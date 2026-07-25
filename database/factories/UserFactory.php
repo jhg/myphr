@@ -1,25 +1,21 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Factories;
 
 use App\Models\User;
+use App\Security\Opaque\OpaqueProfile;
 use Illuminate\Database\Eloquent\Factories\Factory;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
 
 /**
+ * Spec 0001 §3.1: el alta no escribe contraseña, ni `email_verified_at`, ni registro OPAQUE.
+ *
  * @extends Factory<User>
  */
-class UserFactory extends Factory
+final class UserFactory extends Factory
 {
     /**
-     * The current password being used by the factory.
-     */
-    protected static ?string $password;
-
-    /**
-     * Define the model's default state.
-     *
      * @return array<string, mixed>
      */
     public function definition(): array
@@ -27,19 +23,20 @@ class UserFactory extends Factory
         return [
             'name' => fake()->name(),
             'email' => fake()->unique()->safeEmail(),
-            'email_verified_at' => now(),
-            'password' => static::$password ??= Hash::make('password'),
-            'remember_token' => Str::random(10),
         ];
     }
 
     /**
-     * Indicate that the model's email address should be unverified.
+     * Cuenta con el registro OPAQUE completo: la única que puede entrar al panel (ADR 0009).
      */
-    public function unverified(): static
+    public function registered(): static
     {
-        return $this->state(fn (array $attributes) => [
-            'email_verified_at' => null,
+        return $this->state(fn (array $attributes): array => [
+            'opaque_credential_identifier' => random_bytes(32),
+            'opaque_registration_record' => random_bytes(192),
+            'opaque_profile' => OpaqueProfile::NAME,
+            'opaque_registered_at' => now(),
+            'encrypted_settings' => 'v1.'.rtrim(strtr(base64_encode(random_bytes(48)), '+/', '-_'), '='),
         ]);
     }
 }

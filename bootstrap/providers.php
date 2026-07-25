@@ -1,6 +1,11 @@
 <?php
 
+use App\Providers\AppServiceProvider;
+use App\Providers\Filament\PhrPanelProvider;
+use App\Providers\OpaqueServiceProvider;
+
 return [
-    App\Providers\AppServiceProvider::class,
-    App\Providers\Filament\PhrPanelProvider::class,
+    AppServiceProvider::class,
+    PhrPanelProvider::class,
+    OpaqueServiceProvider::class,
 ];
