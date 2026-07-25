@@ -22,6 +22,7 @@
 import { deriveKey, KDF_LABELS } from '../crypto/kdf.js';
 import { open, seal } from '../crypto/envelope.js';
 import { zeroize } from '../crypto/zeroize.js';
+import { t } from '../i18n/index.js';
 import { envelopeContext, ENVELOPE_PURPOSES } from './context.js';
 import { AuthRequestError, postJson, updateCsrfToken } from './http.js';
 import {
@@ -43,35 +44,10 @@ import {
 } from './opaqueClient.js';
 import { navigate } from './navigate.js';
 import { KEY_STRETCHING_SECONDS, progressMixin } from './progress.js';
-
-/**
- * Etapas de la barra de progreso, en el orden de §5.
- *
- * Hay **dos** tramos de Argon2id, no uno: el del registro (paso 6) y el del login inmediato (paso
- * 13). Cuestan lo mismo y son la parte larga del alta, así que se anuncian por separado; si la
- * barra los tratara como un solo tramo, la persona vería una pausa idéntica dos veces sin ninguna
- * explicación de por qué.
- */
-const STAGES = Object.freeze({
-    preparing: 'Preparando…',
-    contacting: 'Comprobando el enlace…',
-    stretching: 'Derivando tu clave en este dispositivo. Tarda unos segundos…',
-    wrapping: 'Creando y protegiendo tu clave…',
-    saving: 'Guardando…',
-    verifying: 'Comprobando que tu contraseña abre tu clave. Tarda unos segundos…',
-    entering: 'Entrando…',
-});
+import { forgetSettings, loadSettings } from './settings.js';
 
 /** Configuración vacía inicial (§3.1): nadie es distinguible por tenerla o no. */
 const EMPTY_SETTINGS = '{"v":1}';
-
-const MESSAGES = Object.freeze({
-    link: 'Este enlace ya no sirve. Pide uno nuevo a quien administra el sistema.',
-    mismatch: 'Las dos contraseñas no coinciden.',
-    configuration: 'Esta instalación no está configurada correctamente. Avisa a quien la administra.',
-    network: 'No hemos podido contactar con el servidor. Inténtalo de nuevo.',
-    verification: 'Algo ha ido mal creando tu clave. No la hemos podido verificar.',
-});
 
 /**
  * Factoría del componente Alpine. Se registra como `phrSetPasswordForm`.
@@ -107,7 +83,7 @@ export function setPasswordForm() {
 
             try {
                 if (password !== confirmation) {
-                    this.error = MESSAGES.mismatch;
+                    this.error = t('setPassword.error.mismatch');
 
                     return;
                 }
@@ -115,6 +91,7 @@ export function setPasswordForm() {
                 await this.run(form, login, password);
             } catch (failure) {
                 forget();
+                forgetSettings();
                 this.error = describe(failure);
                 this.resetProgress();
             } finally {
@@ -129,7 +106,7 @@ export function setPasswordForm() {
          * @param {string} password
          */
         async run(form, login, password) {
-            await this.advance(STAGES.preparing, 0.05);
+            await this.advance(t('stage.preparing'), 0.05);
 
             /** §5, paso 1. */
             await opaqueReady();
@@ -144,7 +121,7 @@ export function setPasswordForm() {
             /** §5, paso 3: sin `keyStretching`. */
             const { clientRegistrationState, registrationRequest } = startRegistration(password);
 
-            await this.advance(STAGES.contacting, 0.1);
+            await this.advance(t('setPassword.stage.contacting'), 0.1);
 
             /** §5, paso 4. */
             const started = await postJson(form.dataset.registrationStartUrl, {
@@ -159,7 +136,7 @@ export function setPasswordForm() {
              * La barra se lanza antes y se espera a que el navegador la pinte: a partir de la
              * siguiente línea el hilo principal está bloqueado y no pinta nada más.
              */
-            await this.advance(STAGES.stretching, 0.4, KEY_STRETCHING_SECONDS);
+            await this.advance(t('setPassword.stage.stretching'), 0.4, KEY_STRETCHING_SECONDS);
 
             /** §5, paso 6: aquí corre el Argon2id. */
             const registered = finishRegistration({
@@ -169,7 +146,7 @@ export function setPasswordForm() {
                 serverIdentity: pinned.serverIdentity,
             });
 
-            await this.advance(STAGES.wrapping, 0.45);
+            await this.advance(t('setPassword.stage.wrapping'), 0.45);
 
             const userId = started.userId;
             const umkContext = envelopeContext(userId, ENVELOPE_PURPOSES.UserMasterKey);
@@ -210,7 +187,7 @@ export function setPasswordForm() {
                 zeroize(kek);
             }
 
-            await this.advance(STAGES.saving, 0.5);
+            await this.advance(t('stage.saving'), 0.5);
 
             /** §5, paso 12: una única petición transaccional. */
             await postJson(form.dataset.registrationFinishUrl, {
@@ -231,7 +208,7 @@ export function setPasswordForm() {
             assertPinned(loginStarted, pinned);
 
             /** Segundo Argon2id, el del login inmediato del paso 13. */
-            await this.advance(STAGES.verifying, 0.9, KEY_STRETCHING_SECONDS);
+            await this.advance(t('setPassword.stage.verifying'), 0.9, KEY_STRETCHING_SECONDS);
 
             const loginFinished = finishLogin({
                 password,
@@ -246,7 +223,7 @@ export function setPasswordForm() {
                 );
             }
 
-            await this.advance(STAGES.entering, 0.95);
+            await this.advance(t('stage.entering'), 0.95);
 
             const session = await postJson(form.dataset.loginFinishUrl, {
                 handshakeId: loginStarted.handshakeId,
@@ -255,6 +232,13 @@ export function setPasswordForm() {
 
             /** §5, pasos 15 y 16: la clave que devuelve el servidor tiene que ser la que nació. */
             assertRoundTrip(loginFinished.exportKey, session.encryptedUserMasterKey, umkContext);
+
+            /**
+             * Ajustes recién sellados en el paso 11, con la clave maestra ya verificada. Se
+             * reutiliza el sobre local: es el mismo que acaba de escribirse en el paso 12, y evita
+             * depender de que `login/finish` lo repita en su respuesta.
+             */
+            loadSettings({ envelope: encryptedSettings, userId });
 
             /** §5, paso 18. */
             const sessionSecret = decodeSessionSecret(session.sessionSecret);
@@ -268,7 +252,7 @@ export function setPasswordForm() {
             /** §5, paso 19. */
             updateCsrfToken(session.csrf);
 
-            await this.advance(STAGES.entering, 1);
+            await this.advance(t('stage.entering'), 1);
 
             /** §5, paso 20. */
             navigate(session.redirect);
@@ -334,12 +318,12 @@ function constantTimeEquals(a, b) {
  */
 function describe(failure) {
     if (failure instanceof AuthRequestError) {
-        return failure.status === null ? MESSAGES.network : MESSAGES.link;
+        return failure.status === null ? t('common.network') : t('setPassword.error.link');
     }
 
     if (failure?.name === 'OpaqueConfigurationError') {
-        return MESSAGES.configuration;
+        return t('common.configuration');
     }
 
-    return MESSAGES.verification;
+    return t('setPassword.error.verification');
 }

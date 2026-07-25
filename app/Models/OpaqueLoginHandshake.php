@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Security\Opaque\OpaquePurpose;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -13,10 +14,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * Spec 0001 §3.2 / OPAQUE.md §14.3: estado de un login OPAQUE en curso, con TTL de 180 segundos.
  *
+ * `purpose` separa el login normal de la reautenticación del cambio de contraseña: un handshake de
+ * login nunca se canjea por un ticket de cambio.
+ *
  * `user_id` es nulo en la rama falsa. `state_ciphertext` es el `ServerLoginState` cifrado con `Crypt`
  * de Laravel; el modelo no lo descifra ni lo expone en su serialización.
  */
-#[Fillable(['user_id', 'state_ciphertext', 'expires_at'])]
+#[Fillable(['user_id', 'state_ciphertext', 'purpose', 'expires_at'])]
 #[Hidden(['state_ciphertext'])]
 final class OpaqueLoginHandshake extends Model
 {
@@ -32,6 +36,7 @@ final class OpaqueLoginHandshake extends Model
     {
         return [
             'expires_at' => 'datetime',
+            'purpose' => OpaquePurpose::class,
         ];
     }
 

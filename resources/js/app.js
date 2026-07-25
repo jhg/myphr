@@ -18,15 +18,50 @@
 
 import './auth/keyring.js';
 
+import { setLocale } from './i18n/index.js';
 import { armInactivityLock, disarmInactivityLock, interceptLogout } from './auth/lock.js';
 import { loginForm } from './auth/loginPage.js';
+import { profilePage } from './auth/profilePage.js';
 import { setPasswordForm } from './auth/setPasswordPage.js';
+import { bootstrapSession } from './auth/sessionBootstrap.js';
 import { installLivewirePayloadGuard } from './guards/livewirePayloadGuard.js';
+import { bloodPressurePage } from './health/bloodPressurePage.js';
+import { dashboardPage } from './health/dashboardPage.js';
+import { glucosePage } from './health/glucosePage.js';
+import { insulinPage } from './health/insulinPage.js';
+import { mealsPage } from './health/mealsPage.js';
 
-/** Componentes que las plantillas nombran en `x-data`. */
+/**
+ * Idioma de las cadenas que construye el cliente, fijado antes de registrar nada.
+ *
+ * Sale del `lang` que el servidor ya emite en el `<html>` a partir de `app()->getLocale()`: no hay
+ * metadato nuevo ni petición nueva, y el idioma del texto que pinta JavaScript no puede separarse
+ * del que pinta Blade. Se fija aquí y no dentro de `i18n/index.js` para no depender del orden en
+ * que se evalúan los módulos: este fichero corre en la cabecera, antes de que exista ninguna
+ * pantalla.
+ *
+ * `wire:navigate` no vuelve a evaluar los módulos ya cargados (ADR 0003), pero tampoco cambia el
+ * idioma: cambiarlo en el perfil recarga la página entera.
+ */
+setLocale(document.documentElement.getAttribute('lang') ?? '');
+
+/**
+ * Componentes que las plantillas nombran en `x-data`.
+ *
+ * Toda pantalla nueva tiene que aparecer aquí. Si falta, Alpine no encuentra el componente que
+ * declara su `x-data` y la pantalla se queda inerte: se pinta, pero ningún botón responde y no hay
+ * error visible en la interfaz. Es un fallo silencioso, así que conviene comprobarlo al añadir una
+ * pantalla y no cuando alguien informa de que algo no funciona.
+ */
 const COMPONENTS = Object.freeze({
     phrLoginForm: loginForm,
     phrSetPasswordForm: setPasswordForm,
+    phrGlucosePage: glucosePage,
+    phrBloodPressurePage: bloodPressurePage,
+    phrMealsPage: mealsPage,
+    phrInsulinPage: insulinPage,
+    phrDashboardPage: dashboardPage,
+    phrProfilePage: profilePage,
 });
 
 /** @param {{data: (name: string, factory: Function) => void}} alpine */
@@ -49,13 +84,14 @@ if (window.Alpine !== undefined) {
 document.addEventListener('livewire:init', () => installLivewirePayloadGuard(), { once: true });
 
 /**
- * Bloqueo de §8, armado solo dentro del panel.
+ * Bloqueo de §8 y arranque de sesión de §6.2, ambos solo dentro del panel.
  *
  * Las pantallas de autenticación se marcan con `data-phr-page` y quedan fuera: ahí no hay sesión que
- * cerrar y la llamada de bloqueo solo produciría un error. La comprobación no puede hacerse al
- * evaluar este módulo, que corre en la cabecera con el `<body>` todavía sin analizar, así que se
- * repite en cada navegación: `livewire:navigated` se dispara también en la carga inicial, y la SPA
- * del panel cambia de pantalla sin volver a evaluar los módulos.
+ * cerrar ni que recuperar, y las dos llamadas solo producirían un error o una redirección de sobra.
+ * La comprobación no puede hacerse al evaluar este módulo, que corre en la cabecera con el `<body>`
+ * todavía sin analizar, así que se repite en cada navegación: `livewire:navigated` se dispara
+ * también en la carga inicial, y la SPA del panel cambia de pantalla sin volver a evaluar los
+ * módulos.
  */
 function armLockForCurrentPage() {
     if (document.querySelector('[data-phr-page]') !== null) {
@@ -67,12 +103,17 @@ function armLockForCurrentPage() {
     armInactivityLock();
 }
 
-document.addEventListener('livewire:navigated', armLockForCurrentPage);
+function runForCurrentPage() {
+    armLockForCurrentPage();
+    void bootstrapSession();
+}
+
+document.addEventListener('livewire:navigated', runForCurrentPage);
 
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', armLockForCurrentPage, { once: true });
+    document.addEventListener('DOMContentLoaded', runForCurrentPage, { once: true });
 } else {
-    armLockForCurrentPage();
+    runForCurrentPage();
 }
 
 interceptLogout();

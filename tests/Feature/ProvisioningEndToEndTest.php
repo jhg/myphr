@@ -197,7 +197,6 @@ it('lleva a una cuenta desde el comando que emite el enlace hasta su UMK recuper
         ->and(strlen((string) $user->opaque_registration_record))->toBe(192)
         ->and(strlen((string) $user->opaque_credential_identifier))->toBe(32)
         ->and($user->encrypted_settings)->toBe($encryptedSettings)
-        ->and($user->password)->toBeNull()
         ->and(OpaqueRegistration::query()->count())->toBe(0)
         ->and(UserRegistrationLink::query()->whereNull('consumed_at')->count())->toBe(0);
 

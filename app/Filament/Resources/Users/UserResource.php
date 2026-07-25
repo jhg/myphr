@@ -47,9 +47,20 @@ final class UserResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'name';
 
-    protected static ?string $modelLabel = 'usuario';
+    /**
+     * Las etiquetas se resuelven por método y no como propiedad estática porque un inicializador de
+     * propiedad en PHP solo admite expresiones constantes, y `__()` no puede llamarse ahí. Fijadas
+     * como cadena, el recurso seguía en castellano aunque el panel estuviera en otro idioma.
+     */
+    public static function getModelLabel(): string
+    {
+        return __('user');
+    }
 
-    protected static ?string $pluralModelLabel = 'usuarios';
+    public static function getPluralModelLabel(): string
+    {
+        return __('users');
+    }
 
     /**
      * Formulario del alta: nombre y login, nada más (ADR 0009).
@@ -63,21 +74,21 @@ final class UserResource extends Resource
         return $schema
             ->components([
                 TextInput::make('name')
-                    ->label('Nombre')
-                    ->helperText('Se guarda en claro: lo usan el menú de usuario y este listado (ADR 0009).')
+                    ->label(__('Name'))
+                    ->helperText(__('Stored in plain text: used by the user menu and this list.'))
                     ->required()
                     ->maxLength(255),
 
                 TextInput::make('email')
-                    ->label('Login')
-                    ->helperText('Queda fijo tras el registro: el identificador de credencial se deriva de él.')
+                    ->label(__('Login'))
+                    ->helperText(__('Fixed once registration is complete: the credential identifier is derived from it.'))
                     ->email()
                     ->required()
                     ->maxLength(255)
                     ->dehydrateStateUsing(fn (?string $state): string => LoginNormalizer::normalize((string) $state))
                     ->rule(static fn (): Closure => static function (string $attribute, mixed $value, Closure $fail): void {
                         if (User::query()->where('email', LoginNormalizer::normalize((string) $value))->exists()) {
-                            $fail('Ya existe una cuenta con ese login.');
+                            $fail(__('An account with that login already exists.'));
                         }
                     }),
             ]);
@@ -90,34 +101,34 @@ final class UserResource extends Resource
             ->defaultSort('created_at', 'desc')
             ->columns([
                 TextColumn::make('name')
-                    ->label('Nombre')
+                    ->label(__('Name'))
                     ->searchable()
                     ->sortable(),
 
                 TextColumn::make('email')
-                    ->label('Login')
+                    ->label(__('Login'))
                     ->searchable()
                     ->sortable(),
 
                 IconColumn::make('registered')
-                    ->label('Registro OPAQUE')
+                    ->label(__('OPAQUE registration'))
                     ->boolean()
                     ->state(fn (User $record): bool => $record->hasCompletedOpaqueRegistration()),
 
                 TextColumn::make('opaque_registered_at')
-                    ->label('Registrado')
+                    ->label(__('Registered'))
                     ->dateTime()
-                    ->placeholder('Pendiente')
+                    ->placeholder(__('Pending'))
                     ->sortable(),
 
                 TextColumn::make('created_at')
-                    ->label('Alta')
+                    ->label(__('Created'))
                     ->dateTime()
                     ->sortable(),
             ])
             ->filters([
                 TernaryFilter::make('registered')
-                    ->label('Registro OPAQUE completo')
+                    ->label(__('OPAQUE registration complete'))
                     ->queries(
                         true: fn (Builder $query): Builder => $query->whereNotNull('opaque_registered_at'),
                         false: fn (Builder $query): Builder => $query->whereNull('opaque_registered_at'),
@@ -145,31 +156,29 @@ final class UserResource extends Resource
     public static function issueRegistrationLinkAction(): Action
     {
         return Action::make('issueRegistrationLink')
-            ->label('Reemitir enlace')
+            ->label(__('Reissue link'))
             ->icon(Heroicon::OutlinedLink)
             ->color('danger')
             ->authorize('issueRegistrationLink')
-            ->modalHeading('Reemitir el enlace de registro')
-            ->modalSubmitActionLabel('Emitir el enlace')
+            ->modalHeading(__('Reissue the registration link'))
+            ->modalSubmitActionLabel(__('Issue the link'))
             ->schema([
-                Callout::make('Si esta cuenta ya tiene datos, la persona perderá el acceso a todo lo anterior.')
+                Callout::make(__('If this account already holds data, the person will lose access to everything already stored.'))
                     ->color('danger')
                     ->icon(Heroicon::OutlinedExclamationTriangle)
                     ->description(
-                        'Su clave maestra estaba envuelta bajo la contraseña antigua. Al establecer una '
-                        .'contraseña nueva se guarda un sobre nuevo y el anterior queda retirado: lo que había '
-                        .'cifrado deja de poder abrirse. No hay recuperación.'
+                        __('Their master key was wrapped under the old password. Setting a new password stores a new envelope and retires the previous one: whatever it protected can no longer be opened. There is no recovery.')
                     ),
 
                 UnorderedList::make([
-                    Text::make('El enlace sirve para establecer la contraseña inicial, no para recuperarla.'),
-                    Text::make('Caduca en '.RegistrationLinks::TTL_HOURS.' horas y sirve una sola vez.'),
-                    Text::make('La aplicación no lo envía por correo: se muestra una sola vez y lo entregas tú.'),
+                    Text::make(__('The link is for setting the initial password, not for recovering it.')),
+                    Text::make(__('Expires in :hours hours and can only be used once.', ['hours' => RegistrationLinks::TTL_HOURS])),
+                    Text::make(__('The application does not email it: it is shown once and you deliver it yourself.')),
                 ]),
 
                 TextInput::make('confirmation')
-                    ->label('Teclea el login de la cuenta para confirmar')
-                    ->helperText('Solo hace falta si la cuenta ya tiene acceso.')
+                    ->label(__('Type the account login to confirm'))
+                    ->helperText(__('Only needed if the account already has access.'))
                     ->autocomplete(false),
             ])
             ->action(function (User $record, array $data, ManageUsers $livewire, RegistrationLinks $links): void {
@@ -184,7 +193,7 @@ final class UserResource extends Resource
                 } catch (RegistrationLinkReissueRequiresConfirmationException $exception) {
                     Notification::make()
                         ->danger()
-                        ->title('Falta la confirmación')
+                        ->title(__('Confirmation required'))
                         ->body($exception->getMessage())
                         ->send();
 

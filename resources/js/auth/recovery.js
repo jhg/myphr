@@ -13,6 +13,7 @@
 import { zeroize } from '../crypto/zeroize.js';
 import { AuthRequestError, postJson } from './http.js';
 import { isUnlocked, restoreFromSessionSecret, decodeSessionSecret } from './keyring.js';
+import { loadSettings } from './settings.js';
 
 /** Resultados posibles de un intento de recuperación. */
 export const RecoveryOutcome = Object.freeze({
@@ -58,14 +59,22 @@ export async function recoverMasterKey(userId) {
     }
 
     const sessionSecret = decodeSessionSecret(payload.sessionSecret);
+    let restored;
 
     try {
-        return restoreFromSessionSecret(sessionSecret, userId)
-            ? RecoveryOutcome.Unlocked
-            : RecoveryOutcome.NeedsLogin;
+        restored = restoreFromSessionSecret(sessionSecret, userId);
     } finally {
         zeroize(sessionSecret);
     }
+
+    if (!restored) {
+        return RecoveryOutcome.NeedsLogin;
+    }
+
+    /** §6.2, paso 4: los ajustes descifrados, ya con la clave maestra en memoria. */
+    loadSettings({ envelope: payload.encryptedSettings, userId });
+
+    return RecoveryOutcome.Unlocked;
 }
 
 /**

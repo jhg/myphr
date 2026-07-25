@@ -1,0 +1,947 @@
+@import '../../../../vendor/filament/filament/resources/css/theme.css';
+
+@source '../../../../app/Filament/**/*';
+@source '../../../../resources/views/filament/**/*';
+@source '../../../../resources/views/phr/**/*';
+@source '../../../../resources/js/**/*';
+
+/*
+ * ⚠️⚠️ EL TEXTO NUNCA SE ESCRIBE CON UN TONO DE LA RAMPA. LÉELO ANTES DE ELEGIR UN COLOR. ⚠️⚠️
+ * ══════════════════════════════════════════════════════════════════════════════════════════
+ *
+ * Nada de `text-gray-900`, `text-gray-600`, `text-gray-400`, `border-gray-300`, `border-gray-200`,
+ * `bg-gray-200` ni `text-white` suelto. Ni en Blade, ni en las plantillas de los módulos JS.
+ *
+ * POR QUÉ. En oscuro la rampa gris se REASIGNA entera (bloque `:root.dark`, al final de este
+ * fichero, según DESIGN.md § Ramp Mapping — Dark): `gray-900` deja de ser la tinta y pasa a ser la
+ * SUPERFICIE (#152238), `gray-200` pasa a ser la tinta (#E8EEF7) y `gray-800` el borde. Un rung es
+ * un peldaño de luminosidad, no un papel. Por eso una clase de rampa escrita sin su pareja `dark:`
+ * NO se atenúa: se INVIERTE. `text-gray-900` sobre una tarjeta acaba pintando el texto exactamente
+ * del color del fondo que tiene debajo —1.00:1— y el dato clínico desaparece de la pantalla.
+ * Es el fallo que motivó esta sección; volverá en cuanto alguien vuelva a teclear un rung.
+ *
+ * QUÉ SE ESCRIBE EN SU LUGAR. Los papeles semánticos de abajo. Conmutan solos, igual que
+ * `bg-surface` y `border-border`, porque son un token que el bloque `:root.dark` reasigna: la
+ * utilidad compila a `color: var(--color-ink)` y no a un hexadecimal. Ninguna plantilla lleva
+ * variante `dark:`, y no hay pareja que se pueda olvidar.
+ *
+ *   ❌ lo que se escribía            ✅ papel correcto            utilidad
+ *   ─────────────────────────────────────────────────────────────────────────────────────────
+ *   text-gray-900                    tinta principal              text-ink
+ *   text-gray-600                    tinta secundaria             text-ink-secondary
+ *   placeholder:text-gray-400        tinta atenuada               placeholder:text-ink-muted
+ *   text-white (sobre relleno azul)  tinta sobre acento           text-accent-ink
+ *   text-gray-400 (deshabilitado)    tinta deshabilitada          text-ink-disabled
+ *   bg-gray-200 (deshabilitado)      relleno deshabilitado        bg-surface-disabled
+ *   border-gray-300                  borde interactivo            border-border-strong
+ *   border-gray-200                  borde decorativo             border-border
+ *   text-danger-600                  rojo en papel de TEXTO       text-destructive-text
+ *   text-primary-600                 azul de acción como texto    text-accent
+ *   bg-primary-600                   relleno de acción            bg-accent
+ *
+ * Los cuatro papeles de tinta se declaran juntos más abajo (§ Tintas); los de apoyo, en los
+ * bloques contiguos. Sus valores salen de § Colors / § Inputs (claro) y § Colors — Dark (oscuro),
+ * y cada par está verificado sobre los TRES peldaños de la escalera oscura, no solo sobre Surface.
+ */
+
+/*
+ * Tokens del sistema de diseño MediCare+ (DESIGN.md).
+ *
+ * Reparto de responsabilidades, para que cada valor tenga UNA sola fuente:
+ *
+ *  - Las rampas de color (primary, info, gray, danger, success, warning) NO se declaran aquí.
+ *    Las escribe `PhrPanelProvider::panel()->colors()`, que Filament imprime en `:root` como
+ *    `--primary-50…--primary-950`; el vendor ya las mapea a utilidades en un `@theme inline`
+ *    (vendor/filament/support/resources/css/index.css, líneas 85-95). Duplicarlas aquí solo
+ *    crearía dos sitios que pueden divergir. La única excepción es el bloque `:root.dark` del
+ *    final: Filament no sabe declarar una rampa por tema, y DESIGN.md § Dark Mode sí define una
+ *    escalera de superficies y tintas propia para el modo oscuro, que hay que materializar en
+ *    algún sitio. Ese es el sitio, y es uno solo.
+ *  - Las familias de cuerpo y monoespaciada tampoco: salen de `->font()` / `->monoFont()`, que
+ *    el layout del panel vuelca en `--font-family` / `--mono-font-family`, y el vendor las
+ *    inyecta en `--font-sans` / `--font-mono`.
+ *
+ * Aquí queda todo lo que Filament no sabe modelar: la escala tipográfica, la familia de
+ * titulares, los colores planos, la elevación, los alias de radio y de espaciado.
+ *
+ * `@theme static` es necesario: Tailwind 4.3.3 poda del CSS final las variables de tema que
+ * ninguna utilidad usa, y varias de estas se consumen con `var(…)` desde CSS o desde estilos
+ * en línea, no a través de una clase.
+ */
+@theme static {
+    /* ── Tipografía · DESIGN.md § Typography ─────────────────────────────────────────── */
+
+    /*
+     * Figtree, la familia de titulares. Filament tiene tres ranuras de fuente —`font()`,
+     * `monoFont()` y `serifFont()`— y ninguna es «titulares», así que Figtree no puede
+     * registrarse en el panel: vive como token y se aplica con la utilidad `font-display`.
+     *
+     * `--font-figtree` la publica en `:root` el ayudante de fuentes de laravel-vite-plugin
+     * (el alias sale de `familyToSlug('Figtree')`). El literal entre comillas es el respaldo
+     * por si esa hoja aún no ha cargado.
+     */
+    --font-display: var(--font-figtree, 'Figtree'), ui-sans-serif, system-ui, sans-serif;
+
+    /*
+     * Escala tipográfica de DESIGN.md. Base 16px = 1rem. Display/Headline/Subhead son Figtree
+     * (combínalas con `font-display`); el resto hereda Open Sans, que ya es la familia por
+     * defecto del panel. Los sufijos `--line-height`, `--letter-spacing` y `--font-weight`
+     * hacen que una sola utilidad (`text-headline`) emita las cuatro propiedades.
+     */
+    --text-display: 2.125rem; /* 34px · saludos del panel, texto hero */
+    --text-display--line-height: 1.2;
+    --text-display--letter-spacing: 0.02em;
+    --text-display--font-weight: 700;
+
+    --text-headline: 1.625rem; /* 26px · títulos de página, cabeceras de sección */
+    --text-headline--line-height: 1.3;
+    --text-headline--letter-spacing: 0.01em;
+    --text-headline--font-weight: 700;
+
+    --text-subhead: 1.25rem; /* 20px · títulos de tarjeta y de panel */
+    --text-subhead--line-height: 1.4;
+    --text-subhead--font-weight: 600;
+
+    --text-body-lg: 1.125rem; /* 18px · instrucciones importantes, avisos */
+    --text-body-lg--line-height: 1.6;
+    --text-body-lg--font-weight: 400;
+
+    --text-body: 1rem; /* 16px · texto de lectura y formularios */
+    --text-body--line-height: 1.6;
+    --text-body--font-weight: 400;
+
+    --text-body-sm: 0.875rem; /* 14px · celdas de tabla, información secundaria */
+    --text-body-sm--line-height: 1.55;
+    --text-body-sm--font-weight: 400;
+
+    --text-caption: 0.75rem; /* 12px · marcas de tiempo, identificadores de registro */
+    --text-caption--line-height: 1.5;
+    --text-caption--letter-spacing: 0.01em;
+    --text-caption--font-weight: 500;
+
+    /*
+     * § Typography · Overline: «Open Sans 11px bold, 1.4 line height, 0.08em tracking. Status
+     * labels, section markers». Es el único papel de la escala que no tenía token, y justo el que
+     * marca las secciones: sin él, las etiquetas de grupo de la barra lateral se quedan en el
+     * `text-sm font-medium` de fábrica de Filament y toda la interfaz acaba a un solo tamaño.
+     */
+    --text-overline: 0.6875rem; /* 11px */
+    --text-overline--line-height: 1.4;
+    --text-overline--letter-spacing: 0.08em;
+    --text-overline--font-weight: 700;
+
+    /*
+     * Los tres tamaños que DESIGN.md fija dentro de § Components y no en § Typography. Sin token
+     * acababan escritos a mano (`text-[0.8125rem]`, `text-[13px]`, `text-[0.9375rem]`) en cinco
+     * sitios, con dos unidades distintas para el mismo píxel y fuera del alcance de cualquier
+     * cambio del sistema.
+     */
+    --text-helper: 0.8125rem; /* 13px · § Inputs · Helper Text y § Chips · Filter Chip */
+    --text-helper--line-height: 1.5;
+    --text-helper--font-weight: 400;
+
+    --text-button: 0.9375rem; /* 15px · § Buttons (tamaño medio) */
+    --text-button--line-height: 1.5;
+    --text-button--font-weight: 600;
+
+    /*
+     * § Chips · Status Chip: «Open Sans 12px bold uppercase». Tiene token propio porque
+     * `text-caption` es el mismo tamaño pero de otro papel —marcas de tiempo— y arrastra su
+     * tracking de 0.01em, que aquí no pinta nada.
+     */
+    --text-status-chip: 0.75rem; /* 12px */
+    --text-status-chip--line-height: 1.5;
+    --text-status-chip--font-weight: 700;
+
+    /*
+     * Código: DESIGN.md § Do's #7 exige IBM Plex Mono para números de historia, códigos y
+     * dosis, para que no se confundan al leerlos. Usa `text-code font-mono` juntos.
+     */
+    --text-code: 0.875rem; /* 14px */
+    --text-code--line-height: 1.6;
+    --text-code--font-weight: 400;
+
+    /* ── Color: tokens planos · DESIGN.md § Colors ───────────────────────────────────── */
+
+    /*
+     * Los papeles que no caben en una rampa de 11 tonos, así que no los cubre `->colors()`. Los
+     * tres azules de la paleta (Primary/Secondary/Tertiary) no se repiten aquí: ya son
+     * `primary-600`, `primary-400` y `primary-300`, y un segundo nombre para el mismo
+     * hexadecimal es un sitio más del que pueden divergir.
+     *
+     * Los tres se reasignan en `:root.dark` con los valores de DESIGN.md § Dark Mode. Funciona
+     * sin indirecciones porque Tailwind compila los colores del tema como referencia —
+     * `.bg-surface{background-color:var(--color-surface)}`—, así que cambiar la variable en un
+     * selector más específico conmuta la utilidad entera.
+     */
+    --color-background: #fafcff; /* fondo de página, azul-blanco muy pálido */
+    --color-surface: #ffffff; /* tarjetas, paneles, contenedores de formulario */
+
+    /*
+     * Borde decorativo de § Cards. En claro es el `gray-200` de la rampa y podría leerse de ella,
+     * pero en oscuro DESIGN.md § Dark Mode lo separa del gris de texto (#2A3A55 el borde, #E8EEF7
+     * la tinta), así que necesita nombre propio para poder conmutar. Lo consume `.fi-simple-main`,
+     * al final del fichero.
+     */
+    --color-border: #e2e8f0; /* borde de tarjeta, tabla y separador */
+
+    /*
+     * ── Tintas · § Colors, § Inputs y § Dark Mode · Colors ───────────────────────────────
+     *
+     * Los cuatro papeles de texto por su nombre, y no por un tono de la rampa gris, por el motivo
+     * que § Ramp Mapping — Dark explica: «in light mode `gray-900` is the ink; in dark mode the
+     * same rung is the surface». Una plantilla que escriba `text-gray-900` sin pareja `dark:` no
+     * se degrada, se invierte. Con `text-ink` no hay nada que emparejar: el token conmuta solo.
+     *
+     * Claro: § Inputs · Text Input (#0F172A), § Inputs · Helper Text (#475569) y § Inputs ·
+     * Text Input · placeholder (#94A3B8). Oscuro: § Colors — Dark, Ink #E8EEF7 (S 13.66:1 ·
+     * R 11.87:1 · O 10.34:1), Ink Secondary #AEBDD1 (8.35 / 7.25 / 6.32:1) e Ink Muted #94A6BE
+     * (6.42 / 5.58 / 4.86:1), los tres verificados sobre el peldaño más claro de la escalera.
+     *
+     * Don'ts #10 es la razón de que el texto secundario sea #475569 (7.4:1) y no el #94A3B8 que
+     * Filament usa por defecto: ese gris queda reservado a placeholders, el único papel que
+     * § Inputs le da.
+     */
+    --color-ink: #0f172a; /* texto principal y etiquetas · § Inputs · Text Input y · Label */
+    --color-ink-secondary: #475569; /* ayudas, pies, texto secundario de lista · § Inputs · Helper Text */
+    --color-ink-muted: #94a3b8; /* placeholders, nunca datos (Don'ts #10) · § Inputs · placeholder */
+
+    /*
+     * El cuarto papel de tinta, `--color-accent-ink` (la tinta ENCIMA del relleno de acento), no
+     * vive aquí sino junto al propio acento, más abajo: su valor depende del relleno y no de la
+     * superficie, y separarlo de él es lo que produce el par blanco-sobre-cian de 1.94:1 que
+     * § Dark Mode · Button Primary prohíbe por escrito. La tinta deshabilitada
+     * (`--color-ink-disabled`) va con su relleno por el mismo motivo.
+     */
+
+    /*
+     * ── Escalera de superficies · § Dark Mode · Colors y § Elevation — Dark ──────────────
+     *
+     * DESIGN.md § Dark Mode — Elevation es explícito: «in dark mode hierarchy is carried by
+     * surface luminance plus border, not by the shadow», y «no dark level may be drawn without
+     * one [a border]». Faltaba justo esa mitad: el tema materializaba las cuatro sombras oscuras
+     * —la parte que NO sostiene la jerarquía— y ninguna de las cuatro superficies.
+     *
+     * En claro los cuatro niveles comparten relleno (#FFFFFF, § Cards · Default y Elevated) y
+     * borde (#E2E8F0), así que el token existe igual y vale para los dos temas: la plantilla
+     * escribe `bg-surface-overlay` y no lleva ninguna variante `dark:`.
+     *
+     * Contrastes calculados con la fórmula de luminancia relativa de WCAG 2.x, tinta Ink
+     * #E8EEF7: sobre #152238 13.66:1, sobre #1E2D45 11.87:1, sobre #26374F 10.34:1. Los dos
+     * primeros coinciden con § Contrast Verification — Dark; el tercero no aparece allí y sale
+     * de aplicar la misma fórmula. Todos AAA.
+     */
+    --color-surface-raised: #ffffff; /* tarjeta en hover, panel activo, popover */
+    --color-surface-overlay: #ffffff; /* desplegables, selectores de fecha, modales */
+
+    /*
+     * Bordes de los niveles altos de la escalera (§ Elevation — Dark: Medium 1px #33455F,
+     * Large 1px #3B4E6B, Overlay 1px #44587A). En claro los tres son el mismo #E2E8F0 de
+     * § Cards, porque en claro la jerarquía la lleva la sombra y no hace falta separar el borde.
+     */
+    --color-border-raised: #e2e8f0; /* nivel Medium */
+    --color-border-large: #e2e8f0; /* nivel Large */
+    --color-border-overlay: #e2e8f0; /* nivel Overlay */
+
+    /*
+     * Fondo de fila y de elemento de lista (§ Lists · Default List Item: hover #F0F7FF,
+     * active #E0EFFF; § Dark Mode · Default List Item: hover #1A2A42, active #1E3550). En claro
+     * son `primary-50` y `primary-100`, pero en oscuro no están en ninguna rampa —la rampa de
+     * acento no se reasigna, ver el punto 3 del bloque oscuro—, así que necesitan nombre propio
+     * para poder conmutar.
+     */
+    --color-surface-hover: #f0f7ff;
+    --color-surface-active: #e0efff;
+
+    /*
+     * Estado deshabilitado. Son DOS papeles con dos rellenos distintos en claro y hay que
+     * nombrarlos por separado, porque un solo token con nombre casi idéntico es exactamente lo
+     * que hace que diverjan: § Buttons · Disabled pide fondo #E2E8F0 y texto #94A3B8, mientras
+     * que § Inputs · Disabled pide fondo #F8FAFC (con borde #E2E8F0 y 60% de opacidad).
+     *
+     * En oscuro los dos convergen: § Dark Mode · Button Disabled y § Components — Dark · Text
+     * Input · Disabled dan el mismo relleno #1B2740. La tinta es #8093AE, no el #7488A3 que fue
+     * el primer candidato: § Contrast Verification — Dark lo rechazó («Ink Disabled #7488A3
+     * (4.11:1) → #8093AE (4.75:1), so that the grey ramp stays monotonic once Border Strong was
+     * lifted past it»). El texto deshabilitado está exento de AA, pero la monotonía de la rampa
+     * no es negociable: #7488A3 quedaría más oscuro que su vecino Border Strong.
+     */
+    --color-surface-disabled: #e2e8f0; /* § Buttons · Disabled */
+    --color-input-surface-disabled: #f8fafc; /* § Inputs · Disabled */
+    --color-ink-disabled: #94a3b8;
+
+    /*
+     * Borde interactivo de input, casilla y radio (§ Inputs: 1.5px #CBD5E1). En claro el hover de
+     * ese borde es Primary (§ Checkboxes: «Hover: Border #0077B6»).
+     *
+     * En oscuro son Border Strong #7189AC y Border Strong Hover #8CA2C4, y son de los pocos
+     * valores del documento con historia: § Contrast Verification — Dark rechaza por escrito los
+     * dos candidatos anteriores («input border #55698A (2.86:1) → #5B7091 (3.17:1 on Surface, but
+     * only 2.39:1 on Overlay) → #7189AC (3.37:1 on the worst rung)»). El umbral es el 3:1 que
+     * WCAG 1.4.11 pide al límite visual de un componente de interfaz, y hay que cumplirlo sobre
+     * Surface Overlay, que es donde vive un campo dentro de un desplegable o un selector de fecha.
+     */
+    --color-border-strong: #cbd5e1;
+    --color-border-strong-hover: #0077b6;
+
+    /*
+     * Los tonos de acento que NO existen en ninguna rampa y que, por tanto, `->colors()` no
+     * puede cubrir. En claro salen de § Buttons · Primary (hover #006399, active #005280) y de
+     * § Colors · Tertiary; en oscuro, de § Colors — Dark (Primary Hover #7FDBEE, Primary Active
+     * #90E0EF, Tertiary #C2F0F7). #7FDBEE y #C2F0F7 son los dos únicos hexadecimales de la
+     * regla 2 de § Derivation Rules — Dark que la rampa `primary` no contiene.
+     *
+     * `--color-accent` sí está en la rampa (`primary-600` / `primary-400`), pero se nombra igual
+     * porque el papel «azul de acción» es lo que conmuta de tema, y la rampa no se reasigna
+     * (ver el punto 3 del bloque oscuro): sin nombre, cada consumidor tendría que escribir la
+     * pareja `primary-600 dark:primary-400` a mano y bastaría con que uno se olvidara.
+     */
+    --color-accent: #0077b6;
+    --color-accent-hover: #006399;
+    --color-accent-active: #005280;
+    --color-tertiary: #90e0ef;
+
+    /*
+     * Pista de la barra de progreso, y por qué no es `--color-tertiary`.
+     *
+     * En claro la pareja es la de § Colors: pista Tertiary #90E0EF —«highlights, progress bars»— y
+     * relleno Primary #0077B6, 3.27:1, que cumple el 3:1 de WCAG 1.4.11 para objetos gráficos. El
+     * problema es que § Dark Mode · Derivation Rule 2 sube AMBOS extremos un escalón (#C2F0F7 y
+     * #48CAE4) y entonces la relación que sostenía la lectura desaparece: 1.58:1. Subir los dos a
+     * la vez conserva cada tono y pierde el par, que es lo único que aquí significa algo.
+     *
+     * Así que en oscuro la pista deja de ser Tertiary y baja a Border #2A3A55 (§ Ramp Mapping —
+     * Dark, rung 800, «decorative borders, and the raised chrome fill»): el relleno #48CAE4 encima
+     * da 5.96:1, muy por encima del 3:1. DESIGN.md no publica la ratio de esta barra, así que queda
+     * fijada aquí. El progreso de la derivación de clave es lo único que dice que la pestaña no se
+     * ha colgado durante los dos estiramientos, y no puede desaparecer.
+     */
+    --color-progress-track: #90e0ef;
+
+    /*
+     * Azul de acción cuando va ENCIMA de un fondo azul pálido —el item de navegación activo, la
+     * pestaña activa, el chip de info—, y no encima de la superficie.
+     *
+     * En claro NO puede ser #0077B6: sobre el fondo activo #E0EFFF de § Lists da 4.16:1 y sobre
+     * el de hover #F0F7FF, 4.51:1. Es la misma trampa que § Chips documenta para el chip de info
+     * («#0077B6 on #F0F7FF is 4.51:1 … so neither clears Do's #1 with any margin») y su misma
+     * solución: #006399 (§ Buttons · Primary · hover), que sube el par sobre #E0EFFF a 5.5:1.
+     * Sólo se mueve la luminosidad; el matiz no cambia.
+     *
+     * En oscuro no hace falta bajar nada: #48CAE4 sobre el activo #1E3550 supera con holgura el
+     * 4.5:1 (sobre Surface son 8.23:1 y el activo es apenas un peldaño más claro).
+     */
+    --color-accent-tinted: #006399;
+
+    /*
+     * Rojo de acción destructiva (§ Buttons · Destructive: relleno #DC2626, hover #B91C1C, active
+     * #991B1B; § Dark Mode · Button Destructive: #F87171, hover #FCA5A5, active #FECACA).
+     * Don'ts #4: el rojo no aparece en ningún otro papel.
+     *
+     * `--color-destructive-text` va aparte del relleno a propósito, y es una distinción que hace
+     * el propio documento: § Colors — Dark separa «Error (#F87171): fills, borders, halos and
+     * icons — graphical roles, threshold 3:1» de «Error Ink (#FCA5A5): every red text role —
+     * message copy, helper text, required asterisk. #F87171 as text falls to 4.36:1 on Surface
+     * Overlay». Un mensaje de validación y el asterisco de campo obligatorio son texto, así que
+     * toman este token y no el del relleno.
+     */
+    --color-destructive: #dc2626;
+    --color-destructive-hover: #b91c1c;
+    --color-destructive-active: #991b1b;
+    --color-destructive-ink: #ffffff; /* tinta ENCIMA del relleno rojo */
+    --color-destructive-text: #dc2626; /* § Inputs · Helper Text · error */
+
+    /*
+     * Tinta que va ENCIMA de un relleno de acento sólido. § Dark Mode · Button Primary lo dice
+     * con todas las letras: «Text is dark ink on a light-blue fill — white text on this fill
+     * cannot reach AA» (blanco sobre #48CAE4 son 1.94:1). En claro el par es #FFFFFF sobre
+     * #0077B6 (4.87:1); en oscuro, #0B1220 sobre #48CAE4 (9.67:1) y sobre #F87171 (6.77:1).
+     * Lo consume la regla del botón sólido, al final del fichero.
+     */
+    --color-accent-ink: #ffffff;
+
+    /*
+     * Tooltip (§ Tooltips: relleno #0F172A, texto #FFFFFF; § Dark Mode · Tooltips: «#E8EEF7
+     * fill, #0B1220 text — inverted against the dark UI exactly as the light tooltip inverts
+     * against the light UI»). El tooltip es el único componente que se invierte respecto del
+     * tema, así que leerlo de la rampa gris lo dejaría del color de la interfaz en oscuro.
+     */
+    --color-tooltip-surface: #0f172a;
+    --color-tooltip-ink: #ffffff;
+
+    /*
+     * ── Avisos y chips · DESIGN.md § Chips y § Dark Mode · Status Chip ───────────────────
+     *
+     * Los tres papeles de un aviso —relleno, línea y tinta— por su nombre, y no por tonos de la
+     * rampa, por dos razones:
+     *
+     *  1. En oscuro, § Dark Mode da a estos chips una escalera propia (#2C1013, #6B2226, #FCA5A5
+     *     el de error) que NO está en la rampa `danger`, y esa rampa no se reasigna. Escrito con
+     *     `bg-danger-50`, el aviso de error saldría en oscuro con fondo rosa claro y tinta rosa
+     *     claro encima. Con el token, el tema conmuta en un solo sitio y ninguna plantilla lleva
+     *     variante `dark:`.
+     *  2. El aviso de error aparece en cuatro pantallas; el trío repetido a mano en cada una es
+     *     justo lo que hace que diverjan.
+     *
+     * La tinta clara de error es #B91C1C y no el #DC2626 que dice § Chips: ese par sobre #FEF2F2
+     * da 4.41:1 y no llega al 4.5:1 de Do's #1, que manda sobre la ficha del componente. #B91C1C
+     * también es de DESIGN.md (§ Buttons · Destructive · hover) y sube el par a 5.9:1. Por el
+     * mismo motivo la tinta de info es #006399 (§ Buttons · Primary · hover, 6.0:1 sobre #F0F7FF)
+     * y no el #0077B6 de § Chips, que se queda en 4.51:1, a una centésima del mínimo.
+     */
+    --color-error-surface: #fef2f2;
+    --color-error-outline: #fecaca;
+    --color-error-ink: #b91c1c;
+
+    --color-info-surface: #f0f7ff;
+    --color-info-outline: #90e0ef;
+    --color-info-ink: #006399;
+
+    /*
+     * Los otros dos chips de estado de § Chips · Status Chip. Faltaban, y la familia a medias es
+     * peor que ninguna: escrito con `bg-success-50`, un chip de éxito sale en oscuro con fondo
+     * #ECFDF5 —casi blanco— y tinta #059669 encima, porque las rampas de acento no se reasignan.
+     *
+     * Las dos tintas claras se desvían de la ficha por el mismo motivo, y con el mismo criterio,
+     * que las de error e info: Do's #1 (4.5:1) manda sobre § Chips. #059669 sobre #ECFDF5 da
+     * 3.58:1 y #D97706 sobre #FFFBEB da 3.07:1 —el chip es 12px bold, así que no entra en la
+     * excepción de texto grande—. Se baja un escalón de la MISMA rampa del panel, que es lo que
+     * pide la regla 3 de § Derivation Rules («if a derived pair fails 4.5:1, lift the tone
+     * another rung — never lower the requirement»): #047857 (`success-700`) da 5.21:1 y #B45309
+     * (`warning-700`) da 4.84:1. Ratios calculados, no estimados.
+     *
+     * Los oscuros son literales de § Dark Mode · Status Chip, con sus contrastes ya verificados
+     * allí: #6EE7B7 sobre #06281F 10.35:1 y #FCD34D sobre #2A1F05 11.23:1.
+     */
+    --color-success-surface: #ecfdf5;
+    --color-success-outline: #a7f3d0;
+    --color-success-ink: #047857;
+
+    --color-warning-surface: #fffbeb;
+    --color-warning-outline: #fde68a;
+    --color-warning-ink: #b45309;
+
+    /*
+     * Relleno SÓLIDO de éxito y aviso, y su tinta encima. DESIGN.md no publica un § Buttons ·
+     * Success ni un § Buttons · Warning, así que estos dos pares se derivan con sus reglas y se
+     * dicen aquí, en vez de dejar que mande el mapa del vendor —que en oscuro pinta el rung 500 con
+     * texto blanco: 2.54:1 sobre #10B981 y 2.15:1 sobre #F59E0B, el mismo fallo que § Dark Mode ya
+     * corrige para el botón primario—.
+     *
+     * Los rellenos son los tonos NOMBRADOS de cada modo: Success #059669 y Warning #D97706 en claro
+     * (§ Colors), #34D399 y #FBBF24 en oscuro (§ Dark Mode). La tinta encima es la de § Dark Mode ·
+     * Button Primary llevada a los dos modos: sobre un relleno claro va tinta oscura, porque el
+     * blanco no llega (blanco sobre #059669 es 3.77:1 y sobre #D97706 3.19:1, ambos por debajo de
+     * 4.5:1). Ratios calculados: #0F172A sobre #059669 4.67:1 y sobre #D97706 5.52:1; #0B1220 sobre
+     * #34D399 9.75:1 y sobre #FBBF24 11.13:1.
+     */
+    --color-success-fill: #059669;
+    --color-success-fill-ink: #0f172a;
+
+    --color-warning-fill: #d97706;
+    --color-warning-fill-ink: #0f172a;
+
+    /* § Chips · Filter Chip: relleno #F0F7FF, borde #CBD5E1, texto #475569 (7.02:1). */
+    --color-chip-surface: #f0f7ff;
+    --color-chip-outline: #cbd5e1;
+    --color-chip-ink: #475569;
+
+    /* ── Elevación · DESIGN.md § Elevation ───────────────────────────────────────────── */
+
+    /*
+     * Se sobrescriben los nombres que Filament ya usa (`shadow-xs` en la tarjeta de las pantallas
+     * de acceso y en la barra superior, `shadow-sm` en tarjetas y secciones, `shadow-lg`/
+     * `shadow-xl` en modales y desplegables) para que toda la interfaz adopte la elevación de
+     * DESIGN.md sin tocar el CSS del vendor. Los valores por defecto de Tailwind son más duros
+     * (negro al 10%); DESIGN.md los quiere suaves para no distraer del contenido clínico.
+     *
+     * `--shadow-xs` entra aquí porque el vendor lo usa en once sitios —`.fi-simple-main` entre
+     * ellos, que es literalmente la tarjeta de login y de establecer contraseña— y sin él esos
+     * once conservarían la sombra de fábrica, que no es ninguna de las cuatro elevaciones de
+     * DESIGN.md § Elevation. Se le da la Subtle, la que § Cards asigna a «cards, form containers».
+     *
+     * El valor va detrás de la indirecta `--elevation-*` (declarada más abajo en `:root` y
+     * reasignada en `:root.dark`) porque Tailwind 4 *inlinea* el literal de la sombra dentro de la
+     * utilidad —`.shadow-sm{--tw-shadow:0 1px 3px …}`—, al contrario que los colores, que sí emite
+     * como `var(…)`: redefinir `--shadow-sm` en un bloque oscuro no tendría ningún efecto.
+     */
+    --shadow-xs: var(--elevation-subtle); /* Subtle */
+    --shadow-sm: var(--elevation-subtle); /* Subtle */
+    --shadow-md: var(--elevation-medium); /* Medium */
+    --shadow-lg: var(--elevation-large); /* Large */
+    --shadow-xl: var(--elevation-overlay); /* Overlay */
+
+    /*
+     * Alias con el nombre que usa DESIGN.md, para poder citarlo en una plantilla. Solo se declara
+     * el que alguien consume (`shadow-large`, en el aviso de registros ilegibles: § Elevation
+     * reserva la elevación Large a «modals, critical alerts»). Un alias que nadie usa no es fuente
+     * de verdad, es una copia más del mismo valor.
+     */
+    --shadow-large: var(--elevation-large);
+
+    /*
+     * Anillo especial de DESIGN.md § Elevation. «2px ring #FAFCFF, 4px ring #0077B6» significa 2px
+     * de separación del color de fondo y 4px de color encima: 0…2px y 2…6px. Cumple el punto 9 de
+     * Do's & Don'ts (foco de alto contraste en todo elemento interactivo).
+     *
+     * Los dos colores son indirectas porque el anillo interior es, por definición, el FONDO DE
+     * PÁGINA, y ese cambia con el tema: #FAFCFF en claro, #0B1220 en oscuro (DESIGN.md § Dark
+     * Mode · Blue Focus). Con el literal claro, cada campo enfocado pintaría un halo blanco
+     * alrededor en modo oscuro — el fallo menos visible al leer el código y el que más ruido
+     * mete en un formulario clínico.
+     *
+     */
+    --shadow-focus-blue: 0 0 0 2px var(--focus-ring-inset), 0 0 0 6px var(--focus-ring-accent);
+
+    /*
+     * § Elevation · Error Halo: la misma construcción de dos anillos con el rojo de error
+     * (2px #FAFCFF + 4px #DC2626), y § Dark Mode · Error Halo (dark) con 2px #0B1220 + 4px
+     * #F87171. Comparte el anillo interior —el fondo de página— con el foco azul, así que basta
+     * una segunda indirecta para el color exterior.
+     *
+     * Se declara ahora porque ya tiene consumidor: `.fi-input-wrp.fi-invalid` existe en el CSS
+     * del vendor (support/resources/css/components/input/wrapper.css) y Filament lo pinta en
+     * cuanto un campo falla la validación, así que la marca por campo de Do's #5 ya ocurre.
+     */
+    --shadow-error-halo: 0 0 0 2px var(--focus-ring-inset), 0 0 0 6px var(--error-ring-accent);
+
+    /* ── Radios · DESIGN.md § Border Radius ──────────────────────────────────────────── */
+
+    /*
+     * No se redefine ningún radio de Tailwind: su escala v4 ya coincide con DESIGN.md en los
+     * nombres que Filament usa —`rounded-sm` 0.25rem = Small 4px, `rounded-lg` 0.5rem =
+     * Medium 8px (el radio por defecto: botones, inputs, tarjetas), `rounded-xl` 0.75rem =
+     * Large 12px (modales), `rounded-2xl` 1rem = XL 16px—. Solo se añaden alias semánticos para
+     * los papeles que el panel usa hoy, y las plantillas los usan siempre: mezclar
+     * `rounded-control` con `rounded-lg` para el mismo píxel deja dos vocabularios para lo mismo.
+     */
+    --radius-chip: 0.25rem; /* 4px · chips, insignias, elementos en línea */
+    --radius-control: 0.5rem; /* 8px · botones e inputs */
+    --radius-card: 0.5rem; /* 8px · tarjetas y paneles */
+
+    /* ── Espaciado · DESIGN.md § Spacing ─────────────────────────────────────────────── */
+
+    /*
+     * `--spacing` se deja en el 0.25rem por defecto a propósito: con esa base la escala de
+     * DESIGN.md (4, 8, 16, 24, 32, 40, 48, 64, 80) sale exacta con 1, 2, 4, 6, 8, 10, 12, 16 y
+     * 20, y los objetivos táctiles de 36/44/52px son `min-h-9`, `min-h-11` y `min-h-13`.
+     * Cambiar la base a los 8px que DESIGN.md llama «unidad base» rompería medio Filament, que
+     * está escrito contra la escala estándar. Se nombran los valores compuestos que DESIGN.md
+     * § Spacing fija por su papel, para que el ritmo vertical del panel deje de ser el que
+     * hereda del layout de Filament (py-8 fijo en los tres tamaños de pantalla).
+     */
+    --spacing-pad-sm: 0.5rem; /* 8px · padding de componente pequeño */
+    --spacing-pad-md: 1rem; /* 16px · padding de componente medio */
+    --spacing-pad-lg: 2rem; /* 32px · padding de componente grande */
+    --spacing-card: 1.5rem; /* 24px · padding de tarjeta */
+
+    /*
+     * Separación entre secciones, responsive por definición (§ Spacing: 40px móvil, 56px
+     * tableta, 80px escritorio). Son tres tokens y no uno con media queries porque un token de
+     * Tailwind es un valor, no una consulta: la plantilla los combina
+     * (`py-section md:py-section-tablet lg:py-section-desktop`).
+     */
+    --spacing-section: 2.5rem; /* 40px · móvil */
+    --spacing-section-tablet: 3.5rem; /* 56px · tableta */
+    --spacing-section-desktop: 5rem; /* 80px · escritorio */
+}
+
+/*
+ * ── Tema claro · valores por defecto de las indirectas ───────────────────────────────────
+ *
+ * Van en un `:root` normal y no dentro de `@theme` porque no son tokens de Tailwind: son la capa
+ * conmutable que consumen los tokens de arriba. Los valores son literalmente los de DESIGN.md
+ * § Elevation, sin reinterpretar ninguno.
+ */
+:root {
+    --elevation-subtle: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px 0 rgb(0 0 0 / 0.04);
+    --elevation-medium: 0 4px 12px 0 rgb(0 0 0 / 0.07), 0 1px 3px 0 rgb(0 0 0 / 0.04);
+    --elevation-large: 0 12px 32px 0 rgb(0 0 0 / 0.08), 0 4px 8px 0 rgb(0 0 0 / 0.04);
+    --elevation-overlay: 0 20px 48px 0 rgb(0 0 0 / 0.12), 0 8px 16px 0 rgb(0 0 0 / 0.06);
+
+    /* § Elevation · Blue Focus: el anillo interior es el fondo de página; el exterior, Primary. */
+    --focus-ring-inset: #fafcff;
+    --focus-ring-accent: #0077b6;
+
+    /* § Elevation · Error Halo: mismo anillo interior, exterior en el rojo de error. */
+    --error-ring-accent: #dc2626;
+
+    /*
+     * ── Gráficas · DESIGN.md § Components · Charts ───────────────────────────────────────
+     *
+     * Una gráfica se dibuja en un `<canvas>`, así que no hereda ninguna clase: cada color hay que
+     * dárselo a mano. Por eso viven aquí y no en `@theme`: no los consume ninguna utilidad de
+     * Tailwind, los lee el módulo JS con
+     * `getComputedStyle(document.documentElement).getPropertyValue('--chart-grid')`. Un literal en
+     * el JS no puede conmutar de tema; una variable sí, y además deja el valor en un solo sitio.
+     *
+     * Las series son las cuatro de § Components · Charts, en ese orden. Todas cumplen el 3:1 de
+     * WCAG 1.4.11 para objetos gráficos sobre la superficie del gráfico. El rojo nunca es una
+     * serie (Don'ts #4), y a partir de la tercera la leyenda es obligatoria (Do's #3), porque la
+     * 3 y la 4 reutilizan los matices de Success y Warning.
+     */
+    --chart-surface: var(--color-surface);
+    --chart-grid: #e2e8f0; /* borde de § Cards · decorativo */
+    --chart-tick: #475569; /* tinta secundaria · 7.58:1 */
+    --chart-tooltip-surface: var(--color-tooltip-surface);
+    --chart-tooltip-ink: var(--color-tooltip-ink);
+    --chart-series-1: #0077b6; /* Primary · 4.87:1 */
+    --chart-series-2: #005280; /* Primary Active · 8.34:1 */
+    --chart-series-3: #059669; /* Success · 3.77:1 */
+    --chart-series-4: #d97706; /* Warning · 3.19:1 */
+}
+
+/*
+ * ── Tema oscuro · DESIGN.md § Dark Mode ──────────────────────────────────────────────────
+ *
+ * Cómo se enchufa, y por qué así y no de otra forma:
+ *
+ *  1. Filament v5 trae el modo oscuro ACTIVADO y lo conmuta con la CLASE `.dark` en el `<html>`,
+ *     no con `prefers-color-scheme`: `@variant dark (&:where(.dark, .dark *))`
+ *     (vendor/filament/filament/resources/css/index.css:27), y la clase la pone el script de
+ *     vendor/filament/filament/resources/views/components/layout/base.blade.php:95-122 según el
+ *     conmutador del menú de usuario o, en modo «system», según el sistema operativo. Por eso el
+ *     selector de abajo es una clase y no una media query.
+ *
+ *  2. Filament NO tiene rampas por tema: imprime una sola vez `--gray-50…--gray-950` en `:root`
+ *     y su CSS decide estáticamente qué tono usa cada papel con el prefijo `dark:`
+ *     (`dark:bg-gray-950` el fondo, `dark:bg-gray-900` tarjetas y desplegables,
+ *     `dark:text-gray-200` etiquetas, `dark:text-gray-400` texto secundario, `dark:text-gray-500`
+ *     iconos). Como el vendor las mapea con `@theme inline`, esas utilidades salen compiladas
+ *     como `color: var(--gray-900)`. Reasignar aquí las variables reencamina de golpe todo el
+ *     cromo del panel a la escalera oscura de DESIGN.md, sin duplicar una sola regla del vendor
+ *     y sin tocar `->colors()`, que sigue siendo la única fuente de la paleta clara.
+ *
+ *  3. Las rampas de acento (primary, info, danger, success, warning) NO se reasignan, a
+ *     propósito. La regla 2 de DESIGN.md § Dark Mode dice que en oscuro cada acento «sube un
+ *     escalón dentro de la rampa que MediCare+ ya tiene», y esos tonos ya existen tal cual:
+ *     Primary oscuro #48CAE4 = `primary-400`, Secondary #90E0EF = `primary-300`,
+ *     Error #F87171 = `danger-400`, Error Ink #FCA5A5 = `danger-300`,
+ *     Success #34D399 = `success-400`, Warning #FBBF24 = `warning-400`. Es también lo que hace el
+ *     vendor (`dark:text-primary-400`). La forma correcta de consumirlos desde una plantilla es
+ *     la variante —`text-danger-600 dark:text-danger-400`—, no un hexadecimal. Reasignarlos aquí
+ *     invertiría el sentido del hover de Filament (el 500 quedaría más claro que el 600) y
+ *     volvería ilegible cualquier `bg-primary-600 text-white` ya escrito.
+ *
+ *     Eso cubre los tonos, no todos los papeles. § Dark Mode nombra cuatro valores que NINGUNA
+ *     rampa contiene —Primary Hover #7FDBEE, Tertiary #C2F0F7 y los chips de éxito y aviso—, más
+ *     la escalera de superficies altas; todos ellos sí se declaran abajo como tokens planos,
+ *     porque no tienen dónde caer dentro de una rampa de once tonos.
+ *
+ * El selector es `:root.dark` —y no `.dark`— por especificidad: Filament imprime la paleta en un
+ * `<style>` en línea con selector `:root`, que empata con `.dark` (0,1,0) y ganaría por orden de
+ * origen. `:root.dark` es (0,2,0) y gana siempre.
+ */
+:root.dark {
+    /*
+     * Rampa gris = escalera de superficies y tintas de DESIGN.md § Dark Mode, en el mismo orden
+     * monótono que la clara (50 el más claro, 950 el más oscuro) para no invertirle el sentido a
+     * ninguna clase `dark:` del vendor. Cada tono cae justo donde Filament lo consume.
+     *
+     * Los contrastes se verifican sobre el peldaño MÁS CLARO de la escalera, #26374F (§ Dark Mode:
+     * «a token is only accepted if it clears its threshold on Surface Overlay too»), no solo sobre
+     * la superficie base: tinta 10.34:1, tinta secundaria 6.32:1, placeholder 4.86:1, borde de
+     * input 3.37:1. Sobre #152238 todos suben (13.66:1, 8.35:1, 6.42:1, 4.46:1).
+     *
+     * ⚠️ Un tono de la rampa NO es un papel. En claro `gray-900` es la tinta; aquí es la superficie.
+     * Una plantilla que escriba `text-gray-900` sin su pareja `dark:` no se degrada: se invierte, y
+     * el texto sale del color de la superficie que tiene debajo (1.00:1). Lo mismo con
+     * `border-gray-200`, que aquí es la tinta, no un borde. Y `bg-white` no conmuta de ninguna
+     * manera —compila a `var(--color-white)`, un literal que ningún bloque de tema alcanza—: toda
+     * tarjeta tiene que escribirse `bg-surface`. Ver § Ramp Mapping — Dark.
+     */
+    --gray-50: #fafcff; /* reserva casi blanca */
+    --gray-100: #f1f5fb; /* reserva */
+    --gray-200: #e8eef7; /* Ink · texto principal y etiquetas */
+    --gray-300: #cbd8e8; /* interpolado entre Ink y tinta secundaria */
+    --gray-400: #aebdd1; /* Ink Secondary · ayudas, pies, texto secundario de lista */
+    --gray-500: #94a6be; /* Ink Muted · placeholders e iconos, nunca datos (Don'ts #10) */
+    --gray-600: #8093ae; /* Ink Disabled */
+    --gray-700: #7189ac; /* Border Strong · input, casilla y radio (borde interactivo, ≥3:1) */
+    --gray-800: #2a3a55; /* Border · tarjeta, tabla y separador (borde decorativo) */
+    --gray-900: #152238; /* Surface · tarjetas, paneles, contenedores de formulario */
+    --gray-950: #0b1220; /* Background · fondo de página */
+
+    /* Los mismos papeles, por su nombre plano (§ Dark Mode · Colors). */
+    --color-background: #0b1220;
+    --color-surface: #152238;
+    --color-border: #2a3a55;
+
+    /*
+     * Tintas (§ Colors — Dark). Los tres tonos coinciden con los peldaños 200, 400 y 500 de la
+     * rampa de arriba —§ Ramp Mapping — Dark es precisamente esa tabla—, pero se nombran también
+     * por su papel para que una plantilla pueda escribir `text-ink` sin variante `dark:`.
+     *
+     * Ink Muted es #94A6BE y no el #8798AF que fue el primer candidato: § Contrast Verification
+     * — Dark lo rechaza («placeholder #7C8DA6 (4.72:1) → #8798AF (5.42:1 on Surface, but 4.10:1
+     * on Overlay) → #94A6BE (4.86:1 on the worst rung)»).
+     */
+    --color-ink: #e8eef7;
+    --color-ink-secondary: #aebdd1;
+    --color-ink-muted: #94a6be;
+
+    /*
+     * La otra mitad de la escalera (§ Dark Mode · Colors y § Elevation — Dark). Estos cuatro
+     * tonos no caben en la rampa gris —ya ocupada por las dos superficies base, las cuatro
+     * tintas y los dos bordes—, y son literalmente lo que sostiene la jerarquía en oscuro.
+     *
+     * Ink #E8EEF7 sobre cada uno, con la fórmula de WCAG 2.x: 11.87:1 sobre #1E2D45 (valor de
+     * § Contrast Verification — Dark) y 10.34:1 sobre #26374F (calculado aquí, la sección no lo
+     * lista). Los dos AAA, así que un título se lee sobre cualquier nivel de la escalera.
+     */
+    --color-surface-raised: #1e2d45; /* Medium y Large: tarjeta en hover, panel activo, modal */
+    --color-surface-overlay: #26374f; /* Overlay: desplegables y selectores de fecha */
+
+    /* «No dark level may be drawn without one [a border]» (§ Elevation — Dark). */
+    --color-border-raised: #33455f; /* nivel Medium */
+    --color-border-large: #3b4e6b; /* nivel Large */
+    --color-border-overlay: #44587a; /* nivel Overlay */
+
+    /* § Dark Mode · Default List Item: hover #1A2A42, active #1E3550. */
+    --color-surface-hover: #1a2a42;
+    --color-surface-active: #1e3550;
+
+    /*
+     * § Dark Mode · Button Disabled («Background #1B2740, text #8093AE») y § Components — Dark ·
+     * Text Input · Disabled («Background #1B2740»): en oscuro los dos rellenos convergen. 4.75:1,
+     * el par que § Contrast Verification — Dark acepta tras rechazar #7488A3 (4.11:1).
+     */
+    --color-surface-disabled: #1b2740;
+    --color-input-surface-disabled: #1b2740;
+    --color-ink-disabled: #8093ae;
+
+    /*
+     * § Dark Mode · Border Strong #7189AC y Border Strong Hover #8CA2C4. Los dos se verifican
+     * sobre los tres peldaños de la escalera, no solo sobre la superficie: 4.46/3.87/3.37:1 el
+     * borde y 6.13/5.33/4.64:1 su hover. Los candidatos anteriores (#5B7091 y #62789A) cumplían
+     * el 3:1 sobre #152238 y lo suspendían sobre #26374F —2.39:1 y 2.68:1—, que es justo donde
+     * viven los desplegables y los selectores de fecha.
+     */
+    --color-border-strong: #7189ac;
+    --color-border-strong-hover: #8ca2c4;
+
+    /*
+     * § Colors — Dark. #7FDBEE y #C2F0F7 son los dos tonos que la regla 2 de § Derivation Rules
+     * añade y que la rampa `primary` no tiene: el hover del azul de acción y el Tertiary
+     * extendido. Primary Active #90E0EF sí está en la rampa (`primary-300`), pero se nombra
+     * aquí para que el trío hover/active/tertiary se lea junto y no diverja.
+     */
+    --color-accent: #48cae4; /* Primary (dark) · 8.23 / 7.15 / 6.23:1 sobre la escalera */
+    --color-accent-hover: #7fdbee; /* 10.07:1 sobre superficie */
+    --color-accent-active: #90e0ef; /* 10.70:1 */
+    --color-tertiary: #c2f0f7; /* 12.98:1 */
+
+    /* Pista de la barra de progreso: Border, para conservar el par con el relleno (5.96:1). */
+    --color-progress-track: #2a3a55;
+
+    /*
+     * Sobre un fondo azul pálido, en oscuro, el azul de acción no necesita bajar de luminosidad:
+     * el «pálido» de § Dark Mode · Default List Item es #1E3550, apenas un peldaño por encima de
+     * Surface, así que #48CAE4 se queda muy por encima del 4.5:1.
+     */
+    --color-accent-tinted: #48cae4;
+
+    /*
+     * § Dark Mode · Button Destructive («#F87171 fill, #0B1220 text. Hover #FCA5A5. Active
+     * #FECACA») y § Colors — Dark · Error Ink para el papel de TEXTO: «every red text role —
+     * message copy, helper text, required asterisk. #F87171 as text falls to 4.36:1 on Surface
+     * Overlay, so red text always takes this tone». #FCA5A5 da 8.40 / 7.30 / 6.35:1.
+     */
+    --color-destructive: #f87171;
+    --color-destructive-hover: #fca5a5;
+    --color-destructive-active: #fecaca;
+    --color-destructive-ink: #0b1220; /* 6.77:1 sobre el relleno #F87171 */
+    --color-destructive-text: #fca5a5;
+
+    /*
+     * § Dark Mode · Button Primary y Button Destructive: la tinta sobre un relleno de acento se
+     * vuelve el fondo de página. Es un fallo de contraste, no una preferencia: blanco sobre
+     * #48CAE4 da 1.94:1 y sobre #F87171 da 2.77:1.
+     */
+    --color-accent-ink: #0b1220;
+
+    /* § Dark Mode · Tooltips: se invierte, igual que el claro se invierte sobre la interfaz clara. */
+    --color-tooltip-surface: #e8eef7;
+    --color-tooltip-ink: #0b1220;
+
+    /*
+     * Avisos y chips · § Dark Mode · Status Chip (error e info) y § Dark Mode · Filter Chip.
+     * Contrastes que da la propia sección: #FCA5A5 sobre #2C1013 9.29:1, #90E0EF sobre #062231
+     * 11.00:1. La tinta de info sube a Secondary (#90E0EF) porque en oscuro el azul de acento
+     * sube un escalón (regla 2 de § Derivation Rules — Dark).
+     */
+    --color-error-surface: #2c1013;
+    --color-error-outline: #6b2226;
+    --color-error-ink: #fca5a5;
+
+    --color-info-surface: #062231;
+    --color-info-outline: #10465f;
+    --color-info-ink: #90e0ef;
+
+    /* § Dark Mode · Status Chip: éxito 10.35:1 y aviso 11.23:1, ambos AAA. */
+    --color-success-surface: #06281f;
+    --color-success-outline: #14513c;
+    --color-success-ink: #6ee7b7;
+
+    --color-warning-surface: #2a1f05;
+    --color-warning-outline: #5a4408;
+    --color-warning-ink: #fcd34d;
+
+    /* Rellenos sólidos de § Dark Mode (Success #34D399, Warning #FBBF24) con la tinta #0B1220. */
+    --color-success-fill: #34d399;
+    --color-success-fill-ink: #0b1220;
+
+    --color-warning-fill: #fbbf24;
+    --color-warning-fill-ink: #0b1220;
+
+    /* § Dark Mode · Filter Chip: borde 3.78:1 y tinta 7.07:1 sobre el relleno #16304A del chip. */
+    --color-chip-surface: #16304a;
+    --color-chip-outline: #7189ac;
+    --color-chip-ink: #aebdd1;
+
+    /*
+     * Elevación · DESIGN.md § Dark Mode — Elevation. Una sombra negra al 6% es invisible sobre
+     * #0B1220, así que la jerarquía la sostienen la luminancia de la superficie y el borde; la
+     * sombra se conserva, más opaca (32/40/48/56%), solo para suavizar la costura. El vocabulario
+     * de cuatro niveles no cambia, y por eso tampoco cambia ninguna plantilla.
+     */
+    --elevation-subtle: 0 1px 3px 0 rgb(0 0 0 / 0.32);
+    --elevation-medium: 0 4px 12px 0 rgb(0 0 0 / 0.4);
+    --elevation-large: 0 12px 32px 0 rgb(0 0 0 / 0.48);
+    --elevation-overlay: 0 20px 48px 0 rgb(0 0 0 / 0.56);
+
+    /*
+     * § Dark Mode · Blue Focus: misma construcción de dos anillos, con el interior en el fondo de
+     * página oscuro y el exterior subido un escalón de la escala cian (#48CAE4, 8.23:1 sobre
+     * superficie). Esto es lo que borra el halo blanco de cada campo enfocado.
+     */
+    --focus-ring-inset: #0b1220;
+    --focus-ring-accent: #48cae4;
+
+    /*
+     * § Dark Mode · Error Halo (dark): 2px #0B1220 + 4px #F87171 (5.76:1 sobre superficie). El
+     * aviso expreso de § Dark Mode · Blue Focus vale igual para este: «the light rings (#FAFCFF)
+     * must never be used in dark mode — they render as a white halo».
+     */
+    --error-ring-accent: #f87171;
+
+    /*
+     * Gráficas · § Charts — Dark. Derivadas con las mismas tres reglas: el cromo toma los papeles
+     * oscuros de tinta y borde, y las series suben un escalón de la misma rampa. Contrastes sobre
+     * la superficie del gráfico (#152238): rótulos de eje 8.35:1, tooltip 16.05:1, series 8.23:1,
+     * 10.70:1, 8.29:1 y 9.55:1. El borde de punto es la superficie, nunca #FFFFFF: con blanco cada
+     * marcador sale con halo.
+     */
+    --chart-grid: #2a3a55; /* Border · 1.39:1, decorativo */
+    --chart-tick: #aebdd1; /* Ink Secondary · 8.35:1 */
+    --chart-series-1: #48cae4; /* Primary (dark) */
+    --chart-series-2: #90e0ef; /* Secondary (dark) */
+    --chart-series-3: #34d399; /* Success (dark) */
+    --chart-series-4: #fbbf24; /* Warning (dark) */
+}
+
+/*
+ * Estas reglas van sin `@layer`: el CSS sin capa gana a cualquier capa, y Filament importa sus
+ * componentes en `layer(components)`. Es la única forma de corregir una clase `fi-*` del vendor
+ * sin subir la especificidad a base de selectores encadenados.
+ */
+
+/*
+ * Fondo de página (DESIGN.md § Colors · Background y § Dark Mode · Background).
+ *
+ * Filament pinta `<body class="fi-body">` con `bg-gray-50`, que en la rampa Slate de DESIGN.md es
+ * #F8FAFC —el gris de los campos deshabilitados, no el fondo de página—. No se puede corregir
+ * moviendo `gray-50`, porque ese tono tiene los dos usos; hace falta esta regla. Vale para los dos
+ * temas sin `:not(.dark)`: `--color-background` conmuta arriba, y en oscuro vale #0B1220, que es
+ * exactamente el `dark:bg-gray-950` que el vendor ya pinta debajo — regla y cromo coinciden en vez
+ * de pelearse.
+ */
+.fi-body {
+    background-color: var(--color-background);
+}
+
+/*
+ * La tarjeta de las pantallas de acceso (login y establecer contraseña).
+ *
+ * `.fi-simple-main` es el contenedor real de esas dos pantallas y el vendor lo pinta con
+ * `sm:rounded-xl` (12px, que DESIGN.md reserva a modales) y `ring-1 ring-gray-950/5`, un negro al
+ * 5% que no está en la paleta. DESIGN.md § Cards pide 8px de radio y un borde de 1px #E2E8F0, así
+ * que se sustituyen los dos. La sombra ya llega bien por `--shadow-xs`.
+ */
+.fi-simple-main {
+    /*
+     * `--color-border` y no `--gray-200`: el borde de tarjeta es #E2E8F0 en claro y #2A3A55 en
+     * oscuro (§ Dark Mode · Border), mientras que en oscuro el `gray-200` de la rampa es la
+     * TINTA (#E8EEF7). Leerlo de la rampa dejaría la tarjeta de login rodeada de una línea casi
+     * blanca en cuanto alguien active el tema oscuro.
+     */
+    border: 1px solid var(--color-border);
+    --tw-ring-color: transparent;
+}
+
+@media (width >= 40rem) {
+    .fi-simple-main {
+        border-radius: var(--radius-card);
+    }
+}
+
+/*
+ * Las superficies flotantes (modal y desplegable), el botón sólido de acento en oscuro y el Error
+ * Halo del campo inválido NO se corrigen aquí, aunque sus valores sí se declaren arriba: los aplica
+ * la capa de componentes que este fichero importa al final (`components/surfaces.css` y
+ * `components/controls.css`), que es la que tiene ese papel. Este fichero declara los tokens;
+ * aquella los cablea a las clases `fi-*`. Duplicar la regla en los dos sitios deja dos fuentes para
+ * el mismo píxel, que es justo lo que el reparto del principio del fichero evita.
+ */
+
+/*
+ * ── Casilla y radio marcados, en oscuro ──────────────────────────────────────────────────
+ *
+ * Lo único del cromo del vendor que la capa de componentes no cubre (no toca ningún `:checked`) y
+ * que sí es un fallo de contraste medido. Filament rellena el estado marcado con
+ * `dark:checked:bg-primary-500` —#1BA1CF en nuestra rampa— y dibuja la marca en blanco: 2.98:1,
+ * por debajo del 3:1 que WCAG 1.4.11 exige a un elemento gráfico. § Dark Mode · Checkboxes / Radio
+ * Buttons pide relleno #48CAE4 (`primary-400`) con la marca en #0B1220, que da 9.67:1.
+ *
+ * La marca es un SVG incrustado en `background-image`, y dentro de un `url()` no se puede resolver
+ * una `var()`: la única forma de recolorearla es reescribir el data URI con el mismo trazado del
+ * vendor y otro `fill`. Es el único hexadecimal literal del fichero, y vive dentro de `:root.dark`,
+ * donde solo puede valer el fondo de página.
+ */
+:root.dark input[type='checkbox'].fi-checkbox-input:checked,
+:root.dark input[type='checkbox'].fi-checkbox-input:indeterminate,
+:root.dark input[type='radio'].fi-radio-input:checked {
+    background-color: var(--primary-400);
+    border-color: var(--primary-400);
+}
+
+:root.dark input[type='checkbox'].fi-checkbox-input:checked {
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg viewBox='0 0 16 16' fill='%230b1220' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12.207 4.793a1 1 0 0 1 0 1.414l-5 5a1 1 0 0 1-1.414 0l-2-2a1 1 0 0 1 1.414-1.414L6.5 9.086l4.293-4.293a1 1 0 0 1 1.414 0z'/%3E%3C/svg%3E");
+}
+
+:root.dark input[type='checkbox'].fi-checkbox-input:indeterminate {
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg viewBox='0 0 16 16' fill='%230b1220' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M4.5 6.75a1.25 1.25 0 0 0 0 2.5h7a1.25 1.25 0 0 0 0-2.5h-7z'/%3E%3C/svg%3E");
+}
+
+:root.dark input[type='radio'].fi-radio-input:checked {
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg viewBox='0 0 16 16' fill='%230b1220' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='8' cy='8' r='3'/%3E%3C/svg%3E");
+}
+
+/*
+ * Respaldo del indicador de foco en modo de contraste forzado (Do's #9).
+ *
+ * El anillo azul de § Elevation se emite como `box-shadow`, y en `forced-colors: active` el
+ * navegador descarta las sombras mientras que sí respeta el `outline: none` con el que las
+ * plantillas lo sustituyen: sin esta regla, justo el perfil de usuario al que apunta Do's #9 se
+ * queda sin ninguna señal de foco. `CanvasText` es el color de texto que elige el sistema, no un
+ * color inventado; en este modo el navegador ignora la paleta de todas formas.
+ */
+@media (forced-colors: active) {
+    :focus,
+    :focus-visible {
+        outline: 3px solid CanvasText;
+        outline-offset: 2px;
+    }
+}
+
+@import './components/index.css'; /* Capa de componentes del armazón (MediCare+) — ver components/index.css */

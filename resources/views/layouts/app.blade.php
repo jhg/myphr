@@ -6,6 +6,9 @@
 
         <title>{{ $title ?? config('app.name') }}</title>
 
+        {{-- Familias de MediCare+ autoalojadas (DESIGN.md § Typography); `app.css` fija la de cuerpo. --}}
+        @fonts
+
         @vite(['resources/css/app.css', 'resources/js/app.js'])
 
         @livewireStyles

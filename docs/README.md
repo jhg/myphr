@@ -62,6 +62,9 @@ los códigos desde el primer dato es lo que hará viable el transporte después.
 
 - [OPAQUE.md](OPAQUE.md): autenticación por contraseña sin enviar la contraseña.
 - [adr/](adr/): decisiones de arquitectura, con su contexto y sus renuncias.
+- [specs/](specs/): el detalle de implementación de cada funcionalidad, apoyado en esos ADR. Ahí
+  vive el contrato criptográfico de la captura de eventos, que hay que respetar al pie de la letra
+  porque se congela con el primer dato real.
 
 [orion-phr]: https://orionhealth.com/us/blog/emr-vs-ehr-vs-phr-whats-the-difference-and-why-does-it-matter/
 [orion-fhir]: https://orionhealth.com/us/blog/hl7-vs-fhir-vs-snomed-ct/

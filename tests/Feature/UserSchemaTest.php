@@ -16,7 +16,6 @@ it('tiene las columnas nuevas de users', function (): void {
         'id',
         'name',
         'email',
-        'password',
         'opaque_credential_identifier',
         'opaque_registration_record',
         'opaque_profile',
@@ -29,30 +28,24 @@ it('tiene las columnas nuevas de users', function (): void {
     expect(Schema::getColumnType('users', 'encrypted_settings'))->toBe('text');
 });
 
-/** Spec 0001 §3.1: `password` es nullable y el alta no marca el correo como verificado. */
-it('crea un usuario sin contraseña y sin email verificado', function (): void {
+/** Con OPAQUE la contraseña nunca llega al servidor: no hay columna donde guardarla. */
+it('no tiene columna password', function (): void {
+    expect(Schema::hasColumn('users', 'password'))->toBeFalse();
+});
+
+/** Spec 0001 §3.1: el alta no marca el correo como verificado. */
+it('crea un usuario sin email verificado', function (): void {
     $user = User::factory()->create();
 
-    expect($user->password)->toBeNull()
-        ->and($user->email_verified_at)->toBeNull()
+    expect($user->email_verified_at)->toBeNull()
         ->and($user->opaque_registered_at)->toBeNull();
 });
 
-/** Spec 0001 §3.1: `password` fuera de la asignación masiva y sin cast `hashed`. */
-it('no admite password en asignación masiva', function (): void {
-    $user = User::factory()->create();
-
-    $user->fill(['password' => 'secreto']);
-
-    expect($user->password)->toBeNull();
-});
-
-/** Spec 0001 §3.1: la columna `password` no autentica a nadie. */
+/** Sin columna `password`, el contrato de `Authenticatable` se cumple con una cadena vacía. */
 it('devuelve una contraseña de autenticación vacía', function (): void {
     $user = User::factory()->create();
-    $user->forceFill(['password' => bcrypt('secreto')])->save();
 
-    expect($user->fresh()->getAuthPassword())->toBe('');
+    expect($user->getAuthPassword())->toBe('');
 });
 
 /** Spec 0001 §3: la clave primaria es un UUIDv7 en forma textual canónica en minúsculas. */

@@ -7,9 +7,10 @@
  * clave maestra en memoria y las instantáneas de DOM que Livewire retiene con datos descifrados, de
  * modo que quitar un `display: none` desde la consola devolvería el panel entero con datos en claro.
  *
- * **Quien cuenta el tiempo es el servidor**, sobre la última petición autenticada. Este temporizador
- * no decide la caducidad: no se ejecuta en una pestaña que el sistema operativo descartó por memoria
- * ni en una que nunca llegó a abrirse. Lo único que hace es avisar y disparar la llamada.
+ * **Quien cuenta el tiempo es el servidor**, sobre la última petición autenticada, en el middleware
+ * `App\Http\Middleware\EnforceIdleTimeout`. Este temporizador no decide la caducidad: no se ejecuta
+ * en una pestaña que el sistema operativo descartó por memoria ni en una que nunca llegó a abrirse.
+ * Lo único que hace es avisar y disparar la llamada.
  *
  * El orden del cierre es normativo (§4.6): la recarga dura va **después** de que el servidor
  * confirme. Recargar antes deja, ante una pérdida de red, el secreto vivo en servidor y al cliente
@@ -23,6 +24,7 @@
 import { postJson } from './http.js';
 import { forget } from './keyring.js';
 import { hardReload } from './navigate.js';
+import { forgetSettings } from './settings.js';
 
 /** Inactividad tolerada antes del cierre (ADR 0009). */
 export const INACTIVITY_LIMIT_MS = 15 * 60 * 1000;
@@ -113,8 +115,9 @@ export async function lock() {
     locking = true;
     clearTimers();
 
-    /** La clave se olvida ya: no depende de que la red funcione. */
+    /** La clave se olvida ya: no depende de que la red funcione. Los ajustes van con ella. */
     forget();
+    forgetSettings();
 
     document.dispatchEvent(new CustomEvent(LOCK_EVENT));
 

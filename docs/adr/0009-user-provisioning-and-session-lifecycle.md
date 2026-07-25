@@ -96,9 +96,19 @@ recordase deja de serlo. Emitir sobre una cuenta ya registrada exige confirmaci�
 vive en el servicio que emite enlaces, no en cada interfaz que lo llama.
 
 El cambio de contraseña de alguien que sí recuerda la actual es otra cosa y sí funciona: se abre la clave
-maestra con la contraseña vieja y se vuelve a envolver con la nueva, sin tocar los datos. Ese flujo no
-entra en la primera versión y hasta entonces la única vía es la reemisión del enlace, con la pérdida que
-describe el párrafo anterior.
+maestra con la contraseña vieja y se vuelve a envolver con la nueva, sin tocar los datos. **Ese flujo está
+implementado**, así que ante una contraseña comprometida o que se quiere rotar la vía correcta es el cambio
+de contraseña, no la reemisión del enlace: el enlace solo queda para quien la ha olvidado del todo, con la
+pérdida que describe el párrafo anterior.
+
+El flujo son cuatro rutas bajo el prefijo `password` del panel (`reauth/start`, `reauth/finish`,
+`registration/start` y `change`, en `PhrPanelProvider`), servidas por los controladores
+`app/Http/Controllers/Auth/Opaque/PasswordChange*`: la reautenticación es un login OPAQUE completo contra
+la contraseña actual —que además devuelve el sobre para abrir la clave maestra— y el registro rehace la
+credencial con la nueva. La clave maestra no cambia, solo se reenvuelve, así que el historial se conserva
+entero. Va con su propio limitador `opaque-password-change` (5/min por usuario, 30/min por IP), más
+estricto que el de login porque cada intento cuesta un handshake completo, y lo cubre
+`tests/Feature/PasswordChangeTest.php`.
 
 El registro de actividad anota el alta de usuarios y el uso del enlace, sin contenido, como fija el
 ADR 0006.
@@ -117,3 +127,6 @@ historial del intérprete de comandos ni en los registros del servidor.
 que cifrar el nombre añade poca privacidad real y a cambio rompería el menú de usuario, los breadcrumbs y
 el listado de administración de Filament, que los resuelven en servidor. Es una excepción consciente y
 acotada a la regla general de cifrar, y no se extiende a ningún otro campo.
+
+La otra excepción, con el mismo razonamiento y decidida después, es el idioma de la interfaz en
+`users.locale`: el ADR 0007 (`docs/adr/0007-encrypted-user-configuration.md`) la documenta con su coste.

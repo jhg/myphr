@@ -86,7 +86,8 @@ export function progressMixin() {
         /**
          * Estilo de la barra interior, como objeto y no como cadena: Alpine mezcla un objeto con
          * el `style` que ya trae el elemento, mientras que una cadena lo sustituiría entero y se
-         * llevaría por delante el color, la altura y el origen de la transformación.
+         * llevaría por delante el `scaleX(0)` inicial de la plantilla, que es el punto de partida
+         * de la transición.
          *
          * @returns {{transform: string, transition: string}}
          */

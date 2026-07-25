@@ -11,6 +11,7 @@ use App\Provisioning\RegistrationLinks;
 use App\Security\Opaque\Base64Url;
 use App\Security\Opaque\CredentialIdentifier;
 use App\Security\Opaque\OpaqueException;
+use App\Security\Opaque\OpaquePurpose;
 use App\Security\Opaque\RegistrationRequest;
 use App\Security\Opaque\RegistrationServer;
 use App\Security\Opaque\ServerSetup;
@@ -86,6 +87,7 @@ final readonly class RegistrationStartController
             'invitation_ref' => $link->id,
             'credential_identifier' => $credentialIdentifier,
             'profile' => $this->setup->profile,
+            'purpose' => OpaquePurpose::Registration,
             'expires_at' => now()->addMinutes(self::PENDING_TTL_MINUTES)->min($link->expires_at),
         ]);
 

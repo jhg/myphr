@@ -21,10 +21,10 @@ recarga de página, el bloqueo por inactividad y el cierre de sesión.
 
 Queda fuera, de forma explícita:
 
-* **Cambio de contraseña** de alguien que recuerda la actual. El ADR 0009 lo deja apuntado como un flujo
-  futuro (abrir la UMK con la contraseña vieja, reenvolverla con la nueva) y esta spec no lo desarrolla.
-  Hasta que exista, la única vía para una contraseña olvidada es la reemisión del enlace, con la pérdida
-  de historial que eso implica.
+* **Cambio de contraseña** de alguien que recuerda la actual. Existe y funciona (rutas `password/*` del
+  panel, controladores `Auth\Opaque\PasswordChange*`, `tests/Feature/PasswordChangeTest.php`); lo describe
+  el ADR 0009 y esta spec no lo desarrolla porque no forma parte del arranque de sesión. La reemisión del
+  enlace, con la pérdida de historial que implica, queda solo para una contraseña **olvidada**.
 * **Recuperación de cuenta** sin contraseña ni enlace nuevo. No hay escrow en esta fase (ADR 0002).
 * **Compartición** de datos con un profesional u otro usuario. El identificador de clave del ADR 0004
   reserva el hueco, pero no hay mecanismo que lo use todavía.
@@ -269,7 +269,10 @@ el pendiente ya no existe y, si el usuario ya quedó registrado con ese mismo `r
 responde éxito de nuevo en vez de un error genérico de "registro no encontrado". Ver sección 7 para el
 detalle del modo de fallo que esto cubre.
 
-Rate limiting: por IP.
+Rate limiting: por IP y por hash del `registrationId`. No comparte limitador con `registration/start`,
+porque esta ruta no recibe el token del enlace: la clave por token sería la del valor vacío para todo el
+mundo, es decir, un único cubo compartido que cualquiera agota desde una IP para dejar sin alta a toda la
+instalación.
 
 ### 4.3 `POST /phr/auth/opaque/login/start`
 
@@ -555,6 +558,15 @@ navegador: un temporizador de cliente no se ejecuta en una pestaña que el siste
 memoria ni en una que nunca llegó a abrirse. El temporizador del navegador es solo lo que dispara la
 recarga dura una vez que el servidor ya cerró la sesión, no lo que decide si debe cerrarla.
 
+Ese conteo vive en el middleware `EnforceIdleTimeout`, dentro del grupo de `authMiddleware()` del panel y
+por detrás de `Authenticate`. Guarda la marca de la última petición autenticada en la propia carga útil de
+la sesión, sin ninguna columna nueva, y cuando se pasan los quince minutos hace lo mismo que la ruta de
+bloqueo: destruye el secreto, cierra la sesión de Laravel y rota el token CSRF. La respuesta es un 401 con
+cuerpo JSON cuando el cliente pide JSON, que es lo que la recuperación de la sección 6.2 ya sabe llevar a
+la pantalla de acceso, y una redirección al login en una navegación normal. La ruta de bloqueo queda exenta
+a propósito: es la que ya hace esa misma destrucción, y contestarle con un 401 dejaría al cliente
+reintentando su cierre en bucle.
+
 Filament monta su propio `POST /logout` por defecto. Ese endpoint no sabe nada del secreto de sesión, así
 que el cierre de sesión normal (la persona pulsa "salir") tiene que pasar por el mismo camino de
 destrucción que usa el bloqueo, no confiar en que el logout de Filament lo haga.
@@ -673,8 +685,14 @@ propiedades `#[Url]` (sección 9).
 `auth/opaqueClient.js` (único sitio que llama a `@serenity-kit/opaque`, con el KSF fijado como constante
 congelada), `auth/keyring.js` (dueño de la UMK en memoria, nunca la expone fuera de su propio módulo),
 `auth/recovery.js` (lee y escribe el paquete de `sessionStorage`, pide el secreto de sesión),
-`auth/setPasswordPage.js`, `auth/loginPage.js`, `auth/lock.js` (temporizador de inactividad),
+`auth/setPasswordPage.js`, `auth/loginPage.js`, `auth/lock.js` (temporizador de inactividad, que avisa y
+dispara la recarga, pero no es quien decide la caducidad),
 `guards/livewirePayloadGuard.js` (interceptor de la sección 9).
+
+**Middleware**
+
+`App\Http\Middleware\EnforceIdleTimeout` (caducidad por inactividad contada en servidor, sección 8),
+`NoStore`, `SetLocale`.
 
 ## 11. Criterios de aceptación y pruebas
 
@@ -709,6 +727,12 @@ congelada), `auth/keyring.js` (dueño de la UMK en memoria, nunca la expone fuer
   lleva a la pantalla de login.
 * El bloqueo se prueba comprobando que, tras `POST /phr/auth/lock`, una petición posterior a
   `session-secret` responde 410, y que la sesión de Laravel ya no está autenticada.
+* Una sesión autenticada cuya última petición fue hace más de quince minutos queda cerrada en la siguiente
+  petición, sin que el navegador haya llamado a `POST /phr/auth/lock`: la sesión deja de estar autenticada,
+  el secreto desaparece y la respuesta es 401 en JSON o redirección al login en una navegación.
+* Los formularios de login y de establecimiento de contraseña no declaran `method` ni `action`, y ningún
+  campo de contraseña declara `name`, de modo que un envío nativo del formulario (sin Alpine todavía
+  hidratado, o con el bundle sin cargar) no puede llevar la contraseña al servidor.
 
 ## 12. Riesgos asumidos
 
@@ -731,3 +755,18 @@ Un punto del diseño de origen que no se ha incorporado a esta spec: la posibili
 de registro a un fichero con permisos restringidos (modo `0600`) como alternativa a imprimirlo solo por
 terminal. Se descarta porque hoy no hay ningún despliegue automatizado que lo necesite; si aparece, es un
 cambio pequeño y localizado en `phr:issue-registration-link`.
+
+## 13. Historial
+
+### 2026-07-26 — La caducidad por inactividad pasa a contarse en el servidor
+Antes: la sección 8 ya exigía que contase el servidor, pero la única cuenta que existía era el
+`setTimeout` de `auth/lock.js`, así que una pestaña descartada por memoria, un portátil cerrado o una
+llamada de cierre que no llegaba a salir dejaban la sesión y el secreto vivos hasta el `session.lifetime`
+de Laravel, hoy 120 minutos. Ahora lo cuenta `EnforceIdleTimeout` y el temporizador del navegador solo
+avisa y dispara la recarga.
+
+### 2026-07-26 — `registration/finish` deja de compartir limitador con `registration/start`
+Antes: la sección 4.2 pedía limitar por IP, y la ruta iba montada sobre el limitador de
+`registration/start`, cuya segunda clave es el hash del `registrationToken`. Esa ruta no recibe ese campo,
+así que todas sus peticiones caían en el mismo cubo de 15 por minuto y cualquiera podía agotarlo para
+dejar sin alta a toda la instalación.

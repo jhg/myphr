@@ -1,5 +1,6 @@
 <?php
 
+use App\Crypto\EnvelopeValidator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -44,7 +45,30 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+/**
+ * Sobre cifrado de mentira, con la forma que valida `App\Crypto\EnvelopeValidator`.
+ *
+ * El servidor no puede fabricar un sobre real porque no tiene la clave del cliente, así que los
+ * tests del transporte usan uno bien formado pero indescifrable: prefijo `v1.` más base64url de un
+ * tamaño de relleno admitido. Es suficiente, porque el servidor solo valida la envoltura.
+ *
+ * Vive aquí, y no en cada fichero de test, porque lo necesitan las cuatro pantallas de eventos y
+ * declararlo en dos ficheros de `Feature` rompe la suite entera con «cannot redeclare function».
+ */
+function envelopeCipherText(int $paddedSize = 256): string
 {
-    // ..
+    $totalBytes = EnvelopeValidator::HEADER_BYTES
+        + EnvelopeValidator::TAG_BYTES
+        + $paddedSize;
+
+    return EnvelopeValidator::PREFIX
+        .rtrim(strtr(base64_encode(random_bytes($totalBytes)), '+/', '-_'), '=');
+}
+
+/**
+ * Instante actual en la forma canónica del ADR 0004, que es la única que acepta `storeEvent`.
+ */
+function canonicalOccurredAtNow(): string
+{
+    return now()->utc()->format('Y-m-d\TH:i:s.u\Z');
 }

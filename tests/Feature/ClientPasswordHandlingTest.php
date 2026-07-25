@@ -143,3 +143,81 @@ it('no cuenta las menciones en comentarios', function (string $snippet): void {
     "// no uses wire:model\nconst a = 1;",
     "<!-- ni localStorage -->\n<div></div>",
 ]);
+
+/**
+ * Ningún formulario de las vistas propias puede declarar `method` o `action`.
+ *
+ * Con esos dos atributos, un envío nativo (Enter antes de que Alpine hidrate, `app.js` que no
+ * cargó, bundle obsoleto tras un despliegue) manda el formulario entero al endpoint OPAQUE por
+ * POST, con la contraseña en claro en el cuerpo. El CSRF responde 419, pero el dato ya viajó y ya
+ * está en memoria del proceso PHP, expuesto a cualquier captura de cuerpo de petición. La única
+ * barrera sería `x-on:submit.prevent`, que no existe hasta que Alpine inicializa.
+ *
+ * Todo el estado de estos formularios viaja por `x-ref` y por atributos `data-*`, así que ni el
+ * `method`, ni el `action`, ni un `name` en un campo de contraseña tienen ningún uso legítimo aquí.
+ */
+it('no deja que un envío nativo de formulario mande nada al servidor', function (): void {
+    $offences = [];
+
+    foreach (clientSourceFiles() as $path => $source) {
+        if (! str_ends_with($path, '.blade.php')) {
+            continue;
+        }
+
+        $code = withoutComments($source);
+
+        preg_match_all('/<form\b[^>]*>/is', $code, $forms, PREG_OFFSET_CAPTURE);
+
+        foreach ($forms[0] as [$tag, $offset]) {
+            $line = substr_count(substr($code, 0, (int) $offset), "\n") + 1;
+
+            foreach (['method', 'action'] as $attribute) {
+                if (preg_match('/\s'.$attribute.'\s*=/i', $tag) === 1) {
+                    $offences[] = "{$path}:{$line} declara «{$attribute}» en un <form>";
+                }
+            }
+        }
+
+        preg_match_all('/<input\b[^>]*>/is', $code, $inputs, PREG_OFFSET_CAPTURE);
+
+        foreach ($inputs[0] as [$tag, $offset]) {
+            if (preg_match('/type\s*=\s*"password"/i', $tag) !== 1) {
+                continue;
+            }
+
+            if (preg_match('/\sname\s*=/i', $tag) === 1) {
+                $line = substr_count(substr($code, 0, (int) $offset), "\n") + 1;
+                $offences[] = "{$path}:{$line} declara «name» en un campo de contraseña";
+            }
+        }
+    }
+
+    expect($offences)->toBe([]);
+});
+
+/** El escaneo anterior sirve de poco si no mira formularios de verdad ni detecta el defecto. */
+it('mira los formularios de contraseña y detecta el atributo prohibido', function (): void {
+    $blades = array_filter(
+        clientSourceFiles(),
+        static fn (string $path): bool => str_ends_with($path, '.blade.php'),
+        ARRAY_FILTER_USE_KEY,
+    );
+
+    $forms = 0;
+    $passwordInputs = 0;
+
+    foreach ($blades as $source) {
+        $code = withoutComments($source);
+        $forms += preg_match_all('/<form\b[^>]*>/is', $code);
+        $passwordInputs += preg_match_all('/<input\b[^>]*type\s*=\s*"password"[^>]*>/is', $code);
+    }
+
+    expect($forms)->toBeGreaterThanOrEqual(5)
+        ->and($passwordInputs)->toBeGreaterThanOrEqual(5);
+
+    $offending = '<form method="post" action="/phr/auth/opaque/login/start">'
+        .'<input type="password" name="password"></form>';
+
+    expect(preg_match('/<form\b[^>]*\smethod\s*=/i', $offending))->toBe(1)
+        ->and(preg_match('/<input\b[^>]*type\s*=\s*"password"[^>]*\sname\s*=/i', $offending))->toBe(1);
+});

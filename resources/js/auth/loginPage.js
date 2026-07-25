@@ -12,6 +12,7 @@
 import { deriveKey, KDF_LABELS } from '../crypto/kdf.js';
 import { open } from '../crypto/envelope.js';
 import { zeroize } from '../crypto/zeroize.js';
+import { t } from '../i18n/index.js';
 import { envelopeContext, ENVELOPE_PURPOSES } from './context.js';
 import { AuthRequestError, postJson, updateCsrfToken } from './http.js';
 import {
@@ -29,28 +30,7 @@ import {
 } from './opaqueClient.js';
 import { navigate } from './navigate.js';
 import { KEY_STRETCHING_SECONDS, progressMixin } from './progress.js';
-
-/**
- * Etapas de la barra de progreso. La de `finishLogin` es la única que bloquea el hilo principal
- * durante segundos, y es la razón de que la barra exista: sin ella la persona pulsa dos veces.
- */
-const STAGES = Object.freeze({
-    preparing: 'Preparando…',
-    contacting: 'Comprobando tus datos…',
-    stretching: 'Derivando tu clave en este dispositivo. Tarda unos segundos…',
-    entering: 'Entrando…',
-});
-
-/**
- * Mensajes que ve la persona. Un único texto para todas las causas de fallo de credenciales, igual
- * que el servidor devuelve un único error genérico (§4.4): distinguirlas delataría qué cuentas
- * existen.
- */
-const MESSAGES = Object.freeze({
-    credentials: 'No hemos podido entrar con esos datos.',
-    configuration: 'Esta instalación no está configurada correctamente. Avisa a quien la administra.',
-    network: 'No hemos podido contactar con el servidor. Inténtalo de nuevo.',
-});
+import { loadSettings } from './settings.js';
 
 /**
  * Factoría del componente Alpine. Se registra como `phrLoginForm`.
@@ -98,7 +78,7 @@ export function loginForm() {
          * @param {string} password
          */
         async run(form, login, password) {
-            await this.advance(STAGES.preparing, 0.1);
+            await this.advance(t('stage.preparing'), 0.1);
 
             await opaqueReady();
 
@@ -106,7 +86,7 @@ export function loginForm() {
 
             const { clientLoginState, startLoginRequest } = startLogin(password);
 
-            await this.advance(STAGES.contacting, 0.25);
+            await this.advance(t('login.stage.contacting'), 0.25);
 
             const started = await postJson(form.dataset.loginStartUrl, {
                 login,
@@ -120,7 +100,7 @@ export function loginForm() {
              * `finishLogin` corre Argon2id de forma síncrona y a partir de aquí el hilo principal no
              * pinta nada más hasta que termine.
              */
-            await this.advance(STAGES.stretching, 0.85, KEY_STRETCHING_SECONDS);
+            await this.advance(t('login.stage.stretching'), 0.85, KEY_STRETCHING_SECONDS);
 
             const finished = finishLogin({
                 password,
@@ -134,7 +114,7 @@ export function loginForm() {
                 throw new AuthRequestError('Login failed.', null, 'authentication_failed');
             }
 
-            await this.advance(STAGES.entering, 0.95);
+            await this.advance(t('stage.entering'), 0.95);
 
             const session = await postJson(form.dataset.loginFinishUrl, {
                 handshakeId: started.handshakeId,
@@ -142,6 +122,9 @@ export function loginForm() {
             });
 
             unwrapMasterKey(finished.exportKey, session);
+
+            /** §6.1, paso 10: los ajustes cifrados, ya con la clave maestra en memoria. */
+            loadSettings({ envelope: session.encryptedSettings, userId: session.userId });
 
             /** §6.1, paso 9: el paquete de recuperación, ya con sesión creada y clave verificada. */
             const sessionSecret = decodeSessionSecret(session.sessionSecret);
@@ -155,7 +138,7 @@ export function loginForm() {
             /** §6.1, paso 10: el CSRF nuevo antes de navegar, o el siguiente POST da 419. */
             updateCsrfToken(session.csrf);
 
-            await this.advance(STAGES.entering, 1);
+            await this.advance(t('stage.entering'), 1);
 
             navigate(session.redirect);
         },
@@ -211,12 +194,12 @@ function unwrapMasterKey(exportKey, session) {
  */
 function describe(failure) {
     if (failure instanceof AuthRequestError) {
-        return failure.status === null ? MESSAGES.network : MESSAGES.credentials;
+        return failure.status === null ? t('common.network') : t('login.error.credentials');
     }
 
     if (failure?.name === 'OpaqueConfigurationError') {
-        return MESSAGES.configuration;
+        return t('common.configuration');
     }
 
-    return MESSAGES.credentials;
+    return t('login.error.credentials');
 }

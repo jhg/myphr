@@ -2,6 +2,7 @@
 
 * **Status**: Accepted
 * **Date**: 2026-07-25
+* **Updated**: 2026-07-25
 * **Decider**: Development Team
 
 ## Context
@@ -51,7 +52,8 @@ su registro y la que se enseña en consulta puede usar el oficial. SNOMED rechaz
 pacientes a la edición internacional y recomienda que cada implementación los aporte; Nueva Zelanda lo
 formalizó como refset nacional para portales de paciente.
 
-Idiomas por orden: inglés primero, castellano después y chino simplificado de China cuando sea viable. El
+Idiomas por orden: inglés primero, castellano después y chino simplificado de China, los tres ya en marcha
+(el ADR 0007 fija dónde vive la preferencia de idioma y por qué va en claro). El
 término oficial de SNOMED existe en inglés para todos los conceptos; su traducción española es español
 americano, así que para España hay que revisarla, y para chino no la hay en la IPS Terminology. Es otra
 razón para que la etiqueta al paciente sea nuestra: es la única capa que podemos ofrecer completa en los
@@ -69,17 +71,18 @@ espontáneamente, y corregirlo más adelante obligaría a re-cifrar todos los so
 usuario, uno a uno. Lo que se muestra en pantalla sale del catálogo y es otra cosa.
 
 **Un código LOINC incluye la unidad de medida y también qué se midió y dónde**, y eso condiciona el
-catálogo por partida doble. La glucemia capilar medida
-con glucómetro es `41653-7` en mg/dL y `14743-9` en mmol/L: son conceptos LOINC distintos, no el mismo
-dato en otra unidad. Como España y Estados Unidos usan mg/dL mientras Reino Unido y China usan mmol/L, un
-mismo concepto de nuestro catálogo puede necesitar más de un código según el país del usuario. La entrada
-del catálogo es el concepto que ve la persona; el código se elige al registrar el dato, en función de la
-unidad y del método de medición, que decide el ADR 0008 (`docs/adr/0008-measurement-method.md`). Conviene
-tenerlo presente al diseñar la tabla: la relación entre concepto y código no es uno a uno. Se almacenan desde el
-primer dato registrado: añadir
+catálogo por partida doble. La glucemia capilar medida con glucómetro es `41653-7` en mg/dL y `14743-9` en
+mmol/L: son conceptos LOINC distintos, no el mismo dato en otra unidad. Como España y Estados Unidos usan
+mg/dL mientras Reino Unido y China usan mmol/L, un mismo concepto de nuestro catálogo puede necesitar más
+de un código según el país del usuario. La entrada del catálogo es el concepto que ve la persona; el
+código se elige al registrar el dato, en función de la unidad y del método de medición, que decide el
+ADR 0008 (`docs/adr/0008-measurement-method.md`). Conviene tenerlo presente al diseñar la tabla: la
+relación entre concepto y código no es uno a uno. Se almacenan desde el primer dato registrado: añadir
 FHIR sobre datos codificados es mecánico, mientras que codificar texto libre histórico exige
 recodificación manual y pierde el contexto de captura. Guardar solo la etiqueta es la única opción
-irreversible y por eso se descarta ahora.
+irreversible y por eso se descarta ahora. Hay una excepción consciente y acotada, los alimentos de una
+comida, que se guardan en texto libre sin codificar porque hoy no existe una fuente que cumpla los
+requisitos de este ADR: la decide y la justifica el ADR 0010 (`docs/adr/0010-uncoded-food-entries.md`).
 
 **Nos limitamos a terminología de licencia libre y de alcance mundial.** No es solo para evitarnos
 trámites: como el proyecto se publica en abierto, cualquiera que lo despliegue en cualquier país debe
@@ -122,11 +125,10 @@ licencia queda referenciada aquí con enlace a la fuente primaria, verificada y 
   usar comercialmente, incluso a terceros que desplieguen este software, a cambio de citar la fuente,
   enlazar la licencia e indicar si se hicieron cambios. En la práctica: el catálogo publicado en el
   repositorio lleva esa atribución junto a los datos, no solo en este documento. A diferencia del Global
-  Patient Set,
-  que es una lista plana de identificador y término, la IPS Terminology incluye jerarquías para su
-  alcance. Su refset (`816080008`) tiene del orden de trece mil conceptos, medidos por expansión, sobre
-  los ocho mil que cita la guía de implementación
-  (https://docs.snomed.org/implementation-guides/snomed-ips-terminology-implementation-guide/2-ips-terminology-overview).
+  Patient Set, que es una lista plana de identificador y término, la IPS Terminology incluye jerarquías
+  para su alcance. Su refset (`816080008`) tiene del orden de trece mil conceptos, medidos por expansión,
+  sobre los ocho mil que cita su guía de implementación:
+  https://docs.snomed.org/implementation-guides/snomed-ips-terminology-implementation-guide/2-ips-terminology-overview
   Se descarga como paquete propio con su módulo, previo registro: no viene dentro del RF2 internacional,
   cuyos ficheros de refset no traen estos miembros. Al descargar se confirma el fichero de licencia.
 
@@ -150,8 +152,7 @@ ADR 0006 (`docs/adr/0006-encrypted-event-model.md`), que cifra también el tipo 
 
 Sobre los códigos que se cifren no se construye índice ciego. La regla ya estaba en el ADR 0002 y aquí
 tiene respaldo publicado: Naveed, Kamara y Wright (CCS 2015) recuperaron atributos cifrados de más del 80%
-de los
-registros en el 95% de doscientos hospitales estadounidenses explotando frecuencias
+de los registros en el 95% de doscientos hospitales estadounidenses explotando frecuencias
 (https://cs.brown.edu/people/seny/pubs/edb.pdf). En un PHR el ataque es más fácil que en ese estudio, no
 menos: cada usuario tiene un puñado de códigos en lugar de miles que promedien las frecuencias, la
 co-ocurrencia delata más que cada código por separado (ver juntos metformina y control de HbA1c
@@ -200,8 +201,8 @@ Sobre el software libre: este repositorio puede publicarse con el catálogo dent
 lo permiten con atribución, y quien lo despliegue hereda ese mismo permiso sin trámite alguno. La
 atribución de ambas (aviso literal de LOINC y crédito con enlace a CC BY 4.0 de la IPS Terminology) va en
 un fichero junto a los datos del catálogo, no solo en este ADR, porque la obligación acompaña a los datos
-allá donde se copien. Lo que nunca podrá incluir el repositorio es contenido de la edición completa de SNOMED CT:
-esa se obtiene con licencia de afiliado, que es individual por organización y territorio (gratuita en los
+allá donde se copien. Lo que nunca podrá incluir el repositorio es contenido de la edición completa de
+SNOMED CT: se obtiene con licencia de afiliado, que es individual por organización y territorio (gratuita en los
 países miembros, con tarifas en el resto), así que si algún día la adoptamos, el patrón es el habitual en
 software sanitario libre: el código se distribuye sin la terminología y cada implantador descarga la suya
 con su propia licencia. Esa responsabilidad es del implantador y se documentará en el README llegado el
@@ -225,3 +226,13 @@ obligaciones del contrato. Los datos ya registrados no se tocan: los códigos so
 
 Cada funcionalidad nueva trae consigo dos decisiones que este ADR no puede anticipar: qué conceptos añade
 al catálogo, que es criterio clínico y no de desarrollo, y qué parte de sus registros va cifrada.
+
+## Decision History
+
+### 2026-07-25: la regla de codificarlo todo admite una excepción, los alimentos de una comida
+Previously decided: todo lo que se registra lleva su código estándar desde el primer dato, sin excepciones,
+porque guardar solo la etiqueta es irreversible.
+Changed because: para alimentos no existe hoy ninguna fuente que cumpla a la vez licencia libre y alcance
+mundial, y obligar a elegir de un catálogo produce la entrada más parecida, no la correcta. La excepción se
+limita al texto del alimento y la decide el ADR 0010 (`docs/adr/0010-uncoded-food-entries.md`); la unidad
+sigue siendo UCUM.

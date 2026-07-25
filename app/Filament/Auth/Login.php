@@ -66,11 +66,11 @@ final class Login extends SimplePage
 
     public function getTitle(): string|Htmlable
     {
-        return __('Entrar');
+        return __('Sign in');
     }
 
     public function getHeading(): string|Htmlable
     {
-        return __('Entrar');
+        return __('Sign in');
     }
 }

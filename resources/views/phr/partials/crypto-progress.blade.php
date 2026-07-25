@@ -11,8 +11,26 @@
     está ocupado derivando, y la barra se quedaría congelada justo durante la espera que tiene que
     cubrir. El componente lanza la transición y espera un repintado **antes** de llamar al WebAssembly.
 
-    Los estilos van en línea porque el panel de Filament no carga `resources/css/app.css`: trae su
-    propia hoja compilada, y estas tres reglas no justifican un tema propio.
+    Los colores salen de los tokens de MediCare+ (DESIGN.md § Colors): pista en Tertiary #90E0EF
+    —«highlights, progress bars»— y relleno en Primary #0077B6. Las utilidades vienen del tema del
+    panel (`resources/css/filament/phr/theme.css`, que declara `resources/views/phr/**` como
+    `@source`); el panel no carga `resources/css/app.css`, así que ahí no hay nada que añadir.
+
+    Pista y relleno van en tokens de papel (`bg-progress-track` y `bg-accent`), no en
+    `bg-primary-300` / `bg-primary-600`: la rampa `primary` no se reasigna en `:root.dark`, así que
+    la barra se quedaba con el azul claro y el azul medio del tema claro sobre el fondo oscuro.
+
+    La pista NO es `bg-tertiary`. Subir los dos extremos un escalón, como haría § Dark Mode ·
+    Derivation Rule 2 con Tertiary y Primary, conserva cada tono y destruye el par: #C2F0F7 contra
+    #48CAE4 es 1.58:1 y la barra se queda invisible justo durante los segundos que existe para
+    cubrir. `--color-progress-track` fija la pareja en los dos modos —#90E0EF/#0077B6 (3.27:1) en
+    claro y #2A3A55/#48CAE4 (5.96:1) en oscuro—; el razonamiento y las ratios están junto al token
+    en `theme.css`.
+
+    El color, la altura y el origen de la transformación son ya utilidades (`bg-accent`,
+    `h-full`, `origin-left`). En el atributo `style` queda una sola declaración, el `scaleX(0)`
+    inicial, porque `progressStyle()` fusiona su objeto con ese atributo y la barra necesita un
+    punto de partida antes de que Alpine evalúe nada.
 --}}
 <div
     data-phr-progress
@@ -24,12 +42,14 @@
     x-bind:aria-valuenow="Math.round(progress * 100)"
     x-bind:aria-valuetext="stage"
 >
-    <div style="overflow: hidden; height: 0.375rem; border-radius: 9999px; background-color: rgb(0 0 0 / 0.1);">
+    <div class="h-2 overflow-hidden rounded-full bg-progress-track">
         <div
-            style="height: 100%; width: 100%; transform-origin: left center; transform: scaleX(0); background-color: currentColor;"
+            class="h-full w-full origin-left bg-accent"
+            style="transform: scaleX(0);"
             x-bind:style="progressStyle()"
         ></div>
     </div>
 
-    <p data-phr-progress-stage aria-live="polite" x-text="stage"></p>
+    {{-- Caption: Open Sans 12px medium, tracking 0.01em, texto secundario #475569. --}}
+    <p data-phr-progress-stage aria-live="polite" x-text="stage" class="mt-2 text-caption text-ink-secondary"></p>
 </div>

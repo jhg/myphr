@@ -25,7 +25,6 @@ it('crea la cuenta con el email normalizado y emite un enlace', function (): voi
 
     expect($user->email)->toBe('álvaro@example.com')
         ->and($user->name)->toBe('Álvaro')
-        ->and($user->password)->toBeNull()
         ->and($user->opaque_registered_at)->toBeNull()
         ->and($user->registrationLinks()->count())->toBe(1);
 });

@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Security\Opaque\BinaryCodec;
 use App\Security\Opaque\Ke3;
 use App\Security\Opaque\OpaqueException;
+use App\Security\Opaque\OpaquePurpose;
 use App\Security\Opaque\ServerLogin;
 use App\Security\Opaque\ServerLoginState;
 use Filament\Facades\Filament;
@@ -49,6 +50,7 @@ final readonly class LoginFinishController
 
         $consumed = OpaqueLoginHandshake::query()
             ->whereKey($data['handshakeId'])
+            ->where('purpose', OpaquePurpose::Login->value)
             ->where('expires_at', '>', now())
             ->delete();
 

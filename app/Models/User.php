@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Http\Controllers\Settings\UpdateSettingsController;
 use App\Policies\UserPolicy;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
@@ -20,11 +21,17 @@ use Illuminate\Notifications\Notifiable;
 /**
  * Spec 0001 §3.1: usuario con clave primaria UUIDv7 y credenciales OPAQUE.
  *
- * `password` queda fuera de la asignación masiva y sin cast `hashed`: no autentica a nadie y solo
- * existe por compatibilidad de framework (§3.1, §9). `name` se guarda en claro (ADR 0009).
+ * No existe columna `password`: con OPAQUE la contraseña nunca llega al servidor, así que guardar un
+ * sitio para un hash sería superficie de ataque sin ningún uso. `name` se guarda en claro (ADR 0009).
+ *
+ * `locale` también va en claro, y es la otra excepción consciente a la regla de cifrar (ADR 0007):
+ * el servidor tiene que saber en qué idioma pintar el panel antes de que exista ninguna clave. Fuera
+ * de `$fillable` a propósito, igual que `encrypted_settings`: solo lo escribe
+ * {@see UpdateSettingsController}, tras validar contra la lista
+ * cerrada de `config('app.supported_locales')`.
  */
 #[Fillable(['name', 'email'])]
-#[Hidden(['password', 'remember_token', 'opaque_credential_identifier', 'opaque_registration_record'])]
+#[Hidden(['remember_token', 'opaque_credential_identifier', 'opaque_registration_record'])]
 final class User extends Authenticatable implements FilamentUser
 {
     /** @use HasFactory<UserFactory> */
@@ -42,10 +49,18 @@ final class User extends Authenticatable implements FilamentUser
     }
 
     /**
-     * Spec 0001 §3.1: la columna `password` no se usa para autenticar.
+     * Spec 0001 §3.1: no hay columna `password`; el contrato de `Authenticatable` exige el método
+     * igualmente, así que se responde con la cadena vacía sin tocar el modelo.
      *
-     * Devolver siempre la cadena vacía impide que un guard basado en hash de contraseña dé por válida
-     * una credencial, incluso si alguien llegara a escribir un hash en la columna.
+     * Esto también es lo que mantiene inofensivo a `Illuminate\Session\Middleware\AuthenticateSession`
+     * (montado en el panel como `Filament\Http\Middleware\AuthenticateSession`, que no sobrescribe
+     * `handle()`): su primera línea es
+     * `if (! $request->hasSession() || ! $request->user() || ! $request->user()->getAuthPassword())`,
+     * y una cadena vacía es «falsy» en PHP, así que el middleware devuelve `$next($request)` de
+     * inmediato y nunca llega a comparar `password_hash_web` contra la sesión. Si este método
+     * devolviera algo distinto de `''`/`null`, esa comparación se activaría y, como nada la mantiene
+     * sincronizada (el login no pasa por `Auth::attempt()`), cerraría la sesión del usuario en la
+     * siguiente petición.
      */
     public function getAuthPassword(): string
     {

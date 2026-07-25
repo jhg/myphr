@@ -46,26 +46,32 @@ export function updateCsrfToken(token) {
 }
 
 /**
- * POST con cuerpo JSON contra un endpoint del panel.
+ * Petición con cuerpo JSON contra un endpoint del panel.
  *
+ * El método y las cabeceras extra son parámetros para que el CSRF y `credentials: 'same-origin'`
+ * sigan viviendo en un único sitio: un segundo cliente HTTP sería un segundo sitio donde olvidarlos.
+ *
+ * @param {string} method
  * @param {string} url
- * @param {object} [body]
+ * @param {object} body
+ * @param {Record<string, string>} headers Cabeceras adicionales (`If-Match`, por ejemplo).
  * @returns {Promise<any>} Cuerpo decodificado de una respuesta 2xx.
  * @throws {AuthRequestError} Cualquier respuesta no 2xx, cualquier cuerpo que no sea JSON y
  *         cualquier fallo de red.
  */
-export async function postJson(url, body = {}) {
+async function sendJson(method, url, body, headers) {
     let response;
 
     try {
         response = await fetch(url, {
-            method: 'POST',
+            method,
             credentials: 'same-origin',
             headers: {
                 'Content-Type': 'application/json',
                 Accept: 'application/json',
                 'X-Requested-With': 'XMLHttpRequest',
                 'X-CSRF-TOKEN': csrfToken(),
+                ...headers,
             },
             body: JSON.stringify(body),
         });
@@ -92,4 +98,28 @@ export async function postJson(url, body = {}) {
     }
 
     return payload;
+}
+
+/**
+ * POST con cuerpo JSON contra un endpoint del panel.
+ *
+ * @param {string} url
+ * @param {object} [body]
+ * @param {Record<string, string>} [headers]
+ * @returns {Promise<any>}
+ */
+export function postJson(url, body = {}, headers = {}) {
+    return sendJson('POST', url, body, headers);
+}
+
+/**
+ * PUT con cuerpo JSON contra un endpoint del panel.
+ *
+ * @param {string} url
+ * @param {object} [body]
+ * @param {Record<string, string>} [headers]
+ * @returns {Promise<any>}
+ */
+export function putJson(url, body = {}, headers = {}) {
+    return sendJson('PUT', url, body, headers);
 }

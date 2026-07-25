@@ -1,0 +1,7 @@
+This file records third-party attributions required by the licenses of the clinical
+terminologies used in this project's catalog (see docs/adr/0005-clinical-vocabulary-loinc-snomed.md).
+
+This material contains content from LOINC (http://loinc.org). LOINC is copyright © Regenstrief
+Institute, Inc. and the Logical Observation Identifiers Names and Codes (LOINC) Committee and is
+available at no cost under the license at http://loinc.org/license. LOINC® is a registered United
+States trademark of Regenstrief Institute, Inc.

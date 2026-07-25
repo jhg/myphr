@@ -1,0 +1,89 @@
+/*
+ * ── Vocabulario corto de la capa de componentes ────────────────────────────────────────────
+ *
+ * Este fichero NO declara ningún valor. Cada línea es un alias de un token que ya existe en
+ * `theme.css`, y esa es toda su razón de ser.
+ *
+ * Antes sí los declaraba, y el resultado fue el fallo que había que arreglar: dos familias
+ * paralelas para los mismos papeles (`--color-border-strong` frente a `--border-control`,
+ * `--color-ink-disabled` frente a `--ink-disabled`…), que ya habían divergido. `theme.css`
+ * traía los tonos correctos y nadie los leía; la capa de componentes leía esta copia, cuyos
+ * cuatro tonos oscuros eran justamente los candidatos que DESIGN.md § Contrast Verification —
+ * Dark enumera como RECHAZADOS, con la ratio que los rechazó:
+ *
+ *   --border-control       #5B7091  → 2.39:1 sobre Surface Overlay  → el bueno es #7189AC
+ *   --border-control-hover #62789A  → 2.68:1 sobre Surface Overlay  → el bueno es #8CA2C4
+ *   --ink-muted            #8798AF  → 4.10:1 sobre Surface Overlay  → el bueno es #94A6BE
+ *   --ink-disabled         #7488A3  → 4.11:1                        → el bueno es #8093AE
+ *
+ * Con alias eso no puede volver a pasar: el valor vive en un solo sitio y el par claro/oscuro lo
+ * resuelve el bloque `:root.dark` de `theme.css`. Aquí no hay `:root.dark` porque no hace falta —
+ * un alias apunta a una variable, no a un color, y conmuta con ella.
+ *
+ * Se conserva el nombre corto porque es el que usan los tres ficheros de esta carpeta y porque
+ * distingue el papel de componente (`--accent`, «el azul de acción de un botón») del token del
+ * sistema (`--color-accent`, «el azul de acción»). Va en `:root` y no en `@theme`: ninguna de
+ * estas necesita generar una utilidad de Tailwind — para eso está ya el token de `theme.css`.
+ */
+
+:root {
+    /* Escalera de superficies · § Elevation y § Dark Mode — Elevation. */
+    --surface-raised: var(--color-surface-raised);
+    --surface-overlay: var(--color-surface-overlay);
+
+    /* «No dark level may be drawn without one [a border]» (§ Elevation — Dark). */
+    --border-medium: var(--color-border-raised);
+    --border-large: var(--color-border-large);
+    --border-overlay: var(--color-border-overlay);
+
+    /* § Lists · Default List Item y § Dark Mode · Default List Item. */
+    --surface-hover: var(--color-surface-hover);
+    --surface-active: var(--color-surface-active);
+
+    /* § Buttons · Disabled y § Inputs · Disabled: dos rellenos distintos en claro. */
+    --surface-disabled: var(--color-surface-disabled);
+    --input-surface-disabled: var(--color-input-surface-disabled);
+    --ink-disabled: var(--color-ink-disabled);
+
+    /* Tintas · § Colors y § Dark Mode · Colors. */
+    --ink: var(--color-ink);
+    --ink-secondary: var(--color-ink-secondary);
+    --ink-muted: var(--color-ink-muted); /* placeholders, nunca datos */
+
+    /* Acento · § Buttons · Primary y § Dark Mode · Button Primary. */
+    --accent: var(--color-accent);
+    --accent-hover: var(--color-accent-hover);
+    --accent-active: var(--color-accent-active);
+    --accent-ink: var(--color-accent-ink); /* tinta ENCIMA del relleno de acento */
+    --accent-tinted: var(--color-accent-tinted); /* tinta de acento SOBRE un fondo azul pálido */
+
+    /* Destructivo · § Buttons · Destructive y § Dark Mode · Button Destructive. */
+    --destructive: var(--color-destructive);
+    --destructive-hover: var(--color-destructive-hover);
+    --destructive-active: var(--color-destructive-active);
+    --destructive-ink: var(--color-destructive-ink); /* tinta ENCIMA del relleno rojo */
+    --destructive-text: var(--color-destructive-text); /* rojo en papel de TEXTO (Error Ink) */
+
+    /* Bordes interactivos · § Inputs (1.5px #CBD5E1) y § Dark Mode · Border Strong (#7189AC). */
+    --border-control: var(--color-border-strong);
+    --border-control-hover: var(--color-border-strong-hover);
+
+    /*
+     * Relleno del botón con contorno. § Buttons · Secondary lo fija en #FFFFFF, pero § Dark Mode ·
+     * Button Secondary lo pasa a «transparent fill»: no es un capricho, es que en oscuro el botón
+     * puede caer sobre cualquier peldaño de la escalera —dentro de un modal (#1E2D45) o de un
+     * desplegable (#26374F)— y pintarle Surface (#152238) dibujaría un rectángulo MÁS OSCURO que
+     * su contenedor, es decir un parche en vez de un contorno. Es el único token de este fichero
+     * que no es un alias directo, porque el papel no existe con ese nombre en `theme.css`.
+     */
+    --button-outline-surface: var(--color-surface);
+
+    /* § Buttons · Sizes: alturas mínimas 36 / 44 / 52px (Do's #2, tabletas a pie de cama). */
+    --size-touch-sm: 2.25rem;
+    --size-touch: 2.75rem;
+    --size-touch-lg: 3.25rem;
+}
+
+:root.dark {
+    --button-outline-surface: transparent;
+}

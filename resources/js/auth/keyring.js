@@ -87,7 +87,16 @@ export function withMasterKey(work) {
     return work(masterKey);
 }
 
-/** Borra la clave de memoria. Es a lo sumo un intento (ADR 0004). */
+/**
+ * Borra la clave de memoria. Es a lo sumo un intento (ADR 0004).
+ *
+ * No borra aquí los ajustes descifrados de `settings.js`: ese módulo importa `withMasterKey` de
+ * este archivo, así que importarlo desde aquí para llamar a `forgetSettings()` cerraría un ciclo de
+ * módulos ES. En su lugar, `forgetSettings()` se llama por separado en los dos sitios que cierran
+ * sesión de verdad (`lock.js` y el `catch` de `setPasswordPage.js`); los dos usos internos de
+ * `forget()` de este archivo (`createMasterKey`, `adoptMasterKey`) son sustituciones de clave
+ * dentro de un mismo flujo de alta, no cierres de sesión.
+ */
 export function forget() {
     if (masterKey !== null) {
         zeroize(masterKey);

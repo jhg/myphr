@@ -36,4 +36,14 @@
 <meta name="phr-lock-url" content="{{ route('filament.phr.auth.lock') }}">
 <meta name="phr-login-url" content="{{ route('filament.phr.auth.login') }}">
 
+{{--
+    Tampoco es secreto: ya viaja en la respuesta de `login/finish` como `userId`. Se publica aquí
+    porque una pantalla que arranca directo en recuperación tras un F5 no pasó por el login en esta
+    carga y no tiene de dónde sacarlo. Es el dato asociado del sobre AEAD de la clave maestra en
+    `sessionStorage` (§6.2): sin él, `unwrapMasterKey` no abre.
+--}}
+@auth
+    <meta name="phr-user-id" content="{{ auth()->user()->getKey() }}">
+@endauth
+
 @vite('resources/js/app.js')

@@ -10,6 +10,7 @@ use App\Security\Opaque\CredentialIdentifier;
 use App\Security\Opaque\Ke1;
 use App\Security\Opaque\LoginNormalizer;
 use App\Security\Opaque\OpaqueException;
+use App\Security\Opaque\OpaquePurpose;
 use App\Security\Opaque\RegistrationRecord;
 use App\Security\Opaque\ServerLogin;
 use App\Security\Opaque\ServerSetup;
@@ -88,6 +89,7 @@ final readonly class LoginStartController
         $handshake = OpaqueLoginHandshake::create([
             'user_id' => $user?->id,
             'state_ciphertext' => Crypt::encryptString($result->state->serialize()),
+            'purpose' => OpaquePurpose::Login,
             'expires_at' => now()->addSeconds(self::HANDSHAKE_TTL_SECONDS),
         ]);
 

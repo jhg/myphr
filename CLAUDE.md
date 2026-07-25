@@ -9,6 +9,8 @@
 - Antes de implementar, consulta la documentación oficial reciente.
 - Si no puedes verificar lo que vas a implementar, no lo implementes.
 - For pure implementation work (writing/editing code), spawn a subagent running sonnet/terra (`model: sonnet`/``model: terra`) to do the coding.
+- **Todo texto visible se escribe traducible, con la clave en inglés.** La interfaz habla inglés (de serie), castellano y chino simplificado: `__('Save settings')` en Blade y PHP, con los catálogos en `lang/es.json` y `lang/zh_CN.json`; nunca un literal suelto. Las etiquetas al paciente de `app/Catalog` van en los tres idiomas dentro del propio enum, y el término oficial de LOINC no se traduce (ADR 0005). El idioma en vigor sale de `App\Support\SupportedLocale`, que es la lista cerrada, y se guarda en claro en `users.locale`: es una excepción consciente al cifrado, documentada en `docs/adr/0007-encrypted-user-configuration.md`.
+- **Todo campo numérico clínico usa `type="number" min="0" step="any" inputmode="decimal"`, nunca `type="text"`.** Con texto se puede teclear `7,8` o `7.8`, y esa ambigüedad de separador decimal es un error de parseo que en un dato cifrado no se corrige después. `step="any"` acepta decimales y aun así incrementa de uno en uno con las flechas (`step="1"` marcaría `7.5` como inválido). El límite de 2 decimales lo impone el cliente con `resources/js/health/numericValue.js` (`parseNumericValue`), no el navegador; el valor se sigue guardando como cadena (ADR 0004).
 
 === foundation rules ===
 

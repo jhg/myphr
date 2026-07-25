@@ -3,7 +3,16 @@
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
 
+/*
+ * Familia de cuerpo de MediCare+ (DESIGN.md § Typography · Body Font).
+ *
+ * Esta hoja la cargan las vistas que viven fuera del panel (`welcome.blade.php` y
+ * `layouts/app.blade.php`), que no pasan por el tema de Filament. Aquí solo se fija la familia:
+ * declarar la escala, la paleta o los radios sería una segunda fuente de verdad frente a
+ * `resources/css/filament/phr/theme.css`. `--font-open-sans` la publica el ayudante de fuentes de
+ * laravel-vite-plugin, que esas vistas emiten con `@fonts`.
+ */
 @theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
-        'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-sans: var(--font-open-sans, 'Open Sans'), ui-sans-serif, system-ui, sans-serif,
+        'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
 }

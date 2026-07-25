@@ -2,6 +2,7 @@
 
 * **Status**: Accepted
 * **Date**: 2026-07-25
+* **Updated**: 2026-07-25
 * **Decider**: Development Team
 
 ## Context
@@ -48,9 +49,12 @@ sea sensible.
 El contenido descifrado es JSON con versión, tipo, desfase horario y datos:
 
 ```json
-{"v": 1, "type": "glucose", "tz": "+02:00",
- "data": {"value": "142", "unit": "mg/dL", "loinc": "41653-7"}}
+{"v": 1, "type": "glucose", "tz": "+02:00", "origin": "manual", "recordedBy": "self",
+ "data": {"value": "142", "unit": "mg/dL", "loinc": "41653-7", "method": "capillary"}}
 ```
+
+Los campos comunes a cualquier tipo van en el nivel superior, junto a `v`, `type` y `tz`; lo propio del
+tipo va dentro de `data`, y ahí el token del método es obligatorio en toda medición por el ADR 0008.
 
 No usamos una columna JSON de base de datos: el servidor no puede consultar lo que no puede descifrar, así
 que un tipo `json` no aporta nada sobre `text` y sí invita a que alguien intente indexarlo dentro de un
@@ -65,25 +69,26 @@ Un evento no equivale a un recurso del formato destino: la tensión arterial, qu
 porque es lo que da el aparato y lo que vive el paciente, se exporta como dos observaciones separadas,
 porque el perfil de tensión no admite el pulso como componente. La asimetría la resuelve el exportador.
 
-**Un evento es un solo sobre**, no un sobre por campo: sus campos no tienen sentido por separado y
-cifrarlos uno a uno los multiplicaría sin ganar nada.
+Un evento es un solo sobre, no un sobre por campo: sus campos no tienen sentido por separado y cifrarlos
+uno a uno los multiplicaría sin ganar nada.
 
-**Lo que identifica a un evento** para el dato asociado del AEAD y para la derivación de su clave es
+Lo que identifica a un evento para el dato asociado del AEAD y para la derivación de su clave es
 `user_id` y `occurred_at`. Atan el sobre a su fila, de modo que mover un ciphertext a otra fecha o a otro
 usuario hace fallar el descifrado en lugar de mostrar un dato correcto atribuido al día equivocado.
 `user_id` es redundante hoy, porque la clave maestra por usuario ya impide leer sobres ajenos, pero cubre
 el día que existan claves compartidas. Se usa el instante y no el `id` de la fila porque es lo que define
 al evento y el cliente ya lo conoce antes de insertar.
 
-Consecuencia que conviene dejar escrita: el tipo clínico **no puede** entrar en el dato asociado, porque
+Consecuencia que conviene dejar escrita: el tipo clínico no puede entrar en el dato asociado, porque
 está cifrado dentro del propio sobre y no puede participar en su propia autenticación. Si alguien mete
 `glucose` ahí, rompe justo la propiedad que se buscaba.
 
-Los cinco tipos del MVP y su futuro inmediato: `glucose` (ver abajo), `insulin` (tipo `rapid|long|mixed`, dosis, y
-código del producto si procede, porque es una
-administración de medicación y no una observación), `bloodPressure` (un solo evento con sistólica,
-diastólica y pulso, como lo da el aparato), `meal` (`mealType` explícito más una lista de alimentos con
-texto libre, cantidad y unidad) y `note` (texto y hallazgos codificados opcionales).
+Los cinco tipos del MVP y su futuro inmediato: `glucose` (ver abajo), `insulin` (tipo `rapid|long|mixed`,
+dosis, y código del producto si procede, porque es una administración de medicación y no una observación),
+`bloodPressure` (un solo evento con sistólica, diastólica y pulso, como lo da el aparato), `meal`
+(`mealType` explícito más una lista de alimentos, cada uno con su texto libre, su cantidad y su unidad, con
+la forma que fija el ADR 0010, `docs/adr/0010-uncoded-food-entries.md`) y `note` (texto y hallazgos
+codificados opcionales).
 
 La glucemia no es un solo tipo de medición: el sensor mide en líquido intersticial, el medidor capilar mide
 sangre y las tiras de orina dan una presencia, no un número. Cada una tiene su código y no son
@@ -94,22 +99,23 @@ la glucemia.
 El servidor valida el formato del sobre, la codificación y el tamaño, que con el relleno a tamaños fijos
 solo puede ser uno de los valores permitidos más la cabecera del sobre. Nunca el contenido.
 
-**La unidad de medida es una preferencia del usuario**, no una elección por registro: se fija una vez
+La unidad de medida es una preferencia del usuario, no una elección por registro: se fija una vez
 (mg/dL o mmol/L para la glucemia) y determina qué código LOINC se guarda, porque son códigos distintos
 según el ADR 0005. Vive en la configuración cifrada del usuario, que decide el ADR 0007
 (`docs/adr/0007-encrypted-user-configuration.md`), y el cliente la necesita antes de poder registrar el
 primer dato.
 
-**Campos que se capturan aunque hoy no se usen**, porque el usuario o el aparato los conocen en ese
-momento y después son irrecuperables. Comunes a todo evento: si el dato es manual o viene de un aparato,
-el aparato si lo hay, si lo registra la propia persona o alguien que la cuida, y una nota libre opcional
-que sirve de válvula de escape para lo que no encaje. Por tipo: en la glucemia, el tipo de medición y el contexto
-respecto a la comida (ayunas, antes, después, al acostarse), que es el campo con más valor clínico de la
-lista y solo se sabe al registrarlo; en la insulina, el producto concreto en texto libre, porque rápida, lenta o
-mixta no
-es un código de medicamento y el destino exige uno, más la zona de inyección; en la tensión, el brazo; en
-las comidas, el orden de los alimentos y una cantidad con dos ranuras, código de unidad cuando exista y
-texto cuando sea doméstica; y en las notas, inicio, duración y severidad.
+Campos que se capturan aunque hoy no se usen, porque el usuario o el aparato los conocen en ese momento y
+después son irrecuperables. Comunes a todo evento: si el dato es manual o viene de un aparato, el aparato
+si lo hay, si lo registra la propia persona o alguien que la cuida, y una nota libre opcional que sirve de
+válvula de escape para lo que no encaje. Por tipo: en la glucemia, el tipo de medición y el contexto
+respecto a la comida (ayunas, antes de comer, después de comer, al acostarse), que es el campo con más
+valor clínico de la lista y solo se sabe al registrarlo, pero es opcional y no viene preseleccionado, de
+modo que si la persona no lo indica el campo no entra en el contenido cifrado en lugar de guardarse vacío;
+en la insulina, el producto concreto en texto libre, porque rápida, lenta o mixta no es un código de
+medicamento y el destino exige uno, más la zona de inyección; en la tensión, el brazo y la postura, que
+juntos forman su método de medición según el ADR 0008 y no son dos metadatos accesorios; en las comidas, el
+orden de los alimentos y su cantidad con unidad (ADR 0010); y en las notas, inicio, duración y severidad.
 
 No se guarda el estado del registro: es obligatorio en el formato destino pero se deriva al exportar, y lo
 mismo con el sujeto, la categoría y los perfiles.
@@ -128,6 +134,18 @@ En las comidas descartamos pedir los hidratos de carbono. Si el paciente no los 
 campos vacíos o números inventados, y un número inventado es peor que ninguno. El médico estima mejor a
 partir del alimento y la cantidad. Añadirlos después es un campo opcional, que por las reglas de
 versionado no rompe nada.
+
+Ese mismo argumento manda en el contexto respecto a la comida. Un desplegable que ya viene con "en ayunas"
+escrito convierte el descuido en un dato falso, y una glucemia mal etiquetada como de ayunas se lee peor
+que una sin etiquetar. Por eso el campo es opcional, sin opción preseleccionada, y ausente del contenido
+cuando no se responde.
+
+La cantidad de los alimentos tiene una sola forma posible porque dos ranuras obligaban a decidir después
+qué hacer con "un plato" o "un puñado", y esa decisión nunca llegaba. Ahora la unidad sale siempre de una
+lista cerrada codificada en UCUM, a costa de que quien no pesa la comida tenga que estimar. Qué unidades
+son y por qué los alimentos no se codifican lo decide el ADR 0010
+(`docs/adr/0010-uncoded-food-entries.md`), que también deja claro que entre esas unidades no hay
+conversión: un resumen que mezcle gramos y mililitros no suma.
 
 * **Pros**: el servidor no sabe qué registra el usuario, solo cuándo; el modelo admite tipos nuevos sin
   tocar el esquema; el formato en reposo queda cerrado con margen para rotación de claves y cambios de
@@ -164,21 +182,20 @@ estado previo.
 Cuando llegue la funcionalidad sin conexión, `deleted_at` pasa a hacer de lápida para que el borrado se
 propague entre dispositivos, que es la razón de reservarlo ya aunque el MVP no sincronice.
 
-**El registro de actividad del servidor solo anota lo que el servidor ya ve.** Alta y baja de registros,
+El registro de actividad del servidor solo anota lo que el servidor ya ve. Alta y baja de registros,
 modificación de usuarios (sabiendo únicamente que hubo cambio, nunca qué cambió ni qué configuración
 tienen, porque va cifrada), inicio de sesión y cierre de sesión cuando se produce, sabiendo que mucha
 gente no cierra sesión y simplemente deja que caduque. Sirve para auditar el servidor y nada más: no anota
-contenido clínico, ni
-nada procedente de los sobres cifrados, ni actividad del cliente como abrir o consultar un registro. Un
-log de accesos detallado acabaría revelando más patrón de uso que la propia tabla de eventos, que es justo
-lo que el diseño evita. Hay que revisar la configuración por defecto del paquete que se use, porque suelen
-registrar de más.
+contenido clínico, ni nada procedente de los sobres cifrados, ni actividad del cliente como abrir o
+consultar un registro. Un log de accesos detallado acabaría revelando más patrón de uso que la propia
+tabla de eventos, que es justo lo que el diseño evita. Hay que revisar la configuración por defecto del
+paquete que se use, porque suelen registrar de más.
 
-**Al añadir un tipo de evento hay que comprobar qué exige el formato de exportación**, aunque la
-exportación no esté implementada, porque **los campos que no se capturan en origen no se recuperan
-después**: no hay migración posible sobre datos cifrados.
+Al añadir un tipo de evento hay que comprobar qué exige el formato de exportación, aunque la exportación
+no esté implementada, porque los campos que no se capturan en origen no se recuperan después: no hay
+migración posible sobre datos cifrados.
 
-Hoy **ningún formato es obligatorio para nosotros**. El RGPD solo pide estructurado y legible por máquina,
+Hoy ningún formato es obligatorio para nosotros. El RGPD solo pide estructurado y legible por máquina,
 sin nombrar ninguno. El reglamento del Espacio Europeo de Datos Sanitarios obliga a los Estados y a los
 sistemas de historia clínica, no a una aplicación de bienestar como esta, cuya interoperabilidad declarada
 es voluntaria; y sus especificaciones técnicas ni siquiera existen todavía. El objetivo, por tanto, es
@@ -189,3 +206,20 @@ Hay una frontera que conviene no cruzar sin analizarla: si algún día la aplica
 paciente del sistema público, pasa a almacenar datos de categoría prioritaria y deja de estar claramente
 fuera de la definición de sistema de historia clínica del reglamento. Es una decisión de alcance de
 producto, no de campos.
+
+## Decision History
+
+### 2026-07-25: el contexto respecto a la comida pasa a opcional y sin valor preseleccionado
+Previously decided: el contexto se capturaba siempre y el desplegable llegaba con el primer caso del enum
+(`fasting`, en ayunas) marcado por el navegador, así que entraba en el contenido cifrado aunque nadie lo
+hubiera elegido.
+Changed because: es el mismo motivo por el que no pedimos los hidratos de carbono, un valor inventado es
+peor que ninguno. Cuando la persona no lo indica, el campo se omite del contenido en lugar de guardarse con
+un valor por defecto silencioso.
+
+### 2026-07-25: la cantidad de los alimentos deja de tener dos ranuras
+Previously decided: la cantidad se guardaba con dos ranuras, código de unidad cuando existiera y texto libre
+cuando la medida fuese doméstica.
+Changed because: la ranura de texto libre producía cantidades incomparables entre sí. Ahora la cantidad es
+un número y la unidad sale siempre de una lista cerrada, que enumera y justifica el ADR 0010
+(`docs/adr/0010-uncoded-food-entries.md`) junto con la decisión de no codificar el texto del alimento.

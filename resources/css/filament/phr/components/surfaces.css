@@ -1,0 +1,302 @@
+/*
+ * ── Superficies: tarjetas, secciones, tablas, pestañas, estados vacíos, modales y menús ────
+ *
+ * Filament repite la MISMA firma en todos sus contenedores:
+ *
+ *     rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10
+ *
+ * Aparece literal en section.css, empty-state.css, modal.css, tabs.css, container.css (tablas),
+ * notification.css, stats-overview-widget.css y dropdown/index.css. Son cuatro decisiones, y las
+ * cuatro se apartan de DESIGN.md:
+ *
+ *  1. `rounded-xl` = 12px, que § Border Radius reserva a «Modals, dialogs». Las tarjetas y los
+ *     paneles llevan Medium (8px), que es además el radio por defecto del sistema.
+ *  2. `ring-1 ring-gray-950/5`: un negro al 5% que no está en la paleta. § Cards pide 1px #E2E8F0,
+ *     y § Dark Mode · Border, #2A3A55.
+ *  3. La sombra: se corrige sola porque `theme.css` ya reasignó `--shadow-sm` a la elevación
+ *     Subtle. Lo que falta es el RELLENO por nivel, que es lo que sostiene la jerarquía en oscuro.
+ *  4. El título: `text-base font-semibold` (16px) para todo, en la familia de cuerpo. § Typography
+ *     da Subhead (Figtree 20px 600) a «card titles, panel headings».
+ *
+ * Todo lo de abajo son esas cuatro correcciones aplicadas contenedor a contenedor. Sin `@layer`,
+ * por el mismo motivo que en `chrome.css`.
+ */
+
+/* ══ Sección · el contenedor más usado del panel ══════════════════════════════════════════ */
+
+.fi-section:not(.fi-section-not-contained):not(.fi-aside),
+.fi-section:not(.fi-section-not-contained).fi-aside > .fi-section-content-ctn,
+.fi-ta-ctn,
+.fi-tabs:not(.fi-contained),
+.fi-empty-state:not(.fi-empty-state-not-contained),
+.fi-wi-stats-overview-stat {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card); /* 8px · § Border Radius · Medium */
+    --tw-ring-color: transparent;
+}
+
+/* § Cards · Default → Hover: la tarjeta sube de Subtle a Medium al pasar por encima. */
+.fi-section:not(.fi-section-not-contained):not(.fi-aside):hover {
+    box-shadow: var(--elevation-medium);
+    border-color: var(--border-medium);
+}
+
+/*
+ * Separadores internos. § Border Radius: «None (0px): Table cells, dividers» — un separador no
+ * lleva radio, pero sí tiene que llevar el color de borde del sistema y no el `white/10` del
+ * vendor, que en oscuro es un blanco translúcido y no #2A3A55.
+ */
+.fi-section.fi-section-has-header:not(.fi-collapsed) > .fi-section-content-ctn,
+.fi-section > .fi-section-content-ctn > .fi-section-footer {
+    border-color: var(--color-border);
+}
+
+/* § Typography · Subhead: «Figtree 20px semibold, 1.4. Card titles, panel headings.» */
+.fi-section .fi-section-header-heading,
+.fi-empty-state .fi-empty-state-heading,
+.fi-ta-empty-state .fi-ta-empty-state-heading,
+.fi-ta-header-heading,
+.fi-modal-heading {
+    font-family: var(--font-display);
+    font-size: var(--text-subhead);
+    line-height: var(--text-subhead--line-height);
+    font-weight: var(--text-subhead--font-weight);
+    color: var(--ink);
+}
+
+/*
+ * Las descripciones pasan de `text-sm text-gray-500` (#94A3B8, 2.54:1) a Body Small sobre la tinta
+ * secundaria (#475569, 7.4:1). Don'ts #10: los grises bajos no valen para información importante,
+ * y la descripción de una sección clínica lo es.
+ */
+.fi-section .fi-section-header-description,
+.fi-empty-state .fi-empty-state-description,
+.fi-ta-empty-state .fi-ta-empty-state-description,
+.fi-ta-header-description,
+.fi-modal-description {
+    font-size: var(--text-body-sm);
+    line-height: var(--text-body-sm--line-height);
+    color: var(--ink-secondary);
+}
+
+/* ══ Widget de estadística · lo primero que se ve al entrar ═══════════════════════════════ */
+
+/*
+ * El valor es el dato clínico de la tarjeta: Display en Figtree (§ Typography, «dashboard
+ * greetings, hero text») y tabular-nums para que las cifras no bailen entre widgets.
+ */
+.fi-wi-stats-overview-stat-value {
+    font-family: var(--font-display);
+    font-size: var(--text-display);
+    line-height: var(--text-display--line-height);
+    letter-spacing: var(--text-display--letter-spacing);
+    font-weight: var(--text-display--font-weight);
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+}
+
+/* La etiqueta que lo acompaña es un «status label»: Overline (§ Typography). */
+.fi-wi-stats-overview-stat-label {
+    font-size: var(--text-overline);
+    line-height: var(--text-overline--line-height);
+    letter-spacing: var(--text-overline--letter-spacing);
+    font-weight: var(--text-overline--font-weight);
+    text-transform: uppercase;
+    color: var(--ink-secondary);
+}
+
+/* ══ Tabla ════════════════════════════════════════════════════════════════════════════════ */
+
+/*
+ * La cabecera de columna es el otro «section marker» del panel: Overline en vez de los 14px
+ * semibold del vendor, que pesan lo mismo que el dato de la celda y aplanan la rejilla.
+ */
+.fi-ta-header-cell {
+    font-size: var(--text-overline);
+    line-height: var(--text-overline--line-height);
+    letter-spacing: var(--text-overline--letter-spacing);
+    font-weight: var(--text-overline--font-weight);
+    text-transform: uppercase;
+    color: var(--ink-secondary);
+}
+
+/* § Typography · Body Small: «Table cells, secondary info». */
+.fi-ta-cell {
+    font-size: var(--text-body-sm);
+    line-height: var(--text-body-sm--line-height);
+}
+
+/* § Border Radius · None: celdas y separadores. Y el color de línea del sistema, no `white/5`. */
+.fi-ta-table,
+.fi-ta-content-ctn,
+.fi-ta-header,
+.fi-ta-empty-state {
+    border-color: var(--color-border);
+    --tw-divide-opacity: 1;
+}
+
+.fi-ta-table > :not([hidden]) ~ :not([hidden]),
+.fi-ta-content-ctn > :not([hidden]) ~ :not([hidden]) {
+    border-color: var(--color-border);
+}
+
+/* § Lists: el resalte de fila es azul (#F0F7FF), no el gris neutro de fábrica. */
+.fi-ta-row:hover {
+    background-color: var(--surface-hover);
+}
+
+.fi-ta-row.fi-selected {
+    background-color: var(--surface-active);
+}
+
+/* ══ Estados vacíos ═══════════════════════════════════════════════════════════════════════ */
+
+/*
+ * Hay DOS componentes de estado vacío con CSS duplicado y clases distintas —`.fi-empty-state`
+ * (support) y `.fi-ta-empty-state` (tables)—; estilar solo uno deja las tablas vacías con el
+ * aspecto de fábrica. El disco del icono pasa del gris neutro al azul pálido de la marca
+ * (`primary-50`/`primary-100` = los #F0F7FF/#E0EFFF de § Lists) con el icono en Primary, que es
+ * lo que § Lists asigna a un elemento delantero.
+ */
+.fi-empty-state .fi-empty-state-icon-bg,
+.fi-ta-empty-state .fi-ta-empty-state-icon-bg {
+    background-color: var(--surface-active);
+    border-radius: 9999px; /* § Border Radius · Full */
+}
+
+.fi-empty-state .fi-empty-state-icon-bg .fi-icon,
+.fi-ta-empty-state .fi-ta-empty-state-icon-bg .fi-icon {
+    color: var(--accent);
+}
+
+/* ══ Pestañas ═════════════════════════════════════════════════════════════════════════════ */
+
+.fi-tabs-item {
+    min-height: var(--size-touch); /* 44px · Do's #2 */
+    border-radius: var(--radius-control);
+    padding-inline: 1rem;
+    font-size: var(--text-body-sm);
+}
+
+.fi-tabs-item:hover,
+.fi-tabs-item:focus-visible {
+    background-color: var(--surface-hover);
+}
+
+.fi-tabs-item.fi-active {
+    background-color: var(--surface-active);
+}
+
+/*
+ * Mismo par relleno/tinta que el ítem activo de la barra lateral (#0077B6 sobre #E0EFFF, 4.16:1) y
+ * misma corrección con `--accent-tinted` (5.54:1). Aquí importa doble: es el texto que dice en qué
+ * pestaña estás.
+ */
+.fi-tabs-item.fi-active .fi-tabs-item-label,
+.fi-tabs-item.fi-active > .fi-icon {
+    color: var(--accent-tinted);
+    font-weight: 600;
+}
+
+.fi-tabs-item .fi-tabs-item-label {
+    color: var(--ink-secondary);
+}
+
+.fi-tabs.fi-contained {
+    border-color: var(--color-border);
+}
+
+/* ══ Modal ════════════════════════════════════════════════════════════════════════════════ */
+
+/*
+ * Aquí el `rounded-xl` del vendor SÍ es correcto: § Border Radius da Large (12px) a «Modals,
+ * dialogs». Lo que cambia es el resto: § Elevation asigna a los modales la elevación **Large**
+ * (no Overlay, que es la de los desplegables), y § Dark Mode — Elevation dice que ese nivel se
+ * dibuja «fill Surface Raised (#1E2D45), 1px #3B4E6B border». Por eso el relleno y el borde son
+ * tokens de nivel y no `bg-white` + anillo negro.
+ */
+.fi-modal > .fi-modal-window-ctn > .fi-modal-window {
+    background-color: var(--surface-raised);
+    border: 1px solid var(--border-large);
+    box-shadow: var(--elevation-large);
+    --tw-ring-color: transparent;
+}
+
+.fi-modal-header,
+.fi-modal-footer {
+    border-color: var(--color-border);
+}
+
+/* ══ Desplegables ═════════════════════════════════════════════════════════════════════════ */
+
+/*
+ * § Elevation asigna la elevación **Overlay** a «dropdown menus, date pickers»; el vendor usa
+ * `shadow-lg`, que es un escalón por debajo. En oscuro, § Dark Mode — Elevation le da relleno
+ * Surface Overlay (#26374F) y borde #44587A: sin esos dos valores un menú abierto en oscuro se
+ * confunde con la tarjeta que tiene detrás, porque la sombra negra ahí no se ve.
+ */
+.fi-dropdown-panel {
+    background-color: var(--surface-overlay);
+    border: 1px solid var(--border-overlay);
+    border-radius: var(--radius-card);
+    box-shadow: var(--elevation-overlay);
+    --tw-ring-color: transparent;
+}
+
+.fi-dropdown-panel:not(.fi-dropdown-list) > :not([hidden]) ~ :not([hidden]) {
+    border-color: var(--color-border);
+}
+
+.fi-dropdown-list-item {
+    min-height: var(--size-touch); /* 44px · Do's #2, tabletas a pie de cama */
+    border-radius: var(--radius-control);
+    padding-inline: 0.75rem;
+    font-size: var(--text-body-sm);
+}
+
+.fi-dropdown-list-item:not(.fi-disabled):not([disabled]):hover,
+.fi-dropdown-list-item:not(.fi-disabled):not([disabled]):focus-visible {
+    background-color: var(--surface-hover);
+}
+
+.fi-dropdown-list-item-label {
+    color: var(--ink);
+}
+
+.fi-dropdown-header {
+    font-size: var(--text-overline);
+    line-height: var(--text-overline--line-height);
+    letter-spacing: var(--text-overline--letter-spacing);
+    font-weight: var(--text-overline--font-weight);
+    text-transform: uppercase;
+    color: var(--ink-secondary);
+}
+
+/* ══ Notificaciones ═══════════════════════════════════════════════════════════════════════ */
+
+/*
+ * El único sitio del vendor que calcula el fondo en tiempo de ejecución —
+ * `color-mix(in oklab, white 90%, var(--color-400))`—, así que hay que pisarlo con
+ * `background-color` y no con una utilidad. Una notificación flota: le toca Overlay.
+ *
+ * Don'ts #6 («no auto-descartar avisos importantes») no se toca aquí: es comportamiento, no CSS.
+ */
+.fi-no-notification:not(.fi-inline) {
+    background-color: var(--surface-overlay);
+    border: 1px solid var(--border-overlay);
+    border-radius: var(--radius-card);
+    box-shadow: var(--elevation-overlay);
+    --tw-ring-color: transparent;
+}
+
+.fi-no-notification-title {
+    font-size: var(--text-body-sm);
+    font-weight: 600;
+    color: var(--ink);
+}
+
+.fi-no-notification-body {
+    font-size: var(--text-helper);
+    color: var(--ink-secondary);
+}

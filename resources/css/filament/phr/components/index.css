@@ -1,0 +1,26 @@
+/*
+ * ── Capa de componentes del armazón · MediCare+ (DESIGN.md) ────────────────────────────────
+ *
+ * Este fichero existe para que `theme.css` solo tenga que añadir UNA línea de `@import`. Su único
+ * contenido son los cuatro ficheros de la carpeta, en el orden en el que dependen unos de otros:
+ *
+ *  1. `tokens.css`    — las parejas claro/oscuro que DESIGN.md define y `theme.css` aún no
+ *                        declara (escalera de superficies oscura, bordes por nivel de elevación,
+ *                        Overline, Error Halo, alturas táctiles). Va primero porque el resto las
+ *                        consume con `var(…)`.
+ *  2. `chrome.css`    — barra lateral, barra superior, marca, cabecera de página, ritmo vertical.
+ *  3. `surfaces.css`  — secciones, tarjetas, tablas, pestañas, estados vacíos, modales, menús.
+ *  4. `controls.css`  — botones, campos, casillas, insignias, avatares y el anillo de foco.
+ *
+ * Ninguna regla usa `@layer`: Filament importa su CSS en `layer(components)` y, por la cascada de
+ * capas, el CSS sin capa gana siempre. Es la misma técnica que `theme.css` ya emplea en `.fi-body`
+ * y `.fi-simple-main`, y evita subir la especificidad a base de encadenar selectores.
+ *
+ * Todo se resuelve en CSS: no se sobreescribe ninguna vista Blade del vendor, así que nada queda
+ * congelado frente a una actualización de Filament.
+ */
+
+@import './tokens.css';
+@import './chrome.css';
+@import './surfaces.css';
+@import './controls.css';

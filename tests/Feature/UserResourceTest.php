@@ -54,8 +54,7 @@ it('crea la cuenta, emite el enlace y lo muestra en un segundo paso', function (
     $created = User::query()->where('email', 'ada@example.com')->sole();
 
     expect($created->name)->toBe('Ada Lovelace')
-        ->and($created->opaque_registered_at)->toBeNull()
-        ->and($created->password)->toBeNull();
+        ->and($created->opaque_registered_at)->toBeNull();
 
     $link = UserRegistrationLink::query()->where('user_id', $created->id)->sole();
 

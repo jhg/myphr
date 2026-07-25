@@ -11,6 +11,7 @@ use App\Models\UserMasterKeyEnvelope;
 use App\Provisioning\InvalidRegistrationLinkException;
 use App\Provisioning\RegistrationLinks;
 use App\Security\Opaque\OpaqueException;
+use App\Security\Opaque\OpaquePurpose;
 use App\Security\Opaque\RegistrationRecord;
 use App\Security\Opaque\ServerSetup;
 use Illuminate\Http\JsonResponse;
@@ -74,6 +75,7 @@ final readonly class RegistrationFinishController
                  */
                 $consumed = OpaqueRegistration::query()
                     ->whereKey($data['registrationId'])
+                    ->where('purpose', OpaquePurpose::Registration->value)
                     ->where('expires_at', '>', now())
                     ->delete();
 

@@ -68,12 +68,12 @@ final class ManageUsers extends ManageRecords
     {
         return [
             CreateAction::make()
-                ->label('Dar de alta')
-                ->modalHeading('Dar de alta a una persona')
-                ->modalDescription('No se pide contraseña: la elige la persona en su navegador al abrir el enlace.')
-                ->modalSubmitActionLabel('Crear y emitir enlace')
+                ->label(__('Enroll'))
+                ->modalHeading(__('Enroll a new person'))
+                ->modalDescription(__('No password is requested: the person chooses it in their browser when they open the link.'))
+                ->modalSubmitActionLabel(__('Create and issue link'))
                 ->createAnother(false)
-                ->successNotificationTitle('Cuenta creada y enlace emitido')
+                ->successNotificationTitle(__('Account created and link issued'))
                 ->after(function (User $record, RegistrationLinks $links): void {
                     /** @var User|null $issuedBy */
                     $issuedBy = auth()->user();
@@ -98,29 +98,29 @@ final class ManageUsers extends ManageRecords
     public function showRegistrationLinkAction(): Action
     {
         return Action::make('showRegistrationLink')
-            ->label('Enlace de registro')
-            ->modalHeading('Enlace de registro')
-            ->modalDescription('Se muestra una sola vez. Cópialo ahora.')
+            ->label(__('Registration link'))
+            ->modalHeading(__('Registration link'))
+            ->modalDescription(__("It's shown only once. Copy it now."))
             ->modalIcon(Heroicon::OutlinedLink)
             ->modalWidth(Width::TwoExtraLarge)
             ->modalSubmitAction(false)
-            ->modalCancelActionLabel('Ya lo he copiado')
+            ->modalCancelActionLabel(__("I've copied it"))
             ->schema(fn (array $arguments): array => [
                 TextEntry::make('registrationUrl')
-                    ->label('Enlace para '.($arguments['login'] ?? ''))
+                    ->label(__('Link for :login', ['login' => $arguments['login'] ?? '']))
                     ->state((string) ($arguments['url'] ?? ''))
                     ->copyable()
-                    ->copyMessage('Enlace copiado')
+                    ->copyMessage(__('Link copied'))
                     ->extraAttributes(['class' => 'break-all']),
 
-                Callout::make('El token no se guarda: no se puede volver a mostrar.')
+                Callout::make(__('The token is not stored: it cannot be shown again.'))
                     ->color('warning')
                     ->icon(Heroicon::OutlinedExclamationTriangle),
 
                 UnorderedList::make([
-                    Text::make('Caduca en '.RegistrationLinks::TTL_HOURS.' horas y sirve una sola vez.'),
-                    Text::make('La aplicación nunca lo envía por correo: hazlo llegar por el canal que elijas.'),
-                    Text::make('La parte tras «#» no viaja al servidor salvo dentro de la petición de registro.'),
+                    Text::make(__('Expires in :hours hours and can only be used once.', ['hours' => RegistrationLinks::TTL_HOURS])),
+                    Text::make(__('The application never emails it: deliver it through whichever channel you choose.')),
+                    Text::make(__('The part after "#" never reaches the server except inside the registration request.')),
                 ]),
             ]);
     }

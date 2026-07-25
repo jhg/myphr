@@ -1,0 +1,471 @@
+/*
+ * ── Controles: botones, campos, insignias, avatares y el anillo de foco ────────────────────
+ *
+ * Sin `@layer`, por el mismo motivo que en `chrome.css` y `surfaces.css`.
+ */
+
+/* ══ Botón · base y tamaños · DESIGN.md § Buttons ═════════════════════════════════════════ */
+
+/*
+ * `.fi-btn` de fábrica es `px-3 py-2 text-sm font-medium`, SIN altura mínima. § Buttons pide
+ * «Open Sans 15px semibold, 10px/24px padding, 44px (touch target) min height», y Do's #2 lo
+ * repite para todo elemento interactivo: el panel se usa en tabletas a pie de cama, donde 40px
+ * es la diferencia entre pulsar «Guardar» y pulsar el botón de al lado.
+ *
+ * `--text-button` ya estaba declarado en `theme.css` y no lo consumía nadie.
+ */
+.fi-btn {
+    min-height: var(--size-touch); /* 44px · tamaño medio */
+    padding: 0.625rem 1.5rem; /* 10px / 24px */
+    border-radius: var(--radius-control); /* 8px · § Border Radius · Medium */
+    font-size: var(--text-button); /* 15px */
+    line-height: var(--text-button--line-height);
+    font-weight: 600;
+}
+
+/* § Buttons · Sizes: «Small 8px 16px / 13px (min-height 36px)». */
+.fi-btn.fi-size-xs,
+.fi-btn.fi-size-sm {
+    min-height: var(--size-touch-sm);
+    padding: 0.5rem 1rem;
+    font-size: var(--text-helper); /* 13px */
+}
+
+/* § Buttons · Sizes: «Large 14px 32px / 16px (min-height 52px)». */
+.fi-btn.fi-size-lg,
+.fi-btn.fi-size-xl {
+    min-height: var(--size-touch-lg);
+    padding: 0.875rem 2rem;
+    font-size: var(--text-body); /* 16px */
+}
+
+/* ══ Botón · variante Primary (sólida con color) ══════════════════════════════════════════ */
+
+/*
+ * Filament decide el par relleno/tinta en PHP (`ColorManager::getComponentClasses`) y lo publica
+ * como las variables `--bg` / `--text` / `--dark-bg` / `--dark-text` sobre el propio elemento. En
+ * oscuro ese mapa deja texto blanco sobre el relleno claro, y DESIGN.md avisa expresamente de que
+ * ese par se queda en 1.82:1. § Dark Mode · Button Primary manda: relleno #48CAE4, tinta #0B1220.
+ * Por eso aquí se fija el par entero con los tokens conmutables en vez de heredar el del vendor:
+ * es una corrección de CONTRASTE, no de gusto.
+ */
+.fi-btn:not(.fi-outlined).fi-color-primary,
+.fi-btn:not(.fi-outlined).fi-color-info {
+    background-color: var(--accent);
+    color: var(--accent-ink);
+}
+
+.fi-btn:not(.fi-outlined).fi-color-primary > .fi-icon,
+.fi-btn:not(.fi-outlined).fi-color-info > .fi-icon {
+    color: var(--accent-ink);
+}
+
+.fi-btn:not(.fi-outlined).fi-color-primary:not(.fi-disabled):not([disabled]):hover,
+.fi-btn:not(.fi-outlined).fi-color-info:not(.fi-disabled):not([disabled]):hover {
+    background-color: var(--accent-hover);
+    color: var(--accent-ink);
+}
+
+.fi-btn:not(.fi-outlined).fi-color-primary:not(.fi-disabled):not([disabled]):active,
+.fi-btn:not(.fi-outlined).fi-color-info:not(.fi-disabled):not([disabled]):active {
+    background-color: var(--accent-active);
+}
+
+/* ══ Botón · variante Destructive ═════════════════════════════════════════════════════════ */
+
+/*
+ * Mismo problema de contraste y misma solución (§ Dark Mode · Button Destructive: #F87171 con
+ * tinta #0B1220). Don'ts #4: el rojo solo aparece aquí, en errores y en alertas críticas.
+ */
+.fi-btn:not(.fi-outlined).fi-color-danger {
+    background-color: var(--destructive);
+    color: var(--destructive-ink);
+}
+
+.fi-btn:not(.fi-outlined).fi-color-danger > .fi-icon {
+    color: var(--destructive-ink);
+}
+
+.fi-btn:not(.fi-outlined).fi-color-danger:not(.fi-disabled):not([disabled]):hover {
+    background-color: var(--destructive-hover);
+    color: var(--destructive-ink);
+}
+
+.fi-btn:not(.fi-outlined).fi-color-danger:not(.fi-disabled):not([disabled]):active {
+    background-color: var(--destructive-active);
+}
+
+/* ══ Botón · variantes Success y Warning (sólidas) ════════════════════════════════════════ */
+
+/*
+ * La familia no puede quedarse a medias: sin estas reglas, la primera acción de Filament que use
+ * `->color('success')` —una notificación, una acción de tabla— hereda el mapa del vendor, que en
+ * oscuro pone texto blanco sobre el rung 500 (2.54:1 en éxito, 2.15:1 en aviso). Los pares y sus
+ * ratios están en `theme.css`, junto a los tokens.
+ */
+.fi-btn:not(.fi-outlined).fi-color-success {
+    background-color: var(--color-success-fill);
+    color: var(--color-success-fill-ink);
+}
+
+.fi-btn:not(.fi-outlined).fi-color-success > .fi-icon {
+    color: var(--color-success-fill-ink);
+}
+
+.fi-btn:not(.fi-outlined).fi-color-warning {
+    background-color: var(--color-warning-fill);
+    color: var(--color-warning-fill-ink);
+}
+
+.fi-btn:not(.fi-outlined).fi-color-warning > .fi-icon {
+    color: var(--color-warning-fill-ink);
+}
+
+/* ══ Botón · variante Secondary (contorno) ════════════════════════════════════════════════ */
+
+/*
+ * § Buttons · Secondary: «#FFFFFF fill, #0077B6 text, 1.5px #0077B6 border». El vendor lo dibuja
+ * con `ring-1` (1px, y además como sombra), así que hay que sustituir el anillo por un borde real
+ * de 1.5px. En oscuro § Dark Mode lo pasa a relleno transparente con borde y texto #48CAE4.
+ */
+.fi-btn.fi-outlined {
+    border: 1.5px solid var(--border-control);
+    /* Surface en claro y transparente en oscuro: ver el JSDoc de `--button-outline-surface`. */
+    background-color: var(--button-outline-surface);
+    color: var(--ink);
+    box-shadow: none;
+    --tw-ring-color: transparent;
+}
+
+.fi-btn.fi-outlined.fi-color-primary,
+.fi-btn.fi-outlined.fi-color-info {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.fi-btn.fi-outlined.fi-color-primary > .fi-icon,
+.fi-btn.fi-outlined.fi-color-info > .fi-icon {
+    color: var(--accent);
+}
+
+/*
+ * El borde es un papel gráfico (umbral 3:1) y se queda en `--destructive`; la etiqueta es TEXTO y
+ * pasa a Error Ink, por el mismo motivo que el mensaje de validación de más abajo: en oscuro
+ * #F87171 como texto da 4.36:1 sobre Surface Overlay y no llega a AA.
+ */
+.fi-btn.fi-outlined.fi-color-danger {
+    border-color: var(--destructive);
+    color: var(--destructive-text);
+}
+
+.fi-btn.fi-outlined.fi-color-danger > .fi-icon {
+    color: var(--destructive);
+}
+
+.fi-btn.fi-outlined:not(.fi-disabled):not([disabled]):hover {
+    background-color: var(--surface-hover);
+}
+
+.fi-btn.fi-outlined:not(.fi-disabled):not([disabled]):active {
+    background-color: var(--surface-active);
+}
+
+/*
+ * Con el botón relleno de azul pálido, la tinta sube un peldaño. En claro #0077B6 sobre #F0F7FF es
+ * 4.51:1 y sobre #E0EFFF 4.16:1 — el primero pasa Do's #1 por una centésima y el segundo no pasa—,
+ * que es el mismo par que § Chips descarta por escrito y para el que el sistema ya define el tono
+ * corregido: `--accent-tinted` (#006399), 6.00:1 y 5.54:1. En oscuro el token vale lo mismo que
+ * `--accent`, así que la regla no cambia nada allí (6.45:1, ya pasaba).
+ */
+.fi-btn.fi-outlined.fi-color-primary:not(.fi-disabled):not([disabled]):hover,
+.fi-btn.fi-outlined.fi-color-info:not(.fi-disabled):not([disabled]):hover,
+.fi-btn.fi-outlined.fi-color-primary:not(.fi-disabled):not([disabled]):active,
+.fi-btn.fi-outlined.fi-color-info:not(.fi-disabled):not([disabled]):active {
+    color: var(--accent-tinted);
+}
+
+/*
+ * El botón neutro sin color (`.fi-btn:not(.fi-color)`) es en la práctica el Secondary del panel:
+ * lo llevan «Cancelar», los filtros y las acciones de cabecera. Recibe el mismo tratamiento —
+ * borde de 1.5px en vez de anillo negro al 10%— pero con la tinta neutra, para que el azul siga
+ * significando «acción principal» y no se gaste en todos los botones a la vez.
+ */
+.fi-btn:not(.fi-color):not(.fi-outlined) {
+    /* Mismo papel que el botón con contorno, y por tanto mismo relleno conmutable. */
+    background-color: var(--button-outline-surface);
+    border: 1.5px solid var(--border-control);
+    color: var(--ink);
+    box-shadow: none;
+    --tw-ring-color: transparent;
+}
+
+.fi-btn:not(.fi-color):not(.fi-outlined):not(.fi-disabled):not([disabled]):hover {
+    background-color: var(--surface-hover);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+/* ══ Botón · variante Ghost ═══════════════════════════════════════════════════════════════ */
+
+/*
+ * § Buttons · Ghost: «transparent, #0077B6 text, no border … 44px min height». En Filament el
+ * papel lo hace `.fi-link`, que es el enlace de acción de tablas y de cabeceras de sección.
+ */
+.fi-link {
+    min-height: var(--size-touch);
+    display: inline-flex;
+    align-items: center;
+    padding-inline: 0.75rem;
+    border-radius: var(--radius-control);
+    font-size: var(--text-button);
+    font-weight: 600;
+}
+
+/*
+ * La tinta del enlace la pone el vendor (`primary-600`, #0077B6). Al rellenarse de azul pálido cae
+ * en el mismo par marginal que el botón con contorno, así que sube al tono corregido.
+ */
+.fi-link:hover {
+    background-color: var(--surface-hover);
+    color: var(--accent-tinted);
+}
+
+.fi-link:active {
+    background-color: var(--surface-active);
+    color: var(--accent-tinted);
+}
+
+/* § Buttons · Disabled: «Background #E2E8F0, text #94A3B8, disabled cursor, no hover change». */
+.fi-btn.fi-disabled:not(.fi-force-enabled),
+.fi-btn[disabled]:not(.fi-force-enabled) {
+    background-color: var(--surface-disabled);
+    border-color: transparent;
+    color: var(--ink-disabled);
+    opacity: 1; /* el color ya comunica el estado; el 70% del vendor lo hacía dos veces */
+}
+
+/* ══ Botón de icono ═══════════════════════════════════════════════════════════════════════ */
+
+/*
+ * `.fi-icon-btn` tiene fichero propio y NO hereda de `.fi-btn`: es el botón de las acciones de
+ * tabla, del cierre de modal y de los conmutadores de la lateral. Do's #2 le aplica igual, así
+ * que sube de 36px a 44px.
+ */
+.fi-icon-btn {
+    min-inline-size: var(--size-touch);
+    min-block-size: var(--size-touch);
+    border-radius: var(--radius-control);
+    color: var(--ink-secondary);
+}
+
+.fi-icon-btn:not(.fi-disabled):not([disabled]):hover {
+    background-color: var(--surface-hover);
+    color: var(--accent);
+}
+
+/* ══ Campo de formulario · DESIGN.md § Inputs ═════════════════════════════════════════════ */
+
+/*
+ * El marco de un campo en Filament NO es un `border`: es `ring-1 ring-gray-950/10`, es decir una
+ * sombra. Por eso el anillo de foco de dos capas de § Elevation no se puede «añadir» — hay que
+ * sustituir la sombra entera. Se hace en tres pasos:
+ *
+ *  1. El marco pasa a ser un borde real de 1.5px #CBD5E1 (§ Inputs) — en oscuro Border Strong
+ *     #7189AC, que es el tono que § Dark Mode verifica sobre los tres peldaños de la escalera
+ *     (4.46/3.87/3.37:1) para que un borde de control cumpla el 3:1 de Do's #1 también sobre
+ *     Surface Overlay. NO es #5B7091: ese es uno de los candidatos que § Contrast Verification —
+ *     Dark enumera como rechazados, porque sobre Overlay se queda en 2.39:1 (ver `tokens.css`).
+ *  2. `box-shadow: none` desarma el anillo del vendor.
+ *  3. Al enfocar, `box-shadow` pasa a `--shadow-focus-blue` (2px del fondo de página + 4px de
+ *     Primary), que `theme.css` ya declaraba y que hasta ahora no consumía nada del panel.
+ */
+.fi-input-wrp {
+    background-color: var(--color-surface);
+    border: 1.5px solid var(--border-control);
+    border-radius: var(--radius-control);
+    box-shadow: none;
+    --tw-ring-color: transparent;
+}
+
+.fi-input-wrp:not(.fi-disabled):not(:has(.fi-ac-action:focus)):focus-within {
+    border-color: var(--accent);
+    box-shadow: var(--shadow-focus-blue);
+}
+
+/*
+ * Error Halo (§ Elevation): el mismo anillo en rojo. § Inputs · Error pide además borde #DC2626,
+ * y Do's #3 exige que el color no vaya solo — el asterisco obligatorio y el mensaje de error de
+ * más abajo son los otros dos portadores.
+ */
+.fi-input-wrp.fi-invalid {
+    border-color: var(--destructive);
+}
+
+.fi-input-wrp.fi-invalid:not(.fi-disabled):focus-within {
+    border-color: var(--destructive);
+    box-shadow: var(--shadow-error-halo);
+}
+
+/* § Inputs · Disabled: «Background #F8FAFC, border #E2E8F0, 60% opacity». */
+.fi-input-wrp.fi-disabled {
+    background-color: var(--input-surface-disabled);
+    border-color: var(--color-border);
+}
+
+/*
+ * § Inputs · Text Input: «Open Sans 16px regular. 44px tall, 10px/14px padding». Los 14px del
+ * vendor obligan a acercar la tableta a la cara para leer una glucemia.
+ */
+.fi-input {
+    min-block-size: var(--size-touch);
+    font-size: var(--text-body);
+    line-height: 1.6;
+    color: var(--ink);
+}
+
+.fi-input::placeholder {
+    color: var(--ink-muted); /* § Inputs: #94A3B8, y Don'ts #8: nunca en lugar de la etiqueta */
+}
+
+/*
+ * Do's #7: «use IBM Plex Mono for all medical record numbers, codes, and dosage values to prevent
+ * misreading». Las unidades de insulina, los mg/dL y las tensiones se teclean en campos numéricos
+ * y de fecha/hora; con IBM Plex Mono el 1 y el 7 dejan de parecerse. `tabular-nums` alinea las
+ * columnas de dígitos.
+ */
+.fi-input[type='number'],
+.fi-input[type='tel'],
+.fi-input[type='date'],
+.fi-input[type='time'],
+.fi-input[type='datetime-local'],
+.fi-input[inputmode='decimal'],
+.fi-input[inputmode='numeric'] {
+    font-family: var(--font-mono);
+    font-size: var(--text-code);
+    font-variant-numeric: tabular-nums;
+}
+
+/* § Inputs · Label: «Open Sans, 14px, weight 600, color #0F172A, bottom margin 6px». */
+.fi-fo-field-label-content {
+    font-size: var(--text-body-sm);
+    font-weight: 600;
+    color: var(--ink);
+}
+
+/* § Inputs · Helper Text: «Open Sans, 13px, weight 400, color #475569». */
+.fi-fo-field-wrp-hint,
+.fi-fo-field-wrp-helper-text {
+    font-size: var(--text-helper);
+    color: var(--ink-secondary);
+}
+
+/*
+ * El mensaje de validación es TEXTO, así que va en Error Ink (`--destructive-text`), no en el rojo
+ * de relleno. § Colors — Dark reserva #F87171 a «fills, borders, halos and icons — graphical roles,
+ * threshold 3:1» y lo rechaza como texto: 4.36:1 sobre Surface Overlay, por debajo de 4.5:1, y el
+ * panel pinta la mayoría de sus formularios dentro de modales y desplegables, que es justo ese
+ * peldaño. #FCA5A5 da 6.35:1 en el peor caso. Es la misma distinción que ya hacen las plantillas
+ * Blade con `text-destructive-text`.
+ */
+.fi-fo-field-wrp-error-message {
+    font-size: var(--text-helper);
+    color: var(--destructive-text);
+    font-weight: 500;
+}
+
+/* ══ Casillas y radios · § Checkboxes y § Radio Buttons ═══════════════════════════════════ */
+
+/*
+ * «20px (larger for clinical accuracy), 1.5px #CBD5E1 border». En oscuro el borde sube a Border
+ * Strong #7189AC —no #5B7091, que § Contrast Verification — Dark rechaza— por el mismo motivo de
+ * 3:1 que el campo de texto.
+ */
+.fi-checkbox-input,
+.fi-radio-input,
+.fi-toggle {
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    border-width: 1.5px;
+    border-color: var(--border-control);
+}
+
+.fi-checkbox-input {
+    border-radius: var(--radius-chip); /* 4px */
+}
+
+.fi-checkbox-input:hover,
+.fi-radio-input:hover {
+    border-color: var(--border-control-hover);
+    background-color: var(--surface-hover);
+}
+
+/* ══ Insignias · § Chips · Status Chip ════════════════════════════════════════════════════ */
+
+/*
+ * «4px corners. Open Sans 12px bold». El vendor usa `rounded-md` (6px) y 12px medium, y le pone un
+ * `ring-1 ring-gray-600/10` — otra vez un negro translúcido.
+ *
+ * Desviación consciente y única del documento: § Chips añade «uppercase», que aquí NO se aplica.
+ * Las insignias de este panel también transportan valores y unidades (Do's #7), y forzar
+ * mayúsculas sobre un dato clínico lo hace más difícil de leer, no menos — que es justo lo
+ * contrario de lo que persiguen Don'ts #10 y Do's #7. El peso 700 y el tracking ya separan la
+ * insignia del texto que la rodea.
+ */
+.fi-badge {
+    border-radius: var(--radius-chip);
+    font-size: var(--text-status-chip);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    padding: 0.25rem 0.75rem; /* 4px / 12px */
+    --tw-ring-color: transparent;
+    border: 1px solid var(--color-border);
+}
+
+/* ══ Avatares · § Border Radius · Full ════════════════════════════════════════════════════ */
+
+.fi-avatar {
+    border-radius: 9999px;
+}
+
+/* ══ Anillo de foco · Do's #9 ═════════════════════════════════════════════════════════════ */
+
+/*
+ * «Do provide high-contrast focus indicators on every interactive element.»
+ *
+ * Filament no tiene un gancho único: emite el foco componente a componente, casi siempre con
+ * `outline-hidden` y un simple cambio de fondo (`focus-visible:bg-gray-50`), que es color sin
+ * forma — con teclado no se sabe dónde estás. Hay que enumerar los selectores; esta es la lista
+ * de todo lo que se puede enfocar en el armazón.
+ *
+ * `--tw-ring-shadow` y `--tw-shadow` se anulan porque en Tailwind 4 el anillo se compone dentro
+ * de la misma propiedad `box-shadow`; sin desarmarlos, el anillo simple de `ring-2` se sumaría al
+ * de dos capas y se vería un tercer borde.
+ *
+ * El respaldo para `forced-colors: active` ya vive en `theme.css` y sigue siendo necesario: en ese
+ * modo el navegador descarta las sombras.
+ */
+.fi-btn:focus-visible,
+.fi-icon-btn:focus-visible,
+.fi-link:focus-visible,
+.fi-sidebar-item-btn:focus-visible,
+.fi-sidebar-group-btn:focus-visible,
+.fi-sidebar-database-notifications-btn:focus-visible,
+.fi-topbar-item-btn:focus-visible,
+.fi-user-menu-trigger:focus-visible,
+.fi-theme-switcher-btn:focus-visible,
+.fi-dropdown-list-item:focus-visible,
+.fi-tabs-item:focus-visible,
+.fi-ta-header-cell-sort-btn:focus-visible,
+.fi-checkbox-input:focus-visible,
+.fi-radio-input:focus-visible,
+.fi-select:focus-visible,
+.fi-breadcrumbs a:focus-visible,
+.fi-logo:focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-focus-blue);
+    --tw-ring-shadow: 0 0 #0000;
+    --tw-shadow: 0 0 #0000;
+    /* El anillo exterior se sale del flujo; sin esto lo recorta el contenedor con scroll. */
+    position: relative;
+    z-index: 1;
+}

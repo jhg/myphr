@@ -109,6 +109,40 @@ final class OpaqueServiceProvider extends ServiceProvider
             ];
         });
 
+        /**
+         * Cambio de contraseña: la clave es el usuario autenticado, que aquí siempre existe, y es
+         * más estricto que el login porque cada intento cuesta al servidor un handshake completo y
+         * a la persona doce segundos de Argon2id. La IP acompaña para que una cuenta comprometida
+         * no sirva de ariete desde muchos sitios a la vez.
+         */
+        RateLimiter::for('opaque-password-change', static function (Request $request): array {
+            $ip = self::clientIp($request);
+            $user = (string) ($request->user()?->getAuthIdentifier() ?? 'guest');
+
+            return [
+                Limit::perMinute(30)->by('opaque-password-change:ip:'.$ip),
+                Limit::perMinute(5)->by('opaque-password-change:user:'.$user),
+            ];
+        });
+
+        /**
+         * `registration/finish` no recibe el `registrationToken` (el cliente solo manda
+         * `registrationId`, `registrationRecord`, `wrappedUserMasterKey` y `encryptedSettings`),
+         * así que no puede compartir limitador con `registration/start`: la clave por token sería
+         * la del hash de la cadena vacía para todo el mundo, un único cubo de 15/min que cualquiera
+         * agota desde una IP para dejar sin alta a toda la instalación. Misma forma que
+         * `opaque-login-finish`: la IP y el identificador del pendiente, que es lo que sí viaja.
+         */
+        RateLimiter::for('opaque-registration-finish', static function (Request $request): array {
+            $ip = self::clientIp($request);
+            $registration = hash('sha256', self::stringInput($request, 'registrationId'));
+
+            return [
+                Limit::perMinute(30)->by('opaque-registration-finish:ip:'.$ip),
+                Limit::perMinute(5)->by('opaque-registration-finish:registration:'.$registration),
+            ];
+        });
+
         RateLimiter::for('opaque-login-finish', static function (Request $request): array {
             $ip = self::clientIp($request);
             $handshake = hash('sha256', self::stringInput($request, 'handshakeId'));
