@@ -321,6 +321,7 @@ Respuesta 200:
 
 ```json
 {
+  "userId": "<uuid del usuario>",
   "redirect": "<url intended o el panel>",
   "csrf": "<token nuevo>",
   "sessionSecret": "<base64url 32B>",
@@ -328,6 +329,11 @@ Respuesta 200:
   "encryptedSettings": "<sobre v1.>"
 }
 ```
+
+`userId` es imprescindible, no informativo: entra en el dato asociado de los dos sobres que vienen en
+esta misma respuesta (paso 9 de la sección 5), así que sin él el cliente no puede abrirlos. La sección 4.1
+lo devuelve por la misma razón. No revela nada que quien recibe un 200 no sepa ya, porque la rama falsa
+nunca llega hasta aquí: responde con el error genérico de credenciales.
 
 `redirect` es `session()->pull('url.intended', $panelUrl)`, para no perder el destino que dejó
 `redirect()->guest()` cuando un middleware sacó a alguien de una URL profunda. La `session_key` de OPAQUE

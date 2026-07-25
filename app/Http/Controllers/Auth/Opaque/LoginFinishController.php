@@ -95,7 +95,9 @@ final readonly class LoginFinishController
 
         $sessionSecret = $this->sessionSecrets->mint($request->session());
 
+        /** El `userId` es el dato asociado del sobre de la clave maestra: sin el, el cliente no puede abrirlo. */
         return response()->json([
+            'userId' => $user->getKey(),
             'redirect' => $request->session()->pull('url.intended', $this->panelUrl()),
             'csrf' => $request->session()->token(),
             'sessionSecret' => $sessionSecret,
