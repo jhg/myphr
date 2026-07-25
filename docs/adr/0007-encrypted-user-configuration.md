@@ -70,6 +70,9 @@ La incomodidad de configurarlo una vez es pequeña comparada con el cambio de na
 
 La configuración se descifra en el arranque de la sesión, junto con la clave maestra.
 
+El sobre se escribe vacío en el alta, aunque no haya nada configurado, para que el servidor no pueda
+distinguir a quien tiene configuración de quien no.
+
 La unidad de medida guardada aquí es una **preferencia**, no un requisito para registrar: cada evento
 lleva su propia unidad y su código correspondiente, así que se puede elegir y cambiar al introducir el
 dato. La preferencia solo rellena el formulario por defecto y decide en qué unidad se muestra.

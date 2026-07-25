@@ -71,7 +71,9 @@ etiquetas se traducen a los idiomas del ADR 0005; los tokens no.
 `YYYY-MM-DDTHH:MM:SS.ffffffZ`, siempre UTC, sufijo `Z`, seis dígitos siempre, rellenando con ceros si la
 fuente da menos precisión. El cliente canonicaliza al cifrar y al descifrar, sin fiarse del formato que
 llegue por la red. ISO 8601 a secas no basta: admite variantes que son bytes distintos, y las propias
-herramientas del proyecto producen tres formas incompatibles entre sí.
+herramientas del proyecto producen tres formas incompatibles entre sí. Por el mismo motivo, cuando un
+identificador de usuario entre en el dato asociado, entra en su forma textual canónica en minúsculas y no
+como bytes.
 
 **Fallo de descifrado**: si el dato asociado no cuadra, el cliente no puede distinguir manipulación de
 corrupción, pero en ambos casos debe tratarlo como error visible y nunca ocultar el registro en silencio.
@@ -83,7 +85,9 @@ cincuenta líneas y ninguna biblioteca hace exactamente lo que necesitamos.
 
 El estado en el navegador queda inventariado y cerrado: la clave maestra en uso vive en memoria, su
 envoltura bajo el secreto de sesión vive en `sessionStorage`, y no hay nada más. Ni IndexedDB, ni
-`localStorage`, ni service worker, ni claves persistidas.
+`localStorage`, ni service worker, ni claves persistidas. El borrado de memoria solo aplica a los búferes
+de bytes propios, y aun ahí es a lo sumo un intento: una contraseña es una cadena inmutable de JavaScript
+y el WebAssembly de OPAQUE mantiene sus copias en su propia memoria mientras viva la pestaña.
 
 Fijamos las versiones sin rango, con `save-exact` e `ignore-scripts` en `.npmrc`, instalación con
 `npm ci`, y `npm audit signatures` como paso bloqueante de integración continua.
@@ -132,10 +136,17 @@ del KSF se manifestaría en producción como pérdida de acceso a la clave maest
 Las actualizaciones de estas dependencias no se automatizan: cuarentena de catorce días y lectura del
 diff completo antes de subir versión. Son releases raros y pequeños, así que es viable.
 
-Quedan dos cosas por medir o decidir antes de escribir el primer dato en producción. Cuánto tarda
-Argon2id con estos parámetros en el iPad más antiguo del personal, porque bajarlos después obliga a que
-todos se registren de nuevo. Y si conviene un ensayo con la clave maestra viviendo como objeto no
-extraíble de WebCrypto, que no persiste nada y sacaría los bytes del heap de JavaScript.
+Los parámetros de Argon2id (tres iteraciones, 64 MiB, paralelismo cuatro) se mantienen tal como están y no
+se miden antes de producción: la medición se hará con usuarios y dispositivos reales. Es un riesgo asumido
+de forma explícita: si resultan demasiado lentos en un dispositivo antiguo, cambiarlos después obliga a
+que todas las personas registradas vuelvan a registrarse desde cero. Hay una mitigación barata que no
+bloquea nada: el primer usuario, que es quien arranca el sistema, puede medirlo en el dispositivo más
+antiguo del que disponga antes de invitar a nadie más, y eso detecta el caso malo cuando todavía no cuesta
+nada.
+
+Queda una cosa por decidir antes de escribir el primer dato en producción: si conviene un ensayo con la
+clave maestra viviendo como objeto no extraíble de WebCrypto, que no persiste nada y sacaría los bytes del
+heap de JavaScript.
 
 La primera aplicación de estas reglas es el registro de eventos de seguimiento, en el ADR 0006
 (`docs/adr/0006-encrypted-event-model.md`), que fija además qué identifica a un evento dentro de su tabla

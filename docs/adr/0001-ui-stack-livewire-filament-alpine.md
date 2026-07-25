@@ -42,11 +42,12 @@ La excepción, acotada: escribimos JavaScript propio únicamente para la criptog
 (`docs/adr/0004-client-crypto-and-data-format.md`). Es el único código JS que mantenemos y auditamos
 nosotros.
 
-Para dibujar gráficas reutilizamos **Chart.js**, que Filament ya empaqueta para sus propios widgets
-(`vendor/filament/widgets/dist/components/chart.js`, versión 4.5.1). Usamos la biblioteca pero no los
-widgets de Filament, porque los datos llegan cifrados y se descifran en cliente. Es un tercero que recibe
-datos clínicos en claro y por tanto está dentro de la frontera de confianza, pero no añade superficie
-nueva de cadena de suministro: ya venía con el panel.
+Para dibujar gráficas usamos Chart.js instalado por npm con versión exacta. Filament lo empaqueta para
+sus widgets, pero no lo expone: su build solo exporta el componente Alpine y lo carga bajo demanda al
+renderizar un widget, que aquí no usamos porque los datos llegan cifrados. Es un tercero que recibe datos
+clínicos en claro y está dentro de la frontera de confianza. Lo que sí verificamos: no hace peticiones de
+red, no carga fuentes externas, no usa `eval`, no escribe en almacenamiento del navegador y no obliga a
+relajar ninguna política de contenido.
 
 ## Rationale
 

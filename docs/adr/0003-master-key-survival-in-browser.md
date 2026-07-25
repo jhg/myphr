@@ -27,10 +27,13 @@ origen. Lo que sí se elige es contra qué otros adversarios se protege.
 
 Activamos el modo SPA del panel, sin prefetching, con excepciones para las URL del mismo dominio que no
 sirven HTML (descargas, PDF, exports), porque Filament marca para navegación cualquier enlace del mismo
-host y un binario pasado por el parser de HTML rompe la interfaz.
+host y un binario pasado por el parser de HTML rompe la interfaz. El SPA es una decisión de interfaz y no
+es lo que sostiene la clave: el módulo criptográfico se carga en la cabecera del documento, que la
+navegación de Livewire conserva sin volver a ejecutar, con SPA o sin él.
 
-Sustituimos la página de login por una propia, que ya necesitábamos para OPAQUE, y en ella hacemos el
-redirect con navegación en lugar de devolver la respuesta de login por defecto de Filament.
+Sustituimos la página de login por una propia, que ya necesitábamos para OPAQUE. Al hacerlo dejamos de
+pasar por el flujo de respuesta de Filament, así que el destino que el usuario intentaba abrir hay que
+devolverlo nosotros en la respuesta del login en lugar de darlo por hecho.
 
 La supervivencia de la clave, sin embargo, no se apoya en el SPA. Al autenticarse, el servidor genera un
 secreto aleatorio ligado a la sesión de Laravel y lo entrega al cliente. El navegador guarda en
@@ -40,10 +43,21 @@ recupera la clave sin pedir contraseña. Así sobrevive al F5, al 419, al redire
 muere al cerrar la pestaña. La mitad del servidor caduca y se puede revocar, de modo que el material que
 quede huérfano en el navegador no abre nada.
 
+El ámbito por pestaña de `sessionStorage` es una propiedad de visibilidad, no de borrado: los navegadores
+lo persisten en el perfil para restaurar la sesión tras un cierre inesperado. Lo que hace inútil ese
+material no es su volatilidad, es que el secreto que lo abre vive en el servidor y se puede revocar.
+
 **La sesión de Laravel tiene que vivir en el servidor**, con almacén de base de datos o Redis, nunca con
 el driver de cookie. Con cookie, el contenido de la sesión viaja al navegador en cada petición y el
 cliente pasaría a tener las dos mitades a la vez, con lo que la propiedad se cae entera por un cambio de
 una línea en la configuración y sin ningún síntoma visible.
+
+El secreto de sesión no tiene tabla ni columna propia: se guarda dentro de la propia carga útil de la
+sesión de Laravel. Con almacén de servidor y sin driver de cookie, la revocación sigue funcionando igual,
+porque destruir la sesión destruye su carga útil y con ella el secreto, sin ningún mecanismo adicional que
+mantener. Lo que se pierde es poder inspeccionar o revocar de forma selectiva la sesión criptográfica de
+alguien sin deserializar su carga útil; se acepta a cambio de no mantener un esquema propio para un único
+valor.
 
 Quedan por tanto dos envoltorios independientes de la misma clave maestra: el permanente bajo la KEK que
 sale de `export_key`, que vive en el servidor y se abre al iniciar sesión con la contraseña, y el de
@@ -93,10 +107,11 @@ es justo lo contrario de lo que queremos en un puesto compartido.
 
 ## Consequences
 
-El despliegue pasa a ser una operación con impacto clínico: actualizar Filament o reconstruir assets
-expulsa a todos los usuarios conectados en su siguiente navegación, con pérdida del trabajo en curso.
-Necesita ventana de mantenimiento o aviso previo, y hay que tratarlo como requisito operativo, no como
-detalle de infraestructura.
+El despliegue pasa a ser una operación con impacto clínico: no es solo actualizar Filament, es reconstruir
+cualquier asset propio, y ocurre igual con el modo SPA desactivado. Cualquiera de los dos casos expulsa a
+todos los usuarios conectados en su siguiente navegación, con pérdida del trabajo en curso. Necesita
+ventana de mantenimiento o aviso previo, y hay que tratarlo como requisito operativo, no como detalle de
+infraestructura.
 
 Ante un 419, Livewire pide confirmación y recarga, lo que para alguien con una nota a medio escribir es
 pérdida de datos. Hace falta interceptarlo con un aviso propio que permita conservar el borrador antes de

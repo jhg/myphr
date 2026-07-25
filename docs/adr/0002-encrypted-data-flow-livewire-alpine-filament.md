@@ -91,7 +91,14 @@ snapshot contiene algo que no sea metadato o sobre cifrado.
 
 Quedan prohibidos en componentes que manejan datos cifrados: `wire:model` en cualquier variante,
 `$entangle` sobre datos en claro, `$persist` de Alpine, `wire:replace`, los islands con `always`, y las
-propiedades expuestas en la URL. La subida de adjuntos no puede usar `wire:model` en el input de fichero,
+propiedades expuestas en la URL.
+
+Esa última prohibición no basta con cumplirla en lo nuestro: las páginas de Filament traen de serie seis
+propiedades que publican en la barra de direcciones la acción abierta y sus argumentos, y un identificador
+de evento ahí ya es metadato clínico. La página base de la que heredan nuestras pantallas las redeclara sin
+ese comportamiento, con un test que falla si alguna vuelve a aparecer.
+
+La subida de adjuntos no puede usar `wire:model` en el input de fichero,
 que enviaría el fichero original, y el nombre del fichero se sustituye por uno opaco antes de subirlo
 porque el nombre es dato clínico.
 

@@ -17,7 +17,14 @@ persona escriba su contraseña en un navegador.
 ## Decision
 
 No hay registro público. Un usuario existente da de alta a otro, o lo hace un comando de consola, y en
-ambos casos lo único que se crea es la fila del usuario y un enlace de un solo uso con caducidad.
+ambos casos lo único que se crea es la fila del usuario y un enlace de un solo uso con caducidad de 24
+horas, como parámetro explícito del comando y no un valor por defecto oculto.
+
+**El enlace se muestra en pantalla una sola vez y nunca se envía por correo.** La aplicación lo entrega al
+administrador que lo emite, y es él quien lo hace llegar a la persona por el canal que elija. Enviarlo por
+correo serializaría la URL en la tabla de trabajos y la haría pasar por el proveedor de correo, que puede
+registrarla, y eso añade una superficie que hoy no existe. El coste aceptado es que el alta lleva siempre
+un paso manual de comunicación.
 
 **La clave maestra nace siempre en el navegador, al usar ese enlace.** La persona elige contraseña, se
 ejecuta el registro OPAQUE, de ahí sale la clave de cifrado de claves, el navegador genera una clave
@@ -39,6 +46,12 @@ abrirlo sin contraseña. Si el bloqueo no mata ese secreto, la recarga del bloqu
 recuperación resuelve y el bloqueo no bloquea nada. Y tiene que hacerlo el servidor: borrar el paquete en
 el cliente no basta, porque quien tenga la máquina delante puede impedir que ese código llegue a
 ejecutarse.
+
+El bloqueo cierra la sesión entera, no solo el secreto. Dejar la sesión de Laravel viva mantiene al
+usuario dentro del panel, con acceso a los datos en claro del resto de personas y a acciones destructivas
+como reemitir un enlace, que es justo el riesgo del puesto compartido que motiva los quince minutos. Y la
+caducidad la cuenta el servidor sobre la última petición autenticada: un temporizador en el navegador no
+se ejecuta en una pestaña descartada por el sistema ni en una que nunca se abrió.
 
 Volver a entrar es entonces una autenticación completa: la clave se deriva de la contraseña y no hay
 atajo.
@@ -76,11 +89,31 @@ un fallo, es la consecuencia directa de que no haya recuperación en esta versi�
 que impedir que alguien lo use creyendo que ayuda: un administrador reseteando la contraseña de un usuario
 le destruye el historial.
 
+Por eso el sobre de la clave maestra es de solo añadir: emitir un enlace nunca sobrescribe el que existe,
+se guarda uno nuevo y el anterior queda retirado con su fecha. Sin esa regla la reemisión destruye el
+único criptograma que la contraseña antigua sabía abrir, y una pérdida que era recuperable para quien la
+recordase deja de serlo. Emitir sobre una cuenta ya registrada exige confirmación explícita, y esa guardia
+vive en el servicio que emite enlaces, no en cada interfaz que lo llama.
+
 El cambio de contraseña de alguien que sí recuerda la actual es otra cosa y sí funciona: se abre la clave
-maestra con la contraseña vieja y se vuelve a envolver con la nueva, sin tocar los datos.
+maestra con la contraseña vieja y se vuelve a envolver con la nueva, sin tocar los datos. Ese flujo no
+entra en la primera versión y hasta entonces la única vía es la reemisión del enlace, con la pérdida que
+describe el párrafo anterior.
 
 El registro de actividad anota el alta de usuarios y el uso del enlace, sin contenido, como fija el
 ADR 0006.
 
+El login normalizado queda fijo una vez la cuenta está registrada: el identificador de credencial se
+derivó de él, cambiarlo dejaría el envelope irrecuperable y reintroduciría el oráculo de enumeración que
+describe `docs/OPAQUE.md`. Consumir un enlace no verifica el correo, porque lo entrega un administrador
+por el canal que sea, así que no se marca nada como verificado. Y entrar al panel exige únicamente tener
+el registro OPAQUE completo sobre una cuenta activa: cualquier criterio que dependa de que otro usuario
+apruebe deja al primero sin quien lo apruebe.
+
 El comando de Artisan no recibe ni pide contraseñas, y por tanto no hay riesgo de que queden en el
 historial del intérprete de comandos ni en los registros del servidor.
+
+**El nombre del usuario se guarda en claro.** El identificador de login ya está en claro por necesidad, así
+que cifrar el nombre añade poca privacidad real y a cambio rompería el menú de usuario, los breadcrumbs y
+el listado de administración de Filament, que los resuelven en servidor. Es una excepción consciente y
+acotada a la regla general de cifrar, y no se extiende a ningún otro campo.

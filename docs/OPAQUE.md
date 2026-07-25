@@ -918,11 +918,15 @@ el escalar es además lo que permite cargar directamente los vectores del RFC
    del RFC, nunca 32 bytes aleatorios usados directamente como escalar).
 3. Deriva y muestra la clave pública.
 4. Genera un `fake_registration_record` válido (§13.2).
-5. Imprime los valores en Base64url listos para copiar al `.env`.
+5. **Imprime** los valores en Base64url por pantalla, listos para copiar al
+   `.env`; nunca escribe el fichero `.env` por sí mismo.
 6. **Nunca** escribe secretos en el repositorio.
 7. Advierte de forma explícita: *perder o cambiar el setup inutiliza todos
    los registros OPAQUE existentes* (los envelopes están ligados a
    `server_public_key`).
+8. Ejecutarlo por segunda vez sobre un despliegue con usuarios ya registrados
+   inutiliza todos los registros existentes sin dar ningún error visible: debe
+   avisarlo explícitamente y pedir confirmación antes de continuar.
 
 ### 12.2 Configuración `.env`
 
@@ -1188,8 +1192,9 @@ antiabuso, jamás dentro del transcript OPAQUE.
 
 ## 15. Endpoints HTTP
 
-Las cuatro rutas se declaran en `routes/web.php`, dentro del grupo de middleware
-`web`. **No pueden ir en un grupo `api`**: ese grupo no incluye `StartSession` ni
+Las cuatro rutas se registran a través de las rutas del panel de Filament, que
+ya las monta con sesión y CSRF; por eso no hacen falta en `routes/web.php`.
+**No pueden ir en un grupo `api`**: ese grupo no incluye `StartSession` ni
 `VerifyCsrfToken`, así que `$request->session()->regenerate()` lanzaría
 `RuntimeException: Session store not set on request` y `Auth::guard('web')->login()`
 no persistiría nada. Este proyecto además no registra hoy ningún grupo `api` en
@@ -1200,7 +1205,7 @@ Como consecuencia, el JavaScript del navegador debe enviar el token CSRF y usar
 
 Las cuatro respuestas llevan `Cache-Control: no-store`.
 
-### 15.1 `POST /auth/opaque/registration/start`
+### 15.1 `POST /phr/auth/opaque/registration/start`
 
 ```json
 { "registrationRequest": "<base64url 32B>", "registrationToken": "<token>" }
@@ -1219,14 +1224,17 @@ Las cuatro respuestas llevan `Cache-Control: no-store`.
   "registrationId": "<uuid>",
   "registrationResponse": "<base64url 64B>",
   "serverPublicKey": "<base64url 32B>",
+  "userId": "<uuid>",
   "profile": "OPAQUE-R255-SHA512-A2ID-m65536-t3-p4-ctx0-v1"
 }
 ```
 
 (`serverPublicKey` es redundante para el protocolo; se expone para pinning y
-diagnóstico.)
+diagnóstico. El cliente necesita `userId` porque el identificador del usuario
+entra en el dato asociado del cifrado, así que debe conocerlo antes de cifrar
+nada.)
 
-### 15.2 `POST /auth/opaque/registration/finish`
+### 15.2 `POST /phr/auth/opaque/registration/finish`
 
 ```json
 { "registrationId": "<uuid>", "registrationRecord": "<base64url 192B>" }
@@ -1237,7 +1245,7 @@ validar `client_public_key` → guardar columnas del usuario → marcar cuenta
 registrada. No abrir el envelope; no guardar la RegistrationResponse; no
 guardar contraseñas.
 
-### 15.3 `POST /auth/opaque/login/start`
+### 15.3 `POST /phr/auth/opaque/login/start`
 
 ```json
 { "login": "user@example.com", "startLoginRequest": "<base64url 96B>" }
@@ -1255,7 +1263,7 @@ Respuesta (HTTP 200 siempre para mensajes estructuralmente válidos):
 }
 ```
 
-### 15.4 `POST /auth/opaque/login/finish`
+### 15.4 `POST /phr/auth/opaque/login/finish`
 
 ```json
 { "handshakeId": "<uuid>", "finishLoginRequest": "<base64url 64B>" }
@@ -1398,9 +1406,12 @@ Cada campo se cifra con una clave derivada por registro, y el sobre va versionad
 desde el primer dato (versión, identificador de algoritmo, identificador de KDF,
 banderas, sal, nonce, ciphertext y tag), transportado como `v1.` más base64url.
 El dato asociado del AEAD y el `info` de la derivación incluyen usuario, tipo de
-registro, identificador y nombre del campo: sin esa atadura, un servidor
-comprometido puede mover un ciphertext del campo de alergias de un paciente al
-campo de diagnóstico de otro y el cliente lo descifraría sin error.
+registro e identificador; el nombre del campo sólo entra cuando el cifrado es
+por campo. Cuando el sobre cubre un registro entero no existe tal campo (ver
+ADR 0004 y ADR 0006 para el detalle de qué identifica a cada registro). Sin esa
+atadura, un servidor comprometido puede mover un ciphertext del campo de
+alergias de un paciente al campo de diagnóstico de otro y el cliente lo
+descifraría sin error.
 
 Laravel almacena sólo: `encrypted_user_master_key`, el sobre de cada campo y la
 versión del formato. Laravel **nunca** recibe: contraseña, `export_key`, KEK ni
