@@ -1,58 +1,82 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# myphr
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Una historia de salud personal (PHR) cifrada de extremo a extremo, construida con Laravel, Filament y
+Livewire.
 
-## About Laravel
+El servidor nunca ve la contraseña ni los datos clínicos en claro. La autenticación usa
+[OPAQUE](https://www.rfc-editor.org/rfc/rfc9807.txt) (aPAKE, sin enviar la contraseña), y todos los datos
+se cifran en el navegador con una clave maestra que el servidor nunca puede leer. El porqué de cada
+decisión está en `docs/`, no aquí: este README es solo la puerta de entrada.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Documentación
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+- [`docs/README.md`](docs/README.md): qué es un PHR, para qué sirve este proyecto y el vocabulario
+  clínico (LOINC/SNOMED CT) que usa.
+- [`docs/OPAQUE.md`](docs/OPAQUE.md): especificación completa de la autenticación por contraseña sin
+  enviar la contraseña.
+- [`docs/adr/`](docs/adr/): decisiones de arquitectura, con su contexto y sus renuncias. Se actualizan en
+  el mismo archivo cuando la decisión evoluciona; nunca se sustituyen por uno nuevo.
+- [`docs/specs/`](docs/specs/): detalle de implementación de cada funcionalidad, apoyado en esos ADR.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Stack
 
-## Learning Laravel
+- PHP 8.4, Laravel 13, Filament 5, Livewire 4.
+- Cliente OPAQUE: [`@serenity-kit/opaque`](https://github.com/serenity-kit/opaque) (versión exacta,
+  ver `docs/OPAQUE.md` §3).
+- Pest 4 para tests (PHP y `arch()`), Vitest para los módulos JS de criptografía.
+- Pint para formato de PHP.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
-
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+## Puesta en marcha
 
 ```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+composer setup
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+Esto instala dependencias PHP y JS, copia `.env`, genera la `APP_KEY`, migra la base de datos y compila
+los assets. Después, antes de dar de alta a nadie, hace falta generar el material criptográfico estático
+del servidor:
 
-## Contributing
+```bash
+php artisan opaque:setup
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+El comando imprime por pantalla el par de claves OPAQUE y el resto de secretos estáticos; se copian a
+mano a `.env`. No escribe el archivo por ti ni se puede ejecutar dos veces sin invalidar los registros
+existentes.
 
-## Code of Conduct
+No hay registro público. El primer usuario (y cualquier otro después) se da de alta emitiendo un enlace
+de un solo uso:
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+```bash
+php artisan phr:issue-registration-link correo@ejemplo.com --name="Nombre"
+```
 
-## Security Vulnerabilities
+El enlace se muestra una sola vez en la terminal; la aplicación nunca lo envía por correo (ver
+`docs/adr/0009-user-provisioning-and-session-lifecycle.md`). La persona lo abre, elige contraseña y su
+clave maestra nace en ese momento en el navegador.
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+Para desarrollo local, con recarga de servidor, cola, logs y Vite en un solo proceso:
 
-## License
+```bash
+composer dev
+```
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+## Tests
+
+```bash
+composer test
+```
+
+Ejecuta la suite de Pest completa, incluidos los vectores oficiales de RFC 9497/9807 y las pruebas de
+arquitectura (sesión, propiedades `#[Url]`, payloads cifrados). Para los módulos JS de criptografía:
+
+```bash
+npm test
+```
+
+## Convenciones del proyecto
+
+Las guías de código para agentes de IA (Laravel Boost, Pest, Filament, etc.) están en `CLAUDE.md` y
+`.ai/`. Cualquier cambio de arquitectura, dominio o comportamiento que afecte a una decisión ya
+documentada se refleja actualizando el ADR o la spec correspondiente, no creando uno nuevo que la
+reemplace.
