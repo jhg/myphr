@@ -150,4 +150,16 @@
             <span x-show="busy" x-cloak>{{ __('Checking…') }}</span>
         </button>
     </form>
+
+    {{--
+        Pie de la pantalla de acceso. Va en tamaño Caption y tinta secundaria (DESIGN.md
+        § Typography y § Colors), que conmutan solas con el modo oscuro: es un crédito, no
+        información que la persona necesite para entrar, así que no compite con el formulario.
+
+        «CubePath» es un nombre propio y no se traduce; lo que sí pasa por `__()` es la frase que lo
+        rodea, para que en chino o en castellano el orden de las palabras pueda ser otro.
+    --}}
+    <p class="mt-8 text-center text-caption text-ink-secondary">
+        {{ __('Hosted on :provider', ['provider' => 'CubePath']) }}
+    </p>
 </section>
