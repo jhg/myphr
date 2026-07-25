@@ -1,0 +1,31 @@
+{
+    "agents": [
+        "claude_code",
+        "codex",
+        "opencode",
+        "copilot",
+        "junie",
+        "zed"
+    ],
+    "cloud": false,
+    "guidelines": true,
+    "mcp": true,
+    "nightwatch": false,
+    "packages": [
+        "filament/filament"
+    ],
+    "sail": false,
+    "skills": [
+        "laravel-best-practices",
+        "livewire-development",
+        "pest-testing",
+        "tailwindcss-development",
+        "adr-and-specs",
+        "design-system",
+        "email-best-practices",
+        "email-html",
+        "plan-quality",
+        "ponytail",
+        "ponytail-audit"
+    ]
+}
