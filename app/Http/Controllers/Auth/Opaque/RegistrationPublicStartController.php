@@ -25,7 +25,7 @@ use Illuminate\Http\Request;
  * El registro por invitación (ADR 0009, Spec 0001 §3.3) sigue siendo el único camino cuando lo abre
  * un administrador o el comando de consola. Este endpoint añade un segundo camino: quien llega sin
  * enlace crea su propia cuenta. No hay código de invitación que validar, así que el equivalente al
- * «token válido» de {@see RegistrationStartController} es, simplemente, que el login esté libre.
+ * «token válido» de {@see InvitedRegistrationStartController} es, simplemente, que el login esté libre.
  *
  * Crea el usuario y el registro OPAQUE pendiente en la misma petición, pero **no** en una única
  * transacción atómica con `registration/finish`: si la persona abandona a mitad, la cuenta queda sin
@@ -90,7 +90,7 @@ final readonly class RegistrationPublicStartController
         }
 
         /**
-         * Igual que en {@see RegistrationStartController::__invoke()}: la cuenta es nueva, así que
+         * Igual que en {@see InvitedRegistrationStartController::__invoke()}: la cuenta es nueva, así que
          * nunca tiene `opaque_credential_identifier` todavía, pero se deriva con la misma fórmula
          * para que el valor coincida con el que calculará `login/start` (§13.1).
          */
@@ -108,7 +108,7 @@ final readonly class RegistrationPublicStartController
             'credential_identifier' => $credentialIdentifier,
             'profile' => $this->setup->profile,
             'purpose' => OpaquePurpose::Registration,
-            'expires_at' => now()->addMinutes(RegistrationStartController::PENDING_TTL_MINUTES),
+            'expires_at' => now()->addMinutes(InvitedRegistrationStartController::PENDING_TTL_MINUTES),
         ]);
 
         /**

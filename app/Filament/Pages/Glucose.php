@@ -73,27 +73,9 @@ final class Glucose extends HealthEventPage
                 ['code' => UcumUnit::MilligramsPerDeciliter->value, 'label' => 'mg/dL'],
                 ['code' => UcumUnit::MillimolesPerLiter->value, 'label' => 'mmol/L'],
             ],
-            'methods' => array_map(
-                static fn (GlucoseMeasurementMethod $method): array => [
-                    'token' => $method->value,
-                    'label' => $method->label($locale),
-                ],
-                GlucoseMeasurementMethod::cases(),
-            ),
-            'mealContexts' => array_map(
-                static fn (MealContext $context): array => [
-                    'token' => $context->value,
-                    'label' => $context->label($locale),
-                ],
-                MealContext::cases(),
-            ),
-            'recordedByRoles' => array_map(
-                static fn (RecordedBy $role): array => [
-                    'token' => $role->value,
-                    'label' => $role->label($locale),
-                ],
-                RecordedBy::cases(),
-            ),
+            'methods' => self::labelledOptions(GlucoseMeasurementMethod::cases(), $locale),
+            'mealContexts' => self::labelledOptions(MealContext::cases(), $locale),
+            'recordedByRoles' => self::labelledOptions(RecordedBy::cases(), $locale),
             'loinc' => self::loincTable(),
         ];
     }

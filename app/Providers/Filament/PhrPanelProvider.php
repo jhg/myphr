@@ -5,6 +5,7 @@ namespace App\Providers\Filament;
 use App\Filament\Auth\Login;
 use App\Filament\Pages\Dashboard;
 use App\Filament\Pages\Profile;
+use App\Http\Controllers\Auth\Opaque\InvitedRegistrationStartController;
 use App\Http\Controllers\Auth\Opaque\LockController;
 use App\Http\Controllers\Auth\Opaque\LoginFinishController;
 use App\Http\Controllers\Auth\Opaque\LoginStartController;
@@ -12,12 +13,11 @@ use App\Http\Controllers\Auth\Opaque\PasswordChangeController;
 use App\Http\Controllers\Auth\Opaque\PasswordChangeReauthFinishController;
 use App\Http\Controllers\Auth\Opaque\PasswordChangeReauthStartController;
 use App\Http\Controllers\Auth\Opaque\PasswordChangeRegistrationStartController;
-use App\Http\Controllers\Auth\Opaque\RegisterController;
 use App\Http\Controllers\Auth\Opaque\RegistrationFinishController;
 use App\Http\Controllers\Auth\Opaque\RegistrationPublicStartController;
-use App\Http\Controllers\Auth\Opaque\RegistrationStartController;
 use App\Http\Controllers\Auth\Opaque\SessionSecretController;
-use App\Http\Controllers\Auth\Opaque\SetPasswordController;
+use App\Http\Controllers\Auth\RegisterPageController;
+use App\Http\Controllers\Auth\SetPasswordPageController;
 use App\Http\Controllers\Settings\UpdateSettingsController;
 use App\Http\Middleware\EnforceIdleTimeout;
 use App\Http\Middleware\NoStore;
@@ -115,6 +115,15 @@ class PhrPanelProvider extends PanelProvider
             ->renderHook(
                 PanelsRenderHook::HEAD_END,
                 fn (): View => view('phr.partials.crypto-head'),
+            )
+            /**
+             * Instalable en la pantalla de inicio (manifiesto, iconos y las etiquetas `apple-*`,
+             * que iOS necesita porque no lee el manifiesto). El service worker que acompaña a esto
+             * no cachea nada; el porqué está escrito en `public/sw.js`.
+             */
+            ->renderHook(
+                PanelsRenderHook::HEAD_END,
+                fn (): View => view('phr.partials.pwa-head'),
             )
             /**
              * Fuentes autoalojadas del sistema de diseño (DESIGN.md § Typography).
@@ -348,20 +357,20 @@ class PhrPanelProvider extends PanelProvider
     protected function unauthenticatedRoutes(Panel $panel): void
     {
         Route::middleware(NoStore::class)->group(function (): void {
-            Route::get(Str::afterLast(RegistrationLinks::SET_PASSWORD_PATH, '/'), SetPasswordController::class)
+            Route::get(Str::afterLast(RegistrationLinks::SET_PASSWORD_PATH, '/'), SetPasswordPageController::class)
                 ->name('auth.set-password');
 
             /**
              * Alta pública (ADR 0009). Sin autenticar y sin invitación: es la pantalla a la que
              * lleva el enlace del formulario de acceso.
              */
-            Route::get('register', RegisterController::class)
+            Route::get('register', RegisterPageController::class)
                 ->name('auth.register');
 
             Route::prefix('auth/opaque')
                 ->name('auth.opaque.')
                 ->group(function (): void {
-                    Route::post('registration/start', RegistrationStartController::class)
+                    Route::post('registration/start', InvitedRegistrationStartController::class)
                         ->middleware('throttle:opaque-registration')
                         ->name('registration.start');
 

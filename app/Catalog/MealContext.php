@@ -19,7 +19,7 @@ use ValueError;
  * No existía un enum para esto en el catálogo; se crea aquí siguiendo el estilo de
  * {@see GlucoseMeasurementMethod} y {@see UcumUnit}.
  */
-enum MealContext: string
+enum MealContext: string implements PatientLabelled
 {
     /** En ayunas, sin haber comido todavía. */
     case Fasting = 'fasting';

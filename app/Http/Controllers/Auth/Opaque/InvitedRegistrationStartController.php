@@ -33,7 +33,7 @@ use Illuminate\Http\Request;
  * `userId` va en la respuesta porque el cliente lo necesita para construir el dato asociado del AEAD
  * antes de cifrar la clave maestra (§4.1). `serverPublicKey` permite el pinning del paso 5.
  */
-final readonly class RegistrationStartController
+final readonly class InvitedRegistrationStartController
 {
     /**
      * Ventana de vida del registro pendiente. Cubre con holgura el Argon2id del navegador sin dejar

@@ -19,7 +19,7 @@ use ValueError;
  *
  * Añadir un caso nuevo es seguro; renombrar o eliminar uno existente no lo es.
  */
-enum BloodPressurePosture: string
+enum BloodPressurePosture: string implements PatientLabelled
 {
     /** Sentado. */
     case Sitting = 'sitting';

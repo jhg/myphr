@@ -25,7 +25,7 @@ use ValueError;
  *
  * Añadir un caso nuevo es seguro; renombrar o eliminar uno existente no lo es.
  */
-enum InjectionSite: string
+enum InjectionSite: string implements PatientLabelled
 {
     /** Abdomen. */
     case Abdomen = 'abdomen';

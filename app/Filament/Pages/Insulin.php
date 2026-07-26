@@ -97,32 +97,14 @@ final class Insulin extends HealthEventPage
             'units' => [
                 ['code' => self::UNIT_INTERNATIONAL_UNIT, 'label' => 'UI (unidades internacionales)'],
             ],
-            'insulinTypes' => array_map(
-                static fn (InsulinType $type): array => [
-                    'token' => $type->value,
-                    'label' => $type->label($locale),
-                ],
-                InsulinType::cases(),
-            ),
-            'injectionSites' => array_map(
-                static fn (InjectionSite $site): array => [
-                    'token' => $site->value,
-                    'label' => $site->label($locale),
-                ],
-                InjectionSite::cases(),
-            ),
+            'insulinTypes' => self::labelledOptions(InsulinType::cases(), $locale),
+            'injectionSites' => self::labelledOptions(InjectionSite::cases(), $locale),
             /**
              * Campo común a todo evento (ADR 0006), no propio de la insulina. `dataOrigins` no se
              * publica: el formulario no pregunta el origen del dato (ver JSDoc de la clase), así
              * que la vista no lo necesita.
              */
-            'recordedByRoles' => array_map(
-                static fn (RecordedBy $role): array => [
-                    'token' => $role->value,
-                    'label' => $role->label($locale),
-                ],
-                RecordedBy::cases(),
-            ),
+            'recordedByRoles' => self::labelledOptions(RecordedBy::cases(), $locale),
         ];
     }
 }

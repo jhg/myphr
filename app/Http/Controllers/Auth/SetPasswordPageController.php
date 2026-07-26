@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Http\Controllers\Auth\Opaque;
+namespace App\Http\Controllers\Auth;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -18,7 +18,7 @@ use Illuminate\Http\Response;
  * consumido y uno inventado. El error de enlace no válido lo muestra el cliente cuando
  * `registration/start` devuelve su error genérico (§7).
  */
-final readonly class SetPasswordController
+final readonly class SetPasswordPageController
 {
     public function __invoke(Request $request): Response
     {

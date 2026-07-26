@@ -77,13 +77,7 @@ final class Meals extends HealthEventPage
         $locale = app()->getLocale();
 
         return [
-            'mealTypes' => array_map(
-                static fn (MealType $mealType): array => [
-                    'token' => $mealType->value,
-                    'label' => $mealType->label($locale),
-                ],
-                MealType::cases(),
-            ),
+            'mealTypes' => self::labelledOptions(MealType::cases(), $locale),
             'units' => array_map(
                 static fn (FoodQuantityUnit $unit): array => [
                     'code' => $unit->value,
@@ -92,13 +86,7 @@ final class Meals extends HealthEventPage
                 FoodQuantityUnit::cases(),
             ),
             /** Campo común a todo evento (ADR 0006), no propio de las comidas. */
-            'recordedByRoles' => array_map(
-                static fn (RecordedBy $role): array => [
-                    'token' => $role->value,
-                    'label' => $role->label($locale),
-                ],
-                RecordedBy::cases(),
-            ),
+            'recordedByRoles' => self::labelledOptions(RecordedBy::cases(), $locale),
         ];
     }
 }

@@ -24,7 +24,7 @@ use ValueError;
  *
  * Añadir un caso nuevo es seguro; renombrar o eliminar uno existente no lo es.
  */
-enum InsulinType: string
+enum InsulinType: string implements PatientLabelled
 {
     /** Insulina de acción rápida. */
     case Rapid = 'rapid';

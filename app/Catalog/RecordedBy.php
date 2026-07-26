@@ -21,7 +21,7 @@ use ValueError;
  * afirmación clínica, es un hecho sobre cómo entró el dato, y lo más frecuente con diferencia es que
  * lo registre la propia persona.
  */
-enum RecordedBy: string
+enum RecordedBy: string implements PatientLabelled
 {
     /** Lo registra la propia persona sobre la que trata el evento. */
     case SelfReported = 'self';

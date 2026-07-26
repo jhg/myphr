@@ -119,3 +119,21 @@ if (document.readyState === 'loading') {
 }
 
 interceptLogout();
+
+/**
+ * Registro del service worker, que es lo único que le falta al navegador para ofrecer instalar la
+ * aplicación en la pantalla de inicio.
+ *
+ * Ese worker no cachea nada a propósito: el porqué, largo y que conviene leer antes de tocarlo, está
+ * en `public/sw.js`. Aquí basta con saber que registrarlo no cambia cómo viaja ninguna petición.
+ *
+ * Los fallos se ignoran en silencio y sin reintento. El registro no está disponible en contextos no
+ * seguros ni en navegación privada de algunos navegadores, y en todos esos casos la aplicación
+ * funciona igual: se pierde el icono en la pantalla de inicio, nada más. Avisar de eso sería ruido
+ * sobre algo que la persona no puede arreglar.
+ */
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+    });
+}

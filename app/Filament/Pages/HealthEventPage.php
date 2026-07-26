@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Filament\Pages;
 
+use App\Catalog\PatientLabelled;
 use App\Crypto\EnvelopeValidator;
 use App\Models\Event;
+use BackedEnum;
 use Carbon\CarbonImmutable;
 use DateTimeInterface;
 use Exception;
@@ -30,6 +32,28 @@ use Illuminate\Validation\ValidationException;
  */
 abstract class HealthEventPage extends PhrPage
 {
+    /**
+     * Casos de un enum del catálogo, listos para el `catalog()` que consume el cliente.
+     *
+     * Cubre solo la forma exactamente repetida en las cuatro pantallas: token más etiqueta traducida
+     * y nada más. Lo que varía —`UcumUnit` y `FoodQuantityUnit`, que publican `code`, o las entradas
+     * con campos añadidos— se queda escrito en línea donde está, porque absorberlo aquí exigiría
+     * parámetros que costarían más de leer que las cuatro líneas que ahorran.
+     *
+     * @param  list<PatientLabelled&BackedEnum>  $cases
+     * @return list<array{token: string, label: string}>
+     */
+    protected static function labelledOptions(array $cases, string $locale): array
+    {
+        return array_map(
+            static fn (PatientLabelled&BackedEnum $case): array => [
+                'token' => (string) $case->value,
+                'label' => $case->label($locale),
+            ],
+            $cases,
+        );
+    }
+
     /**
      * Techo duro de {@see self::fetchEvents()}, para que un `$limit` grande no fuerce una consulta
      * sin límite práctico.

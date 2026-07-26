@@ -19,7 +19,7 @@ use ValueError;
  *
  * Añadir un caso nuevo es seguro; renombrar o eliminar uno existente no lo es.
  */
-enum GlucoseMeasurementMethod: string
+enum GlucoseMeasurementMethod: string implements PatientLabelled
 {
     /** Medición en sangre capilar con glucómetro, tras punción digital. */
     case Capillary = 'capillary';

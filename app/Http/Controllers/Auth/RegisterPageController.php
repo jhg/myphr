@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Http\Controllers\Auth\Opaque;
+namespace App\Http\Controllers\Auth;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -10,7 +10,7 @@ use Illuminate\Http\Response;
 /**
  * `GET /phr/register`: página de alta pública (ADR 0009).
  *
- * Se sirve sin ninguna consulta a base de datos, igual que {@see SetPasswordController}: aquí no hay
+ * Se sirve sin ninguna consulta a base de datos, igual que {@see SetPasswordPageController}: aquí no hay
  * nada que validar todavía. El nombre, el login y el `registrationRequest` de OPAQUE viajan juntos
  * en el cuerpo de `registration/public/start`, que es el único sitio donde se comprueba si el correo
  * ya tiene cuenta.
@@ -20,7 +20,7 @@ use Illuminate\Http\Response;
  * correo no puede saber qué le ha pasado ni cómo seguir. Se mitiga con la limitación de intentos por
  * IP del endpoint, no aquí.
  */
-final readonly class RegisterController
+final readonly class RegisterPageController
 {
     public function __invoke(Request $request): Response
     {

@@ -20,7 +20,7 @@ use ValueError;
  *
  * Añadir un caso nuevo es seguro; renombrar o eliminar uno existente no lo es.
  */
-enum BloodPressureArm: string
+enum BloodPressureArm: string implements PatientLabelled
 {
     /** Brazo izquierdo. */
     case Left = 'left';

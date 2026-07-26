@@ -78,20 +78,8 @@ final class BloodPressure extends HealthEventPage
         $locale = app()->getLocale();
 
         return [
-            'arms' => array_map(
-                static fn (BloodPressureArm $arm): array => [
-                    'token' => $arm->value,
-                    'label' => $arm->label($locale),
-                ],
-                BloodPressureArm::cases(),
-            ),
-            'postures' => array_map(
-                static fn (BloodPressurePosture $posture): array => [
-                    'token' => $posture->value,
-                    'label' => $posture->label($locale),
-                ],
-                BloodPressurePosture::cases(),
-            ),
+            'arms' => self::labelledOptions(BloodPressureArm::cases(), $locale),
+            'postures' => self::labelledOptions(BloodPressurePosture::cases(), $locale),
             /** Sin selector: la tensión no ofrece unidad alternativa (ver BloodPressureUnit). */
             'units' => [
                 'pressure' => BloodPressureUnit::MillimetersOfMercury->value,
@@ -103,13 +91,7 @@ final class BloodPressure extends HealthEventPage
                 'pulse' => BloodPressureLoincCode::Pulse->value,
             ],
             /** Campo común a todo evento (ADR 0006), no propio de la tensión. */
-            'recordedByRoles' => array_map(
-                static fn (RecordedBy $role): array => [
-                    'token' => $role->value,
-                    'label' => $role->label($locale),
-                ],
-                RecordedBy::cases(),
-            ),
+            'recordedByRoles' => self::labelledOptions(RecordedBy::cases(), $locale),
         ];
     }
 }

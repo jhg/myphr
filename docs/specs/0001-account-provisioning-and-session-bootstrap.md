@@ -429,7 +429,7 @@ aquí no hay token de enlace que reparta el abuso entre varios cubos, y porque c
 consultar si el correo existe, escribe una fila de usuario.
 
 La pantalla se sirve en `GET /phr/register` con el nombre `filament.phr.auth.register`, desde
-`RegisterController`, que responde la vista sin ninguna consulta a base de datos: igual que la de
+`RegisterPageController`, que responde la vista sin ninguna consulta a base de datos: igual que la de
 establecer contraseña, aquí todavía no hay nada que validar. El enlace de `login.blade.php` hacia ella
 comprueba con `Route::has()` antes de usar `route()`, una salvaguarda que se escribió cuando la ruta aún
 no existía y que se conserva porque no cuesta nada y evita que la pantalla de acceso reviente entera si
@@ -727,8 +727,8 @@ sobrescrito, implementa `FilamentUser::canAccessPanel()`), `UserRegistrationLink
 
 **Controladores** (invocables planos, sin Livewire)
 
-`LoginController`, `SetPasswordController` (sirve la página genérica; la validación real del token ocurre
-en `registration/start`), `RegistrationStartController`, `RegistrationPublicStartController` (sección
+`LoginController`, `SetPasswordPageController` (sirve la página genérica; la validación real del token ocurre
+en `registration/start`), `InvitedRegistrationStartController`, `RegistrationPublicStartController` (sección
 4.7, alta sin invitación), `RegistrationFinishController`, `LoginStartController`, `LoginFinishController`,
 `SessionSecretController`, `LockController`.
 
