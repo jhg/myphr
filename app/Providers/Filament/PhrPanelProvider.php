@@ -12,7 +12,9 @@ use App\Http\Controllers\Auth\Opaque\PasswordChangeController;
 use App\Http\Controllers\Auth\Opaque\PasswordChangeReauthFinishController;
 use App\Http\Controllers\Auth\Opaque\PasswordChangeReauthStartController;
 use App\Http\Controllers\Auth\Opaque\PasswordChangeRegistrationStartController;
+use App\Http\Controllers\Auth\Opaque\RegisterController;
 use App\Http\Controllers\Auth\Opaque\RegistrationFinishController;
+use App\Http\Controllers\Auth\Opaque\RegistrationPublicStartController;
 use App\Http\Controllers\Auth\Opaque\RegistrationStartController;
 use App\Http\Controllers\Auth\Opaque\SessionSecretController;
 use App\Http\Controllers\Auth\Opaque\SetPasswordController;
@@ -349,12 +351,28 @@ class PhrPanelProvider extends PanelProvider
             Route::get(Str::afterLast(RegistrationLinks::SET_PASSWORD_PATH, '/'), SetPasswordController::class)
                 ->name('auth.set-password');
 
+            /**
+             * Alta pública (ADR 0009). Sin autenticar y sin invitación: es la pantalla a la que
+             * lleva el enlace del formulario de acceso.
+             */
+            Route::get('register', RegisterController::class)
+                ->name('auth.register');
+
             Route::prefix('auth/opaque')
                 ->name('auth.opaque.')
                 ->group(function (): void {
                     Route::post('registration/start', RegistrationStartController::class)
                         ->middleware('throttle:opaque-registration')
                         ->name('registration.start');
+
+                    /**
+                     * Alta pública, sin enlace de invitación. Nombre y limitador separados de
+                     * `registration.start`: aquí no hay token que limite de forma natural el abuso,
+                     * así que el límite por IP tiene que ser el único freno y, por eso, más estricto.
+                     */
+                    Route::post('registration/public/start', RegistrationPublicStartController::class)
+                        ->middleware('throttle:opaque-registration-public')
+                        ->name('registration.public-start');
 
                     Route::post('registration/finish', RegistrationFinishController::class)
                         ->middleware('throttle:opaque-registration-finish')

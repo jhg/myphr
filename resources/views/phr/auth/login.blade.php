@@ -152,6 +152,25 @@
     </form>
 
     {{--
+        Enlace al alta pública (`RegistrationPublicStartController`), sin invitación. Va en el
+        cuerpo normal del texto y no en botón: es una salida secundaria de esta pantalla, no la
+        acción principal.
+
+        `filament.phr.auth.register` todavía no existe como ruta con nombre mientras la página de
+        alta la registra otro cambio en curso; se usa la URL literal como salvaguarda hasta que
+        exista, y se documenta en la entrega.
+    --}}
+    <p class="mt-8 text-center text-caption text-ink-secondary">
+        {{ __("Don't have an account?") }}
+        <a
+            href="{{ Illuminate\Support\Facades\Route::has('filament.phr.auth.register') ? route('filament.phr.auth.register') : '/phr/register' }}"
+            class="font-semibold text-accent underline underline-offset-2"
+        >
+            {{ __('Create one') }}
+        </a>
+    </p>
+
+    {{--
         Pie de la pantalla de acceso. Va en tamaño Caption y tinta secundaria (DESIGN.md
         § Typography y § Colors), que conmutan solas con el modo oscuro: es un crédito, no
         información que la persona necesite para entrar, así que no compite con el formulario.
@@ -159,7 +178,7 @@
         «CubePath» es un nombre propio y no se traduce; lo que sí pasa por `__()` es la frase que lo
         rodea, para que en chino o en castellano el orden de las palabras pueda ser otro.
     --}}
-    <p class="mt-8 text-center text-caption text-ink-secondary">
+    <p class="mt-2 text-center text-caption text-ink-secondary">
         {{ __('Hosted on :provider', ['provider' => 'CubePath']) }}
     </p>
 </section>

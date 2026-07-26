@@ -69,6 +69,15 @@ export const ZH_CN = Object.freeze({
     'setPassword.error.mismatch': '两次输入的密码不一致。',
     'setPassword.error.verification': '创建密钥时出错，无法完成验证。',
 
+    // --- Alta pública (registro) ------------------------------------------------------------------
+    'register.stage.contacting': '正在创建你的账户…',
+    'register.stage.stretching': '正在本设备上派生你的密钥，需要几秒钟…',
+    'register.stage.wrapping': '正在创建并保护你的密钥…',
+    'register.stage.verifying': '正在确认你的密码能打开你的密钥，需要几秒钟…',
+    'register.error.mismatch': '两次输入的密码不一致。',
+    'register.error.loginTaken': '该邮箱已存在账户。',
+    'register.error.generic': '创建账户时出错，无法完成验证。',
+
     // --- Cambio de contraseña -------------------------------------------------------------------
     'changePassword.stage.reauthenticating': '正在核对你的当前密码…',
     'changePassword.stage.stretchingOld': '正在本设备上核对你的当前密码，需要几秒钟…',

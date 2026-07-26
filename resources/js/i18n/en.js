@@ -65,6 +65,15 @@ export const EN = Object.freeze({
     'setPassword.error.mismatch': 'The two passwords do not match.',
     'setPassword.error.verification': 'Something went wrong creating your key. We could not verify it.',
 
+    // --- Alta pública (registro) ------------------------------------------------------------------
+    'register.stage.contacting': 'Creating your account…',
+    'register.stage.stretching': 'Deriving your key on this device. It takes a few seconds…',
+    'register.stage.wrapping': 'Creating and protecting your key…',
+    'register.stage.verifying': 'Checking that your password opens your key. It takes a few seconds…',
+    'register.error.mismatch': 'The two passwords do not match.',
+    'register.error.loginTaken': 'There is already an account with that email address.',
+    'register.error.generic': 'Something went wrong creating your account. We could not verify it.',
+
     // --- Cambio de contraseña -------------------------------------------------------------------
     'changePassword.stage.reauthenticating': 'Checking your current password…',
     'changePassword.stage.stretchingOld': 'Checking your current password on this device. It takes a few seconds…',

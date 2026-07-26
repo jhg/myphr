@@ -15,9 +15,9 @@ Cubre todo lo que ocurre desde que un administrador ejecuta el comando de Artisa
 hasta que la persona invitada está dentro del panel, con su clave maestra (User Master Key, UMK) en
 memoria y lista para cifrar y descifrar datos.
 
-Incluye: el arranque del servidor (`opaque:setup`), la emisión de enlaces de registro, el establecimiento
-de la contraseña inicial y nacimiento de la UMK, el login posterior, la recuperación de la UMK tras una
-recarga de página, el bloqueo por inactividad y el cierre de sesión.
+Incluye: el arranque del servidor (`opaque:setup`), la emisión de enlaces de registro, el registro público
+sin invitación, el establecimiento de la contraseña inicial y nacimiento de la UMK, el login posterior, la
+recuperación de la UMK tras una recarga de página, el bloqueo por inactividad y el cierre de sesión.
 
 Queda fuera, de forma explícita:
 
@@ -49,6 +49,12 @@ llegar a la persona por el canal que elija.
 confirmación. El navegador ejecuta el registro OPAQUE, genera su UMK aleatoria, la envuelve y sube el
 resultado al servidor en una única operación. Si todo va bien, queda autenticada y dentro del panel sin
 un segundo formulario de login.
+
+**Persona que se registra sin invitación.** Llega a la pantalla de acceso, pulsa el enlace de alta y
+escribe su nombre, su correo y una contraseña, sin ningún código de invitación. El navegador ejecuta el
+mismo registro OPAQUE que la persona invitada, con la diferencia de que no hay enlace que consumir: el
+nombre y el correo los aporta ella misma. Si el correo ya tiene cuenta, ve un mensaje que se lo dice, con
+un enlace directo a iniciar sesión, en vez de un error genérico que la deje sin saber qué hacer.
 
 **Persona que vuelve a entrar.** Escribe su login y contraseña en la pantalla de login. El navegador
 ejecuta el login OPAQUE completo, recupera su UMK ya existente y entra al panel.
@@ -374,6 +380,61 @@ hace una recarga dura después de recibir la respuesta, nunca antes: si recarga 
 confirme, una pérdida de red deja el secreto vivo en servidor con el cliente ya sin UMK en memoria, lo
 que en la práctica es un bloqueo que no bloqueó nada del lado servidor.
 
+### 4.7 `POST /phr/auth/opaque/registration/public/start`
+
+Sin autenticar. Es el equivalente de 4.1 para quien llega sin invitación: mismo paso 4 del orden
+criptográfico de la sección 5, con la fila de usuario creándose aquí en vez de venir ya creada por un
+enlace. Petición:
+
+```json
+{ "name": "<nombre completo>", "login": "user@example.com", "registrationRequest": "<base64url 32B>" }
+```
+
+El login se normaliza (`LoginNormalizer::normalize`) antes de comprobar su forma, igual que en
+`phr:issue-registration-link`: espacios exteriores y mayúsculas son variaciones válidas de un mismo login,
+no errores de formato.
+
+La fila de `users` se crea con `User::create(['name' => ..., 'email' => $login])` dentro del propio
+controlador (`RegistrationPublicStartController`), sin comprobación previa de unicidad por `SELECT`: la
+restricción `unique` de la columna decide, en el `INSERT`, cuál de dos altas simultáneas con el mismo
+correo gana. La que pierde no deja fila y recibe 409 `login_taken`. A partir de ahí, la derivación del
+`credential_identifier` y la creación del `OpaqueRegistration` pendiente (con `invitation_ref` a `null`,
+porque no hay enlace que referenciar) son las mismas que en 4.1.
+
+Respuesta 200:
+
+```json
+{
+  "userId": "<uuid>",
+  "registrationId": "<uuid>",
+  "registrationResponse": "<base64url 64B>",
+  "profile": "OPAQUE-R255-SHA512-A2ID-m65536-t3-p4-ctx0-v1",
+  "serverPublicKey": "<base64url 32B>"
+}
+```
+
+Errores: `422 invalid_registration` para un mensaje OPAQUE mal formado o un login que no tiene forma de
+correo, el mismo error genérico que usa el resto del subsistema. `409 login_taken` cuando el correo ya
+tiene cuenta, a propósito distinto del genérico: quien lo recibe tiene que enterarse de que ya existe una
+cuenta con ese correo, no creer que su alta se ha perdido. La pantalla de registro (`register.blade.php`,
+`resources/js/auth/registerPage.js`) traduce este código a un mensaje con un enlace a iniciar sesión.
+
+A partir de aquí, el flujo es idéntico al de 4.2 a 4.4: `registration/finish` con el mismo
+`registrationId`, seguido del login OPAQUE inmediato con la misma contraseña (sección 5, pasos 12 a 20).
+`registration/finish` distingue el origen del pendiente por `invitation_ref`: si es `null`, no intenta
+consumir ningún enlace.
+
+Rate limiting: por IP únicamente (`opaque-registration-public`, 10/min), más estricto que el de 4.1 porque
+aquí no hay token de enlace que reparta el abuso entre varios cubos, y porque cada intento, además de
+consultar si el correo existe, escribe una fila de usuario.
+
+La pantalla se sirve en `GET /phr/register` con el nombre `filament.phr.auth.register`, desde
+`RegisterController`, que responde la vista sin ninguna consulta a base de datos: igual que la de
+establecer contraseña, aquí todavía no hay nada que validar. El enlace de `login.blade.php` hacia ella
+comprueba con `Route::has()` antes de usar `route()`, una salvaguarda que se escribió cuando la ruta aún
+no existía y que se conserva porque no cuesta nada y evita que la pantalla de acceso reviente entera si
+alguien renombra la ruta.
+
 ## 5. Orden criptográfico del establecimiento de contraseña
 
 Es la secuencia más delicada de todo el sistema: cualquier operación fuera de orden o cualquier paso
@@ -417,6 +478,13 @@ login OPAQUE completo con la contraseña que acaba de fijar. Cuesta un Argon2id 
 momento (cuando todavía no hay datos que perder) cualquier desajuste entre el KSF o el `identifiers.server`
 usados en el registro y los que usará todo login futuro, en vez de descubrirlo en el primer login real, ya
 con datos cifrados de por medio.
+
+**Variante del registro público (sección 4.7).** El paso 4 cambia: en vez de validar un token de enlace,
+el servidor crea la fila de `users` a partir del nombre y el login que llegan en la propia petición y
+comprueba la unicidad del correo en el `INSERT`. El paso 12 cambia en consecuencia: la transacción de
+`registration/finish` no consume ningún enlace, porque `invitation_ref` es `null` en el pendiente. El
+resto de la secuencia, del 1 al 20, es idéntico, incluida la UMK naciendo del CSPRNG en el paso 8 y no de
+la contraseña.
 
 ### Qué se rompe si se altera el orden
 
@@ -660,13 +728,14 @@ sobrescrito, implementa `FilamentUser::canAccessPanel()`), `UserRegistrationLink
 **Controladores** (invocables planos, sin Livewire)
 
 `LoginController`, `SetPasswordController` (sirve la página genérica; la validación real del token ocurre
-en `registration/start`), `RegistrationStartController`, `RegistrationFinishController`,
-`LoginStartController`, `LoginFinishController`, `SessionSecretController`, `LockController`.
+en `registration/start`), `RegistrationStartController`, `RegistrationPublicStartController` (sección
+4.7, alta sin invitación), `RegistrationFinishController`, `LoginStartController`, `LoginFinishController`,
+`SessionSecretController`, `LockController`.
 
 **Vistas Blade**
 
-`resources/views/phr/auth/login.blade.php`, `set-password.blade.php`, `link-invalid.blade.php`. Las tres
-replican a mano la estructura de `fi-simple-page` de Filament con
+`resources/views/phr/auth/login.blade.php`, `set-password.blade.php`, `register.blade.php` (sección 4.7),
+`link-invalid.blade.php`. Las cuatro replican a mano la estructura de `fi-simple-page` de Filament con
 `<x-filament-panels::layout.simple>`, porque no hay componente Livewire detrás que resuelva
 `$this->getHeading()`.
 
@@ -685,9 +754,9 @@ propiedades `#[Url]` (sección 9).
 `auth/opaqueClient.js` (único sitio que llama a `@serenity-kit/opaque`, con el KSF fijado como constante
 congelada), `auth/keyring.js` (dueño de la UMK en memoria, nunca la expone fuera de su propio módulo),
 `auth/recovery.js` (lee y escribe el paquete de `sessionStorage`, pide el secreto de sesión),
-`auth/setPasswordPage.js`, `auth/loginPage.js`, `auth/lock.js` (temporizador de inactividad, que avisa y
-dispara la recarga, pero no es quien decide la caducidad),
-`guards/livewirePayloadGuard.js` (interceptor de la sección 9).
+`auth/setPasswordPage.js`, `auth/registerPage.js` (sección 4.7, calca `setPasswordPage.js` sin token de
+enlace), `auth/loginPage.js`, `auth/lock.js` (temporizador de inactividad, que avisa y dispara la recarga,
+pero no es quien decide la caducidad), `guards/livewirePayloadGuard.js` (interceptor de la sección 9).
 
 **Middleware**
 
@@ -757,6 +826,14 @@ terminal. Se descarta porque hoy no hay ningún despliegue automatizado que lo n
 cambio pequeño y localizado en `phr:issue-registration-link`.
 
 ## 13. Historial
+
+### 2026-07-26 — Se añade el registro público, sin invitación
+Antes: la única forma de crear una cuenta era abrir un enlace de invitación, emitido por otro usuario o
+por el comando de consola del primer usuario; secciones 1, 2 y 4 no contemplaban ninguna otra vía. Ahora
+existe `POST /phr/auth/opaque/registration/public/start` (sección 4.7), que crea la fila de usuario en el
+propio endpoint y responde 409 `login_taken` si el correo ya tiene cuenta, en vez de exigir un token.
+`registration/finish` (sección 4.2) queda sin cambios de contrato, pero deja de consumir un enlace cuando
+el pendiente tiene `invitation_ref` a `null` (ADR 0009).
 
 ### 2026-07-26 — La caducidad por inactividad pasa a contarse en el servidor
 Antes: la sección 8 ya exigía que contase el servidor, pero la única cuenta que existía era el

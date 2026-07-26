@@ -1212,7 +1212,10 @@ Las cuatro respuestas llevan `Cache-Control: no-store`.
 ```
 
 1. Validar token de registro/invitación (la aplicación autoriza **antes** de
-   crear la respuesta OPAQUE; sin registro público ilimitado).
+   crear la respuesta OPAQUE). Existe además una segunda vía sin token, el alta pública del
+   ADR 0009, que llega por `registration/public/start`: ahí lo que autoriza antes de crear la
+   respuesta OPAQUE no es un token sino la creación de la fila del usuario, y el abuso se acota
+   con limitación de intentos por IP en lugar de con invitación.
 2. Decodificar estrictamente y validar el punto cegado.
 3. Calcular `credential_identifier = HMAC-SHA-256(ENUM_KEY, normalize(login))` (§13.1).
 4. Derivar clave OPRF (§8.3) y evaluar.

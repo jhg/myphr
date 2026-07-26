@@ -98,6 +98,21 @@ final class OpaqueServiceProvider extends ServiceProvider
             ];
         });
 
+        /**
+         * Alta pública (sin invitación): el endpoint crea la cuenta por sí mismo, así que es un
+         * oráculo de enumeración masiva por diseño (409 `login_taken` si el correo ya existe) y no
+         * hay token que reparta el abuso entre cubos, como en `opaque-registration`. La IP es la
+         * única clave posible, y el límite es más estricto que el de registro por invitación: cada
+         * intento aquí, además de consultar existencia, escribe una fila de usuario.
+         */
+        RateLimiter::for('opaque-registration-public', static function (Request $request): array {
+            $ip = self::clientIp($request);
+
+            return [
+                Limit::perMinute(10)->by('opaque-registration-public:ip:'.$ip),
+            ];
+        });
+
         RateLimiter::for('opaque-login', static function (Request $request): array {
             $ip = self::clientIp($request);
             $login = hash('sha256', LoginNormalizer::normalize(self::stringInput($request, 'login')));

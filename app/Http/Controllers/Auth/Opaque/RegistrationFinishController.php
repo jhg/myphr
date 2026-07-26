@@ -89,7 +89,14 @@ final readonly class RegistrationFinishController
                     return null;
                 }
 
-                $this->links->consumeById((string) $pending->invitation_ref);
+                /**
+                 * `invitation_ref` es nulo cuando el pendiente nace del alta pública
+                 * ({@see RegistrationPublicStartController}), que no consume ningún enlace porque
+                 * nunca hubo uno.
+                 */
+                if ($pending->invitation_ref !== null) {
+                    $this->links->consumeById((string) $pending->invitation_ref);
+                }
 
                 $user->currentMasterKeyEnvelope?->retire();
 

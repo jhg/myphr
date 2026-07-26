@@ -22,6 +22,7 @@ import { setLocale } from './i18n/index.js';
 import { armInactivityLock, disarmInactivityLock, interceptLogout } from './auth/lock.js';
 import { loginForm } from './auth/loginPage.js';
 import { profilePage } from './auth/profilePage.js';
+import { registerPage } from './auth/registerPage.js';
 import { setPasswordForm } from './auth/setPasswordPage.js';
 import { bootstrapSession } from './auth/sessionBootstrap.js';
 import { installLivewirePayloadGuard } from './guards/livewirePayloadGuard.js';
@@ -56,6 +57,7 @@ setLocale(document.documentElement.getAttribute('lang') ?? '');
 const COMPONENTS = Object.freeze({
     phrLoginForm: loginForm,
     phrSetPasswordForm: setPasswordForm,
+    phrRegisterForm: registerPage,
     phrGlucosePage: glucosePage,
     phrBloodPressurePage: bloodPressurePage,
     phrMealsPage: mealsPage,

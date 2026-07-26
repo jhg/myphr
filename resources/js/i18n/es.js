@@ -63,6 +63,15 @@ export const ES = Object.freeze({
     'setPassword.error.mismatch': 'Las dos contraseñas no coinciden.',
     'setPassword.error.verification': 'Algo ha ido mal creando tu clave. No la hemos podido verificar.',
 
+    // --- Alta pública (registro) ------------------------------------------------------------------
+    'register.stage.contacting': 'Creando tu cuenta…',
+    'register.stage.stretching': 'Derivando tu clave en este dispositivo. Tarda unos segundos…',
+    'register.stage.wrapping': 'Creando y protegiendo tu clave…',
+    'register.stage.verifying': 'Comprobando que tu contraseña abre tu clave. Tarda unos segundos…',
+    'register.error.mismatch': 'Las dos contraseñas no coinciden.',
+    'register.error.loginTaken': 'Ya existe una cuenta con ese correo electrónico.',
+    'register.error.generic': 'Algo ha ido mal creando tu cuenta. No la hemos podido verificar.',
+
     // --- Cambio de contraseña -------------------------------------------------------------------
     'changePassword.stage.reauthenticating': 'Comprobando tu contraseña actual…',
     'changePassword.stage.stretchingOld':
