@@ -126,6 +126,15 @@ class PhrPanelProvider extends PanelProvider
                 fn (): View => view('phr.partials.pwa-head'),
             )
             /**
+             * Idioma de la petición, en el `<body>` y no solo en el `<html>`, porque la navegación
+             * de Livewire reemplaza el primero y no los atributos del segundo. El porqué completo
+             * está en la propia plantilla.
+             */
+            ->renderHook(
+                PanelsRenderHook::BODY_START,
+                fn (): View => view('phr.partials.locale-marker'),
+            )
+            /**
              * Fuentes autoalojadas del sistema de diseño (DESIGN.md § Typography).
              *
              * `Vite::fonts()` emite las etiquetas `<link rel="preload">` y el `<style>` con los

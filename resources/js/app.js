@@ -33,18 +33,32 @@ import { insulinPage } from './health/insulinPage.js';
 import { mealsPage } from './health/mealsPage.js';
 
 /**
- * Idioma de las cadenas que construye el cliente, fijado antes de registrar nada.
+ * Idioma de las cadenas que construye el cliente.
  *
- * Sale del `lang` que el servidor ya emite en el `<html>` a partir de `app()->getLocale()`: no hay
- * metadato nuevo ni petición nueva, y el idioma del texto que pinta JavaScript no puede separarse
- * del que pinta Blade. Se fija aquí y no dentro de `i18n/index.js` para no depender del orden en
- * que se evalúan los módulos: este fichero corre en la cabecera, antes de que exista ninguna
- * pantalla.
+ * Sale de lo que el servidor ya emite a partir de `app()->getLocale()`: no hay petición nueva, y el
+ * texto que pinta JavaScript no puede separarse del que pinta Blade.
  *
- * `wire:navigate` no vuelve a evaluar los módulos ya cargados (ADR 0003), pero tampoco cambia el
- * idioma: cambiarlo en el perfil recarga la página entera.
+ * Se relee **en cada navegación**, y no una sola vez al cargar, porque el idioma del servidor puede
+ * cambiar sin que la pestaña se recargue. El caso normal es entrar: la pantalla de acceso no tiene
+ * sesión y se sirve en el idioma de `Accept-Language`, y en cuanto hay sesión pasa a mandar el
+ * guardado en la cuenta. Con una sola lectura, ese primer idioma se quedaba congelado y la persona
+ * veía el panel en chino con las etiquetas de las gráficas en castellano.
+ *
+ * La fuente es un marcador del `<body>` y no el `lang` del `<html>`: la navegación de Livewire
+ * reemplaza el primero y no los atributos del segundo. El `lang` se actualiza aquí a mano para que
+ * los lectores de pantalla y `Intl` no se queden con el de la primera carga.
  */
-setLocale(document.documentElement.getAttribute('lang') ?? '');
+function syncLocale() {
+    const marker = document.querySelector('[data-phr-locale]');
+    const active = setLocale(marker?.dataset.phrLocale ?? document.documentElement.lang ?? '');
+    const tag = active.replace('_', '-');
+
+    if (document.documentElement.lang !== tag) {
+        document.documentElement.lang = tag;
+    }
+}
+
+syncLocale();
 
 /**
  * Componentes que las plantillas nombran en `x-data`.
@@ -106,6 +120,7 @@ function armLockForCurrentPage() {
 }
 
 function runForCurrentPage() {
+    syncLocale();
     armLockForCurrentPage();
     void bootstrapSession();
 }
