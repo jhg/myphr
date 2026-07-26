@@ -56,3 +56,42 @@ it('emite el marcador dentro del body', function (): void {
         ->and($markerAt)->not->toBeFalse()
         ->and($markerAt)->toBeGreaterThan($bodyStart);
 });
+
+/**
+ * El menú de usuario se traduce en cada petición, no al construir el panel.
+ *
+ * `PhrPanelProvider::panel()` corre una sola vez, al registrar el panel, y en ese momento todavía no
+ * ha pasado `SetLocale`: un `__()` evaluado ahí congela la traducción del primer idioma que hubiera.
+ * Es el mismo motivo por el que los títulos de las páginas se resuelven por método y no como
+ * propiedad estática.
+ */
+it('traduce el menú de usuario en el idioma de la cuenta', function (): void {
+    $user = User::factory()->registered()->create(['locale' => 'zh_CN']);
+
+    $this->actingAs($user)
+        ->get('/phr')
+        ->assertOk()
+        ->assertSee('我的资料', false)
+        ->assertDontSee('My profile', false);
+});
+
+/**
+ * Guardia contra la recaída: ya han sido tres en este proyecto.
+ *
+ * El cuerpo de `panel()` corre una sola vez. Toda traducción que aparezca ahí tiene que estar dentro
+ * de un `Closure` para que Filament la resuelva al pintar, con `SetLocale` ya aplicado. Escrita como
+ * cadena suelta se congela en el idioma por defecto y el fallo no da ningún error: simplemente sale
+ * en el idioma equivocado, que es de lo más difícil de notar revisando código.
+ */
+it('no evalúa ninguna traducción al construir el panel', function (): void {
+    $lines = file(app_path('Providers/Filament/PhrPanelProvider.php'), FILE_IGNORE_NEW_LINES);
+
+    $eager = array_filter(
+        $lines,
+        static fn (string $line): bool => str_contains($line, '__(')
+            && ! str_contains($line, 'fn (')
+            && ! str_contains($line, 'function ('),
+    );
+
+    expect($eager)->toBe([], 'Traducción evaluada fuera de un Closure: '.implode(' | ', $eager));
+});

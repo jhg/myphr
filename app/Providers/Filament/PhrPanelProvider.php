@@ -314,7 +314,14 @@ class PhrPanelProvider extends PanelProvider
              */
             ->userMenuItems([
                 'profile' => Action::make('profile')
-                    ->label(__('My profile'))
+                    /**
+                     * La etiqueta va en un `Closure` y no como cadena: este método construye el
+                     * panel una sola vez, al registrarlo, y ahí todavía no ha pasado `SetLocale`.
+                     * Un `__()` evaluado en ese momento se queda con el idioma por defecto para
+                     * siempre, aunque la cuenta tenga otro. Es el mismo motivo por el que los
+                     * títulos de las páginas se resuelven por método y no como propiedad estática.
+                     */
+                    ->label(fn (): string => __('My profile'))
                     ->icon(Heroicon::UserCircle)
                     ->url(fn (): string => Profile::getUrl()),
             ])
