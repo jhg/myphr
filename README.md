@@ -1,5 +1,7 @@
 # myphr
 
+> MVP presentado a la hackathon de CubePath.
+
 Una historia de salud personal (PHR) cifrada de extremo a extremo, construida con Laravel, Filament y
 Livewire.
 
