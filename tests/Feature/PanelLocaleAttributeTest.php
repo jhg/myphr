@@ -86,11 +86,23 @@ it('traduce el menú de usuario en el idioma de la cuenta', function (): void {
 it('no evalúa ninguna traducción al construir el panel', function (): void {
     $lines = file(app_path('Providers/Filament/PhrPanelProvider.php'), FILE_IGNORE_NEW_LINES);
 
+    /**
+     * Se miran solo líneas de código. Los comentarios que explican por qué la traducción va dentro
+     * de un `Closure` mencionan `__()` por fuerza, y contarlos haría fallar el test por documentar
+     * justo lo que quiere impedir.
+     */
     $eager = array_filter(
         $lines,
-        static fn (string $line): bool => str_contains($line, '__(')
-            && ! str_contains($line, 'fn (')
-            && ! str_contains($line, 'function ('),
+        static function (string $line): bool {
+            $trimmed = ltrim($line);
+
+            return str_contains($line, '__(')
+                && ! str_starts_with($trimmed, '*')
+                && ! str_starts_with($trimmed, '//')
+                && ! str_starts_with($trimmed, '/*')
+                && ! str_contains($line, 'fn (')
+                && ! str_contains($line, 'function (');
+        },
     );
 
     expect($eager)->toBe([], 'Traducción evaluada fuera de un Closure: '.implode(' | ', $eager));

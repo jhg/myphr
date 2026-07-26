@@ -159,6 +159,8 @@ export const ES = Object.freeze({
         + 'para cargarlos todos.',
     'dashboard.emptyGlucose': 'Todavía no hay registros de glucemia en este periodo.',
     'dashboard.emptyBloodPressure': 'Todavía no hay registros de tensión en este periodo.',
+    'dashboard.addFirstGlucose': 'Añadir tu primera lectura',
+    'dashboard.addFirstBloodPressure': 'Añadir tu primera lectura',
     'dashboard.targetRangeUnitMismatch': 'Tu rango objetivo está guardado en otra unidad, así que no se '
         + 'puede calcular el tiempo en rango sobre lecturas en {unit}. Ajusta la unidad del rango o la de '
         + 'presentación en los ajustes.',

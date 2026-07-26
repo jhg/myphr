@@ -112,6 +112,12 @@ class PhrPanelProvider extends PanelProvider
              * lo único que conseguiría es enviar al servidor lo que la persona teclea.
              */
             ->globalSearch(false)
+            /**
+             * El icono del PWA hace también de marca del panel, para que la barra superior y el
+             * icono de la pantalla de inicio sean lo mismo. En un `Closure` porque `brandLogo()`
+             * admite `Htmlable` y así la vista se resuelve al pintar, no al construir el panel.
+             */
+            ->brandLogo(fn (): View => view('phr.partials.brand'))
             ->renderHook(
                 PanelsRenderHook::HEAD_END,
                 fn (): View => view('phr.partials.crypto-head'),

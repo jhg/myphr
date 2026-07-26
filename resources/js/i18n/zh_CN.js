@@ -151,6 +151,8 @@ export const ZH_CN = Object.freeze({
     'dashboard.truncated': '本概览只包含最近的记录：这段时间内的记录太多，无法全部载入。',
     'dashboard.emptyGlucose': '这段时间内还没有血糖记录。',
     'dashboard.emptyBloodPressure': '这段时间内还没有血压记录。',
+    'dashboard.addFirstGlucose': '添加第一条记录',
+    'dashboard.addFirstBloodPressure': '添加第一条记录',
     'dashboard.targetRangeUnitMismatch': '你的目标范围使用的是另一种单位，因此无法在 {unit} 的读数上计算范围内时间。请在设置中修改范围单位或显示单位。',
     'dashboard.targetRangeInvite': '在设置中配置你的血糖目标范围，这里就会显示你有多少比例的时间处于范围之内。',
     'dashboard.generic': '概览未能载入。',

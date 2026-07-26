@@ -387,7 +387,25 @@ function createCallout(tone, message) {
  * @param {string} [params.unit]
  * @returns {HTMLDivElement}
  */
-function createStatTile({ label, value, unit }) {
+/**
+ * Tinta de cada lectura clínica de una cifra del panel.
+ *
+ * Son los papeles semánticos de DESIGN.md, que conmutan solos con el tema oscuro. `neutral` es el
+ * caso normal: la mayoría de las cifras (recuento, media, mínimo) no significan nada por sí solas y
+ * teñirlas sería decorar, no informar.
+ *
+ * @type {Record<string, string>}
+ */
+/** Referencia clínica habitual de tiempo en rango, en porcentaje. */
+const TIME_IN_RANGE_TARGET = 70;
+
+const TONE_INK = Object.freeze({
+    neutral: 'text-ink',
+    good: 'text-success-ink',
+    warning: 'text-warning-ink',
+});
+
+function createStatTile({ label, value, unit, tone = 'neutral' }) {
     const tile = document.createElement('div');
     /**
      * `bg-background` y `border-border`: papeles de § Colors, que conmutan solos con el tema. Con
@@ -401,8 +419,16 @@ function createStatTile({ label, value, unit }) {
     caption.textContent = label;
     tile.appendChild(caption);
 
+    /**
+     * La cifra en tamaño Headline y la unidad pequeña al lado: la jerarquía la da el tamaño, no el
+     * color, así que sigue leyéndose igual en escala de grises y con el tema oscuro.
+     *
+     * `tone` tiñe la cifra cuando el dato tiene una lectura clínica —dentro o fuera del rango
+     * objetivo— y se queda en la tinta normal cuando no la tiene. El color nunca va solo: la cifra y
+     * su etiqueta siguen ahí, que es lo que exige DESIGN.md (Do's #3).
+     */
     const valueLine = document.createElement('p');
-    valueLine.className = 'mt-1 font-mono text-body-lg font-semibold text-ink';
+    valueLine.className = `mt-1 font-mono text-headline font-semibold ${TONE_INK[tone] ?? TONE_INK.neutral}`;
     valueLine.textContent = value;
 
     if (unit) {
@@ -468,6 +494,76 @@ function createWindowHeading(window) {
  * @param {string} unit
  * @returns {HTMLDivElement}
  */
+/**
+ * Estado vacío con salida.
+ *
+ * Antes era una frase gris y nada más: la primera pantalla que ve alguien recién registrado le decía
+ * que no hay datos y ahí se acababa. Ahora lleva un icono, la misma frase y un botón que lleva a
+ * crear el primer registro, que es lo único que esa persona puede hacer en ese momento.
+ *
+ * El destino llega en un `data-*` del contenedor, puesto por Blade: la ruta del panel la decide el
+ * servidor y no se duplica aquí.
+ *
+ * @param {string} message
+ * @param {string|null} href
+ * @param {string} actionLabel
+ * @returns {HTMLElement}
+ */
+function renderEmptyState(message, href, actionLabel) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'flex flex-col items-center gap-3 rounded-control border border-dashed '
+        + 'border-border-strong px-6 py-10 text-center';
+
+    const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    icon.setAttribute('viewBox', '0 0 24 24');
+    icon.setAttribute('fill', 'none');
+    icon.setAttribute('stroke', 'currentColor');
+    icon.setAttribute('stroke-width', '1.5');
+    icon.setAttribute('aria-hidden', 'true');
+    icon.setAttribute('class', 'size-8 text-ink-muted');
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('stroke-linecap', 'round');
+    path.setAttribute('stroke-linejoin', 'round');
+    path.setAttribute('d', 'M3 13.5h4.5l2.25-4.5 3 9 2.25-4.5H21');
+    icon.appendChild(path);
+    wrapper.appendChild(icon);
+
+    const text = document.createElement('p');
+    text.className = 'text-body-sm text-ink-secondary';
+    text.textContent = message;
+    wrapper.appendChild(text);
+
+    if (typeof href === 'string' && href !== '') {
+        const action = document.createElement('a');
+        action.href = href;
+        action.className = 'inline-flex min-h-11 items-center justify-center rounded-control bg-accent '
+            + 'px-6 py-2.5 text-button text-accent-ink transition hover:bg-accent-hover '
+            + 'focus-visible:outline-none focus-visible:shadow-focus-blue';
+        action.textContent = actionLabel;
+        wrapper.appendChild(action);
+    }
+
+    return wrapper;
+}
+
+/**
+ * Destino de una pantalla, leído del contenedor que pinta Blade.
+ *
+ * Devuelve `null` si no hay documento con `querySelector` —los tests montan un `document` mínimo— o
+ * si el atributo falta. En ese caso el estado vacío se pinta igual, solo que sin botón: la frase, que
+ * es lo que informa, no depende de encontrar la ruta.
+ *
+ * @param {string} name
+ * @returns {string|null}
+ */
+function pageUrl(name) {
+    if (typeof document?.querySelector !== 'function') {
+        return null;
+    }
+
+    return document.querySelector('[data-glucose-url]')?.dataset?.[name] ?? null;
+}
+
 export function renderGlucosePeriod(window, periodSummary, unit) {
     const section = document.createElement('div');
     section.className = 'space-y-3';
@@ -480,10 +576,11 @@ export function renderGlucosePeriod(window, periodSummary, unit) {
      * datos existen y solo están en otra unidad.
      */
     if (!hasGlucoseData(periodSummary)) {
-        const empty = document.createElement('p');
-        empty.className = 'text-body-sm text-ink-secondary';
-        empty.textContent = t('dashboard.emptyGlucose');
-        section.appendChild(empty);
+        section.appendChild(renderEmptyState(
+            t('dashboard.emptyGlucose'),
+            pageUrl('glucoseUrl'),
+            t('dashboard.addFirstGlucose'),
+        ));
     }
 
     for (const [method, methodSummary] of sortedMethodEntries(periodSummary.byMethod)) {
@@ -536,10 +633,20 @@ function renderGlucoseMethodCard(method, methodSummary, unit) {
     }));
 
     if (methodSummary.inRangePercent !== undefined) {
+        /**
+         * El único dato del panel que se puede leer como bueno o mejorable sin interpretar nada: el
+         * rango objetivo lo eligió la propia persona en su perfil, así que el umbral no lo pone la
+         * aplicación.
+         *
+         * El 70 % es la referencia clínica habitual para tiempo en rango. Por debajo se marca en
+         * ámbar, no en rojo: esto es un resumen personal, no un diagnóstico, y teñir de rojo la
+         * glucemia de alguien es un mensaje que esta aplicación no está en posición de dar.
+         */
         grid.appendChild(createStatTile({
             label: t('dashboard.stat.timeInRange'),
             value: formatNumber(methodSummary.inRangePercent),
             unit: '%',
+            tone: methodSummary.inRangePercent >= TIME_IN_RANGE_TARGET ? 'good' : 'warning',
         }));
     }
 
@@ -604,10 +711,11 @@ function renderBloodPressurePeriod(window, periodSummary) {
     section.appendChild(createWindowHeading(window));
 
     if (!hasBloodPressureData(periodSummary)) {
-        const empty = document.createElement('p');
-        empty.className = 'text-body-sm text-ink-secondary';
-        empty.textContent = t('dashboard.emptyBloodPressure');
-        section.appendChild(empty);
+        section.appendChild(renderEmptyState(
+            t('dashboard.emptyBloodPressure'),
+            pageUrl('bloodPressureUrl'),
+            t('dashboard.addFirstBloodPressure'),
+        ));
 
         return section;
     }

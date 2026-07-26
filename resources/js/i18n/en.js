@@ -158,6 +158,8 @@ export const EN = Object.freeze({
         'The summary only includes the most recent records: there are too many in this period to load them all.',
     'dashboard.emptyGlucose': 'There are no blood glucose records in this period yet.',
     'dashboard.emptyBloodPressure': 'There are no blood pressure records in this period yet.',
+    'dashboard.addFirstGlucose': 'Add your first reading',
+    'dashboard.addFirstBloodPressure': 'Add your first reading',
     'dashboard.targetRangeUnitMismatch': 'Your target range is saved in a different unit, so time in range '
         + 'cannot be calculated over readings in {unit}. Change either the range unit or the display unit in '
         + 'the settings.',

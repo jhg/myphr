@@ -33,10 +33,17 @@
     contenedor `fi-page-header-main-ctn` de Filament (el `py-8` y la cabecera).
 --}}
 <x-filament-panels::page>
+{{--
+    Destinos de los estados vacíos. Van en `data-*` y no escritos en el módulo de JavaScript porque
+    la ruta del panel la decide `PhrPanelProvider`, y una ruta duplicada a mano en el cliente es de
+    las que se quedan obsoletas sin que nadie lo note hasta que alguien pulsa el botón.
+--}}
 <div
     x-data="phrDashboardPage"
     wire:key="dashboard-page"
     class="space-y-6"
+    data-glucose-url="{{ \App\Filament\Pages\Glucose::getUrl() }}"
+    data-blood-pressure-url="{{ \App\Filament\Pages\BloodPressure::getUrl() }}"
 >
     {{--
         Avisos de carga: sobres que no abrieron, resumen recortado o un fallo al pedir datos. El
