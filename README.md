@@ -1,64 +1,67 @@
 # myphr
 
-> MVP presentado a la hackathon de CubePath.
+> MVP built for the CubePath hackathon.
 
-Una historia de salud personal (PHR) cifrada de extremo a extremo, construida con Laravel, Filament y
-Livewire.
+An end-to-end encrypted personal health record (PHR), built with Laravel, Filament and Livewire.
 
-El servidor nunca ve la contraseña ni los datos clínicos en claro. La autenticación usa
-[OPAQUE](https://www.rfc-editor.org/rfc/rfc9807.txt) (aPAKE, sin enviar la contraseña), y todos los datos
-se cifran en el navegador con una clave maestra que el servidor nunca puede leer. El porqué de cada
-decisión está en `docs/`, no aquí: este README es solo la puerta de entrada.
+The server never sees your password or your health data in the clear. Sign-in uses
+[OPAQUE](https://www.rfc-editor.org/rfc/rfc9807.txt) (an aPAKE: the password never leaves the browser),
+and every record is encrypted in the browser with a master key the server cannot read. The reasoning
+behind each decision lives in `docs/`, not here. This README is only the front door.
 
-## Documentación
+## Documentation
 
-- [`docs/README.md`](docs/README.md): qué es un PHR, para qué sirve este proyecto y el vocabulario
-  clínico (LOINC/SNOMED CT) que usa.
-- [`docs/OPAQUE.md`](docs/OPAQUE.md): especificación completa de la autenticación por contraseña sin
-  enviar la contraseña.
-- [`docs/adr/`](docs/adr/): decisiones de arquitectura, con su contexto y sus renuncias. Se actualizan en
-  el mismo archivo cuando la decisión evoluciona; nunca se sustituyen por uno nuevo.
-- [`docs/specs/`](docs/specs/): detalle de implementación de cada funcionalidad, apoyado en esos ADR.
+The documents below are written in Spanish.
+
+- [`docs/README.md`](docs/README.md): what a PHR is, what this project is for, and the clinical
+  vocabulary it uses (LOINC / SNOMED CT).
+- [`docs/OPAQUE.md`](docs/OPAQUE.md): the full specification of password authentication without ever
+  sending the password.
+- [`docs/adr/`](docs/adr/): architecture decisions, with their context and their trade-offs. When a
+  decision changes, we update the same file instead of adding a new one that replaces it.
+- [`docs/specs/`](docs/specs/): implementation detail for each feature, built on top of those ADRs.
 
 ## Stack
 
-- PHP 8.4, Laravel 13, Filament 5, Livewire 4.
-- Cliente OPAQUE: [`@serenity-kit/opaque`](https://github.com/serenity-kit/opaque) (versión exacta,
-  ver `docs/OPAQUE.md` §3).
-- Pest 4 para tests (PHP y `arch()`), Vitest para los módulos JS de criptografía.
-- Pint para formato de PHP.
+- PHP 8.4 or 8.5, Laravel 13, Filament 5, Livewire 4. Both PHP versions run in CI: development uses
+  8.4 and production runs 8.5.
+- OPAQUE client: [`@serenity-kit/opaque`](https://github.com/serenity-kit/opaque) (exact version pinned,
+  see `docs/OPAQUE.md` §3).
+- Pest 4 for the PHP suite, including `arch()` tests. The JavaScript crypto modules use Node's built-in
+  test runner, so there is no extra test dependency to install.
+- Pint for PHP formatting.
 
-## Puesta en marcha
+## Getting started
 
 ```bash
 composer setup
 ```
 
-Esto instala dependencias PHP y JS, copia `.env`, genera la `APP_KEY`, migra la base de datos y compila
-los assets. Después, antes de dar de alta a nadie, hace falta generar el material criptográfico estático
-del servidor:
+This installs the PHP and JavaScript dependencies, copies `.env`, generates the `APP_KEY`, runs the
+migrations and builds the assets. After that, and before anyone can sign up, you need to generate the
+server's static cryptographic material:
 
 ```bash
 php artisan opaque:setup
 ```
 
-El comando imprime por pantalla el par de claves OPAQUE y el resto de secretos estáticos; se copian a
-mano a `.env`. No escribe el archivo por ti ni se puede ejecutar dos veces sin invalidar los registros
-existentes.
+The command prints the OPAQUE key pair and the other static secrets to the terminal. You copy them into
+`.env` by hand: it does not write the file for you. Run it only once. Running it again on an
+installation that already has accounts locks every one of them out, with no way to recover them.
 
-Hay dos vías de alta (ADR 0009). Cualquiera puede registrarse desde `/phr/register`, y además se puede
-emitir un enlace de un solo uso, que es la forma de dar de alta al primer usuario antes de que el panel
-esté accesible:
+There are two ways to create an account (ADR 0009). Anyone can sign up at `/phr/register`, and you can
+also issue a single-use link. The link is how you create the first account, before the panel is
+reachable:
 
 ```bash
-php artisan phr:issue-registration-link correo@ejemplo.com --name="Nombre"
+php artisan phr:issue-registration-link someone@example.com --name="Their name"
 ```
 
-El enlace se muestra una sola vez en la terminal; la aplicación nunca lo envía por correo (ver
-`docs/adr/0009-user-provisioning-and-session-lifecycle.md`). La persona lo abre, elige contraseña y su
-clave maestra nace en ese momento en el navegador.
+The link is shown once in the terminal and the application never emails it (see
+`docs/adr/0009-user-provisioning-and-session-lifecycle.md`). The person opens it, chooses a password,
+and their master key is created right then, in their browser.
 
-Para desarrollo local, con recarga de servidor, cola, logs y Vite en un solo proceso:
+For local development, with the server, queue, logs and Vite running in a single process:
 
 ```bash
 composer dev
@@ -70,27 +73,28 @@ composer dev
 composer test
 ```
 
-Ejecuta la suite de Pest completa, incluidos los vectores oficiales de RFC 9497/9807 y las pruebas de
-arquitectura (sesión, propiedades `#[Url]`, payloads cifrados). Para los módulos JS de criptografía:
+This runs the full Pest suite, including the official RFC 9497 / 9807 test vectors and the architecture
+tests (session handling, `#[Url]` properties, encrypted payloads). For the JavaScript crypto modules:
 
 ```bash
 npm test
 ```
 
-## Convenciones del proyecto
+Both suites, plus Pint, also run on every push through
+[GitHub Actions](.github/workflows/tests.yml).
 
-Las guías de código para agentes de IA (Laravel Boost, Pest, Filament, etc.) están en `CLAUDE.md` y
-`.ai/`. Cualquier cambio de arquitectura, dominio o comportamiento que afecte a una decisión ya
-documentada se refleja actualizando el ADR o la spec correspondiente, no creando uno nuevo que la
-reemplace.
+## Project conventions
 
-## Licencia
+The coding guidelines for AI agents (Laravel Boost, Pest, Filament, and so on) live in `CLAUDE.md` and
+`.ai/`. Any change to the architecture, the domain or the behaviour that affects an already documented
+decision is recorded by updating the matching ADR or spec, never by adding a new one that replaces it.
 
-Este proyecto está liberado al dominio público bajo [The Unlicense](LICENSE). Puedes copiarlo,
-modificarlo y usarlo para lo que quieras, con o sin ánimo de lucro, sin pedir permiso ni atribuir.
+## Licence
 
-Con una salvedad que no es nuestra y que no podemos renunciar por ti: el vocabulario clínico del
-catálogo procede de terceros con sus propias condiciones, y esas siguen en pie. Están recogidas en
-[`NOTICE`](NOTICE) y razonadas en el
-[ADR 0005](docs/adr/0005-clinical-vocabulary-loinc-snomed.md). LOINC, en concreto, exige mantener su
-aviso de atribución.
+This project is released into the public domain under [The Unlicense](LICENSE). You can copy it, modify
+it and use it for anything, commercial or not, without asking and without giving credit.
+
+One caveat, and it is not ours to waive: the clinical vocabulary in the catalog comes from third parties
+with their own terms, and those still apply. They are listed in [`NOTICE`](NOTICE) and explained in
+[ADR 0005](docs/adr/0005-clinical-vocabulary-loinc-snomed.md). LOINC in particular requires that its
+attribution notice is kept.

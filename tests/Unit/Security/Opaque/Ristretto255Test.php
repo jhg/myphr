@@ -54,6 +54,29 @@ describe('validatePoint', function (): void {
         expect(fn () => Ristretto255::validatePoint($nonCanonical))->toThrow(InvalidPointException::class);
     });
 
+    /**
+     * Canonicidad completa, no solo el bit alto.
+     *
+     * Entre `p = 2^255 - 19` y `2^255` hay diecinueve valores con el bit alto a cero que tampoco son
+     * codificaciones canónicas. Un chequeo que solo mire ese bit los deja pasar, y esta comprobación
+     * existe para que no se pueda sustituir por uno más corto.
+     *
+     * No se delega en libsodium: `sodium_crypto_core_ristretto255_is_valid_point()` rechaza estas
+     * entradas en unas versiones y las acepta en otras, y esta diferencia salió justamente al
+     * ejecutar la suite en integración continua.
+     */
+    it('rejects non-canonical encodings without the high bit set', function (string $description, string $point): void {
+        expect(strlen($point))->toBe(32)
+            ->and(ord($point[31]) & 0x80)->toBe(0, "$description tiene el bit alto puesto");
+
+        expect(fn () => Ristretto255::validatePoint($point))
+            ->toThrow(InvalidPointException::class, 'canonical encoding');
+    })->with([
+        ['p exacto', "\xed".str_repeat("\xff", 30)."\x7f"],
+        ['p + 1', "\xee".str_repeat("\xff", 30)."\x7f"],
+        ['2^255 - 1', str_repeat("\xff", 31)."\x7f"],
+    ]);
+
     it('rejects bytes that are not a group element', function (): void {
         expect(fn () => Ristretto255::validatePoint(str_repeat("\xff", 32)))
             ->toThrow(InvalidPointException::class);

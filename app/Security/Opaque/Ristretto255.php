@@ -13,6 +13,10 @@ use SodiumException;
  * Añade a libsodium las comprobaciones que RFC 9807 §10.7 exige para toda
  * entrada remota y que la extensión no hace por sí sola:
  *
+ * - canonicidad de la codificación del elemento: `is_valid_point()` la
+ *   comprueba en unas versiones de libsodium y no en otras, de modo que
+ *   delegarla haría que la misma aplicación aceptara o rechazara codificaciones
+ *   alternativas según con qué biblioteca se compilase PHP;
  * - rechazo explícito del elemento neutro (`is_valid_point()` devuelve `true`
  *   para 32 bytes cero);
  * - rechazo del escalar cero;
@@ -54,6 +58,23 @@ final class Ristretto255
             throw new InvalidPointException('Ristretto255 element must be exactly 32 bytes.');
         }
 
+        /**
+         * La canonicidad se comprueba aquí y **no** se delega en libsodium.
+         *
+         * `sodium_crypto_core_ristretto255_is_valid_point()` no la verifica en todas las versiones
+         * de la biblioteca: con libsodium 1.0.20 rechaza una codificación no canónica, y en el
+         * runner de integración continua la acepta. Un mismo despliegue, según con qué libsodium se
+         * haya compilado PHP, admitiría codificaciones alternativas del mismo elemento, que es
+         * justo la propiedad que ristretto255 existe para dar: una y solo una representación por
+         * elemento del grupo.
+         *
+         * Es el mismo criterio que ya se aplicaba al elemento neutro unas líneas más abajo: lo que
+         * RFC 9807 §10.7 exige de toda entrada remota se comprueba aquí, no se supone.
+         */
+        if (! self::isCanonicalEncoding($point)) {
+            throw new InvalidPointException('Ristretto255 element is not a canonical encoding.');
+        }
+
         try {
             $isValid = sodium_crypto_core_ristretto255_is_valid_point($point);
         } catch (SodiumException $exception) {
@@ -67,6 +88,36 @@ final class Ristretto255
         if (self::isIdentityElement($point)) {
             throw new InvalidPointException('Ristretto255 element is the identity element.');
         }
+    }
+
+    /**
+     * ¿Son estos 32 bytes la codificación canónica de un elemento del cuerpo (RFC 9496 §4.1)?
+     *
+     * Es decir: interpretados en little-endian, ¿valen menos que `p = 2^255 - 19`? Eso descarta de
+     * una vez el bit alto puesto (todo lo que llega a `2^255`) y el hueco de diecinueve valores
+     * entre `p` y `2^255`, que es el caso que se cuela cuando solo se mira el bit alto.
+     *
+     * La comparación es en tiempo constante, sin salidas anticipadas. El elemento es público, así
+     * que el tiempo no filtra ningún secreto, pero un bucle que corta en el primer byte distinto
+     * invita a copiarse a un sitio donde sí importe.
+     */
+    private static function isCanonicalEncoding(string $point): bool
+    {
+        /** `p = 2^255 - 19` en little-endian: 0xED, treinta 0xFF y 0x7F. */
+        $prime = "\xed".str_repeat("\xff", 30)."\x7f";
+
+        $borrow = 0;
+        $stillEqual = 1;
+
+        for ($i = self::ELEMENT_BYTES - 1; $i >= 0; $i--) {
+            $difference = ord($point[$i]) - ord($prime[$i]);
+
+            /** `>> 8` deja todo unos si la resta fue negativa, es decir si este byte es menor. */
+            $borrow |= ($difference >> 8) & $stillEqual;
+            $stillEqual &= (((ord($point[$i]) ^ ord($prime[$i])) - 1) >> 8) & 1;
+        }
+
+        return ($borrow & 1) === 1;
     }
 
     /**
