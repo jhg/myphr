@@ -1,10 +1,10 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
-    "name": "laravel/laravel",
+    "name": "jhg/myphr",
     "type": "project",
-    "description": "The skeleton application for the Laravel framework.",
-    "keywords": ["laravel", "framework"],
-    "license": "MIT",
+    "description": "End-to-end encrypted personal health record.",
+    "keywords": ["phr", "health", "opaque", "zero-knowledge"],
+    "license": "Unlicense",
     "require": {
         "php": "^8.3",
         "ext-sodium": "*",

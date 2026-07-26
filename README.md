@@ -46,8 +46,9 @@ El comando imprime por pantalla el par de claves OPAQUE y el resto de secretos e
 mano a `.env`. No escribe el archivo por ti ni se puede ejecutar dos veces sin invalidar los registros
 existentes.
 
-No hay registro público. El primer usuario (y cualquier otro después) se da de alta emitiendo un enlace
-de un solo uso:
+Hay dos vías de alta (ADR 0009). Cualquiera puede registrarse desde `/phr/register`, y además se puede
+emitir un enlace de un solo uso, que es la forma de dar de alta al primer usuario antes de que el panel
+esté accesible:
 
 ```bash
 php artisan phr:issue-registration-link correo@ejemplo.com --name="Nombre"
@@ -82,3 +83,14 @@ Las guías de código para agentes de IA (Laravel Boost, Pest, Filament, etc.) e
 `.ai/`. Cualquier cambio de arquitectura, dominio o comportamiento que afecte a una decisión ya
 documentada se refleja actualizando el ADR o la spec correspondiente, no creando uno nuevo que la
 reemplace.
+
+## Licencia
+
+Este proyecto está liberado al dominio público bajo [The Unlicense](LICENSE). Puedes copiarlo,
+modificarlo y usarlo para lo que quieras, con o sin ánimo de lucro, sin pedir permiso ni atribuir.
+
+Con una salvedad que no es nuestra y que no podemos renunciar por ti: el vocabulario clínico del
+catálogo procede de terceros con sus propias condiciones, y esas siguen en pie. Están recogidas en
+[`NOTICE`](NOTICE) y razonadas en el
+[ADR 0005](docs/adr/0005-clinical-vocabulary-loinc-snomed.md). LOINC, en concreto, exige mantener su
+aviso de atribución.
