@@ -14,11 +14,13 @@ use App\Security\Opaque\CredentialIdentifier;
 use App\Security\Opaque\OpaqueProfile;
 use App\Security\Opaque\Oprf;
 use App\Security\Opaque\RegistrationRecord;
+use App\Support\AuditEvent;
 use Filament\Http\Middleware\Authenticate;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
+use Spatie\Activitylog\Models\Activity;
 use Tests\Support\OpaqueTestClient;
 
 uses(RefreshDatabase::class);
@@ -660,3 +662,46 @@ it('añade un sobre nuevo y retira el anterior al registrarse otra vez', functio
     expect($user->opaque_credential_identifier)
         ->toBe($first['user']->opaque_credential_identifier);
 });
+
+/**
+ * Rastro de actividad del ciclo de vida de una cuenta.
+ *
+ * Vive aquí y no en `ActivityLogTest` porque el alta y el login exigen recorrer el protocolo OPAQUE
+ * entero, y los ayudantes que lo hacen son los de este fichero. Lo que se comprueba es la secuencia
+ * y que ninguna fila lleve propiedades: el servidor anota el verbo y la fecha, nunca el contenido.
+ */
+it('deja un rastro del alta y del login sin propiedades', function (): void {
+    ['user' => $user] = completeRegistration();
+
+    expect(activityLogEvents())->toBe([
+        AuditEvent::RegistrationLinkIssued->value,
+        AuditEvent::RegistrationCompleted->value,
+    ]);
+
+    completeLogin($user)->assertOk();
+
+    expect(activityLogEvents())->toBe([
+        AuditEvent::RegistrationLinkIssued->value,
+        AuditEvent::RegistrationCompleted->value,
+        AuditEvent::LoggedIn->value,
+    ]);
+
+    $activities = Activity::query()->where('log_name', AuditEvent::LOG_NAME)->get();
+
+    foreach ($activities as $activity) {
+        expect($activity->properties->toArray())->toBe([])
+            ->and($activity->subject_id)->toBe($user->getKey());
+    }
+});
+
+/**
+ * @return array<int, string>
+ */
+function activityLogEvents(): array
+{
+    return Activity::query()
+        ->where('log_name', AuditEvent::LOG_NAME)
+        ->orderBy('id')
+        ->pluck('event')
+        ->all();
+}

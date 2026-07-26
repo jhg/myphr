@@ -14,6 +14,7 @@ use App\Security\Opaque\OpaqueException;
 use App\Security\Opaque\OpaquePurpose;
 use App\Security\Opaque\RegistrationRecord;
 use App\Security\Opaque\ServerSetup;
+use App\Support\AuditEvent;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -112,6 +113,18 @@ final readonly class RegistrationFinishController
                     'opaque_registered_at' => now(),
                     'encrypted_settings' => $data['encryptedSettings'],
                 ])->save();
+
+                /**
+                 * Dentro de la transacción y después del `save`, para que solo lo anote la
+                 * transacción ganadora: la rama idempotente de arriba sale antes y no registra un
+                 * alta que en realidad ya estaba hecha. Si algo revienta, el rastro se deshace con
+                 * el resto.
+                 */
+                activity(AuditEvent::LOG_NAME)
+                    ->causedBy($user)
+                    ->performedOn($user)
+                    ->event(AuditEvent::RegistrationCompleted->value)
+                    ->log(AuditEvent::RegistrationCompleted->value);
 
                 return (string) $user->id;
             });

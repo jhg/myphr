@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Crypto\EnvelopeValidator;
+use App\Support\AuditEvent;
 use Database\Factories\EventFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -13,6 +14,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use LogicException;
+use Spatie\Activitylog\Models\Concerns\LogsActivity;
+use Spatie\Activitylog\Support\LogOptions;
 
 /**
  * ADR 0006: un evento clínico es un sobre cifrado con solo las columnas en claro que el servidor
@@ -23,7 +26,50 @@ use LogicException;
 final class Event extends Model
 {
     /** @use HasFactory<EventFactory> */
-    use HasFactory, HasUuids, SoftDeletes;
+    use HasFactory, HasUuids, LogsActivity, SoftDeletes;
+
+    /**
+     * Nombre del log de las transiciones del ciclo de vida, separado del de la cuenta
+     * ({@see AuditEvent::LOG_NAME}) para poder consultarlos por separado.
+     */
+    public const LOG_NAME = 'health-event';
+
+    /**
+     * El rastro va en el modelo y no en las páginas que escriben, para que ninguna vía de borrado
+     * futura se quede sin anotar por olvido: cualquiera que pase por Eloquent queda registrada.
+     *
+     * `forceDeleted` no está entre los eventos que Spatie graba por defecto, y aquí hace falta
+     * porque el objetivo distingue entre marcar para borrar y borrar de verdad.
+     *
+     * @var array<int, string>
+     */
+    protected static array $recordEvents = ['created', 'updated', 'deleted', 'restored', 'forceDeleted'];
+
+    /**
+     * Sin atributos y sin propiedades, a propósito.
+     *
+     * `LogOptions::defaults()` no registra ni los `fillable` ni los `unguarded`, así que la fila
+     * anota el verbo, el sujeto, quién lo causó y la fecha, y nada más. Es lo único honesto que se
+     * puede guardar: `payload` es un sobre cifrado que el servidor no puede leer, y copiarlo al
+     * registro solo duplicaría texto cifrado y multiplicaría el sitio del que habría que borrarlo.
+     */
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->useLogName(self::LOG_NAME)
+            ->setDescriptionForEvent(function (string $eventName): string {
+                /**
+                 * Un borrado definitivo dispara `deleted` y después `forceDeleted`, así que sin esto
+                 * quedarían dos filas para una sola acción. Una descripción vacía es la forma que
+                 * tiene el paquete de saltarse una entrada.
+                 */
+                if ($eventName === 'deleted' && $this->isForceDeleting()) {
+                    return '';
+                }
+
+                return $eventName;
+            });
+    }
 
     /**
      * ADR 0006 (Consequences): el formato de fecha por defecto de Laravel, `Y-m-d H:i:s`, trunca los

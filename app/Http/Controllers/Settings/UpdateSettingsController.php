@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Settings;
 
 use App\Crypto\EnvelopeValidator;
 use App\Models\User;
+use App\Support\AuditEvent;
 use App\Support\SupportedLocale;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -92,6 +93,17 @@ final readonly class UpdateSettingsController
         }
 
         $user->forceFill($columns)->save();
+
+        /**
+         * Se anota que los ajustes cambiaron, nunca cuáles: el sobre es opaco y el idioma, aunque
+         * esté en claro en la columna, es una preferencia de la persona que el rastro no necesita
+         * repetir para cumplir su función.
+         */
+        activity(AuditEvent::LOG_NAME)
+            ->causedBy($user)
+            ->performedOn($user)
+            ->event(AuditEvent::SettingsUpdated->value)
+            ->log(AuditEvent::SettingsUpdated->value);
 
         return response()
             ->json(['saved' => true])

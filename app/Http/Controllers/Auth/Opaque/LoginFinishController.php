@@ -13,6 +13,7 @@ use App\Security\Opaque\OpaqueException;
 use App\Security\Opaque\OpaquePurpose;
 use App\Security\Opaque\ServerLogin;
 use App\Security\Opaque\ServerLoginState;
+use App\Support\AuditEvent;
 use Filament\Facades\Filament;
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Http\JsonResponse;
@@ -96,6 +97,16 @@ final readonly class LoginFinishController
         $request->session()->regenerate();
 
         $sessionSecret = $this->sessionSecrets->mint($request->session());
+
+        /**
+         * Se anota que la cuenta entró, después de que la sesión exista: si algo fallara antes, no
+         * habría que deshacer una entrada que afirma un acceso que no llegó a ocurrir.
+         */
+        activity(AuditEvent::LOG_NAME)
+            ->causedBy($user)
+            ->performedOn($user)
+            ->event(AuditEvent::LoggedIn->value)
+            ->log(AuditEvent::LoggedIn->value);
 
         /** El `userId` es el dato asociado del sobre de la clave maestra: sin el, el cliente no puede abrirlo. */
         return response()->json([

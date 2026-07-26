@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Auth\Opaque;
 
 use App\Auth\SessionSecrets;
+use App\Models\User;
+use App\Support\AuditEvent;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -34,7 +36,18 @@ final readonly class LockController
     {
         $session = $request->session();
 
+        $user = $request->user();
+
         $this->sessionSecrets->destroy($session);
+
+        /** Antes del `logout`, que es lo que deja de haber alguien a quien atribuirlo. */
+        if ($user instanceof User) {
+            activity(AuditEvent::LOG_NAME)
+                ->causedBy($user)
+                ->performedOn($user)
+                ->event(AuditEvent::LoggedOut->value)
+                ->log(AuditEvent::LoggedOut->value);
+        }
 
         Auth::guard('web')->logout();
 

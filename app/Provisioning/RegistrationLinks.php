@@ -9,6 +9,7 @@ use App\Models\UserRegistrationLink;
 use App\Security\Opaque\Base64Url;
 use App\Security\Opaque\LoginNormalizer;
 use App\Security\Opaque\RandomSource;
+use App\Support\AuditEvent;
 
 /**
  * Emisión, validación y consumo de enlaces de registro de un solo uso
@@ -67,6 +68,21 @@ final readonly class RegistrationLinks
             'expires_at' => now()->addHours(self::TTL_HOURS),
             'created_by' => $issuedBy?->id,
         ]);
+
+        /**
+         * El rastro va aquí y no en quien llama, porque emitir un enlace se puede hacer desde el
+         * panel y desde `phr:issue-registration-link`, y esta es la única pieza por la que pasan
+         * ambas. Es la acción más destructiva del sistema (Spec 0001 §3.4): completar el registro
+         * nuevo retira el sobre vigente de la clave maestra y deja inaccesible lo ya guardado.
+         *
+         * El token **no** se anota. Es la credencial que abre el alta, y guardarla en claro aquí
+         * anularía el sentido de que en su propia tabla solo viva su hash.
+         */
+        activity(AuditEvent::LOG_NAME)
+            ->causedBy($issuedBy)
+            ->performedOn($user)
+            ->event(AuditEvent::RegistrationLinkIssued->value)
+            ->log(AuditEvent::RegistrationLinkIssued->value);
 
         return url(self::SET_PASSWORD_PATH).'#'.$token;
     }

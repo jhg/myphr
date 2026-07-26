@@ -6,6 +6,7 @@ namespace App\Filament\Resources\Users;
 
 use App\Filament\Resources\Users\Pages\ManageUsers;
 use App\Models\User;
+use App\Policies\UserPolicy;
 use App\Provisioning\RegistrationLinkReissueRequiresConfirmationException;
 use App\Provisioning\RegistrationLinks;
 use App\Security\Opaque\LoginNormalizer;
@@ -46,6 +47,21 @@ final class UserResource extends Resource
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedUsers;
 
     protected static ?string $recordTitleAttribute = 'name';
+
+    /**
+     * Recurso desactivado (ADR 0009): ni en la navegación ni accesible por URL.
+     *
+     * La puerta de verdad es {@see UserPolicy}, cuyos permisos devuelven `false`; esto
+     * es la segunda vuelta de llave, para que reabrir la política por descuido no vuelva a colgar el
+     * apartado del menú sin que nadie lo decida. El código del recurso se conserva entero porque la
+     * decisión es de alcance, no de calidad: reabrirlo es tocar estas dos piezas y nada más.
+     */
+    protected static bool $shouldRegisterNavigation = false;
+
+    public static function canAccess(): bool
+    {
+        return false;
+    }
 
     /**
      * Las etiquetas se resuelven por método y no como propiedad estática porque un inicializador de

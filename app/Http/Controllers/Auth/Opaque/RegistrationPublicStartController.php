@@ -14,6 +14,7 @@ use App\Security\Opaque\OpaquePurpose;
 use App\Security\Opaque\RegistrationRequest;
 use App\Security\Opaque\RegistrationServer;
 use App\Security\Opaque\ServerSetup;
+use App\Support\AuditEvent;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -109,6 +110,16 @@ final readonly class RegistrationPublicStartController
             'purpose' => OpaquePurpose::Registration,
             'expires_at' => now()->addMinutes(RegistrationStartController::PENDING_TTL_MINUTES),
         ]);
+
+        /**
+         * El alta pública crea la fila de usuario por sí misma, así que aquí ya existe una cuenta
+         * aunque el registro OPAQUE no esté completo todavía. Sin causer: no hay nadie autenticado,
+         * y atribuírselo a la propia cuenta recién creada diría menos de lo que parece.
+         */
+        activity(AuditEvent::LOG_NAME)
+            ->performedOn($user)
+            ->event(AuditEvent::AccountCreated->value)
+            ->log(AuditEvent::AccountCreated->value);
 
         return response()->json([
             'userId' => $user->id,

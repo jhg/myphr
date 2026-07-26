@@ -13,6 +13,7 @@ use App\Models\UserMasterKeyEnvelope;
 use App\Security\Opaque\OpaqueException;
 use App\Security\Opaque\OpaquePurpose;
 use App\Security\Opaque\RegistrationRecord;
+use App\Support\AuditEvent;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -100,12 +101,12 @@ final readonly class PasswordChangeController
 
         $sessionSecret = $this->sessionSecrets->mint($request->session());
 
-        /** ADR 0006: se anota que la cuenta cambió de contraseña, jamás nada del contenido. */
-        activity()
+        /** Se anota que la cuenta cambió de contraseña, jamás nada del contenido. */
+        activity(AuditEvent::LOG_NAME)
             ->causedBy($user)
             ->performedOn($user)
-            ->event('password-changed')
-            ->log('cambio de contraseña');
+            ->event(AuditEvent::PasswordChanged->value)
+            ->log(AuditEvent::PasswordChanged->value);
 
         return response()->json([
             'changed' => true,
