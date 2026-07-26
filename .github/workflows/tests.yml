@@ -1,0 +1,98 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+# Un push que reemplaza a otro cancela la ejecución anterior: en una rama activa, lo que interesa es
+# el último commit, no la cola de los anteriores.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # 8.4 es la versión de desarrollo y 8.5 la que corre en producción, porque Ubuntu 26.04 no
+        # trae otra y el PPA de ondrej no publica esa suite. Probar solo una de las dos dejaría sin
+        # cubrir justo la diferencia que puede romper el despliegue.
+        php: ['8.4', '8.5']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preparar PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          # sodium es obligatoria: toda la criptografía OPAQUE del servidor depende de ella.
+          extensions: sodium, mbstring, xml, curl, zip, bcmath, intl, gd, sqlite3
+          coverage: none
+
+      - name: Caché de Composer
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/composer/files
+          key: composer-${{ matrix.php }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ matrix.php }}-
+
+      - name: Instalar dependencias de PHP
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Preparar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Instalar dependencias de JavaScript
+        run: npm ci
+
+      - name: Tests de JavaScript
+        run: npm test
+
+      # Antes de los tests de PHP, y no por gusto: las pruebas que piden una página del panel la
+      # renderizan de verdad, y el layout de Filament resuelve el tema y `app.js` contra el manifiesto
+      # de Vite. Sin `public/build` esos tests fallan con `ViteException`, no con lo que están
+      # probando.
+      - name: Compilar los assets
+        run: npm run build
+
+      # `phpunit.xml` no fija `APP_KEY`, y sin ella fallan las pruebas que cifran el estado del
+      # handshake de login. En local la aporta el `.env` del proyecto; aquí hay que generarla.
+      - name: Preparar el entorno
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Tests de PHP
+        run: php artisan test
+
+  lint:
+    name: Estilo
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preparar PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+
+      - name: Instalar dependencias de PHP
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      # `--test` no corrige nada, solo informa: en CI la única respuesta útil es fallar y que el
+      # arreglo se haga en el repositorio, no en el runner.
+      - name: Pint
+        run: vendor/bin/pint --test
