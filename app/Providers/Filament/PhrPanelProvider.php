@@ -62,47 +62,47 @@ class PhrPanelProvider extends PanelProvider
             ->path('phr')
             ->viteTheme('resources/css/filament/phr/theme.css')
             /**
-             * Ancho completo por defecto en todo el panel.
+             * Full width by default across the whole panel.
              *
-             * Las pantallas de seguimiento son listados largos y gráficas: con el ancho acotado por
-             * defecto de Filament, la gráfica se estrecha y caben menos registros en pantalla sin
-             * desplazarse, que es justo lo contrario de lo que pide un diario de mediciones.
+             * The tracking screens are long listings and charts: with Filament's default bounded
+             * width, the chart narrows and fewer records fit on screen without scrolling, which is
+             * the exact opposite of what a measurement diary needs.
              */
             ->maxContentWidth(Width::Full)
             /**
-             * Modo oscuro **activado**, con conmutador (DESIGN.md § Dark Mode).
+             * Dark mode **on**, with a switcher (DESIGN.md § Dark Mode).
              *
-             * No hace falta ninguna llamada: Filament v5 ya trae `$hasDarkMode = true`,
-             * `$hasThemeSwitcher = true` y `defaultThemeMode = ThemeMode::System`
-             * (vendor/filament/filament/src/Panel/Concerns/HasDarkMode.php:9-13 y
-             * HasTheme.php:22). Se deja tal cual a propósito: DESIGN.md § Dark Mode define ya la
-             * paleta oscura completa —superficies, tintas, bordes, elevación y anillo de foco—,
-             * derivada de la clara con una regla explícita, y `theme.css` la materializa en un
-             * único bloque `:root.dark`. Como el modo por defecto es «system», quien tenga el
-             * sistema operativo en oscuro entra directamente en esa paleta sin tocar nada, así
-             * que apagarlo escondería el problema en vez de resolverlo.
+             * No call is needed: Filament v5 already ships `$hasDarkMode = true`,
+             * `$hasThemeSwitcher = true` and `defaultThemeMode = ThemeMode::System`
+             * (vendor/filament/filament/src/Panel/Concerns/HasDarkMode.php:9-13 and
+             * HasTheme.php:22). It is left as is on purpose: DESIGN.md § Dark Mode already defines
+             * the full dark palette —surfaces, inks, borders, elevation and focus ring—, derived
+             * from the light one with an explicit rule, and `theme.css` materializes it in a single
+             * `:root.dark` block. Since the default mode is "system", anyone whose operating system
+             * is in dark mode lands straight in that palette without touching anything, so turning
+             * it off would hide the problem instead of solving it.
              */
             ->login(Login::class)
             /**
-             * SPA **sin prefetching** (Spec 0001 §10).
+             * SPA **without prefetching** (Spec 0001 §10).
              *
-             * El prefetching de Filament pide la página al pasar el ratón por encima de un enlace.
-             * Cada una de esas peticiones es un acceso a datos clínicos que nadie solicitó, y queda
-             * en el registro de auditoría como si la persona hubiera abierto la pantalla. El
-             * segundo argumento es `false` por defecto en Filament; se pasa explícito para que un
-             * cambio de ese valor por defecto no lo active en silencio.
+             * Filament's prefetching requests the page when you hover over a link. Each of those
+             * requests is an access to clinical data nobody asked for, and it lands in the audit log
+             * as if the person had opened the screen. The second argument is `false` by default in
+             * Filament; it is passed explicitly so a change in that default does not switch it on
+             * silently.
              */
             ->spa(hasPrefetching: false)
             /**
-             * URLs que no sirven HTML y que, por tanto, no puede tomar el enrutador de Alpine
-             * (`Alpine.navigate` insertaría un JSON en el `<body>`): los endpoints de OPAQUE y de
-             * sesión, que responden JSON, y el `POST /phr/logout`, que responde una redirección.
+             * URLs that do not serve HTML and that therefore cannot be taken over by Alpine's
+             * router (`Alpine.navigate` would insert JSON into the `<body>`): the OPAQUE and session
+             * endpoints, which answer JSON, and `POST /phr/logout`, which answers a redirect.
              *
-             * `/phr/auth/*` ya cubre las cuatro rutas nuevas del cambio de contraseña
-             * (`/phr/auth/password/…`), que cuelgan de ese mismo prefijo. `PUT /phr/settings` no
-             * cuelga de él —los ajustes no son autenticación— y también responde JSON, así que se
-             * añade aparte. La página de perfil (`GET /phr/profile`) sirve HTML y se queda fuera de
-             * la lista: es una pantalla más del panel y debe navegarse como SPA.
+             * `/phr/auth/*` already covers the four new password change routes
+             * (`/phr/auth/password/…`), which hang off that same prefix. `PUT /phr/settings` does
+             * not hang off it —settings are not authentication— and also answers JSON, so it is
+             * added separately. The profile page (`GET /phr/profile`) serves HTML and stays off the
+             * list: it is one more panel screen and must be navigated as a SPA.
              */
             ->spaUrlExceptions(fn (): array => [
                 url('/phr/auth/*'),
@@ -112,33 +112,33 @@ class PhrPanelProvider extends PanelProvider
                 url('/phr/shares/*'),
             ])
             /**
-             * Buscador global desactivado (Spec 0001 §10).
+             * Global search disabled (Spec 0001 §10).
              *
-             * Resuelve en servidor sobre datos que aquí están cifrados: no podría encontrar nada, y
-             * lo único que conseguiría es enviar al servidor lo que la persona teclea.
+             * It resolves on the server over data that is encrypted here: it could not find
+             * anything, and all it would achieve is sending whatever the person types to the server.
              */
             ->globalSearch(false)
             /**
-             * El icono del PWA hace también de marca del panel, para que la barra superior y el
-             * icono de la pantalla de inicio sean lo mismo. En un `Closure` porque `brandLogo()`
-             * admite `Htmlable` y así la vista se resuelve al pintar, no al construir el panel.
+             * The PWA icon doubles as the panel brand, so the top bar and the home screen icon are
+             * the same thing. In a `Closure` because `brandLogo()` accepts `Htmlable` and this way
+             * the view resolves when painting, not when building the panel.
              */
             ->brandLogo(fn (): View => view('phr.partials.brand'))
             /**
-             * Icono de la pestaña del navegador.
+             * Browser tab icon.
              *
-             * Se reutiliza a propósito el mismo PNG que ya declara el manifiesto del PWA
-             * (`public/manifest.webmanifest`) en lugar de generar un juego aparte: con dos juegos,
-             * el día que cambie la marca se actualiza uno y se olvida el otro, y la pestaña acaba
-             * mostrando un icono distinto al de la aplicación instalada. El 192 es el más pequeño
-             * de los dos del manifiesto y sobra para los 16/32 px de una pestaña.
+             * It deliberately reuses the same PNG the PWA manifest already declares
+             * (`public/manifest.webmanifest`) instead of generating a separate set: with two sets,
+             * the day the brand changes one gets updated and the other forgotten, and the tab ends
+             * up showing a different icon from the installed application. The 192 is the smaller of
+             * the manifest's two and is more than enough for the 16/32 px of a tab.
              *
-             * Ruta absoluta y **sin dominio**, como el resto de las etiquetas de `pwa-head`: el
-             * proyecto garantiza que cambiar de dominio no rompe nada (ADR 0003), y Filament imprime
-             * esta cadena tal cual en el `href` del `<link rel="icon">`.
+             * An absolute path and **no domain**, like the rest of the `pwa-head` tags: the project
+             * guarantees that changing domain breaks nothing (ADR 0003), and Filament prints this
+             * string verbatim into the `href` of the `<link rel="icon">`.
              *
-             * Con esto no hace falta `public/favicon.ico`: el navegador solo cae en esa ruta por
-             * convención cuando la página no declara ningún icono.
+             * With this there is no need for `public/favicon.ico`: the browser only falls back to
+             * that path by convention when the page declares no icon.
              */
             ->favicon('/icons/icon-192.png')
             ->renderHook(
@@ -146,114 +146,113 @@ class PhrPanelProvider extends PanelProvider
                 fn (): View => view('phr.partials.crypto-head'),
             )
             /**
-             * Instalable en la pantalla de inicio (manifiesto, iconos y las etiquetas `apple-*`,
-             * que iOS necesita porque no lee el manifiesto). El service worker que acompaña a esto
-             * no cachea nada; el porqué está escrito en `public/sw.js`.
+             * Installable on the home screen (manifest, icons and the `apple-*` tags, which iOS
+             * needs because it does not read the manifest). The service worker that goes with this
+             * caches nothing; the why is written in `public/sw.js`.
              */
             ->renderHook(
                 PanelsRenderHook::HEAD_END,
                 fn (): View => view('phr.partials.pwa-head'),
             )
             /**
-             * Botón de «instalar aplicación», en la barra superior y a la izquierda del menú de
-             * usuario.
+             * "Install app" button, in the top bar and to the left of the user menu.
              *
-             * Va como render hook con plantilla propia, y no como entrada de `->userMenuItems()`,
-             * porque la decisión de mostrarlo no es del servidor: en Chromium depende de que llegue
-             * `beforeinstallprompt` después de pintar, en iOS ese evento no existe y el botón solo
-             * puede explicar el gesto manual de «Compartir», y si la aplicación ya está instalada no
-             * debe salir nada. Un item de menú construido en PHP se pintaría siempre, también en los
-             * navegadores donde pulsarlo no puede hacer nada.
+             * It goes in as a render hook with its own template, and not as a `->userMenuItems()`
+             * entry, because the decision to show it is not the server's: on Chromium it depends on
+             * `beforeinstallprompt` arriving after painting, on iOS that event does not exist and
+             * the button can only explain the manual "Share" gesture, and if the application is
+             * already installed nothing should appear. A menu item built in PHP would always be
+             * painted, including in browsers where pressing it can do nothing.
              */
             ->renderHook(
                 PanelsRenderHook::USER_MENU_BEFORE,
                 fn (): View => view('phr.partials.install-button'),
             )
             /**
-             * Idioma de la petición, en el `<body>` y no solo en el `<html>`, porque la navegación
-             * de Livewire reemplaza el primero y no los atributos del segundo. El porqué completo
-             * está en la propia plantilla.
+             * Request language, on the `<body>` and not only on the `<html>`, because Livewire
+             * navigation replaces the former and not the attributes of the latter. The full why is
+             * in the template itself.
              */
             ->renderHook(
                 PanelsRenderHook::BODY_START,
                 fn (): View => view('phr.partials.locale-marker'),
             )
             /**
-             * Fuentes autoalojadas del sistema de diseño (DESIGN.md § Typography).
+             * Self-hosted design system fonts (DESIGN.md § Typography).
              *
-             * `Vite::fonts()` emite las etiquetas `<link rel="preload">` y el `<style>` con los
-             * `@font-face` y las variables `--font-figtree`, `--font-open-sans` y
-             * `--font-ibm-plex-mono` que consume el tema. Los ficheros los descarga Vite en el
-             * build y se sirven desde `public/build`, así que no hay ninguna petición a un
-             * tercero: en un PHR de conocimiento cero, cada carga del panel se queda en casa.
+             * `Vite::fonts()` emits the `<link rel="preload">` tags and the `<style>` with the
+             * `@font-face` rules and the `--font-figtree`, `--font-open-sans` and
+             * `--font-ibm-plex-mono` variables the theme consumes. Vite downloads the files at
+             * build time and they are served from `public/build`, so there is no request to a third
+             * party: in a zero-knowledge PHR, every panel load stays at home.
              *
-             * Hace falta el render hook porque Filament nunca llama a `@fonts`: su layout base
-             * solo pinta `getFontHtml()` / `getMonoFontHtml()`.
+             * The render hook is needed because Filament never calls `@fonts`: its base layout only
+             * paints `getFontHtml()` / `getMonoFontHtml()`.
              */
             ->renderHook(
                 PanelsRenderHook::HEAD_START,
                 fn (): Htmlable => Vite::fonts(['figtree', 'open-sans', 'ibm-plex-mono']),
             )
             /**
-             * Familias del panel: Open Sans para el cuerpo e IBM Plex Mono para códigos y
-             * valores (DESIGN.md § Typography y Do's #7). Filament las vuelca en `--font-family`
-             * y `--mono-font-family`, de donde salen `--font-sans` y `--font-mono`.
+             * Panel families: Open Sans for body text and IBM Plex Mono for codes and values
+             * (DESIGN.md § Typography and Do's #7). Filament dumps them into `--font-family` and
+             * `--mono-font-family`, which is where `--font-sans` and `--font-mono` come from.
              *
-             * `LocalFontProvider` es explícito y obligatorio: sin `$provider`, Filament recurre a
-             * `BunnyFontProvider`, que añadiría un `<link>` a fonts.bunny.net en cada carga del
-             * panel clínico. Sin `$url`, `LocalFontProvider` no imprime nada —las fuentes ya
-             * llegan por el hook de arriba— y solo deja fijado el nombre de la familia.
+             * `LocalFontProvider` is explicit and mandatory: without `$provider`, Filament falls
+             * back to `BunnyFontProvider`, which would add a `<link>` to fonts.bunny.net on every
+             * load of the clinical panel. Without `$url`, `LocalFontProvider` prints nothing —the
+             * fonts already arrive through the hook above— and only pins the family name.
              *
-             * Figtree, la familia de titulares, no cabe aquí: Filament solo tiene ranuras para
-             * cuerpo, monoespaciada y serif. Va como token `--font-display` en theme.css.
+             * Figtree, the display family, does not fit here: Filament only has slots for body,
+             * monospace and serif. It goes in as the `--font-display` token in theme.css.
              */
             ->font('Open Sans', provider: LocalFontProvider::class)
             ->monoFont('IBM Plex Mono', provider: LocalFontProvider::class)
             /**
-             * Paleta MediCare+ (DESIGN.md § Colors). Esta es la única fuente de las rampas: el
-             * panel las imprime en `:root` como `--primary-50…950` y el CSS del vendor ya las
-             * mapea a las utilidades `bg-*`, `text-*` y `ring-*`.
+             * MediCare+ palette (DESIGN.md § Colors). This is the single source of the ramps: the
+             * panel prints them into `:root` as `--primary-50…950` and the vendor CSS already maps
+             * them to the `bg-*`, `text-*` and `ring-*` utilities.
              *
-             * Se pasan los once tonos a mano en lugar de un hexadecimal suelto porque
-             * `Color::generatePalette()` solo hereda el matiz y fija la luminosidad de cada tono
-             * con constantes propias: con `'primary' => '#0077B6'`, el Med Blue exacto no
-             * aparecería en ningún tono de la rampa resultante.
+             * The eleven shades are passed by hand instead of a single hex value because
+             * `Color::generatePalette()` only inherits the hue and fixes the lightness of each shade
+             * with constants of its own: with `'primary' => '#0077B6'`, the exact Med Blue would not
+             * appear in any shade of the resulting ramp.
              *
-             * El tono que manda es el **600**: es el que DESIGN.md § Buttons · Primary usa como
-             * relleno sólido (#0077B6 con texto blanco, 4.87:1 sobre blanco, por encima del 4.5:1
-             * de Do's #1).
+             * The shade that rules is the **600**: it is the one DESIGN.md § Buttons · Primary uses
+             * as a solid fill (#0077B6 with white text, 4.87:1 on white, above the 4.5:1 in Do's
+             * #1).
              *
-             * Aviso, porque no es lo que uno esperaría: el mapa de color de botones de Filament
-             * (`ButtonComponentColorMap`) NO se queda con ese par. Resuelve el tono por contraste
-             * y solo acepta un candidato cuyo mejor texto sea claro; para el 600 el mejor texto
-             * calculado es el 950, que es oscuro, así que descarta el candidato y en tema claro
-             * rellena el botón con el **400** (#48CAE4) y texto oscuro. Por eso el relleno sólido
-             * no se deja en manos de ese mapa: lo fija la capa de componentes del tema
-             * (`resources/css/filament/phr/components/controls.css`) contra § Buttons y
-             * § Components — Dark. Esta rampa es la paleta, no la decisión de qué tono usa cada
-             * componente.
+             * A warning, because it is not what you would expect: Filament's button colour map
+             * (`ButtonComponentColorMap`) does NOT keep that pair. It resolves the shade by contrast
+             * and only accepts a candidate whose best text is light; for the 600 the computed best
+             * text is the 950, which is dark, so it discards the candidate and in light theme fills
+             * the button with the **400** (#48CAE4) and dark text. That is why the solid fill is not
+             * left to that map: the theme's component layer
+             * (`resources/css/filament/phr/components/controls.css`) pins it against § Buttons and
+             * § Components — Dark. This ramp is the palette, not the decision of which shade each
+             * component uses.
              *
-             * Los once tonos de cada rampa, incluidos los que § Colors no nombra, están
-             * publicados en DESIGN.md § Color Ramps junto con la regla que los deriva
-             * (interpolación en OKLCH entre tonos nombrados, sin girar el matiz, y con los tonos
-             * interpolados marcados como decorativos). Esa sección es la fuente; aquí solo se
-             * transcribe.
+             * The eleven shades of each ramp, including the ones § Colors does not name, are
+             * published in DESIGN.md § Color Ramps together with the rule that derives them (OKLCH
+             * interpolation between named shades, without rotating the hue, and with the
+             * interpolated shades marked as decorative). That section is the source; this is only a
+             * transcription.
              */
             ->colors([
                 'primary' => [
-                    50 => '#F0F7FF',  // hover de botón secundario, fantasma, chip y lista
-                    100 => '#E0EFFF', // active de esos mismos
-                    200 => '#BBE6FC', // interpolado entre 100 y 300
+                    50 => '#F0F7FF',  // hover for secondary, ghost, chip and list
+                    100 => '#E0EFFF', // active for those same ones
+                    200 => '#BBE6FC', // interpolated between 100 and 300
                     300 => '#90E0EF', // Tertiary · Pale Cyan
                     400 => '#48CAE4', // Secondary · Light Blue
-                    500 => '#1BA1CF', // interpolado entre 400 y 600
+                    500 => '#1BA1CF', // interpolated between 400 and 600
                     600 => '#0077B6', // Primary · Med Blue
-                    700 => '#006399', // hover del botón primario
-                    800 => '#005280', // active del botón primario
-                    900 => '#004168', // extrapolado siguiendo el paso 700→800
-                    950 => '#003250', // extrapolado con ese mismo paso
+                    700 => '#006399', // primary button hover
+                    800 => '#005280', // primary button active
+                    900 => '#004168', // extrapolated following the 700→800 step
+                    950 => '#003250', // extrapolated with that same step
                 ],
-                // DESIGN.md § Colors: Info es el mismo #0077B6 que Primary.
+                // DESIGN.md § Colors: Info is the same #0077B6 as Primary.
                 'info' => [
                     50 => '#F0F7FF',
                     100 => '#E0EFFF',
@@ -268,14 +267,14 @@ class PhrPanelProvider extends PanelProvider
                     950 => '#003250',
                 ],
                 /**
-                 * Los grises que DESIGN.md usa en inputs, tarjetas, listas y estados
-                 * deshabilitados (#0F172A, #475569, #94A3B8, #CBD5E1, #E2E8F0, #F8FAFC) son la
-                 * rampa Slate de Tailwind v3. No se puede usar `Color::Slate`, que es la de
-                 * Tailwind v4 y no coincide (su 300 es #cad5e2, no #CBD5E1).
+                 * The greys DESIGN.md uses in inputs, cards, lists and disabled states (#0F172A,
+                 * #475569, #94A3B8, #CBD5E1, #E2E8F0, #F8FAFC) are the Tailwind v3 Slate ramp.
+                 * `Color::Slate` cannot be used: it is the Tailwind v4 one and does not match (its
+                 * 300 is #cad5e2, not #CBD5E1).
                  */
                 'gray' => [
-                    // DESIGN.md § Color Ramps · Gray. En oscuro esta misma rampa se repunta por
-                    // papel en `:root.dark` (theme.css), según § Ramp Mapping — Dark.
+                    // DESIGN.md § Color Ramps · Gray. In dark mode this same ramp is re-pointed by
+                    // role in `:root.dark` (theme.css), per § Ramp Mapping — Dark.
                     50 => '#F8FAFC',
                     100 => '#F1F5F9',
                     200 => '#E2E8F0',
@@ -288,8 +287,8 @@ class PhrPanelProvider extends PanelProvider
                     900 => '#0F172A',
                     950 => '#020617',
                 ],
-                // Error #DC2626 con el hover (#B91C1C) y el active (#991B1B) del botón
-                // destructivo, y el chip de error (#FEF2F2 fondo, #FECACA borde).
+                // Error #DC2626 with the hover (#B91C1C) and active (#991B1B) of the destructive
+                // button, and the error chip (#FEF2F2 background, #FECACA border).
                 'danger' => [
                     50 => '#FEF2F2',
                     100 => '#FEE2E2',
@@ -303,7 +302,7 @@ class PhrPanelProvider extends PanelProvider
                     900 => '#7F1D1D',
                     950 => '#450A0A',
                 ],
-                // Success #059669 y su chip de estado (#ECFDF5 fondo, #A7F3D0 borde).
+                // Success #059669 and its status chip (#ECFDF5 background, #A7F3D0 border).
                 'success' => [
                     50 => '#ECFDF5',
                     100 => '#D1FAE5',
@@ -317,7 +316,7 @@ class PhrPanelProvider extends PanelProvider
                     900 => '#064E3B',
                     950 => '#022C22',
                 ],
-                // Warning #D97706 y su chip de estado (#FFFBEB fondo, #FDE68A borde).
+                // Warning #D97706 and its status chip (#FFFBEB background, #FDE68A border).
                 'warning' => [
                     50 => '#FFFBEB',
                     100 => '#FEF3C7',
@@ -338,32 +337,32 @@ class PhrPanelProvider extends PanelProvider
                 Dashboard::class,
             ])
             /**
-             * Entrada del menú de usuario que lleva a la página de perfil.
+             * User menu entry that leads to the profile page.
              *
-             * La clave literal `'profile'` es reservada: `HasUserMenu::registerUserMenuItems()`
-             * la usa para **sustituir** el item que Filament inyecta de serie, en vez de añadir uno
-             * nuevo al lado. Importa hacerlo así porque ese item por defecto se construye con
-             * `->url(Filament::getProfileUrl())`, que devuelve `null` mientras el panel no llame a
-             * `->profile()`: hoy el menú muestra el nombre de la persona y no lleva a ninguna parte.
+             * The literal key `'profile'` is reserved: `HasUserMenu::registerUserMenuItems()` uses
+             * it to **replace** the item Filament injects by default, instead of adding a new one
+             * beside it. Doing it this way matters because that default item is built with
+             * `->url(Filament::getProfileUrl())`, which returns `null` while the panel does not call
+             * `->profile()`: today the menu shows the person's name and leads nowhere.
              *
-             * La clase es `Filament\Actions\Action`; `Filament\Navigation\MenuItem` sigue
-             * aceptándose pero está `@deprecated` en v5.
+             * The class is `Filament\Actions\Action`; `Filament\Navigation\MenuItem` is still
+             * accepted but is `@deprecated` in v5.
              *
-             * La URL sale de `Profile::getUrl()` y no de `Filament::getProfileUrl()` porque
-             * {@see Profile} es una página normal del panel, descubierta por `discoverPages()`, no
-             * la página de perfil de Filament: no hereda de `Filament\Auth\Pages\EditProfile`, que
-             * da por hecho una columna `password` y un formulario de contraseña actual que enviaría
-             * la contraseña en claro al servidor. En un cierre diferido, para que la resolución de
-             * la ruta no ocurra mientras se construye el panel.
+             * The URL comes from `Profile::getUrl()` and not from `Filament::getProfileUrl()`
+             * because {@see Profile} is an ordinary panel page, discovered by `discoverPages()`, not
+             * Filament's profile page: it does not extend `Filament\Auth\Pages\EditProfile`, which
+             * assumes a `password` column and a current-password form that would send the password
+             * in the clear to the server. In a deferred closure, so route resolution does not happen
+             * while the panel is being built.
              */
             ->userMenuItems([
                 'profile' => Action::make('profile')
                     /**
-                     * La etiqueta va en un `Closure` y no como cadena: este método construye el
-                     * panel una sola vez, al registrarlo, y ahí todavía no ha pasado `SetLocale`.
-                     * Un `__()` evaluado en ese momento se queda con el idioma por defecto para
-                     * siempre, aunque la cuenta tenga otro. Es el mismo motivo por el que los
-                     * títulos de las páginas se resuelven por método y no como propiedad estática.
+                     * The label goes in a `Closure` and not as a string: this method builds the
+                     * panel once, when registering it, and `SetLocale` has not run at that point. A
+                     * `__()` evaluated then keeps the default language forever, even if the account
+                     * has another one. It is the same reason page titles are resolved by method and
+                     * not as a static property.
                      */
                     ->label(fn (): string => __('My profile'))
                     ->icon(Heroicon::UserCircle)
@@ -387,32 +386,33 @@ class PhrPanelProvider extends PanelProvider
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
                 /**
-                 * Detrás de `StartSession` porque lee la preferencia de la cuenta, y por delante de
-                 * `authMiddleware` para que la pantalla de acceso, que se pinta sin sesión, también
-                 * salga en el idioma que pide el navegador (ADR 0007).
+                 * Behind `StartSession` because it reads the account preference, and ahead of
+                 * `authMiddleware` so the login screen, which is painted without a session, also
+                 * comes out in the language the browser asks for (ADR 0007).
                  */
                 SetLocale::class,
             ])
             ->authMiddleware([
                 Authenticate::class,
                 /**
-                 * Caducidad por inactividad contada en servidor (Spec 0001 §8; ADR 0009). Va detrás
-                 * de `Authenticate` porque solo tiene sentido sobre una sesión ya autenticada, y
-                 * cubre también las rutas de `authenticatedRoutes()`, que es donde viven el secreto
-                 * de sesión y los ajustes cifrados.
+                 * Idle timeout counted on the server (Spec 0001 §8; ADR 0009). It goes behind
+                 * `Authenticate` because it only makes sense on an already authenticated session,
+                 * and it also covers the `authenticatedRoutes()` routes, which is where the session
+                 * secret and the encrypted settings live.
                  */
                 EnforceIdleTimeout::class,
             ]);
     }
 
     /**
-     * Rutas de OPAQUE y página del enlace (Spec 0001 §4).
+     * OPAQUE routes and the link page (Spec 0001 §4).
      *
-     * Van en `routes()`, que Filament monta con el prefijo del panel y con la sesión y el CSRF del
-     * grupo `web`, pero **fuera** del grupo de `getAuthMiddleware()`: quien las usa todavía no está
-     * autenticado. No pueden ir en un grupo `api`, que no incluye `StartSession` ni la protección
-     * contra CSRF: `session()->regenerate()` lanzaría `RuntimeException: Session store not set on
-     * request` y `Auth::guard('web')->login()` no persistiría nada (`docs/OPAQUE.md` §15).
+     * They go in `routes()`, which Filament mounts with the panel prefix and with the session and
+     * CSRF of the `web` group, but **outside** the `getAuthMiddleware()` group: whoever uses them is
+     * not authenticated yet. They cannot go in an `api` group, which includes neither `StartSession`
+     * nor CSRF protection: `session()->regenerate()` would throw `RuntimeException: Session store
+     * not set on request` and `Auth::guard('web')->login()` would persist nothing
+     * (`docs/OPAQUE.md` §15).
      */
     protected function unauthenticatedRoutes(Panel $panel): void
     {
@@ -421,8 +421,8 @@ class PhrPanelProvider extends PanelProvider
                 ->name('auth.set-password');
 
             /**
-             * Alta pública (ADR 0009). Sin autenticar y sin invitación: es la pantalla a la que
-             * lleva el enlace del formulario de acceso.
+             * Public signup (ADR 0009). Unauthenticated and without an invitation: it is the screen
+             * the link on the login form leads to.
              */
             Route::get('register', RegisterPageController::class)
                 ->name('auth.register');
@@ -435,9 +435,9 @@ class PhrPanelProvider extends PanelProvider
                         ->name('registration.start');
 
                     /**
-                     * Alta pública, sin enlace de invitación. Nombre y limitador separados de
-                     * `registration.start`: aquí no hay token que limite de forma natural el abuso,
-                     * así que el límite por IP tiene que ser el único freno y, por eso, más estricto.
+                     * Public signup, with no invitation link. Its name and limiter are separate from
+                     * `registration.start`: there is no token here to bound abuse naturally, so the
+                     * per-IP limit has to be the only brake and, for that reason, stricter.
                      */
                     Route::post('registration/public/start', RegistrationPublicStartController::class)
                         ->middleware('throttle:opaque-registration-public')
@@ -459,10 +459,10 @@ class PhrPanelProvider extends PanelProvider
     }
 
     /**
-     * Rutas que exigen una sesión ya autenticada (Spec 0001 §4.5 y §4.6).
+     * Routes that require an already authenticated session (Spec 0001 §4.5 and §4.6).
      *
-     * `authenticatedRoutes()` es el único punto de montaje del panel que corre **dentro** del grupo
-     * de `getAuthMiddleware()`.
+     * `authenticatedRoutes()` is the only mount point of the panel that runs **inside** the
+     * `getAuthMiddleware()` group.
      */
     protected function sessionRoutes(Panel $panel): void
     {
@@ -474,19 +474,19 @@ class PhrPanelProvider extends PanelProvider
                 Route::post('lock', LockController::class)->name('lock');
 
                 /**
-                 * Cambio de contraseña de quien recuerda la actual.
+                 * Password change for someone who remembers the current one.
                  *
-                 * Son cuatro pasos de un mismo flujo y van aquí, autenticadas y con CSRF, porque el
-                 * usuario sale siempre de la sesión y nunca de un campo del cuerpo: aceptarlo del
-                 * cuerpo convertiría estas rutas en un oráculo de login arbitrario.
+                 * These are four steps of one flow and they go here, authenticated and with CSRF,
+                 * because the user always comes from the session and never from a body field:
+                 * accepting it from the body would turn these routes into an arbitrary login oracle.
                  *
-                 * `reauth/*` es un login OPAQUE completo contra el registro almacenado —la única
-                 * forma de obtener el `export_key` viejo con el que se abre el sobre de la clave
-                 * maestra— y `registration/start` + `change` rehacen el registro con la contraseña
-                 * nueva. La clave maestra no cambia: solo se reenvuelve.
+                 * `reauth/*` is a full OPAQUE login against the stored registration —the only way
+                 * to obtain the old `export_key` that opens the master key envelope— and
+                 * `registration/start` + `change` redo the registration with the new password. The
+                 * master key does not change: it is only rewrapped.
                  *
-                 * El limitador `opaque-password-change` (5/min por usuario, 30/min por IP) ya está
-                 * declarado en `OpaqueServiceProvider`.
+                 * The `opaque-password-change` limiter (5/min per user, 30/min per IP) is already
+                 * declared in `OpaqueServiceProvider`.
                  */
                 Route::prefix('password')
                     ->name('password.')
@@ -506,29 +506,29 @@ class PhrPanelProvider extends PanelProvider
             });
 
         /**
-         * Guardado de los ajustes cifrados (ADR 0007).
+         * Saving the encrypted settings (ADR 0007).
          *
-         * Fuera del grupo `auth/` de arriba a propósito: los ajustes no son autenticación. `PUT` y
-         * no `POST` porque la escritura es siempre un reemplazo completo del documento —el servidor
-         * no puede parchear lo que no puede descifrar— y así reintentar tras un fallo de red es
-         * seguro. Del cuerpo solo se valida la envoltura del sobre.
+         * Deliberately outside the `auth/` group above: settings are not authentication. `PUT` and
+         * not `POST` because the write is always a full replacement of the document —the server
+         * cannot patch what it cannot decrypt— and that way retrying after a network failure is
+         * safe. Of the body, only the envelope wrapper is validated.
          */
         Route::middleware(NoStore::class)
             ->put('settings', UpdateSettingsController::class)
             ->name('settings.update');
 
         /**
-         * Compartición de recortes (ADR 0011), lado de quien es dueño de los datos.
+         * Clipping sharing (ADR 0011), on the side of whoever owns the data.
          *
-         * Van en `authenticatedRoutes()`, con sesión, CSRF y caducidad por inactividad: crear,
-         * listar y revocar son operaciones de la persona propietaria. La otra mitad del flujo —la
-         * página del profesional, `challenge` y `open`— vive en `routes/web.php` con la pila
-         * contraria, sin sesión y sin CSRF, porque quien la usa no tiene cuenta.
+         * These go in `authenticatedRoutes()`, with session, CSRF and idle timeout: creating,
+         * listing and revoking are operations of the owner. The other half of the flow —the
+         * professional's page, `challenge` and `open`— lives in `routes/web.php` with the opposite
+         * stack, no session and no CSRF, because whoever uses it has no account.
          *
-         * El paquete sube por aquí, un endpoint HTTP propio, y **no** por Livewire: lleva prefijo
-         * `s1.` y los dos guardarraíles del ADR 0002 abortan cualquier cadena larga que no empiece
-         * por `v1.`. No se tocan; se usa la vía que el propio ADR 0002 reserva para los blobs
-         * grandes.
+         * The package is uploaded through here, an HTTP endpoint of its own, and **not** through
+         * Livewire: it carries the `s1.` prefix and the two ADR 0002 guardrails abort on any long
+         * string that does not start with `v1.`. They are not touched; we use the route ADR 0002
+         * itself reserves for large blobs.
          */
         Route::middleware(NoStore::class)
             ->prefix('shares')

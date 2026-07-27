@@ -8,38 +8,38 @@ use App\Support\SupportedLocale;
 use ValueError;
 
 /**
- * Tipo de insulina inyectada: rápida, lenta o mixta (ADR 0006, sección de tipos del MVP).
+ * Type of insulin injected: rapid, long acting or mixed (ADR 0006, MVP types section).
  *
- * El evento de insulina **no lleva código LOINC**: no es una observación de una magnitud, es el
- * registro de una administración de medicación (ADR 0006, «insulin (tipo rapid|long|mixed, dosis, y
- * código del producto si procede, porque es una administración de medicación y no una
- * observación)»). Es la diferencia con {@see GlucoseMeasurementMethod}: no se busca un
- * código de laboratorio para (tipo, unidad) porque no existe tal cosa aquí.
+ * The insulin event carries **no LOINC code**: it is not an observation of a quantity, it is the
+ * record of a medication administration (ADR 0006, "insulin (type rapid|long|mixed, dose, and the
+ * product code where applicable, because it is a medication administration and not an
+ * observation)"). That is the difference with {@see GlucoseMeasurementMethod}: we do not look for a
+ * lab code for (type, unit) because no such thing exists here.
  *
- * El valor de cada caso es el token estable que entra en el sobre cifrado (ADR 0004: «tokens
- * estables, nunca etiquetas visibles»), así que, igual que {@see GlucoseMeasurementMethod}, **no
- * puede cambiar nunca** una vez publicado. Cambiarlo dejaría ilegibles los sobres cifrados ya
- * guardados, porque no hay forma de recorrerlos y re-cifrarlos con el token nuevo sin la clave de
- * cada usuario.
+ * The value of each case is the stable token that goes into the encrypted envelope (ADR 0004:
+ * "stable tokens, never visible labels"), so, like {@see GlucoseMeasurementMethod}, it **can never
+ * change** once published. Changing it would leave the already stored encrypted envelopes
+ * unreadable, because there is no way to walk them and re-encrypt them with the new token without
+ * each user's key.
  *
- * Añadir un caso nuevo es seguro; renombrar o eliminar uno existente no lo es.
+ * Adding a new case is safe; renaming or removing an existing one is not.
  */
 enum InsulinType: string implements PatientLabelled
 {
-    /** Insulina de acción rápida. */
+    /** Rapid acting insulin. */
     case Rapid = 'rapid';
 
-    /** Insulina de acción lenta (basal). */
+    /** Long acting (basal) insulin. */
     case Long = 'long';
 
-    /** Insulina mixta (combinación de rápida y lenta en la misma inyección). */
+    /** Mixed insulin (rapid and long acting combined in the same injection). */
     case Mixed = 'mixed';
 
     /**
-     * Etiqueta en el idioma indicado, para mostrar al paciente (ADR 0005: la etiqueta no sustituye
-     * al token, que es lo único que entra en el sobre cifrado).
+     * Label in the given language, to show to the patient (ADR 0005: the label does not replace the
+     * token, which is the only thing that goes into the encrypted envelope).
      *
-     * @param  string  $locale  Cualquier código; los no soportados caen al idioma por defecto.
+     * @param  string  $locale  Any code; unsupported ones fall back to the default language.
      */
     public function label(string $locale): string
     {
@@ -55,7 +55,7 @@ enum InsulinType: string implements PatientLabelled
             [self::Rapid, 'zh_CN'] => '速效',
             [self::Long, 'zh_CN'] => '长效',
             [self::Mixed, 'zh_CN'] => '预混',
-            default => throw new ValueError(sprintf('Falta la etiqueta de tipo de insulina para el idioma "%s".', $locale)),
+            default => throw new ValueError(sprintf('Missing insulin type label for locale "%s".', $locale)),
         };
     }
 }

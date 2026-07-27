@@ -9,7 +9,8 @@ use App\Security\Opaque\OpaqueProfile;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * Spec 0001 §3.1: el alta no escribe contraseña, ni `email_verified_at`, ni registro OPAQUE.
+ * Spec 0001 §3.1: creating an account writes no password, no `email_verified_at` and no OPAQUE
+ * registration.
  *
  * @extends Factory<User>
  */
@@ -27,7 +28,8 @@ final class UserFactory extends Factory
     }
 
     /**
-     * Cuenta con el registro OPAQUE completo: la única que puede entrar al panel (ADR 0009).
+     * Account with the OPAQUE registration completed: the only one that can enter the panel
+     * (ADR 0009).
      */
     public function registered(): static
     {

@@ -6,6 +6,7 @@ use App\Security\Opaque\OpaqueProfile;
 use App\Security\Opaque\Oprf;
 use App\Security\Opaque\RegistrationRecord;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Symfony\Component\Process\Process;
 use Tests\TestCase;
 
 /*
@@ -50,14 +51,14 @@ expect()->extend('toBeOne', function () {
 */
 
 /**
- * Sobre cifrado de mentira, con la forma que valida `App\Crypto\EnvelopeValidator`.
+ * A fake encrypted envelope, with the shape `App\Crypto\EnvelopeValidator` validates.
  *
- * El servidor no puede fabricar un sobre real porque no tiene la clave del cliente, así que los
- * tests del transporte usan uno bien formado pero indescifrable: prefijo `v1.` más base64url de un
- * tamaño de relleno admitido. Es suficiente, porque el servidor solo valida la envoltura.
+ * The server cannot build a real envelope because it has no client key, so the transport tests use
+ * a well-formed but undecryptable one: the `v1.` prefix plus base64url of an allowed padding size.
+ * That is enough, because the server only validates the wrapper.
  *
- * Vive aquí, y no en cada fichero de test, porque lo necesitan las cuatro pantallas de eventos y
- * declararlo en dos ficheros de `Feature` rompe la suite entera con «cannot redeclare function».
+ * It lives here, and not in each test file, because the four event screens need it and declaring it
+ * in two `Feature` files breaks the whole suite with "cannot redeclare function".
  */
 function envelopeCipherText(int $paddedSize = 256): string
 {
@@ -70,7 +71,7 @@ function envelopeCipherText(int $paddedSize = 256): string
 }
 
 /**
- * Instante actual en la forma canónica del ADR 0004, que es la única que acepta `storeEvent`.
+ * The current instant in the canonical ADR 0004 form, which is the only one `storeEvent` accepts.
  */
 function canonicalOccurredAtNow(): string
 {
@@ -78,24 +79,55 @@ function canonicalOccurredAtNow(): string
 }
 
 /**
- * Identidad del servidor OPAQUE en los tests.
+ * Runs one command of the JavaScript half of the sharing tests.
  *
- * Es un identificador de despliegue fijo, deliberadamente NO derivado del dominio: si cambiase con
- * `app.url`, las cuentas dejarían de poder entrar al mover el sitio de dominio (lo comprueban
- * `OpaqueServerIdentityIsDomainIndependentTest` y `DomainChangeDoesNotBreakAccountTest`). Vive aquí
- * porque el cliente de pruebas la necesita en `finishLogin`/`finishRegistration` de media docena de
- * ficheros: si cada uno declarase la suya, un cambio en una sola convertiría el resto en tests que
- * pasan por casualidad.
+ * Lives here, and not in a single test file, because two `Feature` files now need it and declaring
+ * the same function twice breaks the whole suite with "cannot redeclare function".
+ *
+ * @param  array<string, mixed>  $input
+ * @return array<string, mixed>
+ */
+function runShareClient(string $command, array $input): array
+{
+    $process = new Process(
+        ['node', base_path('tests/js/support/shareRoundTrip.mjs'), $command],
+        base_path(),
+        null,
+        json_encode($input, JSON_THROW_ON_ERROR),
+        120,
+    );
+
+    $process->run();
+
+    expect($process->getExitCode())->toBe(0, $process->getErrorOutput());
+
+    /** @var array<string, mixed> $decoded */
+    $decoded = json_decode($process->getOutput(), true, 512, JSON_THROW_ON_ERROR);
+
+    expect($decoded['ok'])->toBeTrue(json_encode($decoded));
+
+    return $decoded;
+}
+
+/**
+ * OPAQUE server identity used in the tests.
+ *
+ * It is a fixed deployment identifier, deliberately NOT derived from the domain: if it changed with
+ * `app.url`, accounts would stop being able to log in when the site moves domain (checked by
+ * `OpaqueServerIdentityIsDomainIndependentTest` and `DomainChangeDoesNotBreakAccountTest`). It lives
+ * here because the test client needs it in `finishLogin`/`finishRegistration` across half a dozen
+ * files: if each one declared its own, a change in a single one would turn the rest into tests that
+ * pass by accident.
  */
 const TEST_SERVER_IDENTITY = 'myemr.test/opaque-v1';
 
 /**
- * Configuración OPAQUE equivalente a la que produce `opaque:setup`, con material fijo para que un
- * fallo sea reproducible.
+ * OPAQUE configuration equivalent to the one `opaque:setup` produces, with fixed material so a
+ * failure is reproducible.
  *
- * Vive aquí, y no en cada fichero de test, porque la necesitan todos los flujos de autenticación
- * (alta, login, cambio de contraseña, cambio de dominio) y declarar la misma función en dos
- * ficheros de `Feature` rompe la suite entera con «cannot redeclare function».
+ * It lives here, and not in each test file, because every authentication flow needs it (signup,
+ * login, password change, domain change) and declaring the same function in two `Feature` files
+ * breaks the whole suite with "cannot redeclare function".
  *
  * @return array<string, mixed>
  */

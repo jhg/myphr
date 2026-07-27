@@ -19,19 +19,19 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
 /**
- * `POST /phr/shares` (ADR 0011): sube el paquete de un recorte y crea su primer enlace.
+ * `POST /phr/shares` (ADR 0011): uploads a clipping's package and creates its first link.
  *
- * Es un endpoint HTTP propio y **no** un método de componente Livewire, a propósito. El paquete
- * lleva el prefijo `s1.`, y los dos guardarraíles del ADR 0002 (`livewirePayloadGuard.js` y
- * `EncryptedPayloadGuardHook`) abortan cualquier cadena de más de 256 caracteres que no empiece por
- * `v1.`: un paquete que viajase por Livewire moriría en los dos extremos. No se tocan esos
- * guardarraíles; se usa la vía que el propio ADR 0002 reserva para los blobs grandes.
+ * It is an HTTP endpoint of its own and **not** a Livewire component method, on purpose. The package
+ * carries the `s1.` prefix, and the two ADR 0002 guardrails (`livewirePayloadGuard.js` and
+ * `EncryptedPayloadGuardHook`) abort on any string longer than 256 characters that does not start
+ * with `v1.`: a package travelling over Livewire would die at both ends. Those guardrails are not
+ * touched; we use the route ADR 0002 itself reserves for large blobs.
  *
- * Lo que el servidor valida es **forma y nada más**: prefijo y escalón de relleno del paquete,
- * prefijo y tamaño del descriptor y del envoltorio, forma de los identificadores y coherencia de la
- * caducidad. No puede validar contenido y no lo intenta.
+ * What the server validates is **shape and nothing else**: the package prefix and padding step, the
+ * prefix and size of the descriptor and the wrapper, the shape of the identifiers and the
+ * consistency of the expiry. It cannot validate content and does not try.
  *
- * El usuario sale siempre de la sesión, nunca del cuerpo.
+ * The user always comes from the session, never from the body.
  */
 final readonly class StoreShareController
 {
@@ -93,15 +93,15 @@ final readonly class StoreShareController
     }
 
     /**
-     * La caducidad tiene que llegar del cliente y no calcularla el servidor: entra en la derivación
-     * de `wrapKey` y en el dato asociado del envoltorio (`canonicalDate(expiresAt)`), así que el
-     * cliente la necesita **antes** de cifrar. Lo que el servidor comprueba es que corresponde a una
-     * de las tres opciones de la lista cerrada del ADR 0011.
+     * The expiry has to come from the client and not be computed by the server: it goes into the
+     * `wrapKey` derivation and into the wrapper's associated data (`canonicalDate(expiresAt)`), so
+     * the client needs it **before** encrypting. What the server checks is that it corresponds to
+     * one of the three options in the ADR 0011 closed list.
      *
-     * La comparación admite {@see ShareTtl::TOLERANCE_MINUTES} de holgura porque entre que el
-     * cliente fija la fecha y llega la petición pasan el Argon2id del PIN, que en un equipo lento
-     * son varios segundos, y la subida de hasta 4 MiB. Exigir igualdad al segundo convertiría un
-     * portátil viejo en un error de validación.
+     * The comparison allows {@see ShareTtl::TOLERANCE_MINUTES} of slack because between the client
+     * fixing the date and the request arriving there are the Argon2id of the PIN, which on a slow
+     * machine is several seconds, and the upload of up to 4 MiB. Requiring equality to the second
+     * would turn an old laptop into a validation error.
      */
     private function parseExpiry(mixed $value): ?CarbonImmutable
     {

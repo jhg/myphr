@@ -8,22 +8,21 @@ use App\Support\SupportedLocale;
 use ValueError;
 
 /**
- * Zona de inyección de la insulina (ADR 0006, «en la insulina, el producto concreto en texto libre
- * ..., más la zona de inyección»).
+ * Insulin injection site (ADR 0006, "for insulin, the specific product as free text ..., plus the
+ * injection site").
  *
- * Propio de la insulina, no común a todo evento: vive dentro de `data`, junto a `insulinType`,
- * `dose`, `unit` y `product`. Es opcional, con el mismo criterio que
- * {@see MealContext}: si la persona no la indica, el campo se omite del contenido
- * cifrado en vez de guardarse con un valor por defecto silencioso, porque una zona inventada es
- * peor que ninguna.
+ * Specific to insulin, not common to every event: it lives inside `data`, next to `insulinType`,
+ * `dose`, `unit` and `product`. It is optional, with the same criterion as {@see MealContext}: if
+ * the person does not state it, the field is left out of the encrypted content instead of being
+ * stored with a silent default, because a made-up site is worse than none.
  *
- * El valor de cada caso es el token estable que entra en el sobre cifrado (ADR 0004: «tokens
- * estables, nunca etiquetas visibles»), así que, igual que {@see GlucoseMeasurementMethod}, **no
- * puede cambiar nunca** una vez publicado. Cambiarlo dejaría ilegibles los sobres cifrados ya
- * guardados, porque no hay forma de recorrerlos y re-cifrarlos con el token nuevo sin la clave de
- * cada usuario.
+ * The value of each case is the stable token that goes into the encrypted envelope (ADR 0004:
+ * "stable tokens, never visible labels"), so, like {@see GlucoseMeasurementMethod}, it **can never
+ * change** once published. Changing it would leave the already stored encrypted envelopes
+ * unreadable, because there is no way to walk them and re-encrypt them with the new token without
+ * each user's key.
  *
- * Añadir un caso nuevo es seguro; renombrar o eliminar uno existente no lo es.
+ * Adding a new case is safe; renaming or removing an existing one is not.
  */
 enum InjectionSite: string implements PatientLabelled
 {
@@ -33,17 +32,17 @@ enum InjectionSite: string implements PatientLabelled
     /** Muslo. */
     case Thigh = 'thigh';
 
-    /** Glúteo. */
+    /** Buttock. */
     case Glute = 'glute';
 
     /** Brazo. */
     case Arm = 'arm';
 
     /**
-     * Etiqueta en el idioma indicado, para mostrar al paciente (ADR 0005: la etiqueta no sustituye
-     * al token, que es lo único que entra en el sobre cifrado).
+     * Label in the given language, to show to the patient (ADR 0005: the label does not replace the
+     * token, which is the only thing that goes into the encrypted envelope).
      *
-     * @param  string  $locale  Cualquier código; los no soportados caen al idioma por defecto.
+     * @param  string  $locale  Any code; unsupported ones fall back to the default language.
      */
     public function label(string $locale): string
     {
@@ -62,7 +61,7 @@ enum InjectionSite: string implements PatientLabelled
             [self::Thigh, 'zh_CN'] => '大腿',
             [self::Glute, 'zh_CN'] => '臀部',
             [self::Arm, 'zh_CN'] => '手臂',
-            default => throw new ValueError(sprintf('Falta la etiqueta de zona de inyección para el idioma "%s".', $locale)),
+            default => throw new ValueError(sprintf('Missing injection site label for locale "%s".', $locale)),
         };
     }
 }

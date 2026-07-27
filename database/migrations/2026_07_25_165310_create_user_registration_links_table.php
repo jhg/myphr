@@ -7,9 +7,9 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Spec 0001 §3.3: enlace de registro de un solo uso, con TTL de 24 horas (ADR 0009).
+ * Spec 0001 §3.3: single-use registration link, with a 24-hour TTL (ADR 0009).
  *
- * El token en claro nunca se persiste: solo su `sha256` de 32 bytes.
+ * The plaintext token is never persisted: only its 32-byte `sha256`.
  */
 return new class extends Migration
 {
@@ -19,13 +19,13 @@ return new class extends Migration
             $table->uuid('id')->primary();
             $table->foreignUuid('user_id')->constrained('users')->cascadeOnDelete();
 
-            /** Spec 0001 §3.3: sha256 del token en claro, 32 bytes. Longitud validada en aplicación. */
+            /** Spec 0001 §3.3: sha256 of the plaintext token, 32 bytes. Length validated in the application. */
             $table->binary('token_hash')->unique();
 
             $table->timestamp('expires_at');
             $table->timestamp('consumed_at')->nullable();
 
-            /** Spec 0001 §3.3: quién emitió el enlace, para auditoría. */
+            /** Spec 0001 §3.3: who issued the link, for auditing. */
             $table->foreignUuid('created_by')->nullable()->constrained('users')->nullOnDelete();
 
             $table->timestamp('created_at');

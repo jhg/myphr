@@ -1,63 +1,63 @@
 /**
- * De dónde salen los eventos descifrados de un periodo (ADR 0002, ADR 0004, ADR 0006).
+ * Where the decrypted events of a period come from (ADR 0002, ADR 0004, ADR 0006).
  *
- * **La abstracción es una sola función asíncrona**, no una clase ni una interfaz con métodos:
+ * **The abstraction is one single async function**, not a class and not an interface with methods:
  *
  *     (range) => Promise<{events, failedToOpen, truncated}>
  *
- * y `range` es el `{from, to}` que ya produce `dateRange.js`. Se ha elegido la forma más pequeña que
- * responde a la única pregunta que las vistas hacen —«dame los eventos de este rango»— porque
- * cualquier método de más volvería a atar las pantallas a un origen concreto: un `hasMore()` o un
- * `refresh()` solo tienen sentido con servidor detrás, y el lector del profesional no tiene ninguno.
- * Con una función, montar un origen nuevo es escribir una función.
+ * and `range` is the `{from, to}` `dateRange.js` already produces. The smallest shape that answers
+ * the only question the views ask —"give me the events of this range"— was chosen because any
+ * extra method would tie the screens back to a concrete source: a `hasMore()` or a `refresh()` only
+ * make sense with a server behind, and the professional's reader has none. With a function,
+ * building a new source is writing a function.
  *
- * Las tres claves de la respuesta son las que la pantalla **tiene que poder decir en voz alta**:
- * cuántos eventos hay, cuántos sobres no abrieron (ADR 0004: un sobre roto se cuenta y se avisa,
- * nunca se traga) y si la lectura se quedó corta. Un resumen recortado que se presenta como completo
- * es el peor fallo posible en un historial clínico.
+ * The three keys of the response are the ones the screen **has to be able to say out loud**: how
+ * many events there are, how many envelopes did not open (ADR 0004: a broken envelope is counted
+ * and reported, never swallowed) and whether the read fell short. A shortened summary presented as
+ * complete is the worst possible failure in a clinical history.
  *
- * Dos implementaciones, en **dos ficheros distintos**:
+ * Two implementations, in **two different files**:
  *
- * - {@see memoryEventSource}, aquí: la del lector del profesional y la de la vista previa de
- *   compartir. Los eventos ya están descifrados en memoria (vienen del paquete `s1.` o de la
- *   pantalla que lo va a crear), así que solo hay que acotarlos por rango. Ni una petición.
- * - `livewireEventSource`, en `livewireEventSource.js`: la del panel, que pide páginas al servidor y
- *   **descifra en el navegador**.
+ * - {@see memoryEventSource}, here: the one of the professional's reader and of the share preview.
+ *   The events are already decrypted in memory (they come from the `s1.` package or from the
+ *   screen about to create it), so they only have to be clipped by range. Not one request.
+ * - `livewireEventSource`, in `livewireEventSource.js`: the panel one, which asks the server for
+ *   pages and **decrypts in the browser**.
  *
- * **Están separadas por una razón de perímetro, no de orden.** Este fichero es alcanzable desde la
- * entrada de Vite del lector (`reader.js`), y Rollup mete en el trozo común todo lo que alcanzan las
- * dos entradas, con su cadena entera de importaciones. Mientras el origen del panel vivió aquí, el
- * lector arrastraba `eventEnvelope.js` → `auth/keyring.js`, es decir el módulo que guarda y abre la
- * clave maestra en `sessionStorage`, hasta el navegador de una consulta ajena. No era explotable
- * —allí no hay clave que abrir—, pero el invariante declarado del ADR 0011 («el lector no arrastra
- * nada del panel», «no escribe nada en el dispositivo») dejaba de ser estructural.
+ * **They are split for a perimeter reason, not a tidiness one.** This file is reachable from the
+ * Vite entry point of the reader (`reader.js`), and Rollup puts into the shared chunk everything
+ * both entry points reach, with its whole import chain. While the panel source lived here, the
+ * reader dragged `eventEnvelope.js` → `auth/keyring.js`, that is the module that stores and opens
+ * the master key in `sessionStorage`, all the way to the browser of somebody else's clinic. It was
+ * not exploitable —there is no key to open there—, but the stated invariant of ADR 0011 ("the
+ * reader drags nothing of the panel", "it writes nothing on the device") stopped being structural.
  *
- * Por eso **este fichero no importa nada**: ni `eventEnvelope.js`, ni Livewire, ni el DOM. Lo vigila
- * `tests/js/clippingExplorer.test.mjs`, que recorre el grafo de importaciones **transitivo** desde
- * `reader.js`; un test de importaciones directas no puede vigilar un perímetro que Vite decide por
+ * That is why **this file imports nothing**: no `eventEnvelope.js`, no Livewire, no DOM. It is
+ * watched by `tests/js/clippingExplorer.test.mjs`, which walks the **transitive** import graph from
+ * `reader.js`; a direct-import test cannot watch a perimeter Vite decides by reachability.
  * alcanzabilidad.
  */
 
 /**
- * Tamaño de página: el techo duro de `HealthEventPage::MAX_FETCH_LIMIT`, que recorta cualquier valor
- * mayor. Pedir menos solo multiplicaría las idas y vueltas.
+ * Page size: the hard ceiling of `HealthEventPage::MAX_FETCH_LIMIT`, which clips any larger value.
+ * Asking for less would only multiply the round trips.
  */
 export const FETCH_PAGE_SIZE = 500;
 
 /**
- * Tope de páginas por carga. Con 500 eventos por página son 5.000 eventos, muy por encima de lo que
- * cabe en 30 días de registro humano; existe solo para que un cursor que no avanzara no dejara al
- * navegador pidiendo páginas sin fin.
+ * Page cap per load. With 500 events per page that is 5,000 events, well above what fits in 30
+ * days of human recording; it exists only so that a cursor that failed to advance could not leave
+ * the browser asking for pages forever.
  */
 export const MAX_FETCH_PAGES = 10;
 
 /**
- * Aplana un evento descifrado a la forma que espera `statistics.js`: el contenido en claro
- * (`{v, type, tz, data, ...}`) más `occurredAt` en el mismo nivel (ver JSDoc del módulo
- * `statistics.js`, «Forma de entrada»).
+ * Flattens a decrypted event into the shape `statistics.js` expects: the content in the clear
+ * (`{v, type, tz, data, ...}`) plus `occurredAt` at the same level (see the JSDoc of the
+ * `statistics.js` module, "Input shape").
  *
- * @param {{occurredAt: string}} rawEvent Tal cual lo devuelve `fetchEvents` (sin descifrar).
- * @param {object} content Contenido ya descifrado con `openEvent`.
+ * @param {{occurredAt: string}} rawEvent Exactly as `fetchEvents` returns it (undecrypted).
+ * @param {object} content Content already decrypted with `openEvent`.
  * @returns {object}
  */
 export function flattenDecryptedEvent(rawEvent, content) {
@@ -65,8 +65,8 @@ export function flattenDecryptedEvent(rawEvent, content) {
 }
 
 /**
- * Instante en que empieza el rango pedido, en milisegundos desde epoch, o `-Infinity` cuando el
- * rango está abierto por abajo («todos los registros»).
+ * Instant the requested range starts at, in milliseconds since epoch, or `-Infinity` when the
+ * range is open at the bottom ("every record").
  *
  * @param {{from: string|null}} range
  * @returns {number}
@@ -82,7 +82,7 @@ export function rangeStartMs(range) {
 }
 
 /**
- * Fin del rango pedido, exclusivo, o `Infinity` cuando está abierto por arriba.
+ * End of the requested range, exclusive, or `Infinity` when it is open at the top.
  *
  * @param {{to: string|null}} range
  * @returns {number}
@@ -98,21 +98,21 @@ export function rangeEndMs(range) {
 }
 
 /**
- * ¿Hace falta pedir otra página de eventos?
+ * Do we need to ask for another page of events?
  *
- * `fetchEvents` devuelve **todos** los tipos de evento del usuario (el servidor no puede filtrar por
- * tipo, ADR 0006) ordenados de más reciente a más antiguo y con un límite. Con una sola página de
- * 100 —el valor por defecto del servidor— quien registra glucemia, tensión, comidas e insulina
- * varias veces al día no llega ni a diez días atrás, y el resumen de un periodo largo saldría
- * recortado sin decirlo. Así que se pagina con cursor hasta cubrir el rango elegido.
+ * `fetchEvents` returns **every** event type of the user (the server cannot filter by type, ADR
+ * 0006) sorted from most recent to oldest and with a limit. With a single page of 100 —the server
+ * default— somebody who records glucose, blood pressure, meals and insulin several times a day
+ * does not even reach ten days back, and the summary of a long period would come out clipped
+ * without saying so. So it pages with a cursor until the chosen range is covered.
  *
- * Se para cuando la página viene incompleta (ya no hay más eventos) o cuando el más antiguo de la
- * página ya cae antes del inicio del rango. Una fecha ilegible también para el bucle, en vez de
- * dejarlo pidiendo páginas a ciegas.
+ * It stops when the page comes back incomplete (there are no more events) or when the oldest of
+ * the page already falls before the start of the range. An unreadable date also stops the loop,
+ * instead of leaving it asking for pages blindly.
  *
- * @param {list<{occurredAt: string}>} page Tal cual la devuelve `fetchEvents` (sin descifrar).
- * @param {number} pageSize Límite pedido al servidor.
- * @param {number} windowStartMs Ver {@see rangeStartMs}.
+ * @param {list<{occurredAt: string}>} page Exactly as `fetchEvents` returns it (undecrypted).
+ * @param {number} pageSize Limit asked of the server.
+ * @param {number} windowStartMs See {@see rangeStartMs}.
  * @returns {boolean}
  */
 export function needsAnotherPage(page, pageSize, windowStartMs) {
@@ -126,19 +126,19 @@ export function needsAnotherPage(page, pageSize, windowStartMs) {
 }
 
 /**
- * Origen del lector y de la vista previa de compartir: los eventos ya están descifrados en memoria.
+ * Source of the reader and of the share preview: the events are already decrypted in memory.
  *
- * Acota con el **mismo criterio que el servidor**, `[from, to)` (ver `HealthEventPage::fetchEvents`,
- * que aplica `>=` al inicio y `<` al final), y devuelve el mismo orden, de más reciente a más
- * antiguo. Es lo que hace que las vistas no noten la diferencia: cambiar de origen no puede cambiar
- * qué eventos entran en un resumen, o el paciente y el médico verían medias distintas del mismo
- * periodo.
+ * It clips with the **same criterion as the server**, `[from, to)` (see
+ * `HealthEventPage::fetchEvents`, which applies `>=` at the start and `<` at the end), and returns
+ * the same order, most recent to oldest. That is what keeps the views from noticing the
+ * difference: changing source cannot change which events enter a summary, or patient and doctor
+ * would see different means for the same period.
  *
- * `failedToOpen` llega como parámetro y no se calcula: en el lector los sobres se abren al deshacer
- * el paquete, mucho antes de esta función, y el recuento de los que fallaron tiene que sobrevivir
- * hasta la pantalla (ADR 0004).
+ * `failedToOpen` arrives as a parameter and is not computed: in the reader the envelopes are
+ * opened while unpacking the package, long before this function, and the count of the failed ones
+ * has to survive all the way to the screen (ADR 0004).
  *
- * @param {list<object>} events Eventos ya descifrados y aplanados.
+ * @param {list<object>} events Events already decrypted and flattened.
  * @param {{failedToOpen?: number}} [options]
  * @returns {(range: {from: string|null, to: string|null}) => Promise<{events: list<object>, failedToOpen: number, truncated: boolean}>}
  */
@@ -152,14 +152,14 @@ export function memoryEventSource(events, { failedToOpen = 0 } = {}) {
                 const occurredMs = Date.parse(event?.occurredAt);
 
                 /**
-                 * Una fecha ilegible no se descarta: se deja pasar. Descartarla escondería un
-                 * registro que existe, y esconder es peor que enseñar algo mal colocado.
+                 * An unreadable date is not dropped: it is let through. Dropping it would hide a
+                 * record that exists, and hiding is worse than showing something badly placed.
                  */
                 return Number.isNaN(occurredMs) || (occurredMs >= startMs && occurredMs < endMs);
             })
             .sort((a, b) => Date.parse(b.occurredAt) - Date.parse(a.occurredAt));
 
-        /** Nada se trunca: no hay paginación que agotar, están todos delante. */
+        /** Nothing is truncated: there is no pagination to exhaust, they are all right here. */
         return { events: inRange, failedToOpen, truncated: false };
     };
 }

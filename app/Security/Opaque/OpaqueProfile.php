@@ -5,69 +5,69 @@ declare(strict_types=1);
 namespace App\Security\Opaque;
 
 /**
- * Perfil criptográfico único de este despliegue (`docs/OPAQUE.md` §2).
+ * The single cryptographic profile of this deployment (`docs/OPAQUE.md` §2).
  *
  * `OPAQUE-R255-SHA512-A2ID-m65536-t3-p4-ctx0-v1`:
  *
- * - OPAQUE RFC 9807, instanciación 3DH.
- * - OPRF RFC 9497, suite `ristretto255-SHA512`, `modeOPRF = 0x00`.
- * - Grupo AKE ristretto255 (RFC 9496), Hash SHA-512, KDF HKDF-SHA-512
+ * - OPAQUE RFC 9807, 3DH instantiation.
+ * - OPRF RFC 9497, `ristretto255-SHA512` suite, `modeOPRF = 0x00`.
+ * - AKE group ristretto255 (RFC 9496), Hash SHA-512, KDF HKDF-SHA-512
  *   (RFC 5869), MAC HMAC-SHA-512 (RFC 2104).
- * - KSF Argon2id v0x13, m=65536 KiB, t=3, p=4: se ejecuta **sólo en el
- *   cliente**, el servidor nunca lo invoca.
- * - `context` del preamble vacío (`ctx0`).
+ * - KSF Argon2id v0x13, m=65536 KiB, t=3, p=4: it runs **on the client only**,
+ *   the server never invokes it.
+ * - Empty preamble `context` (`ctx0`).
  *
- * El nombre incluye los parámetros del KSF y el contexto porque RFC 9807 §7
- * define la configuración como la tupla (OPRF, KDF, MAC, Hash, KSF, Group,
- * Context): dos despliegues con distinto KSF son incompatibles y el fallo se
- * manifiesta como «contraseña incorrecta».
+ * The name includes the KSF parameters and the context because RFC 9807 §7
+ * defines the configuration as the tuple (OPRF, KDF, MAC, Hash, KSF, Group,
+ * Context): two deployments with a different KSF are incompatible and the
+ * failure shows up as "wrong password".
  *
- * No hay negociación de suites ni se aceptan identificadores enviados por el
- * cliente. Las longitudes de los mensajes de §6 se derivan de las constantes
- * de tamaño de §2 y se exponen aquí ya calculadas.
+ * There is no suite negotiation and no client-supplied identifiers are
+ * accepted. The §6 message lengths derive from the §2 size constants and are
+ * exposed here already computed.
  *
  * @see https://www.rfc-editor.org/rfc/rfc9807 RFC 9807 §2, §7
  */
 final class OpaqueProfile
 {
-    /** Nombre versionado del perfil; se persiste junto a cada registro (§2). */
+    /** Versioned profile name; it is stored alongside every record (§2). */
     public const string NAME = 'OPAQUE-R255-SHA512-A2ID-m65536-t3-p4-ctx0-v1';
 
-    /** `Nh` — salida de Hash (SHA-512), en bytes. */
+    /** `Nh` — Hash output (SHA-512), in bytes. */
     public const int NH = 64;
 
-    /** `Nx` — salida de Extract (HKDF-SHA-512), en bytes. */
+    /** `Nx` — Extract output (HKDF-SHA-512), in bytes. */
     public const int NX = 64;
 
-    /** `Nm` — salida de MAC (HMAC-SHA-512), en bytes. */
+    /** `Nm` — MAC output (HMAC-SHA-512), in bytes. */
     public const int NM = 64;
 
-    /** `Nn` — longitud de los nonces, en bytes. */
+    /** `Nn` — nonce length, in bytes. */
     public const int NN = 32;
 
-    /** `Nseed` — longitud de las semillas, en bytes. */
+    /** `Nseed` — seed length, in bytes. */
     public const int NSEED = 32;
 
-    /** `Npk` — clave pública ristretto255 serializada, en bytes. */
+    /** `Npk` — serialized ristretto255 public key, in bytes. */
     public const int NPK = 32;
 
-    /** `Nsk` — clave privada (escalar) ristretto255, en bytes. */
+    /** `Nsk` — ristretto255 private key (scalar), in bytes. */
     public const int NSK = 32;
 
-    /** `Noe` — elemento OPRF serializado, en bytes. */
+    /** `Noe` — serialized OPRF element, in bytes. */
     public const int NOE = 32;
 
-    /** `Nok` — clave privada OPRF, en bytes. */
+    /** `Nok` — OPRF private key, in bytes. */
     public const int NOK = 32;
 
-    /** `oprf_seed` del servidor: `Nh` bytes (§12). */
+    /** Server `oprf_seed`: `Nh` bytes (§12). */
     public const int OPRF_SEED_BYTES = self::NH;
 
     /**
-     * `credential_identifier`: 32 bytes fijos (§13.1).
+     * `credential_identifier`: a fixed 32 bytes (§13.1).
      *
-     * La longitud fija es obligatoria porque RFC 9807 §5.2.2 concatena
-     * `credential_identifier || "OprfKey"` sin prefijo de longitud.
+     * The fixed length is mandatory because RFC 9807 §5.2.2 concatenates
+     * `credential_identifier || "OprfKey"` without a length prefix.
      */
     public const int CREDENTIAL_IDENTIFIER_BYTES = 32;
 
@@ -119,7 +119,7 @@ final class OpaqueProfile
     /** `ServerLoginState` = `expected_client_mac[Nm] || session_key[Nx]` (§6.3). */
     public const int SERVER_LOGIN_STATE_BYTES = self::NM + self::NX;
 
-    /** Longitud máxima de un vector `<1..2^16-1>` de `CleartextCredentials` (§6.4). */
+    /** Maximum length of a `<1..2^16-1>` vector in `CleartextCredentials` (§6.4). */
     public const int MAX_IDENTITY_BYTES = 0xFFFF;
 
     private function __construct() {}

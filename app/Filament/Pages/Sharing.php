@@ -12,25 +12,25 @@ use Filament\Support\Icons\Heroicon;
 use Illuminate\Contracts\Support\Htmlable;
 
 /**
- * Pantalla desde la que se comparte un recorte del historial con un profesional (ADR 0011).
+ * Screen a clipping of the history is shared with a professional from (ADR 0011).
  *
- * Esta clase no ve nada de lo que se comparte, y no puede: el recorte se arma, se comprime y se
- * cifra entero en el navegador, y sube por `POST /phr/shares`, un endpoint HTTP propio que no pasa
- * por Livewire. Aquí solo se publican tres cosas en claro, que son públicas por naturaleza: la lista
- * cerrada de caducidades, los tipos clínicos que se pueden elegir con su etiqueta traducida, y las
- * URL a las que el cliente tiene que llamar.
+ * This class sees nothing of what is shared, and it cannot: the clipping is assembled, compressed
+ * and encrypted whole in the browser, and uploaded through `POST /phr/shares`, an HTTP endpoint of
+ * its own that does not go through Livewire. Only three plaintext things are published here, and
+ * they are public by nature: the closed list of expiries, the clinical types that can be picked with
+ * their translated labels, and the URLs the client has to call.
  *
- * **Por qué hereda de {@see HealthEventPage}** y no directamente de {@see PhrPage}: para leer los
- * eventos que van a formar el recorte, el cliente usa `fetchEvents`, el mismo método y el mismo
- * criterio de fecha canónica que las seis pantallas de historial. Una segunda vía de lectura sería
- * un segundo sitio donde equivocarse con el rango semiabierto `[from, to)` y con la autorización, y
- * el que acabaría desviándose es justo el que casi nadie mira. `storeEvent` viene de propina y no
- * añade superficie: cualquier pantalla de eventos del panel ya lo expone para el mismo usuario.
+ * **Why it extends {@see HealthEventPage}** and not {@see PhrPage} directly: to read the events that
+ * will make up the clipping, the client uses `fetchEvents`, the same method and the same canonical
+ * date criterion as the six history screens. A second read path would be a second place to get the
+ * half-open range `[from, to)` and the authorization wrong, and the one that would drift is exactly
+ * the one almost nobody looks at. `storeEvent` comes along for free and adds no surface: any events
+ * screen in the panel already exposes it for the same user.
  *
- * **Por qué el paquete no sube por Livewire**: lleva prefijo `s1.`, y los dos guardarraíles del
- * ADR 0002 (`livewirePayloadGuard.js` y `EncryptedPayloadGuardHook`) abortan cualquier cadena de
- * más de 256 caracteres que no empiece por `v1.`. No se tocan; se usa la vía que el propio ADR 0002
- * reserva para los blobs grandes.
+ * **Why the package is not uploaded through Livewire**: it carries the `s1.` prefix, and the two ADR
+ * 0002 guardrails (`livewirePayloadGuard.js` and `EncryptedPayloadGuardHook`) abort on any string
+ * longer than 256 characters that does not start with `v1.`. They are not touched; we use the route
+ * ADR 0002 itself reserves for large blobs.
  */
 final class Sharing extends HealthEventPage
 {
@@ -39,18 +39,19 @@ final class Sharing extends HealthEventPage
     protected string $view = 'phr.pages.sharing';
 
     /**
-     * Al final del menú, después de las pantallas de registro.
+     * At the end of the menu, after the recording screens.
      *
-     * Compartir no es una tarea diaria como apuntar una glucemia: se hace antes de una consulta,
-     * unas pocas veces al mes. Ponerla arriba la pondría en el camino de quien solo quiere anotar
-     * una lectura, y es la única pantalla del panel cuyo botón manda datos fuera.
+     * Sharing is not a daily task like jotting down a blood glucose reading: you do it before a
+     * consultation, a few times a month. Putting it at the top would put it in the way of someone
+     * who only wants to log a reading, and it is the only screen in the panel whose button sends
+     * data out.
      */
     protected static ?int $navigationSort = 10;
 
     /**
-     * El título y la etiqueta de navegación se resuelven por método y no como propiedad estática
-     * porque un inicializador de propiedad en PHP solo admite expresiones constantes: `__()` no
-     * puede llamarse ahí.
+     * The title and the navigation label are resolved by method and not as a static property because
+     * a property initializer in PHP only accepts constant expressions: `__()` cannot be called
+     * there.
      */
     public function getTitle(): string|Htmlable
     {
@@ -63,17 +64,17 @@ final class Sharing extends HealthEventPage
     }
 
     /**
-     * Tokens de los tipos clínicos que se pueden compartir.
+     * Tokens of the clinical types that can be shared.
      *
-     * Son los valores del campo `type` que va **dentro** del sobre de cada evento (ADR 0006), así
-     * que el servidor no los usa para nada: no puede filtrar por tipo y no lo intenta. Se publican
-     * solo para pintar las casillas con su etiqueta traducida. La lista tiene que coincidir con
-     * `SHAREABLE_TYPES` de `resources/js/health/sharePage.js`, que es quien filtra de verdad, y
-     * `tests/Feature/SharingPageTest.php` falla si dejan de coincidir: una casilla de un tipo que el
-     * cliente no reconoce produce recortes a los que les falta ese tipo sin que nadie se entere.
+     * They are the values of the `type` field that goes **inside** each event's envelope (ADR 0006),
+     * so the server does not use them for anything: it cannot filter by type and does not try. They
+     * are published only to paint the checkboxes with their translated labels. The list has to match
+     * `SHAREABLE_TYPES` in `resources/js/health/sharePage.js`, which is what really filters, and
+     * `tests/Feature/SharingPageTest.php` fails if they stop matching: a checkbox for a type the
+     * client does not recognize produces clippings missing that type with nobody noticing.
      *
-     * El orden es el mismo del menú del panel, no alfabético: quien busca «tensión» la busca donde
-     * la ve todos los días.
+     * The order is the same as the panel menu, not alphabetical: someone looking for "blood
+     * pressure" looks for it where they see it every day.
      *
      * @var list<string>
      */
@@ -87,15 +88,15 @@ final class Sharing extends HealthEventPage
     ];
 
     /**
-     * Catálogo público en claro que el cliente necesita para pintar la pantalla y para cifrar.
+     * Public plaintext catalog the client needs to paint the screen and to encrypt.
      *
-     * Nada de lo que sale de aquí depende del usuario: son los mismos tipos, las mismas caducidades
-     * y las mismas URL para cualquiera. Lo único que cambia es el idioma de las etiquetas, que sale
-     * del que ya está en vigor para esta petición.
+     * Nothing that comes out of here depends on the user: the same types, the same expiries and the
+     * same URLs for everybody. The only thing that changes is the language of the labels, which
+     * comes from the one already in force for this request.
      *
-     * `readerUrlTemplate` lleva `{link}` sin rellenar y se construye con `route()` en vez de
-     * concatenar un prefijo a mano: el prefijo público de la página del lector es una decisión de
-     * superficie que puede cambiar, y el día que cambie tiene que cambiar en un único sitio.
+     * `readerUrlTemplate` carries an unfilled `{link}` and is built with `route()` instead of
+     * concatenating a prefix by hand: the public prefix of the reader page is a surface decision that
+     * can change, and the day it changes it has to change in a single place.
      *
      * @return array{
      *     types: list<array{token: string, label: string}>,
@@ -122,7 +123,7 @@ final class Sharing extends HealthEventPage
                 ],
                 ShareTtl::cases(),
             ),
-            /** 24 horas, el valor por defecto del ADR 0011. */
+            /** 24 hours, the ADR 0011 default. */
             'defaultTtl' => ShareTtl::Day->value,
             'endpoints' => [
                 'shares' => route('filament.phr.shares.index'),
@@ -133,24 +134,24 @@ final class Sharing extends HealthEventPage
                 'links' => Shares::MAX_LINKS_PER_SHARE,
             ],
             /**
-             * El mismo vocabulario que recibe la página del lector, para que la vista previa se pinte
-             * con las mismas palabras y los mismos términos LOINC que verá el profesional. Es dato
-             * público de referencia (ADR 0005): no depende de ninguna cuenta y no dice nada de lo que
-             * hay dentro del recorte. Va en esta misma respuesta y no en una petición aparte porque
-             * la vista previa no puede añadir ni una llamada al servidor: todo lo que enseña ya está
-             * descifrado en el navegador.
+             * The same vocabulary the reader page receives, so the preview is painted with the same
+             * words and the same LOINC terms the professional will see. It is public reference data
+             * (ADR 0005): it depends on no account and says nothing about what is inside the
+             * clipping. It travels in this same response and not in a separate request because the
+             * preview cannot add a single call to the server: everything it shows is already
+             * decrypted in the browser.
              */
             'readerCatalog' => (new ReaderCatalog)->toArray(),
         ];
     }
 
     /**
-     * URL de la página del lector con `{link}` por rellenar.
+     * URL of the reader page with `{link}` still to be filled in.
      *
-     * Se genera con un identificador de relleno y se sustituye después, en vez de pasar `{link}`
-     * directamente a `route()`: el generador de URL de Laravel trata las llaves como el hueco del
-     * parámetro y responde «falta el parámetro link». El relleno es un UUIDv4 con la forma exacta
-     * que tendrá el de verdad, para que no se cuele una ruta con restricción de formato.
+     * It is generated with a placeholder identifier and substituted afterwards, instead of passing
+     * `{link}` straight to `route()`: Laravel's URL generator treats braces as the parameter slot and
+     * answers "missing parameter link". The placeholder is a UUIDv4 with the exact shape the real one
+     * will have, so a route with a format constraint does not slip through.
      */
     private static function readerUrlTemplate(): string
     {
@@ -160,8 +161,8 @@ final class Sharing extends HealthEventPage
     }
 
     /**
-     * Etiqueta de un tipo clínico, la misma palabra que usa el menú del panel para esa pantalla:
-     * quien elige «Glucemia» aquí tiene que reconocer la pantalla donde la apunta.
+     * Label of a clinical type, the same word the panel menu uses for that screen: whoever picks
+     * "Blood glucose" here has to recognize the screen they log it on.
      */
     private static function typeLabel(string $token): string
     {
@@ -177,9 +178,9 @@ final class Sharing extends HealthEventPage
     }
 
     /**
-     * Etiqueta de una caducidad. Se dice en tiempo («1 hora») y no en fecha, porque el TTL se
-     * elige antes de generar y la fecha exacta todavía no existe; la fecha se enseña después, con
-     * el enlace ya creado.
+     * Label of an expiry. It is stated as a duration ("1 hour") and not as a date, because the TTL is
+     * chosen before generating and the exact date does not exist yet; the date is shown afterwards,
+     * once the link is created.
      */
     private static function ttlLabel(ShareTtl $ttl): string
     {

@@ -8,17 +8,17 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
 /**
- * `GET /phr/register`: página de alta pública (ADR 0009).
+ * `GET /phr/register`: public signup page (ADR 0009).
  *
- * Se sirve sin ninguna consulta a base de datos, igual que {@see SetPasswordPageController}: aquí no hay
- * nada que validar todavía. El nombre, el login y el `registrationRequest` de OPAQUE viajan juntos
- * en el cuerpo de `registration/public/start`, que es el único sitio donde se comprueba si el correo
- * ya tiene cuenta.
+ * It is served without a single database query, like {@see SetPasswordPageController}: there is
+ * nothing to validate yet. The name, the login and the OPAQUE `registrationRequest` travel together
+ * in the body of `registration/public/start`, which is the only place where we check whether the
+ * email already has an account.
  *
- * A diferencia del alta por invitación, esta pantalla sí revela que una cuenta existe cuando el
- * correo está tomado. Es una decisión consciente del ADR 0009: sin ese aviso, quien se equivoca de
- * correo no puede saber qué le ha pasado ni cómo seguir. Se mitiga con la limitación de intentos por
- * IP del endpoint, no aquí.
+ * Unlike invited signup, this screen does reveal that an account exists when the email is taken. It
+ * is a deliberate decision from ADR 0009: without that notice, somebody who mistypes their email
+ * cannot know what happened or how to continue. It is mitigated by the endpoint's per-IP attempt
+ * limiting, not here.
  */
 final readonly class RegisterPageController
 {

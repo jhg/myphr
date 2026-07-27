@@ -8,41 +8,41 @@ use App\Support\SupportedLocale;
 use ValueError;
 
 /**
- * Lista cerrada de unidades para la cantidad de un alimento dentro de una comida (ADR 0006).
+ * Closed list of units for the amount of a food inside a meal (ADR 0006).
  *
- * Decisión literal del usuario: gramos, miligramos, kilos, centilitros, litros, mililitros y
- * unidades, y nada más. Los alimentos en sí NO se codifican contra ningún vocabulario (es una
- * excepción consciente al ADR 0005, justificada en el ADR que cubre la pantalla de comidas), pero
- * la unidad sí va codificada en UCUM (http://unitsofmeasure.org), tal y como exige el ADR 0005 para
- * evitar una conversión imposible más adelante.
+ * A literal decision by the user: grams, milligrams, kilos, centilitres, litres, millilitres and
+ * pieces, and nothing else. The foods themselves are NOT coded against any vocabulary (a deliberate
+ * exception to ADR 0005, justified in the ADR that covers the meals screen), but the unit is coded
+ * in UCUM (http://unitsofmeasure.org), exactly as ADR 0005 requires, to avoid an impossible
+ * conversion later on.
  *
- * Códigos verificados uno a uno contra la especificación UCUM (tabla de unidades comunes
- * https://ucum.org/docs/common-units y el listado de HL7 en
- * https://terminology.hl7.org/5.5.0/ValueSet-ucum-common.html, ambos con la forma sensible a
- * mayúsculas de la especificación):
- * - Gramo: `g`.
- * - Miligramo: `mg` (prefijo `m` = mili).
- * - Kilogramo: `kg` (prefijo `k` = kilo).
- * - Centilitro: `cL` (prefijo `c` = centi sobre `L`, no `cl`: la forma en mayúscula es la que UCUM
- *   documenta como alternativa sensible a mayúsculas para evitar confundir la `l` minúscula con el
- *   dígito 1, y es la que usan HL7/FHIR en sus tablas de unidades comunes).
- * - Litro: `L` (no `l`, mismo motivo).
- * - Mililitro: `mL` (no `ml`, mismo motivo).
- * - Unidades (recuento de piezas): UCUM no tiene un símbolo propio para "una pieza"; la cantidad
- *   adimensional es la unidad `1`, y UCUM permite anotarla entre llaves para que el código siga
- *   siendo legible sin cambiar su semántica (`{annotation}` es azúcar sintáctico sobre `1`). Se
- *   elige `{each}` en vez de `1` a secas porque un código UCUM vacío de anotación ("1") no dice
- *   nada por sí solo en una lista de unidades, y `{each}` es la anotación que ya usan ejemplos de
- *   HL7/FHIR para "una pieza, un ítem" cuando no hay una unidad de conteo más específica (p. ej.
- *   comprimidos, cápsulas). Queda documentado aquí para que se pueda revisar.
+ * Codes verified one by one against the UCUM specification (common units table
+ * https://ucum.org/docs/common-units and the HL7 listing at
+ * https://terminology.hl7.org/5.5.0/ValueSet-ucum-common.html, both in the case-sensitive form from
+ * the spec):
+ * - Gram: `g`.
+ * - Milligram: `mg` (prefix `m` = milli).
+ * - Kilogram: `kg` (prefix `k` = kilo).
+ * - Centilitre: `cL` (prefix `c` = centi on top of `L`, not `cl`: the uppercase form is the one UCUM
+ *   documents as the case-sensitive alternative to avoid confusing a lowercase `l` with the digit 1,
+ *   and it is the one HL7/FHIR use in their common unit tables).
+ * - Litre: `L` (not `l`, same reason).
+ * - Millilitre: `mL` (not `ml`, same reason).
+ * - Pieces (item count): UCUM has no symbol of its own for "one piece"; a dimensionless amount is
+ *   the unit `1`, and UCUM lets you annotate it in braces so the code stays readable without
+ *   changing its meaning (`{annotation}` is syntactic sugar over `1`). We pick `{each}` instead of a
+ *   bare `1` because a UCUM code with no annotation ("1") says nothing on its own in a list of
+ *   units, and `{each}` is the annotation HL7/FHIR examples already use for "one piece, one item"
+ *   when there is no more specific counting unit (tablets, capsules, and so on). It is documented
+ *   here so it can be reviewed.
  *
- * El valor de cada caso es ese código UCUM tal cual, no una aproximación legible. Es un token que
- * viaja dentro del sobre cifrado (ADR 0004, ADR 0006), así que, igual que
- * {@see GlucoseMeasurementMethod}, **no puede cambiar nunca** una vez publicado: renombrar o
- * eliminar un caso dejaría ilegibles los sobres ya guardados, porque no hay forma de recorrerlos y
- * re-cifrarlos con el token nuevo sin la clave de cada usuario.
+ * The value of each case is that UCUM code verbatim, not a readable approximation. It is a token
+ * that travels inside the encrypted envelope (ADR 0004, ADR 0006), so, like
+ * {@see GlucoseMeasurementMethod}, it **can never change** once published: renaming or removing a
+ * case would leave the stored envelopes unreadable, because there is no way to walk them and
+ * re-encrypt them with the new token without each user's key.
  *
- * Añadir un caso nuevo es seguro; renombrar o eliminar uno existente no lo es.
+ * Adding a new case is safe; renaming or removing an existing one is not.
  */
 enum FoodQuantityUnit: string
 {
@@ -64,14 +64,14 @@ enum FoodQuantityUnit: string
     /** Mililitros. */
     case Milliliter = 'mL';
 
-    /** Unidades sueltas (piezas), sin una unidad de conteo más específica. */
+    /** Loose pieces, with no more specific counting unit. */
     case Piece = '{each}';
 
     /**
-     * Etiqueta en el idioma indicado, para mostrar al paciente (ADR 0005: la etiqueta no sustituye
-     * al token, que es lo único que entra en el sobre cifrado).
+     * Label in the given language, to show to the patient (ADR 0005: the label does not replace the
+     * token, which is the only thing that goes into the encrypted envelope).
      *
-     * @param  string  $locale  Cualquier código; los no soportados caen al idioma por defecto.
+     * @param  string  $locale  Any code; unsupported ones fall back to the default language.
      */
     public function label(string $locale): string
     {
@@ -99,7 +99,7 @@ enum FoodQuantityUnit: string
             [self::Liter, 'zh_CN'] => '升',
             [self::Milliliter, 'zh_CN'] => '毫升',
             [self::Piece, 'zh_CN'] => '个',
-            default => throw new ValueError(sprintf('Falta la etiqueta de unidad de cantidad de alimento para el idioma "%s".', $locale)),
+            default => throw new ValueError(sprintf('Missing food quantity unit label for locale "%s".', $locale)),
         };
     }
 }

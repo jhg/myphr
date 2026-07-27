@@ -5,8 +5,8 @@ declare(strict_types=1);
 use App\Security\Opaque\ExpandMessageXmdSha512;
 
 /**
- * Vectores oficiales de RFC 9380, Apéndice K.3 «expand_message_xmd(SHA-512)».
- * Fuente: https://www.rfc-editor.org/rfc/rfc9380.txt
+ * Official RFC 9380 vectors, Appendix K.3 "expand_message_xmd(SHA-512)".
+ * Source: https://www.rfc-editor.org/rfc/rfc9380.txt
  *
  * name = expand_message_xmd
  * DST  = QUUX-V01-CS02-with-expander-SHA512-256
@@ -15,14 +15,14 @@ use App\Security\Opaque\ExpandMessageXmdSha512;
  */
 const RFC9380_K3_DST = 'QUUX-V01-CS02-with-expander-SHA512-256';
 
-/** msg del vector «q128_...» de RFC 9380 §K.3: "q128_" seguido de 128 letras q (133 bytes). */
+/** msg of the "q128_..." vector from RFC 9380 §K.3: "q128_" followed by 128 q letters (133 bytes). */
 const RFC9380_MSG_Q128 = 'q128_qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq';
 
-/** msg del vector «a512_...» de RFC 9380 §K.3: "a512_" seguido de 512 letras a (517 bytes). */
+/** msg of the "a512_..." vector from RFC 9380 §K.3: "a512_" followed by 512 a letters (517 bytes). */
 const RFC9380_MSG_A512 = 'a512_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
 /**
- * Los diez vectores de RFC 9380 §K.3, todos con el mismo DST.
+ * The ten vectors from RFC 9380 §K.3, all with the same DST.
  *
  * @var array<string, array{0: array{msg: string, len_in_bytes: int, uniform_bytes: string}}>
  */
@@ -117,7 +117,7 @@ it('binds len_in_bytes into the output so different lengths do not share a prefi
     $short = ExpandMessageXmdSha512::expand('abc', RFC9380_K3_DST, 32);
     $long = ExpandMessageXmdSha512::expand('abc', RFC9380_K3_DST, 128);
 
-    // Distintos len_in_bytes entran en el hash, así que NO deben coincidir (RFC 9380 §5.3.1, paso 5).
+    // Different len_in_bytes go into the hash, so they must NOT match (RFC 9380 §5.3.1, step 5).
     expect(substr($long, 0, 32))->not->toBe($short);
 });
 
@@ -134,7 +134,7 @@ it('rejects len_in_bytes greater than 65535', function (): void {
 })->throws(InvalidArgumentException::class);
 
 it('rejects ell greater than 255', function (): void {
-    // 255 * 64 = 16320 es el máximo admisible; 16321 exige ell = 256.
+    // 255 * 64 = 16320 is the maximum allowed; 16321 would need ell = 256.
     expect(strlen(ExpandMessageXmdSha512::expand('abc', RFC9380_K3_DST, 255 * 64)))->toBe(255 * 64);
 
     ExpandMessageXmdSha512::expand('abc', RFC9380_K3_DST, 255 * 64 + 1);

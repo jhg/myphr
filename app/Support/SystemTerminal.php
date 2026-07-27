@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Support;
 
 /**
- * Implementación de producción de {@see Terminal} sobre `stream_isatty(STDOUT)`.
+ * Production implementation of {@see Terminal} on top of `stream_isatty(STDOUT)`.
  */
 final class SystemTerminal implements Terminal
 {

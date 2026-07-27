@@ -5,32 +5,32 @@ declare(strict_types=1);
 namespace App\Security\Opaque;
 
 /**
- * Lado servidor del login OPAQUE-3DH: `CreateCredentialResponse`,
- * `AuthServerRespond` y `ServerFinish`
- * (RFC 9807 §6.3.2.2, §6.4.4 y §6.2.4 / `docs/OPAQUE.md` §11.3, §11.4 y §11.8).
+ * Server side of the OPAQUE-3DH login: `CreateCredentialResponse`,
+ * `AuthServerRespond` and `ServerFinish`
+ * (RFC 9807 §6.3.2.2, §6.4.4 and §6.2.4 / `docs/OPAQUE.md` §11.3, §11.4 and §11.8).
  *
- * La fuente de aleatoriedad se inyecta para poder reproducir los vectores
- * oficiales (`docs/OPAQUE.md` §20.3); en producción es
+ * The source of randomness is injected so we can reproduce the official
+ * vectors (`docs/OPAQUE.md` §20.3); in production it is
  * {@see SystemRandomSource}.
  */
 final class ServerLogin
 {
-    /** Etiqueta del `Expand` que genera el pad de enmascarado (Apéndice A). */
+    /** Label of the `Expand` that generates the masking pad (Appendix A). */
     public const string MASKING_PAD_LABEL = 'CredentialResponsePad';
 
-    /** `Nn` — longitud de los nonces del protocolo, en bytes. */
+    /** `Nn` — length of the protocol nonces, in bytes. */
     private const int NONCE_LENGTH = 32;
 
-    /** `Nseed` — longitud de la semilla de la clave efímera, en bytes. */
+    /** `Nseed` — length of the ephemeral key seed, in bytes. */
     private const int KEYSHARE_SEED_LENGTH = 32;
 
-    /** `Npk` — longitud de la clave pública ristretto255, en bytes. */
+    /** `Npk` — length of the ristretto255 public key, in bytes. */
     private const int PUBLIC_KEY_LENGTH = 32;
 
-    /** `Npk + Nn + Nm` — longitud del pad de enmascarado, en bytes. */
+    /** `Npk + Nn + Nm` — length of the masking pad, in bytes. */
     private const int MASKING_PAD_LENGTH = 128;
 
-    /** `Nsk` — longitud de la clave privada estática del servidor, en bytes. */
+    /** `Nsk` — length of the server static private key, in bytes. */
     private const int PRIVATE_KEY_LENGTH = 32;
 
     public function __construct(
@@ -48,23 +48,23 @@ final class ServerLogin
      * masked_response   = pad XOR (server_public_key || record.envelope)
      * ```
      *
-     * El XOR opera sobre 128 bytes exactos: 32 de `server_public_key` más 96
-     * de envelope. Un usuario inexistente se atiende con el
-     * `fake_registration_record` de `docs/OPAQUE.md` §13.2 y esta misma
-     * función, de modo que la salida es indistinguible.
+     * The XOR runs over exactly 128 bytes: 32 from `server_public_key` plus 96
+     * from the envelope. A non-existent user is served with the
+     * `fake_registration_record` from `docs/OPAQUE.md` §13.2 and this very
+     * function, so the output is indistinguishable.
      *
-     * @param  Ke1  $ke1  Mensaje del cliente ya parseado y con puntos validados.
-     * @param  RegistrationRecord  $record  Record real o ficticio del usuario.
-     * @param  string  $oprfSeed  `oprf_seed` del servidor, 64 bytes (`Nh`).
-     * @param  string  $credentialIdentifier  Identificador binario de longitud fija (§13.1).
-     * @param  string  $serverPublicKey  Clave pública estática del servidor, 32 bytes.
-     * @return CredentialResponse Estructura de 192 bytes.
+     * @param  Ke1  $ke1  Client message, already parsed and with its points validated.
+     * @param  RegistrationRecord  $record  Real or fake record for the user.
+     * @param  string  $oprfSeed  Server `oprf_seed`, 64 bytes (`Nh`).
+     * @param  string  $credentialIdentifier  Fixed-length binary identifier (§13.1).
+     * @param  string  $serverPublicKey  Server static public key, 32 bytes.
+     * @return CredentialResponse 192-byte structure.
      *
-     * @throws InvalidMessageException Si `$serverPublicKey` no mide 32 bytes o
-     *                                 si el XOR recibe longitudes distintas.
-     * @throws InvalidPointException Si `blinded_message` no valida o la
-     *                               evaluación produce la identidad.
-     * @throws OpaqueException Si `DeriveKeyPair` agota su contador.
+     * @throws InvalidMessageException If `$serverPublicKey` is not 32 bytes long
+     *                                 or the XOR gets different lengths.
+     * @throws InvalidPointException If `blinded_message` does not validate or the
+     *                               evaluation yields the identity.
+     * @throws OpaqueException If `DeriveKeyPair` exhausts its counter.
      */
     public function createCredentialResponse(
         Ke1 $ke1,
@@ -98,36 +98,36 @@ final class ServerLogin
     }
 
     /**
-     * `AuthServerRespond` con 3DH (RFC 9807 §6.4.4 / `docs/OPAQUE.md` §11.4).
+     * `AuthServerRespond` with 3DH (RFC 9807 §6.4.4 / `docs/OPAQUE.md` §11.4).
      *
      * ```
      * server_nonce = random(32)
-     * (sk_e, pk_e)  = DeriveDiffieHellmanKeyPair(random(32))   // nunca reutilizada
+     * (sk_e, pk_e)  = DeriveDiffieHellmanKeyPair(random(32))   // never reused
      * dh1 = DH(sk_e,               client_public_keyshare)
      * dh2 = DH(server_private_key, client_public_keyshare)
      * dh3 = DH(sk_e,               record.client_public_key)
      * ikm = dh1 || dh2 || dh3
      * ```
      *
-     * El orden de los tres Diffie-Hellman es normativo: invertirlo produce un
-     * `ikm` distinto y el cliente ve un `server_mac` incorrecto.
+     * The order of the three Diffie-Hellman operations is normative: swapping
+     * it produces a different `ikm` and the client sees a wrong `server_mac`.
      *
-     * @param  Ke1  $ke1  Mensaje del cliente ya parseado.
-     * @param  CredentialResponse  $credentialResponse  Salida de {@see self::createCredentialResponse()}.
-     * @param  RegistrationRecord  $record  Record real o ficticio del usuario.
-     * @param  string  $serverPrivateKey  Escalar estático del servidor, 32 bytes.
-     * @param  string  $serverIdentity  `OPAQUE_SERVER_IDENTITY`, de 0 a 65535 bytes.
-     * @param  string  $context  Contexto del perfil; cadena vacía en producción (§2).
-     * @param  string|null  $clientIdentity  Identidad explícita del cliente, o `null`
-     *                                       para el default del RFC (`client_public_key`).
-     * @return ServerLoginResult `KE2` de 320 bytes y `ServerLoginState` de 128 bytes.
+     * @param  Ke1  $ke1  Client message, already parsed.
+     * @param  CredentialResponse  $credentialResponse  Output of {@see self::createCredentialResponse()}.
+     * @param  RegistrationRecord  $record  Real or fake record for the user.
+     * @param  string  $serverPrivateKey  Server static scalar, 32 bytes.
+     * @param  string  $serverIdentity  `OPAQUE_SERVER_IDENTITY`, 0 to 65535 bytes.
+     * @param  string  $context  Profile context; the empty string in production (§2).
+     * @param  string|null  $clientIdentity  Explicit client identity, or `null`
+     *                                       for the RFC default (`client_public_key`).
+     * @return ServerLoginResult 320-byte `KE2` and 128-byte `ServerLoginState`.
      *
-     * @throws InvalidMessageException Si `$serverPrivateKey` no mide 32 bytes.
-     * @throws InvalidPointException Si algún Diffie-Hellman recibe una entrada
-     *                               inválida o produce la identidad.
-     * @throws InvalidConfigurationException Si el contexto o alguna identidad
-     *                                       excede 65535 bytes.
-     * @throws OpaqueException Si `DeriveKeyPair` agota su contador.
+     * @throws InvalidMessageException If `$serverPrivateKey` is not 32 bytes long.
+     * @throws InvalidPointException If a Diffie-Hellman gets an invalid input or
+     *                               yields the identity.
+     * @throws InvalidConfigurationException If the context or an identity
+     *                                       exceeds 65535 bytes.
+     * @throws OpaqueException If `DeriveKeyPair` exhausts its counter.
      */
     public function authServerRespond(
         Ke1 $ke1,
@@ -185,20 +185,20 @@ final class ServerLogin
      * `ServerFinish` (RFC 9807 §6.2.4 / `docs/OPAQUE.md` §11.8).
      *
      * ```
-     * si !ct_equal(ke3.client_mac, state.expected_client_mac):
-     *     ClientAuthenticationError      // NO devolver session_key
+     * if !ct_equal(ke3.client_mac, state.expected_client_mac):
+     *     ClientAuthenticationError      // do NOT return session_key
      * return state.session_key
      * ```
      *
-     * La comparación es en tiempo constante (RFC 9807 §9.1). Todo `KE3` que no
-     * cuadre cuenta como intento fallido (§9.2): la session key sólo se
-     * devuelve cuando el MAC verifica.
+     * The comparison is constant time (RFC 9807 §9.1). Every `KE3` that does
+     * not match counts as a failed attempt (§9.2): the session key is only
+     * returned when the MAC verifies.
      *
-     * @param  Ke3  $ke3  Mensaje del cliente, 64 bytes.
-     * @param  ServerLoginState  $state  Estado persistido del handshake.
-     * @return string Session key de 64 bytes (`Nx`).
+     * @param  Ke3  $ke3  Client message, 64 bytes.
+     * @param  ServerLoginState  $state  Persisted handshake state.
+     * @return string 64-byte session key (`Nx`).
      *
-     * @throws AuthenticationFailedException Si el MAC del cliente no coincide.
+     * @throws AuthenticationFailedException If the client MAC does not match.
      */
     public static function serverFinish(Ke3 $ke3, ServerLoginState $state): string
     {

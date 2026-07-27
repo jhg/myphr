@@ -7,83 +7,70 @@ use App\Http\Controllers\Sharing\ShareOpenController;
 use App\Http\Controllers\Sharing\ShareReaderPageController;
 use App\Http\Middleware\NoStore;
 use App\Http\Middleware\WithoutLivewireAssets;
+use App\Providers\AppServiceProvider;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Route;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
-use Livewire\Livewire;
-use Livewire\Mechanisms\HandleRequests\RequireLivewireHeaders;
 
 /**
- * La raíz del sitio manda al panel, que es toda la aplicación.
+ * The site root sends you to the panel, which is the whole application.
  *
- * Antes servía `resources/views/welcome.blade.php`, la página de bienvenida de fábrica de Laravel:
- * texto en inglés sin `__()` —la única URL del proyecto sin traducir en ninguno de los tres
- * idiomas— y decenas de peldaños de rampa (`text-gray-900`, `bg-gray-200`, `text-white`) que
- * DESIGN.md prohíbe y que ensuciaban cualquier auditoría de tokens. No la enlazaba nada.
+ * It used to serve `resources/views/welcome.blade.php`, Laravel's stock welcome page: English text
+ * without `__()` —the only URL in the project not translated into any of the three languages— and
+ * dozens of ramp steps (`text-gray-900`, `bg-gray-200`, `text-white`) that DESIGN.md forbids and
+ * that polluted any token audit. Nothing linked to it.
  *
- * Va al panel y no directamente a la pantalla de acceso: si hay sesión, Filament lleva al inicio, y
- * si no la hay, redirige él mismo a `/phr/login`. Así la decisión de a dónde va una visita sin
- * sesión vive en un solo sitio.
+ * It goes to the panel and not straight to the login screen: if there is a session, Filament takes
+ * you home, and if there is none, it redirects to `/phr/login` itself. That way the decision of
+ * where a visit without a session goes lives in a single place.
  */
 Route::redirect('/', '/phr')->name('home');
 
 /**
- * El endpoint de Livewire, bajado al prefijo del panel.
- *
- * De serie vive en `/livewire-<hash>/update`, es decir **fuera** de `/phr`, y eso obligaba a que la
- * cookie de sesión tuviera `path=/`. Con `path=/`, el navegador la manda también en la navegación de
- * nivel superior a `/s/{link}` y en sus subrecursos: retirarle `StartSession` a esas rutas evita que
- * Laravel la lea y la escriba, pero no evita que viaje. Cualquier proxy, WAF, CDN o registro de
- * acceso por delante ve entonces, en la misma línea, el identificador del recorte y la cookie de una
- * cuenta concreta, que es exactamente la correlación que este diseño dice evitar (ADR 0011).
- *
- * Con la ruta aquí, **todo lo que necesita sesión cuelga de `/phr`** y la cookie puede acotarse
- * (`SESSION_PATH`, `config/session.php`). Lo vigila `tests/Feature/SessionCookieScopeTest.php`, que
- * recorre las rutas y falla si alguna con `StartSession` queda fuera del prefijo.
- *
- * El nombre acaba en `livewire.update` porque es así como `HandleRequests::findUpdateRoute()`
- * encuentra una ruta propia y la prefiere a la suya.
+ * Livewire's update endpoint is **not** declared here: it lives in
+ * {@see AppServiceProvider::registerPanelLivewireUpdateRoute()}, which explains why.
+ * The short version: route files do not run when routes are cached, and a Livewire update route that
+ * is only declared here silently reverts to its default path on any deploy that runs
+ * `php artisan optimize`.
  */
-Livewire::setUpdateRoute(fn ($handle) => Route::post('/phr/livewire/update', $handle)
-    ->middleware(['web', RequireLivewireHeaders::class])
-    ->name('phr.livewire.update'));
 
 /**
- * Lectura de un recorte compartido con un profesional (ADR 0011).
+ * Reading a clipping shared with a professional (ADR 0011).
  *
- * Las tres rutas viven aquí y no bajo `phr` porque el prefijo del panel es el de Filament
- * (`PhrPanelProvider::path('phr')`) y todo lo que se monta ahí pasa por `routes()`, que Filament
- * envuelve con el grupo `web` y por tanto con sesión y CSRF, incluidas sus rutas sin autenticar.
- * Esta pila es la contraria: sin cookie de sesión, sin CSRF y sin nada que identifique a quien lee.
+ * The three routes live here and not under `phr` because the panel prefix belongs to Filament
+ * (`PhrPanelProvider::path('phr')`) and everything mounted there goes through `routes()`, which
+ * Filament wraps with the `web` group and therefore with session and CSRF, including its own
+ * unauthenticated routes. This stack is the opposite: no session cookie, no CSRF and nothing that
+ * identifies the reader.
  *
- * El prefijo es `/s`, corto porque acaba en un QR —cada carácter son módulos de más en el código— y
- * mudo porque la URL se enseña en una consulta y se guarda en el historial de un dispositivo ajeno:
- * `/compartir-historial-medico/…` diría de qué va antes de que nadie la abra. El dominio ya delata
- * bastante por Certificate Transparency.
+ * The prefix is `/s`, short because it ends up in a QR code —every character is more modules in the
+ * code— and mute because the URL is shown during a consultation and stored in the history of
+ * someone else's device: `/share-medical-history/…` would say what it is about before anyone opens
+ * it. The domain already gives away enough through Certificate Transparency.
  *
- * Se retiran cinco middlewares del grupo `web`, uno a uno y de forma explícita:
+ * Five middlewares from the `web` group are removed, one by one and explicitly:
  *
- * * `StartSession`, `EncryptCookies` y `AddQueuedCookiesToResponse`, para que la respuesta no lleve
- *   ninguna cookie. Una cookie de sesión aquí sería un identificador estable de un profesional en su
- *   consulta, correlacionable entre los recortes de dos pacientes distintos.
- * * `PreventRequestForgery`, porque no hay sesión que falsificar y exigir un token obligaría a
- *   pintarlo en la página, que es tanto como no exigirlo.
- * * `ShareErrorsFromSession`, que sin sesión revienta.
+ * * `StartSession`, `EncryptCookies` and `AddQueuedCookiesToResponse`, so the response carries no
+ *   cookie at all. A session cookie here would be a stable identifier for a professional in their
+ *   practice, correlatable across the clippings of two different patients.
+ * * `PreventRequestForgery`, because there is no session to forge and requiring a token would mean
+ *   painting it on the page, which is as good as not requiring it.
+ * * `ShareErrorsFromSession`, which blows up without a session.
  *
- * `WithoutLivewireAssets` apaga la inyección automática del runtime de Livewire, que se cuela en
- * cualquier respuesta HTML de 200 sin que la plantilla lo pida: el porqué está en el propio
- * middleware.
+ * `WithoutLivewireAssets` turns off the automatic injection of the Livewire runtime, which sneaks
+ * into any 200 HTML response without the template asking for it: the why is in the middleware
+ * itself.
  *
- * `NoStore` sí se aplica: ya pone `Cache-Control: no-store`, `Pragma: no-cache` y
- * `Referrer-Policy: no-referrer`, esta última especialmente pertinente aquí, porque la URL lleva `S`
- * en el fragmento y el resto de la URL no debe viajar como `Referer` a ningún recurso externo.
+ * `NoStore` is applied: it sets `Cache-Control: no-store`, `Pragma: no-cache` and
+ * `Referrer-Policy: no-referrer`, the last one especially relevant here, because the URL carries `S`
+ * in the fragment and the rest of the URL must never travel as `Referer` to any external resource.
  *
- * Los limitadores por IP son hermanos de los de `OpaqueServiceProvider` y se declaran en
- * `AppServiceProvider`. No sustituyen al contador de intentos, que vive en columna: son dos frenos
- * distintos, uno contra el ruido y otro contra la fuerza bruta sobre el PIN.
+ * The per-IP limiters are siblings of the ones in `OpaqueServiceProvider` and are declared in
+ * `AppServiceProvider`. They do not replace the attempt counter, which lives in a column: they are
+ * two different brakes, one against noise and one against brute force on the PIN.
  */
 Route::prefix('s')
     ->name('share.')

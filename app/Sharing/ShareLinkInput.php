@@ -10,26 +10,26 @@ use App\Security\Opaque\Base64Url;
 use App\Security\Opaque\InvalidMessageException;
 
 /**
- * Lectura y validación del bloque `link` que llega en el cuerpo de las dos rutas que crean enlaces
- * (ADR 0011).
+ * Reading and validating the `link` block that arrives in the body of the two routes that create
+ * links (ADR 0011).
  *
- * Vive aparte porque lo necesitan crear un recorte y re-armar un enlace, y un criterio de validez
- * duplicado acaba divergiendo justo en la mitad que menos se prueba.
+ * It lives apart because both creating a clipping and re-arming a link need it, and a duplicated
+ * validity criterion ends up drifting exactly in the half that gets tested least.
  *
- * Todo lo que valida es **forma**: que el identificador sea un UUID, que la sal y el comprobante
- * midan lo que tienen que medir y vengan en base64url canónico, y que el envoltorio tenga forma de
- * sobre `v1.`. El contenido no se puede comprobar: `wrapper` está cifrado con una clave derivada de
- * `S`, que nunca llega al servidor, y `pin_tag` es indistinguible de 32 bytes al azar sin conocer el
- * PIN, que es exactamente lo que se pretende.
+ * Everything it validates is **shape**: that the identifier is a UUID, that the salt and the proof
+ * are the right length and come in canonical base64url, and that the wrapper has the shape of a
+ * `v1.` envelope. The content cannot be checked: `wrapper` is encrypted with a key derived from `S`,
+ * which never reaches the server, and `pin_tag` is indistinguishable from 32 random bytes without
+ * knowing the PIN, which is exactly the point.
  */
 final class ShareLinkInput
 {
     private function __construct() {}
 
     /**
-     * @param  mixed  $input  El valor bajo la clave `link` del cuerpo, sin suponer que es un array.
-     * @return array{id: string, pinSalt: string, pinTag: string, wrapper: string}|null Bytes ya
-     *                                                                                  decodificados, o `null` si algo no valida.
+     * @param  mixed  $input  The value under the `link` key of the body, without assuming it is an array.
+     * @return array{id: string, pinSalt: string, pinTag: string, wrapper: string}|null Already
+     *                                                                                  decoded bytes, or `null` if something does not validate.
      */
     public static function parse(mixed $input): ?array
     {

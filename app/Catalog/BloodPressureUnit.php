@@ -5,20 +5,20 @@ declare(strict_types=1);
 namespace App\Catalog;
 
 /**
- * Unidades UCUM (http://unitsofmeasure.org) propias de la tensión arterial.
+ * UCUM units (http://unitsofmeasure.org) specific to blood pressure.
  *
- * Se declaran aparte de {@see UcumUnit} en vez de añadirse a ese enum compartido porque esta
- * pantalla no toca ficheros que no sean suyos (varios agentes trabajan en paralelo sobre el
- * catálogo). El ADR 0005 (docs/adr/0005-clinical-vocabulary-loinc-snomed.md) fija los milímetros
- * de mercurio como `mm[Hg]` y los latidos por minuto como `/min`, verificados contra UCUM: a
- * diferencia de la glucemia, la tensión no ofrece una unidad alternativa que el usuario deba
- * elegir, así que cada caso es fijo para su magnitud y no hay selector en la pantalla.
+ * They are declared apart from {@see UcumUnit} instead of being added to that shared enum because
+ * this screen does not touch files that are not its own (several agents work on the catalog in
+ * parallel). ADR 0005 (docs/adr/0005-clinical-vocabulary-loinc-snomed.md) fixes millimetres of
+ * mercury as `mm[Hg]` and beats per minute as `/min`, both verified against UCUM: unlike blood
+ * glucose, blood pressure offers no alternative unit for the user to pick, so each case is fixed for
+ * its quantity and there is no selector on the screen.
  */
 enum BloodPressureUnit: string
 {
-    /** Milímetros de mercurio, unidad de la presión sistólica y diastólica. */
+    /** Millimetres of mercury, the unit of systolic and diastolic pressure. */
     case MillimetersOfMercury = 'mm[Hg]';
 
-    /** Latidos por minuto, unidad del pulso. */
+    /** Beats per minute, the unit of the pulse. */
     case BeatsPerMinute = '/min';
 }

@@ -1,33 +1,32 @@
 /**
- * Único sitio del proyecto que llama a `@serenity-kit/opaque` (Spec 0001 §10).
+ * The only place in the project that calls `@serenity-kit/opaque` (Spec 0001 §10).
  *
- * Encapsula tres cosas que, repartidas por las pantallas, acabarían divergiendo:
+ * It wraps three things that, spread over the screens, would end up diverging:
  *
- * 1. El **KSF congelado**. `keyStretching` va en `finishRegistration` y en `finishLogin`, nunca en
- *    los `start*` (§5, «Qué se rompe si se altera el orden»): pasarlo en el `start` se ignora en
- *    silencio y el registro queda atado al valor por defecto del paquete, de modo que todo login
- *    futuro falla como «contraseña incorrecta».
- * 2. El **`identifiers.server`**, que tiene que coincidir carácter a carácter con
- *    `OPAQUE_SERVER_IDENTITY` del servidor. Llega en un `<meta>` del `<head>` del panel.
- * 3. El **pinning** del perfil y de la clave pública del servidor antes de derivar nada (§5, paso
- *    5): en el registro no existe todavía `server_mac` y nada más autentica al servidor.
+ * 1. The **frozen KSF**. `keyStretching` goes in `finishRegistration` and in `finishLogin`, never
+ *    in the `start*` calls (§5, "What breaks if the order is altered"): passing it in the `start`
+ *    is ignored in silence and the registration stays tied to the package default, so every
+ *    future login fails as "wrong password".
+ * 2. The **`identifiers.server`**, which has to match character for character the server
+ *    `OPAQUE_SERVER_IDENTITY`. It arrives in a `<meta>` of the panel `<head>`.
+ * 3. The **pinning** of the profile and of the server public key before deriving anything (§5,
+ *    step 5): during registration there is no `server_mac` yet and nothing else authenticates the server.
  */
 
 import { client, ready } from '@serenity-kit/opaque';
 
 /**
- * Argon2id v0x13, m=64 MiB, t=3, p=4: los parámetros que nombra el perfil
- * `OPAQUE-R255-SHA512-A2ID-m65536-t3-p4-ctx0-v1` (`docs/OPAQUE.md` §2).
+ * Argon2id v0x13, m=64 MiB, t=3, p=4: the parameters named by the
+ * `OPAQUE-R255-SHA512-A2ID-m65536-t3-p4-ctx0-v1` profile (`docs/OPAQUE.md` §2).
  *
- * Congelado a propósito: si estos números cambian sin cambiar el nombre del perfil, el login de
- * todo el mundo se comporta como una contraseña incorrecta, sin ninguna pista de que el problema
- * es de configuración (§7).
+ * Frozen on purpose: if these numbers change without changing the profile name, everyone's login
+ * behaves like a wrong password, with no hint that the problem is configuration (§7).
  */
 export const KEY_STRETCHING = Object.freeze({
     'argon2id-custom': Object.freeze({ iterations: 3, memory: 65536, parallelism: 4 }),
 });
 
-/** Error de configuración del cliente. Se distingue de «contraseña incorrecta» a propósito. */
+/** Client configuration error. Told apart from "wrong password" on purpose. */
 export class OpaqueConfigurationError extends Error {
     /** @param {string} message */
     constructor(message) {
@@ -37,7 +36,7 @@ export class OpaqueConfigurationError extends Error {
 }
 
 /**
- * Lee un `<meta name="...">` del documento.
+ * Reads a `<meta name="...">` from the document.
  *
  * @param {string} name
  * @returns {string|null}
@@ -50,11 +49,11 @@ function meta(name) {
 }
 
 /**
- * Parámetros públicos que el `<head>` del panel publica.
+ * Public parameters published by the panel `<head>`.
  *
  * @returns {{profile: string, serverIdentity: string, serverPublicKey: string}}
- * @throws {OpaqueConfigurationError} Si falta alguno: sin ellos no hay pinning posible y derivar
- *         igualmente sería derivar contra un servidor no autenticado.
+ * @throws {OpaqueConfigurationError} If any is missing: without them there is no pinning possible
+ *         and deriving anyway would be deriving against an unauthenticated server.
  */
 export function opaqueParameters() {
     const profile = meta('phr-opaque-profile');
@@ -69,8 +68,8 @@ export function opaqueParameters() {
 }
 
 /**
- * Comprueba el perfil y la clave pública que devuelve el servidor contra los fijados en la página
- * (§5, paso 5). Se llama **antes** de `finishRegistration`, no después.
+ * Checks the profile and the public key the server returns against the ones pinned on the page
+ * (§5, step 5). It is called **before** `finishRegistration`, not after.
  *
  * @param {{profile?: string, serverPublicKey?: string}} response
  * @param {{profile: string, serverPublicKey: string}} pinned
@@ -87,13 +86,13 @@ export function assertPinned(response, pinned) {
     }
 }
 
-/** Resuelve cuando el WebAssembly del paquete está cargado (§5, paso 1). */
+/** Resolves when the package WebAssembly is loaded (§5, step 1). */
 export function opaqueReady() {
     return ready;
 }
 
 /**
- * `startRegistration` — sin `keyStretching` (§5, paso 3).
+ * `startRegistration` — without `keyStretching` (§5, step 3).
  *
  * @param {string} password
  * @returns {{clientRegistrationState: string, registrationRequest: string}}
@@ -103,7 +102,7 @@ export function startRegistration(password) {
 }
 
 /**
- * `finishRegistration` — aquí, y solo aquí, corre el Argon2id (§5, paso 6).
+ * `finishRegistration` — here, and only here, Argon2id runs (§5, step 6).
  *
  * @param {object} params
  * @param {string} params.password
@@ -128,7 +127,7 @@ export function finishRegistration({
 }
 
 /**
- * `startLogin` — sin `keyStretching` (§6.1, paso 3).
+ * `startLogin` — without `keyStretching` (§6.1, step 3).
  *
  * @param {string} password
  * @returns {{clientLoginState: string, startLoginRequest: string}}
@@ -138,11 +137,11 @@ export function startLogin(password) {
 }
 
 /**
- * `finishLogin` (§6.1, paso 5).
+ * `finishLogin` (§6.1, step 5).
  *
- * Devuelve `undefined` —nunca `null`— cuando la contraseña no cuadra, y **lanza** cuando la
- * configuración del KSF es inválida. Son dos casos distintos y quien llama tiene que separarlos:
- * el primero es un error de la persona, el segundo un error de despliegue.
+ * It returns `undefined` —never `null`— when the password does not match, and it **throws** when
+ * the KSF configuration is invalid. These are two different cases and the caller has to keep them
+ * apart: the first is a mistake by the person, the second a deployment mistake.
  *
  * @param {object} params
  * @param {string} params.password

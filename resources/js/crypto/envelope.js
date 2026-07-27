@@ -1,35 +1,35 @@
 /**
- * Sobre cifrado versionado del ADR 0004.
+ * Versioned encrypted envelope from ADR 0004.
  *
- * Transporte: `v1.` seguido de base64url sin padding del sobre binario.
+ * Transport: `v1.` followed by the binary envelope in base64url, no padding.
  *
  * ```
- * offset  bytes  campo
- *      0      1  versión del formato            (0x01)
- *      1      1  identificador de algoritmo     (0x01 = XChaCha20-Poly1305-IETF)
- *      2      1  identificador de KDF           (0x01 = HKDF-SHA-512)
- *      3      1  banderas                       (bit 0 = contenido rellenado)
- *      4      4  identificador de clave         (reservado, hoy siempre cero)
- *      8     32  sal de la derivación
+ * offset  bytes  field
+ *      0      1  format version                 (0x01)
+ *      1      1  algorithm identifier           (0x01 = XChaCha20-Poly1305-IETF)
+ *      2      1  KDF identifier                 (0x01 = HKDF-SHA-512)
+ *      3      1  flags                          (bit 0 = padded content)
+ *      4      4  key identifier                 (reserved, always zero today)
+ *      8     32  derivation salt
  *     40     24  nonce
  *     64      n  ciphertext || tag (16 bytes)
  * ```
  *
- * El identificador de clave se reserva aunque hoy no se use: la rotación y la
- * compartición futuras exigirían si no re-cifrar todo el histórico, y eso es
- * justamente lo que el servidor no puede hacer (ADR 0004).
+ * The key identifier is reserved even though nothing uses it today: future
+ * rotation and sharing would otherwise force re-encrypting the whole
+ * history, and that is exactly what the server cannot do (ADR 0004).
  *
- * **Relleno a tamaños fijos antes de cifrar** (256, 1024, 4096 bytes). La
- * longitud del ciphertext delata el contenido: sin relleno, el servidor
- * clasifica los registros por tamaño sin descifrar nada. El contenido se
- * prefija con su longitud en cuatro bytes big-endian y se rellena de ceros
- * hasta el primer tamaño que quepa.
+ * **Padding to fixed sizes before encrypting** (256, 1024, 4096 bytes). The
+ * ciphertext length gives the content away: without padding, the server
+ * sorts records by size without decrypting anything. The content is
+ * prefixed with its length in four big-endian bytes and padded with zeros
+ * up to the first size that fits.
  *
- * **Dato asociado**: lo aporta quien llama (ADR 0004 y ADR 0006 fijan qué
- * contexto es para cada funcionalidad). Entra en dos sitios a la vez: en el
- * `info` de la derivación de la subclave del sobre y en el dato asociado del
- * AEAD. La cabecera completa entra también en el dato asociado, de modo que
- * cambiar una bandera o el identificador de clave invalida el tag.
+ * **Associated data**: supplied by the caller (ADR 0004 and ADR 0006 fix
+ * which context belongs to each feature). It goes into two places at once:
+ * the `info` of the envelope subkey derivation and the AEAD associated
+ * data. The whole header goes into the associated data too, so changing a
+ * flag or the key identifier invalidates the tag.
  */
 
 import { xchacha20poly1305 } from '@noble/ciphers/chacha.js';
@@ -38,10 +38,10 @@ import { decodeBase64Url, encodeBase64Url } from './base64url.js';
 import { deriveKey, KDF_LABELS, KEY_LENGTH } from './kdf.js';
 import { zeroize } from './zeroize.js';
 
-/** Prefijo de transporte, comprobado también por el guardarraíl del ADR 0002. */
+/** Transport prefix, also checked by the ADR 0002 guard rail. */
 export const ENVELOPE_PREFIX = 'v1.';
 
-/** Versión del formato dentro del sobre binario. */
+/** Format version inside the binary envelope. */
 export const ENVELOPE_VERSION = 0x01;
 
 /** XChaCha20-Poly1305-IETF. */
@@ -50,7 +50,7 @@ export const ALGORITHM_XCHACHA20_POLY1305 = 0x01;
 /** HKDF-SHA-512. */
 export const KDF_HKDF_SHA512 = 0x01;
 
-/** Bandera: el contenido va rellenado a tamaño fijo. */
+/** Flag: the content is padded to a fixed size. */
 export const FLAG_PADDED = 0x01;
 
 export const KEY_ID_LENGTH = 4;
@@ -58,25 +58,25 @@ export const SALT_LENGTH = 32;
 export const NONCE_LENGTH = 24;
 export const TAG_LENGTH = 16;
 
-/** Cabecera: versión, algoritmo, KDF, banderas, id de clave, sal y nonce. */
+/** Header: version, algorithm, KDF, flags, key id, salt and nonce. */
 export const HEADER_LENGTH = 4 + KEY_ID_LENGTH + SALT_LENGTH + NONCE_LENGTH;
 
-/** Bytes que consume el prefijo de longitud del relleno. */
+/** Bytes taken by the length prefix of the padding. */
 const LENGTH_PREFIX = 4;
 
-/** Tamaños fijos de relleno del ADR 0004. */
+/** Fixed padding sizes from ADR 0004. */
 export const PADDED_SIZES = Object.freeze([256, 1024, 4096]);
 
-/** Contenido máximo que cabe en el mayor de los tamaños fijos. */
+/** Largest content that fits in the biggest fixed size. */
 export const MAX_PADDED_CONTENT = PADDED_SIZES[PADDED_SIZES.length - 1] - LENGTH_PREFIX;
 
 const TEXT_ENCODER = new TextEncoder();
 const TEXT_DECODER = new TextDecoder('utf-8', { fatal: true });
 
 /**
- * Error del sobre. No distingue manipulación de corrupción, porque el cliente
- * tampoco puede: el ADR 0004 exige tratarlo como error visible y nunca ocultar
- * el registro en silencio.
+ * Envelope error. It does not tell tampering from corruption, because the
+ * client cannot either: ADR 0004 demands treating it as a visible error and
+ * never hiding the record in silence.
  */
 export class EnvelopeError extends Error {
     /** @param {string} message */
@@ -116,11 +116,11 @@ function toBytes(value, name) {
 }
 
 /**
- * Rellena el contenido al primer tamaño fijo en que quepa.
+ * Pads the content to the first fixed size it fits in.
  *
  * @param {Uint8Array} content
- * @returns {Uint8Array} Longitud exactamente uno de `PADDED_SIZES`.
- * @throws {EnvelopeError} Si el contenido no cabe en el mayor de los tamaños.
+ * @returns {Uint8Array} Length exactly one of `PADDED_SIZES`.
+ * @throws {EnvelopeError} If the content does not fit in the biggest size.
  */
 export function pad(content) {
     const needed = content.length + LENGTH_PREFIX;
@@ -142,11 +142,11 @@ export function pad(content) {
 }
 
 /**
- * Quita el relleno.
+ * Removes the padding.
  *
  * @param {Uint8Array} padded
  * @returns {Uint8Array}
- * @throws {EnvelopeError} Si el tamaño o la longitud declarada no son válidos.
+ * @throws {EnvelopeError} If the size or the declared length is not valid.
  */
 export function unpad(padded) {
     if (!PADDED_SIZES.includes(padded.length)) {
@@ -177,17 +177,17 @@ function aeadAssociatedData(header, associatedData) {
 }
 
 /**
- * Cierra un sobre.
+ * Seals an envelope.
  *
  * @param {object} params
- * @param {Uint8Array} params.key Clave de 32 bytes (KEK, clave de sesión o
- *        clave por registro). No se usa directamente: se deriva una subclave
- *        con la sal del sobre.
- * @param {Uint8Array|string} params.plaintext Contenido en claro.
- * @param {Uint8Array|string} params.associatedData Contexto del registro
- *        (ADR 0004). Puede ser vacío, pero entonces el sobre no queda atado a
- *        nada y es movible entre filas.
- * @param {Uint8Array} [params.keyId] 4 bytes reservados; ceros por defecto.
+ * @param {Uint8Array} params.key 32-byte key (KEK, session key or per-record
+ *        key). It is not used directly: a subkey is derived with the salt of
+ *        the envelope.
+ * @param {Uint8Array|string} params.plaintext Content in the clear.
+ * @param {Uint8Array|string} params.associatedData Record context
+ *        (ADR 0004). It may be empty, but then the envelope is tied to
+ *        nothing and can be moved between rows.
+ * @param {Uint8Array} [params.keyId] 4 reserved bytes; zeros by default.
  * @returns {string} `v1.` + base64url.
  */
 export function seal({ key, plaintext, associatedData, keyId }) {
@@ -241,16 +241,16 @@ export function seal({ key, plaintext, associatedData, keyId }) {
 }
 
 /**
- * Abre un sobre.
+ * Opens an envelope.
  *
  * @param {object} params
- * @param {Uint8Array} params.key Misma clave que se usó al cerrarlo.
+ * @param {Uint8Array} params.key Same key used to seal it.
  * @param {string} params.envelope `v1.` + base64url.
- * @param {Uint8Array|string} params.associatedData Mismo contexto que al cerrarlo.
- * @returns {Uint8Array} Contenido en claro, sin relleno.
- * @throws {EnvelopeError} Prefijo, base64url, cabecera, tamaño o tag inválidos.
- *         El fallo no distingue manipulación de corrupción y nunca debe
- *         silenciarse (ADR 0004).
+ * @param {Uint8Array|string} params.associatedData Same context used to seal it.
+ * @returns {Uint8Array} Content in the clear, without padding.
+ * @throws {EnvelopeError} Invalid prefix, base64url, header, size or tag.
+ *         The failure does not tell tampering from corruption and must
+ *         never be silenced (ADR 0004).
  */
 export function open({ key, envelope, associatedData }) {
     assertKey(key);
@@ -320,7 +320,7 @@ export function open({ key, envelope, associatedData }) {
 }
 
 /**
- * Igual que `seal`, con contenido de texto.
+ * Same as `seal`, with text content.
  *
  * @param {{key: Uint8Array, plaintext: string, associatedData: Uint8Array|string, keyId?: Uint8Array}} params
  * @returns {string}
@@ -330,7 +330,7 @@ export function sealText(params) {
 }
 
 /**
- * Igual que `open`, decodificando el contenido como UTF-8 estricto.
+ * Same as `open`, decoding the content as strict UTF-8.
  *
  * @param {{key: Uint8Array, envelope: string, associatedData: Uint8Array|string}} params
  * @returns {string}

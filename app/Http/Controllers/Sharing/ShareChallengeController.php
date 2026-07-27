@@ -9,21 +9,21 @@ use App\Sharing\ShareLinkGate;
 use Illuminate\Http\JsonResponse;
 
 /**
- * `POST /s/{link}/challenge` (ADR 0011): primer paso de la lectura.
+ * `POST /s/{link}/challenge` (ADR 0011): first step of the read.
  *
- * Devuelve **solo la sal** con la que el cliente estira el PIN con Argon2id. Ni un byte del paquete
- * ni del envoltorio: entregarlos aquí, antes de validar el PIN, es exactamente el fallo que
- * invalidaba el diseño inicial, porque con el blob descargado un PIN de seis dígitos son un millón
- * de pruebas fuera de línea.
+ * It returns **only the salt** the client stretches the PIN with using Argon2id. Not a byte of the
+ * package or the wrapper: handing them out here, before validating the PIN, is exactly the flaw that
+ * invalidated the original design, because with the blob downloaded a six-digit PIN is a million
+ * offline guesses.
  *
- * Responde **siempre 200 y siempre con 16 bytes**, exista el enlace o no. Un 404 sobre un enlace
- * inexistente, caducado o revocado convertiría una lista de identificadores en un mapa de qué
- * recortes siguen vivos, y de paso diría que esa persona compartió algo. Aquí todavía no hay PIN que
- * valorar, así que las cuatro situaciones tienen que ser indistinguibles.
+ * It **always answers 200 and always with 16 bytes**, whether the link exists or not. A 404 on a
+ * non-existent, expired or revoked link would turn a list of identifiers into a map of which
+ * clippings are still alive, and along the way say that this person shared something. There is no
+ * PIN to judge yet here, so all four situations have to be indistinguishable.
  *
- * La ruta va sin sesión, sin CSRF y sin autenticación: quien la usa es un profesional sin cuenta.
- * Es `POST` y no `GET` para que el identificador del enlace no acabe en el historial de navegación
- * como una petición de recurso ni en ninguna caché intermedia.
+ * The route runs with no session, no CSRF and no authentication: whoever uses it is a professional
+ * without an account. It is `POST` and not `GET` so the link identifier does not end up in the
+ * browsing history as a resource request or in any intermediate cache.
  */
 final readonly class ShareChallengeController
 {

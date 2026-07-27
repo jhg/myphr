@@ -16,23 +16,23 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
 /**
- * Arranque del subsistema OPAQUE (`docs/OPAQUE.md` §12.2).
+ * Bootstrap of the OPAQUE subsystem (`docs/OPAQUE.md` §12.2).
  *
- * Registra {@see ServerSetup} como singleton construido desde `config/opaque.php`
- * con la validación estricta de esa clase (base64url canónico, longitudes
- * exactas, canonicidad del escalar y coherencia de la clave pública derivada),
- * y {@see RandomSource} sobre el CSPRNG del sistema.
+ * It registers {@see ServerSetup} as a singleton built from `config/opaque.php`
+ * with that class's strict validation (canonical base64url, exact lengths,
+ * canonicity of the scalar and consistency of the derived public key), and
+ * {@see RandomSource} on top of the system CSPRNG.
  *
- * Aquí **no se genera nada**: si falta configuración o no valida, el arranque
- * falla con {@see InvalidConfigurationException}. Producir el material estático
- * es tarea explícita de `php artisan opaque:setup`.
+ * **Nothing is generated here**: if configuration is missing or does not
+ * validate, boot fails with {@see InvalidConfigurationException}. Producing the
+ * static material is the explicit job of `php artisan opaque:setup`.
  *
- * La comprobación es anticipada en `boot()`, para que el fallo ocurra al
- * arrancar y no en la primera petición de login, y se limita al arranque HTTP:
- * la consola tiene que poder funcionar antes de que exista el setup
- * (`opaque:setup` es quien lo genera, y `key:generate` o `migrate` corren en
- * una instalación aún sin configurar). Las pruebas también quedan fuera,
- * porque construyen su propia configuración caso a caso.
+ * The check is done eagerly in `boot()`, so the failure happens at boot and not
+ * on the first login request, and it is limited to the HTTP boot: the console
+ * has to work before the setup exists (`opaque:setup` is what generates it, and
+ * `key:generate` or `migrate` run on an install that is not configured yet).
+ * Tests are also left out, because they build their own configuration case by
+ * case.
  */
 final class OpaqueServiceProvider extends ServiceProvider
 {
@@ -59,9 +59,9 @@ final class OpaqueServiceProvider extends ServiceProvider
     }
 
     /**
-     * Fuerza la validación del setup en el arranque HTTP (§12.2).
+     * Forces validation of the setup during the HTTP boot (§12.2).
      *
-     * @throws InvalidConfigurationException Si el setup falta o no valida.
+     * @throws InvalidConfigurationException If the setup is missing or does not validate.
      */
     public function boot(): void
     {
@@ -75,16 +75,16 @@ final class OpaqueServiceProvider extends ServiceProvider
     }
 
     /**
-     * Limitadores de tasa de las rutas de OPAQUE (Spec 0001 §4.1, §4.3 y §4.4;
+     * Rate limiters for the OPAQUE routes (Spec 0001 §4.1, §4.3 and §4.4;
      * `docs/OPAQUE.md` §13.3).
      *
-     * Las claves son siempre valores derivados: por IP, por **hash** del identificador normalizado y
-     * por la combinación de ambos. El login en claro no es nunca una clave de limitación, porque el
-     * almacén de caché acabaría conteniendo la lista de emails que alguien ha probado.
+     * The keys are always derived values: by IP, by **hash** of the normalized identifier and by the
+     * combination of both. The plaintext login is never a limiter key, because the cache store would
+     * end up holding the list of emails somebody has tried.
      *
-     * `login/finish` no recibe el `login`, así que su tercera clave es el `handshakeId`. Usar la
-     * misma clave vacía para todas sus peticiones crearía un único cubo compartido que cualquiera
-     * podría agotar para dejar sin login a todo el mundo.
+     * `login/finish` does not receive the `login`, so its third key is the `handshakeId`. Using the
+     * same empty key for all of its requests would create a single shared bucket anyone could drain
+     * to lock everybody out of login.
      */
     private function registerRateLimiters(): void
     {
@@ -99,11 +99,11 @@ final class OpaqueServiceProvider extends ServiceProvider
         });
 
         /**
-         * Alta pública (sin invitación): el endpoint crea la cuenta por sí mismo, así que es un
-         * oráculo de enumeración masiva por diseño (409 `login_taken` si el correo ya existe) y no
-         * hay token que reparta el abuso entre cubos, como en `opaque-registration`. La IP es la
-         * única clave posible, y el límite es más estricto que el de registro por invitación: cada
-         * intento aquí, además de consultar existencia, escribe una fila de usuario.
+         * Public signup (no invitation): the endpoint creates the account itself, so it is a mass
+         * enumeration oracle by design (409 `login_taken` if the email already exists) and there is
+         * no token to spread the abuse across buckets, as in `opaque-registration`. The IP is the
+         * only possible key, and the limit is stricter than the one for invited registration: every
+         * attempt here, on top of checking existence, writes a user row.
          */
         RateLimiter::for('opaque-registration-public', static function (Request $request): array {
             $ip = self::clientIp($request);
@@ -125,10 +125,10 @@ final class OpaqueServiceProvider extends ServiceProvider
         });
 
         /**
-         * Cambio de contraseña: la clave es el usuario autenticado, que aquí siempre existe, y es
-         * más estricto que el login porque cada intento cuesta al servidor un handshake completo y
-         * a la persona doce segundos de Argon2id. La IP acompaña para que una cuenta comprometida
-         * no sirva de ariete desde muchos sitios a la vez.
+         * Password change: the key is the authenticated user, who always exists here, and it is
+         * stricter than login because every attempt costs the server a full handshake and the
+         * person twelve seconds of Argon2id. The IP tags along so a compromised account cannot be
+         * used as a battering ram from many places at once.
          */
         RateLimiter::for('opaque-password-change', static function (Request $request): array {
             $ip = self::clientIp($request);
@@ -141,12 +141,12 @@ final class OpaqueServiceProvider extends ServiceProvider
         });
 
         /**
-         * `registration/finish` no recibe el `registrationToken` (el cliente solo manda
-         * `registrationId`, `registrationRecord`, `wrappedUserMasterKey` y `encryptedSettings`),
-         * así que no puede compartir limitador con `registration/start`: la clave por token sería
-         * la del hash de la cadena vacía para todo el mundo, un único cubo de 15/min que cualquiera
-         * agota desde una IP para dejar sin alta a toda la instalación. Misma forma que
-         * `opaque-login-finish`: la IP y el identificador del pendiente, que es lo que sí viaja.
+         * `registration/finish` does not receive the `registrationToken` (the client only sends
+         * `registrationId`, `registrationRecord`, `wrappedUserMasterKey` and `encryptedSettings`),
+         * so it cannot share a limiter with `registration/start`: the per-token key would be the
+         * hash of the empty string for everybody, a single 15/min bucket anyone can drain from one
+         * IP to lock the whole install out of signup. Same shape as `opaque-login-finish`: the IP
+         * and the pending row identifier, which is what does travel.
          */
         RateLimiter::for('opaque-registration-finish', static function (Request $request): array {
             $ip = self::clientIp($request);
@@ -170,10 +170,10 @@ final class OpaqueServiceProvider extends ServiceProvider
     }
 
     /**
-     * Lee un campo del cuerpo sin dar por hecho que es una cadena.
+     * Reads a body field without assuming it is a string.
      *
-     * El limitador corre **antes** que la validación del controlador, así que aquí llega el cuerpo
-     * tal cual: un `login[]=x` convertiría un `(string)` directo en un error 500.
+     * The limiter runs **before** the controller validation, so the body arrives here as is: a
+     * `login[]=x` would turn a plain `(string)` cast into a 500.
      */
     private static function stringInput(Request $request, string $key): string
     {

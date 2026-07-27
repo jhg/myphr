@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Security\Opaque;
 
 /**
- * `RegistrationRecord` — credencial persistida del usuario
+ * `RegistrationRecord` — the user's persisted credential
  * (RFC 9807 §5.1 / `docs/OPAQUE.md` §6.1).
  *
  * ```
@@ -15,32 +15,32 @@ namespace App\Security\Opaque;
  *   [96..191]  envelope[Nn+Nm = 32+64 = 96]
  * ```
  *
- * El objeto es inmutable y valida las longitudes exactas en el constructor.
- * La clave pública del cliente se valida como elemento del grupo porque
- * proviene del cliente (RFC 9807 §10.7); `masking_key` y `envelope` son
- * material opaco de longitud fija y no admiten más comprobación que su tamaño.
+ * The object is immutable and validates the exact lengths in the constructor.
+ * The client public key is validated as a group element because it comes from
+ * the client (RFC 9807 §10.7); `masking_key` and `envelope` are opaque
+ * fixed-length material and admit no check beyond their size.
  */
 final class RegistrationRecord
 {
-    /** Longitud total del record serializado, en bytes. */
+    /** Total length of the serialized record, in bytes. */
     public const int LENGTH = 192;
 
-    /** `Npk` — clave pública ristretto255, en bytes. */
+    /** `Npk` — ristretto255 public key, in bytes. */
     public const int PUBLIC_KEY_LENGTH = 32;
 
-    /** `Nh` — longitud de `masking_key`, en bytes. */
+    /** `Nh` — length of `masking_key`, in bytes. */
     public const int MASKING_KEY_LENGTH = 64;
 
-    /** `Nn + Nm` — longitud del envelope, en bytes. */
+    /** `Nn + Nm` — length of the envelope, in bytes. */
     public const int ENVELOPE_LENGTH = 96;
 
     /**
-     * @param  string  $clientPublicKey  Elemento ristretto255 serializado, 32 bytes.
-     * @param  string  $maskingKey  Clave de enmascarado, 64 bytes.
+     * @param  string  $clientPublicKey  Serialized ristretto255 element, 32 bytes.
+     * @param  string  $maskingKey  Masking key, 64 bytes.
      * @param  string  $envelope  `envelope_nonce || auth_tag`, 96 bytes.
      *
-     * @throws InvalidMessageException Si alguna longitud no es la exacta.
-     * @throws InvalidPointException Si `$clientPublicKey` no es un elemento válido.
+     * @throws InvalidMessageException If any length is not exact.
+     * @throws InvalidPointException If `$clientPublicKey` is not a valid element.
      */
     public function __construct(
         public readonly string $clientPublicKey,
@@ -55,12 +55,12 @@ final class RegistrationRecord
     }
 
     /**
-     * Parsea los 192 bytes de un `RegistrationRecord` con los offsets de §6.1.
+     * Parses the 192 bytes of a `RegistrationRecord` with the offsets from §6.1.
      *
-     * @param  string  $bytes  Record serializado, exactamente 192 bytes.
+     * @param  string  $bytes  Serialized record, exactly 192 bytes.
      *
-     * @throws InvalidMessageException Si la longitud total no es 192.
-     * @throws InvalidPointException Si la clave pública del cliente no valida.
+     * @throws InvalidMessageException If the total length is not 192.
+     * @throws InvalidPointException If the client public key does not validate.
      */
     public static function parse(string $bytes): self
     {
@@ -74,14 +74,14 @@ final class RegistrationRecord
     }
 
     /**
-     * Decodifica el record tal y como viaja por HTTP: base64url estricto y
-     * canónico, sin padding, de 256 caracteres (`docs/OPAQUE.md` §5).
+     * Decodes the record exactly as it travels over HTTP: strict, canonical
+     * base64url, no padding, 256 characters (`docs/OPAQUE.md` §5).
      *
-     * @param  string  $encoded  Cadena base64url recibida del cliente.
+     * @param  string  $encoded  base64url string received from the client.
      *
-     * @throws InvalidMessageException Si la codificación no es canónica o la
-     *                                 longitud binaria no es 192.
-     * @throws InvalidPointException Si la clave pública del cliente no valida.
+     * @throws InvalidMessageException If the encoding is not canonical or the
+     *                                 binary length is not 192.
+     * @throws InvalidPointException If the client public key does not validate.
      */
     public static function fromBase64Url(string $encoded): self
     {
@@ -89,7 +89,7 @@ final class RegistrationRecord
     }
 
     /**
-     * @return string Record en base64url sin padding, 256 caracteres (§5).
+     * @return string Record as base64url without padding, 256 characters (§5).
      */
     public function toBase64Url(): string
     {

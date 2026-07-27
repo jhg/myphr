@@ -6,7 +6,7 @@ use App\Crypto\EnvelopeValidator;
 use App\Crypto\ShareEnvelopeValidator;
 
 /**
- * ADR 0011: el paquete tiene su propio validador, hermano y separado del de los eventos.
+ * ADR 0011: the package has its own validator, a sibling of and separate from the events one.
  */
 function sharePackageOfSize(int $paddedSize): string
 {
@@ -24,14 +24,14 @@ it('acepta los cuatro escalones de la escalera propia', function (int $paddedSiz
     '4 MiB' => 4194304,
 ]);
 
-it('rechaza cualquier tamaño que no sea un escalón', function (): void {
+it('rejects any size that is not a ladder step', function (): void {
     expect(ShareEnvelopeValidator::isValid(sharePackageOfSize(65535)))->toBeFalse()
         ->and(ShareEnvelopeValidator::isValid(sharePackageOfSize(65537)))->toBeFalse();
 });
 
 /**
- * El prefijo distinto es lo que impide colar un paquete en la columna `payload` de un evento, o al
- * revés. Los dos validadores tienen que rechazarse mutuamente, o el guardarraíl no sirve de nada.
+ * The different prefix is what stops a package being slipped into the `payload` column of an event,
+ * or the other way round. Both validators have to reject each other, or the guardrail is worthless.
  */
 it('no cruza formatos con el validador de eventos', function (): void {
     $package = sharePackageOfSize(65536);
@@ -42,8 +42,8 @@ it('no cruza formatos con el validador de eventos', function (): void {
 });
 
 /**
- * La escalera de los eventos no se amplía: si lo hiciera, dejaría de acotar un registro suelto, que
- * es justamente para lo que existe (ADR 0004).
+ * The events ladder is not widened: if it were, it would stop bounding a single record, which is
+ * exactly what it exists for (ADR 0004).
  */
 it('deja intacta la escalera de los eventos', function (): void {
     expect(EnvelopeValidator::SIZES)->toBe([
@@ -53,23 +53,23 @@ it('deja intacta la escalera de los eventos', function (): void {
     ]);
 });
 
-it('rechaza base64url no canónico y cadenas que no son cadenas', function (mixed $value): void {
+it('rejects non-canonical base64url and values that are not strings', function (mixed $value): void {
     expect(ShareEnvelopeValidator::isValid($value))->toBeFalse();
 })->with([
     'sin prefijo' => fn (): string => substr(sharePackageOfSize(65536), 3),
     'prefijo de evento' => fn (): string => 'v1.'.substr(sharePackageOfSize(65536), 3),
-    'alfabeto estándar' => fn (): string => 's1.'.base64_encode(random_bytes(65536 + 80)),
-    'vacío' => '',
+    'standard alphabet' => fn (): string => 's1.'.base64_encode(random_bytes(65536 + 80)),
+    'empty' => '',
     'nulo' => null,
     'entero' => 42,
     'array' => [[]],
 ]);
 
 /**
- * El tope de tamaño existe para que el endpoint no sea alojamiento anónimo gratuito, y sale del
- * escalón mayor: subirlo obliga a añadir antes un escalón, y no al revés.
+ * The size cap exists so the endpoint is not free anonymous hosting, and it comes from the largest
+ * step: raising it means adding a step first, and not the other way round.
  */
-it('acota la longitud de transporte al mayor escalón', function (): void {
+it('bounds the transport length to the largest ladder step', function (): void {
     $largest = ShareEnvelopeValidator::HEADER_BYTES + ShareEnvelopeValidator::TAG_BYTES + 4194304;
     $expected = 3 + (int) ceil($largest / 3) * 4;
 

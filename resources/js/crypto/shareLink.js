@@ -1,33 +1,33 @@
 /**
- * El envoltorio del enlace: la capa pequeña del ADR 0011, la que ata un enlace
- * concreto a un paquete concreto.
+ * The link wrapper: the small layer of ADR 0011, the one that ties a given
+ * link to a given package.
  *
- * El envoltorio es un sobre corriente del ADR 0004 (`v1.`, `crypto/envelope.js`)
- * cifrado con `wrapKey` y cuyo contenido son los 32 bytes de `CK`. Su dato
- * asociado es:
+ * The wrapper is a plain ADR 0004 envelope (`v1.`, `crypto/envelope.js`)
+ * encrypted with `wrapKey`, whose content is the 32 bytes of `CK`. Its
+ * associated data is:
  *
  * ```
- * "myphr/share-link/v1" || 0x00 || linkId || 0x00 || canonicalDate(expiresAt) || 0x00 || sha512(paquete)
+ * "myphr/share-link/v1" || 0x00 || linkId || 0x00 || canonicalDate(expiresAt) || 0x00 || sha512(package)
  * ```
  *
- * **Para qué está ahí el hash del paquete.** Sin él, el servidor puede servir
- * el envoltorio del enlace A junto al paquete de B: `wrapKey` abre el
- * envoltorio, sale un `CK` válido, y con ese `CK`... no abriría el paquete de
- * B, cierto, pero sí abriría cualquier paquete que compartiese `CK`, y sobre
- * todo el emparejamiento queda al arbitrio del servidor, que es justo lo que un
- * dato asociado existe para impedir. Con el hash dentro, el envoltorio solo
- * descifra si viene acompañado del paquete exacto con el que se creó: cambiar
- * un byte del paquete, o cambiar el paquete entero por el de otra persona, hace
- * fallar el tag antes de que nadie enseñe nada en pantalla.
+ * **Why the package hash is in there.** Without it, the server can serve the
+ * wrapper of link A next to the package of B: `wrapKey` opens the wrapper, a
+ * valid `CK` comes out, and with that `CK`... it would not open B's package,
+ * true, but it would open any package that shared `CK`, and above all the
+ * pairing is left to the server's discretion, which is exactly what
+ * associated data exists to prevent. With the hash inside, the wrapper only
+ * decrypts when it comes with the exact package it was created with: change
+ * one byte of the package, or swap the whole package for someone else's, and
+ * the tag fails before anything is shown on screen.
  *
- * Ese es el segundo cierre del sistema, complementario al del propio paquete
- * (`shareEnvelope.js`), que está atado a `shareId` y al instante de generación.
- * Las dos capas tienen dato asociado, y ninguna de las dos se puede recolocar.
+ * That is the second lock of the system, complementary to the one of the
+ * package itself (`shareEnvelope.js`), which is tied to `shareId` and to the
+ * generation instant. Both layers have associated data, and neither can be moved.
  *
- * **Qué se hashea, exactamente**: los bytes UTF-8 de la cadena de transporte
- * tal cual llega, `s1.` incluido. Hashear lo que se recibe y no lo que se
- * decodifica evita que dos codificaciones distintas del mismo sobre den hashes
- * distintos, y hace la comprobación posible antes de decodificar nada.
+ * **What exactly is hashed**: the UTF-8 bytes of the transport string as it
+ * arrives, `s1.` included. Hashing what is received instead of what is
+ * decoded stops two different encodings of the same envelope from giving
+ * different hashes, and makes the check possible before decoding anything.
  */
 
 import { sha512 } from '@noble/hashes/sha2.js';
@@ -40,15 +40,15 @@ import { SEND_KEY_LENGTH, shareLinkContext } from './shareKeys.js';
 
 const TEXT_ENCODER = new TextEncoder();
 
-/** Longitud del hash del paquete dentro del dato asociado. */
+/** Length of the package hash inside the associated data. */
 export const PACKAGE_DIGEST_LENGTH = 64;
 
 /**
- * Hash del paquete tal cual viaja.
+ * Hash of the package exactly as it travels.
  *
  * @param {string} packageEnvelope `s1.` + base64url.
  * @returns {Uint8Array} 64 bytes.
- * @throws {ShareEnvelopeError} Si no es un paquete con su prefijo.
+ * @throws {ShareEnvelopeError} If it is not a package with its prefix.
  */
 export function sharePackageDigest(packageEnvelope) {
     if (typeof packageEnvelope !== 'string' || !packageEnvelope.startsWith(SHARE_PREFIX)) {
@@ -59,12 +59,12 @@ export function sharePackageDigest(packageEnvelope) {
 }
 
 /**
- * Dato asociado del envoltorio.
+ * Associated data of the wrapper.
  *
  * @param {object} params
- * @param {string} params.linkId UUIDv4 del enlace, el que viaja en la URL.
- * @param {Date|number|string} params.expiresAt Caducidad del enlace.
- * @param {string} params.packageEnvelope Paquete `s1.` con el que se empareja.
+ * @param {string} params.linkId Link UUIDv4, the one that travels in the URL.
+ * @param {Date|number|string} params.expiresAt Link expiry.
+ * @param {string} params.packageEnvelope `s1.` package it is paired with.
  * @returns {Uint8Array}
  */
 export function shareWrapperContext({ linkId, expiresAt, packageEnvelope }) {
@@ -76,15 +76,15 @@ export function shareWrapperContext({ linkId, expiresAt, packageEnvelope }) {
 }
 
 /**
- * Cierra el envoltorio: `CK` bajo `wrapKey`.
+ * Seals the wrapper: `CK` under `wrapKey`.
  *
  * @param {object} params
- * @param {Uint8Array} params.wrapKey Salida de `deriveWrapKey`.
+ * @param {Uint8Array} params.wrapKey Output of `deriveWrapKey`.
  * @param {Uint8Array} params.contentKey `CK`, 32 bytes.
  * @param {string} params.linkId
  * @param {Date|number|string} params.expiresAt
- * @param {string} params.packageEnvelope Paquete `s1.` que este enlace abre.
- * @returns {string} `v1.` + base64url, para la columna `share_links.wrapper`.
+ * @param {string} params.packageEnvelope `s1.` package this link opens.
+ * @returns {string} `v1.` + base64url, for the `share_links.wrapper` column.
  */
 export function sealShareWrapper({ wrapKey, contentKey, linkId, expiresAt, packageEnvelope }) {
     assertKey(contentKey, 'contentKey');
@@ -97,18 +97,18 @@ export function sealShareWrapper({ wrapKey, contentKey, linkId, expiresAt, packa
 }
 
 /**
- * Abre el envoltorio y devuelve `CK`.
+ * Opens the wrapper and returns `CK`.
  *
  * @param {object} params
  * @param {Uint8Array} params.wrapKey
- * @param {string} params.wrapper Columna `wrapper` tal cual la sirve el servidor.
+ * @param {string} params.wrapper `wrapper` column exactly as the server serves it.
  * @param {string} params.linkId
  * @param {Date|number|string} params.expiresAt
- * @param {string} params.packageEnvelope Paquete recibido en la misma respuesta.
+ * @param {string} params.packageEnvelope Package received in the same response.
  * @returns {Uint8Array} `CK`, 32 bytes.
- * @throws {import('./envelope.js').EnvelopeError} Si no abre: PIN erróneo, enlace
- *         o caducidad manipulados, o paquete que no es el suyo. No se silencia
- *         nunca (ADR 0004).
+ * @throws {import('./envelope.js').EnvelopeError} If it does not open: wrong PIN,
+ *         tampered link or expiry, or a package that is not its own. It is
+ *         never silenced (ADR 0004).
  */
 export function openShareWrapper({ wrapKey, wrapper, linkId, expiresAt, packageEnvelope }) {
     const contentKey = openEnvelope({
@@ -123,39 +123,39 @@ export function openShareWrapper({ wrapKey, wrapper, linkId, expiresAt, packageE
 }
 
 /**
- * Longitud del fragmento en bytes: `S` más el instante de generación.
+ * Fragment length in bytes: `S` plus the generation instant.
  *
- * **Por qué el instante viaja aquí y no lo pone el servidor.** Para abrir el
- * paquete hay que reconstruir su dato asociado, que es
+ * **Why the instant travels here and is not set by the server.** Opening the
+ * package means rebuilding its associated data, which is
  * `"myphr/share/v1" || 0x00 || shareId || 0x00 || canonicalDate(generatedAt)`,
- * y eso hay que tenerlo **antes** de descifrar. El `shareId` es una columna y el
- * servidor lo sabe; el instante de generación no lo sabe, porque lo elige el
- * cliente al armar el recorte y ninguna columna lo guarda: el ADR 0011 enumera
- * las columnas de `shares` una a una y añadir un `generated_at` sería añadir una
- * fecha nueva en claro a una tabla que se diseñó para no tener ninguna que no
- * hiciera falta.
+ * and that has to be known **before** decrypting. `shareId` is a column and
+ * the server knows it; the generation instant it does not know, because the
+ * client picks it while building the clipping and no column stores it: ADR
+ * 0011 lists the columns of `shares` one by one, and adding a `generated_at`
+ * would add a new date in the clear to a table designed to carry no date it
+ * did not need.
  *
- * Así que va en el fragmento, que es el único canal que no pasa por el servidor.
- * Cuesta once caracteres de URL (43 → 54 en base64url) y a cambio el lector no
- * depende de que el servidor diga la verdad sobre nada de lo que entra en la
- * criptografía. Ocho bytes big-endian con el epoch en milisegundos: `Date` de
- * JavaScript no tiene más precisión, y `canonicalDate` de un epoch en
- * milisegundos y de su `Date` dan exactamente la misma cadena.
+ * So it travels in the fragment, the only channel that never reaches the
+ * server. It costs eleven URL characters (43 → 54 in base64url) and in
+ * exchange the reader does not depend on the server telling the truth about
+ * anything that enters the crypto. Eight big-endian bytes with the epoch in
+ * milliseconds: JavaScript `Date` has no more precision, and `canonicalDate`
+ * of an epoch in milliseconds and of its `Date` give exactly the same string.
  */
 export const SEND_FRAGMENT_LENGTH = SEND_KEY_LENGTH + 8;
 
 /**
- * Fragmento de la URL: `S` y el instante de generación del recorte, juntos.
+ * URL fragment: `S` and the generation instant of the clipping, together.
  *
- * El fragmento no llega al servidor, y por eso `S` puede ir ahí; lo que sí
- * alcanza son el historial del navegador del profesional, su sincronización en
- * la nube y las capturas de pantalla (ADR 0011, "Consequences"). Este códec no
- * arregla nada de eso: solo garantiza que los bytes van y vuelven idénticos.
+ * The fragment never reaches the server, which is why `S` can travel there;
+ * what it does reach is the professional's browser history, its cloud sync
+ * and screenshots (ADR 0011, "Consequences"). This codec fixes none of that:
+ * it only guarantees the bytes go and come back identical.
  *
  * @param {object} params
  * @param {Uint8Array} params.sendKey `S`, 32 bytes.
- * @param {Date|number} params.generatedAt Instante de generación del recorte.
- * @returns {string} base64url, sin `#`.
+ * @param {Date|number} params.generatedAt Generation instant of the clipping.
+ * @returns {string} base64url, without `#`.
  */
 export function encodeShareFragment({ sendKey, generatedAt }) {
     assertKey(sendKey, 'sendKey');
@@ -175,10 +175,10 @@ export function encodeShareFragment({ sendKey, generatedAt }) {
 }
 
 /**
- * @param {string} encoded Lo que venía en `location.hash`, ya sin `#`.
+ * @param {string} encoded What came in `location.hash`, already without `#`.
  * @returns {{sendKey: Uint8Array, generatedAt: Date}}
- * @throws {import('./base64url.js').Base64UrlError} Si no es base64url canónico.
- * @throws {ShareEnvelopeError} Si no mide lo que tiene que medir.
+ * @throws {import('./base64url.js').Base64UrlError} If it is not canonical base64url.
+ * @throws {ShareEnvelopeError} If its length is not the expected one.
  */
 export function decodeShareFragment(encoded) {
     const bytes = decodeBase64Url(encoded, 'share fragment');

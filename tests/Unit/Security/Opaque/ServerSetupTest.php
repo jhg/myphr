@@ -11,12 +11,12 @@ use App\Security\Opaque\Ristretto255;
 use App\Security\Opaque\ServerSetup;
 
 /**
- * Carga y validación estricta del setup del servidor
- * (`docs/OPAQUE.md` §12.2), incluidos los casos negativos de §20.6
- * «setup incorrecto» y «escalar no canónico en el setup».
+ * Loading and strict validation of the server setup
+ * (`docs/OPAQUE.md` §12.2), including the §20.6 negative cases
+ * "bad setup" and "non-canonical scalar in the setup".
  */
 
-/** Escalar estático del servidor derivado de forma determinista (§12.1). */
+/** Server static scalar derived deterministically (§12.1). */
 function setupPrivateKey(): string
 {
     [$privateKey] = Oprf::deriveDiffieHellmanKeyPair(str_repeat("\x07", 32));
@@ -37,7 +37,7 @@ function setupFakeRecord(): RegistrationRecord
 }
 
 /**
- * Configuración válida equivalente a la de `config/opaque.php`.
+ * Valid configuration equivalent to the one in `config/opaque.php`.
  *
  * @param  array<string, mixed>  $overrides
  * @return array<string, mixed>

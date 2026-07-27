@@ -1,23 +1,23 @@
 /**
- * Vocabulario de tipos de evento y filtro por tipo (ADR 0006).
+ * Vocabulary of event types and filtering by type (ADR 0006).
  *
- * **Por qué vive fuera de cualquier pantalla.** Los mismos seis tipos gobiernan el panel del
- * paciente, el lector del profesional y la vista previa de la pantalla de compartir. Mientras la
- * lista y el filtro estuvieron dentro de `dashboardPage.js`, cualquier consumidor nuevo tenía que
- * copiarlos, y dos copias de una lista de tipos clínicos divergen en cuanto se añade el séptimo:
- * una pantalla dejaría de enseñar un tipo de registro sin que nadie lo note, que es la peor clase de
- * fallo en un historial (una ausencia se lee como «no hay», no como «no se pinta»).
+ * **Why it lives outside any screen.** The same six types govern the patient panel, the
+ * professional's reader and the preview of the share screen. While the list and the filter lived
+ * inside `dashboardPage.js`, any new consumer had to copy them, and two copies of a list of
+ * clinical types diverge as soon as a seventh is added: one screen would stop showing a record
+ * type with nobody noticing, which is the worst kind of failure in a history (an absence reads as
+ * "there is none", not as "it is not painted").
  *
- * Aquí no se importa nada de Livewire, ni de `$wire`, ni del DOM: son datos y funciones puras.
+ * Nothing of Livewire, of `$wire` or of the DOM is imported here: these are data and pure functions.
  */
 
 /**
- * Tipos de evento conocidos, en el orden en que se ofrecen en los filtros.
+ * Known event types, in the order they are offered in the filters.
  *
- * Los tokens son los que viajan dentro del sobre cifrado (ADR 0006) y son el contrato con los
- * `<input type="checkbox">` que renderiza `resources/views/phr/pages/dashboard.blade.php`: allí se
- * escribe el mismo token en el `x-model`, porque las opciones las pinta el servidor (el morph del
- * DOM borraría cualquier opción escrita por JavaScript).
+ * The tokens are the ones that travel inside the encrypted envelope (ADR 0006) and they are the
+ * contract with the `<input type="checkbox">` that `resources/views/phr/pages/dashboard.blade.php`
+ * renders: the same token is written there in the `x-model`, because the server paints the options
+ * (the DOM morph would wipe any option written by JavaScript).
  *
  * @type {Readonly<list<string>>}
  */
@@ -31,11 +31,11 @@ export const EVENT_TYPES = Object.freeze([
 ]);
 
 /**
- * Estado inicial del filtro: **todos los tipos marcados**.
+ * Initial state of the filter: **every type ticked**.
  *
- * Estrenar una pantalla con algún tipo desmarcado escondería registros que existen sin que nadie lo
- * haya pedido, y en un historial clínico «no aparece» se lee como «se ha perdido». Quien quiera
- * mirar un solo tipo lo desmarca; nadie tiene que descubrir por qué le falta algo.
+ * Opening a screen with a type unticked would hide records that exist without anybody asking, and
+ * in a clinical history "it does not show" reads as "it has been lost". Whoever wants to look at a
+ * single type unticks the rest; nobody should have to discover why something is missing.
  *
  * @returns {Record<string, boolean>}
  */
@@ -44,7 +44,7 @@ export function defaultSelectedTypes() {
 }
 
 /**
- * Tipos marcados ahora mismo, en el orden de {@see EVENT_TYPES}.
+ * Types ticked right now, in the order of {@see EVENT_TYPES}.
  *
  * @param {Record<string, boolean>} selectedTypes
  * @returns {list<string>}
@@ -54,12 +54,12 @@ export function selectedTypeTokens(selectedTypes) {
 }
 
 /**
- * Deja solo los eventos de los tipos marcados.
+ * Keeps only the events of the ticked types.
  *
- * No cuesta ninguna petición ni ningún descifrado: los eventos llegan aquí ya abiertos, porque el
- * servidor no puede filtrar por tipo (ADR 0006) y baja de todos modos todos los del rango. Por eso
- * el filtro se aplica al pintar y no al pedir, y por eso vale igual para el lector, que no tiene
- * servidor al que pedir nada.
+ * It costs no request and no decryption: the events arrive here already open, because the server
+ * cannot filter by type (ADR 0006) and brings down all of them in the range anyway. That is why
+ * the filter is applied when painting and not when asking, and why it serves the reader equally,
+ * which has no server to ask anything of.
  *
  * @param {list<{type?: string}>} events
  * @param {Record<string, boolean>} selectedTypes

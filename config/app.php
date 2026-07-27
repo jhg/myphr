@@ -91,11 +91,11 @@ return [
     | Supported Locales
     |--------------------------------------------------------------------------
     |
-    | Lista cerrada de idiomas que la interfaz sabe hablar, con el de serie primero. No viene de
-    | env a propósito: cada idioma exige etiquetas traducidas en los enums de App\Catalog, así que
-    | añadir uno es un cambio de código y no de configuración de despliegue. La lista vive en la
-    | constante para que esos enums puedan resolver una etiqueta sin contenedor; aquí se expone
-    | para quien la busque donde es normal buscarla. Nada fuera de ella llega a App::setLocale().
+    | Closed list of the languages the interface speaks, with the default one first. It deliberately
+    | does not come from env: every language needs translated labels in the App\Catalog enums, so
+    | adding one is a code change, not a deployment setting. The list lives in the constant so those
+    | enums can resolve a label without the container; it is exposed here for whoever looks for it
+    | where you would normally look. Nothing outside this list ever reaches App::setLocale().
     |
     */
 

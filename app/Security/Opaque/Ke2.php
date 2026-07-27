@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Security\Opaque;
 
 /**
- * `KE2` — respuesta del servidor al `KE1`
- * (RFC 9807 §6.1 / `docs/OPAQUE.md` §6.2 y §11.6).
+ * `KE2` — the server's answer to `KE1`
+ * (RFC 9807 §6.1 / `docs/OPAQUE.md` §6.2 and §11.6).
  *
  * ```
  * KE2 (320 bytes)
@@ -14,12 +14,12 @@ namespace App\Security\Opaque;
  *   [192..319]  auth_response (128)
  * ```
  *
- * Su longitud es fija e independiente de que el usuario exista o no
+ * Its length is fixed and independent of whether the user exists
  * (`docs/OPAQUE.md` §13.3, §20.8).
  */
 final class Ke2
 {
-    /** Longitud total del mensaje serializado, en bytes. */
+    /** Total length of the serialized message, in bytes. */
     public const int LENGTH = 320;
 
     public function __construct(
@@ -28,12 +28,12 @@ final class Ke2
     ) {}
 
     /**
-     * Parsea los 320 bytes de `KE2` con los offsets de §6.2.
+     * Parses the 320 bytes of `KE2` with the offsets from §6.2.
      *
-     * @param  string  $bytes  Mensaje serializado, exactamente 320 bytes.
+     * @param  string  $bytes  Serialized message, exactly 320 bytes.
      *
-     * @throws InvalidMessageException Si la longitud total no es 320.
-     * @throws InvalidPointException Si `server_public_keyshare` no valida.
+     * @throws InvalidMessageException If the total length is not 320.
+     * @throws InvalidPointException If `server_public_keyshare` does not validate.
      */
     public static function parse(string $bytes): self
     {
@@ -46,14 +46,14 @@ final class Ke2
     }
 
     /**
-     * Decodifica el mensaje tal y como viaja por HTTP: base64url estricto y
-     * canónico, sin padding, de 427 caracteres (`docs/OPAQUE.md` §5).
+     * Decodes the message exactly as it travels over HTTP: strict, canonical
+     * base64url, no padding, 427 characters (`docs/OPAQUE.md` §5).
      *
-     * @param  string  $encoded  Cadena base64url.
+     * @param  string  $encoded  base64url string.
      *
-     * @throws InvalidMessageException Si la codificación no es canónica o la
-     *                                 longitud binaria no es 320.
-     * @throws InvalidPointException Si `server_public_keyshare` no valida.
+     * @throws InvalidMessageException If the encoding is not canonical or the
+     *                                 binary length is not 320.
+     * @throws InvalidPointException If `server_public_keyshare` does not validate.
      */
     public static function fromBase64Url(string $encoded): self
     {
@@ -61,7 +61,7 @@ final class Ke2
     }
 
     /**
-     * @return string Mensaje en base64url sin padding, 427 caracteres (§5).
+     * @return string Message as base64url without padding, 427 characters (§5).
      */
     public function toBase64Url(): string
     {

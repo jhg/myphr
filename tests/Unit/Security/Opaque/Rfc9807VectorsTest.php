@@ -19,17 +19,17 @@ use Tests\Unit\Security\Opaque\Support\QueuedRandomSource;
 use Tests\Unit\Security\Opaque\Support\Rfc9807Vectors;
 
 /**
- * Validación contra los vectores oficiales del Apéndice C de RFC 9807
+ * Validation against the official Appendix C vectors of RFC 9807
  * (`docs/OPAQUE.md` §20.2).
  *
- * Sólo se usan los del perfil `ristretto255-SHA512`: C.1.1, C.1.2 y C.2.1.
- * Los vectores fijan `KSF: Identity` y `Context: "OPAQUE-POC"`, de modo que el
- * contexto se pasa explícitamente en lugar de tomarlo de `ServerSetup`, que en
- * este perfil lo obliga a ser vacío.
+ * Only the `ristretto255-SHA512` profile ones are used: C.1.1, C.1.2 and C.2.1.
+ * The vectors fix `KSF: Identity` and `Context: "OPAQUE-POC"`, so the context is
+ * passed explicitly instead of taken from `ServerSetup`, which in this profile
+ * forces it to be empty.
  *
- * La aleatoriedad del servidor (`masking_nonce`, `server_nonce`,
- * `server_keyshare_seed`, en ese orden de consumo) se inyecta con
- * {@see QueuedRandomSource}; no se mockea ninguna función global.
+ * Server randomness (`masking_nonce`, `server_nonce`, `server_keyshare_seed`, in
+ * that order of consumption) is injected with {@see QueuedRandomSource}; no
+ * global function is mocked.
  */
 
 /**
@@ -41,12 +41,12 @@ function expectBytes(string $actual, string $expected, string $label): void
 }
 
 /**
- * Reproduce la parte de cliente del registro que los vectores publican
- * (RFC 9807 §5.2.1 y §5.2.3), con `Stretch()` = identidad.
+ * Reproduces the client side of the registration that the vectors publish
+ * (RFC 9807 §5.2.1 and §5.2.3), with `Stretch()` = identity.
  *
- * Sirve para localizar una divergencia antes de llegar al AKE: si
- * `randomized_password` ya no cuadra, el fallo está en el OPRF o en HKDF, no
- * en el key schedule.
+ * It helps locate a divergence before reaching the AKE: if
+ * `randomized_password` already does not match, the fault is in the OPRF or in
+ * HKDF, not in the key schedule.
  *
  * @param  array<string, string>  $vector
  */
@@ -70,7 +70,7 @@ function assertRegistrationVector(array $vector): RegistrationRecord
     expectBytes($response->serialize(), $vector['registration_response'], 'registration_response');
 
     // RFC 9807 §5.2.3: randomized_password = Extract("", oprf_output || Stretch(oprf_output)).
-    // El vector usa KSF = Identity, así que Stretch(x) = x.
+    // The vector uses KSF = Identity, so Stretch(x) = x.
     $oprfOutput = Oprf::finalize(
         $vector['password'],
         $vector['blind_registration'],
@@ -105,11 +105,11 @@ function assertRegistrationVector(array $vector): RegistrationRecord
 }
 
 /**
- * Recorre el login del servidor contra un vector y comprueba, en orden,
- * los intermedios que el RFC publica antes de comparar `KE2`.
+ * Walks the server login against a vector and checks, in order, the
+ * intermediate values the RFC publishes before comparing `KE2`.
  *
  * @param  array<string, string>  $vector
- * @param  string|null  $clientIdentity  `null` aplica el default de RFC 9807 §4.
+ * @param  string|null  $clientIdentity  `null` applies the RFC 9807 §4 default.
  */
 function assertLoginVector(
     array $vector,
@@ -156,8 +156,8 @@ function assertLoginVector(
         'credential_response'
     );
 
-    // 3DH del servidor (RFC 9807 §6.4.4) recalculado aparte para poder
-    // comparar el preamble y las claves intermedias del vector.
+    // The server 3DH (RFC 9807 §6.4.4) recomputed separately so we can compare
+    // the preamble and the vector's intermediate keys.
     [$ephemeralPrivateKey, $serverPublicKeyshare] = Oprf::deriveDiffieHellmanKeyPair(
         $vector['server_keyshare_seed']
     );
@@ -229,8 +229,8 @@ it('reproduces RFC 9807 C.1.1 (real, ristretto255-SHA512, default identities)', 
 
     $record = assertRegistrationVector($vector);
 
-    // Sin client_identity ni server_identity: RFC 9807 §4 manda usar las
-    // claves públicas como defaults.
+    // No client_identity and no server_identity: RFC 9807 §4 says to use the
+    // public keys as defaults.
     assertLoginVector($vector, $record, null, $vector['server_public_key']);
 });
 
@@ -245,7 +245,7 @@ it('reproduces RFC 9807 C.1.2 (real, ristretto255-SHA512, explicit identities)',
 it('reproduces RFC 9807 C.2.1 (fake record for an unregistered user)', function (): void {
     $vector = Rfc9807Vectors::fakeVector1();
 
-    // RFC 9807 §6.3.2.2: el envelope del registro ficticio son Nn + Nm bytes
+    // RFC 9807 §6.3.2.2: the fake registration envelope is Nn + Nm zero bytes;
     // cero; el vector no lo lista precisamente por eso (`docs/OPAQUE.md` §13.2).
     $record = new RegistrationRecord(
         $vector['client_public_key'],

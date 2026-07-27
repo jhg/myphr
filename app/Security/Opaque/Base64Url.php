@@ -5,27 +5,26 @@ declare(strict_types=1);
 namespace App\Security\Opaque;
 
 /**
- * Base64 URL-safe **sin padding** con decodificación estricta
+ * URL-safe Base64 **without padding** and with strict decoding
  * (`docs/OPAQUE.md` §5).
  *
- * Es el único formato de transporte HTTP de los mensajes OPAQUE. La
- * estrictez no es una preferencia: `@serenity-kit/opaque` codifica con
- * `URL_SAFE_NO_PAD` y decodifica con `DecodePaddingMode::RequireNone`, así
- * que aceptar variantes rompería la interoperabilidad además de admitir
- * múltiples representaciones del mismo mensaje.
+ * It is the only HTTP transport format for OPAQUE messages. Strictness is not
+ * a preference: `@serenity-kit/opaque` encodes with `URL_SAFE_NO_PAD` and
+ * decodes with `DecodePaddingMode::RequireNone`, so accepting variants would
+ * break interoperability on top of allowing several representations of the
+ * same message.
  *
- * Reglas aplicadas al decodificar:
+ * Rules applied when decoding:
  *
- * 1. Alfabeto `A-Z a-z 0-9 - _` únicamente: se rechazan `=`, espacios,
- *    saltos de línea y el alfabeto Base64 estándar (`+`, `/`).
- * 2. Longitud congruente: `strlen % 4 === 1` es imposible en Base64 y se
- *    rechaza.
- * 3. Canonicidad: se vuelve a codificar el resultado y se exige igualdad
- *    exacta con la entrada, lo que rechaza los bits sobrantes distintos de
- *    cero en el último carácter.
+ * 1. Alphabet `A-Z a-z 0-9 - _` only: `=`, spaces, line breaks and the
+ *    standard Base64 alphabet (`+`, `/`) are rejected.
+ * 2. Congruent length: `strlen % 4 === 1` is impossible in Base64 and is
+ *    rejected.
+ * 3. Canonicity: the result is re-encoded and must match the input exactly,
+ *    which rejects non-zero leftover bits in the last character.
  *
- * `base64_decode(..., strict: true)` de PHP no cubre ninguna de las tres:
- * acepta padding, ignora espacios en blanco y admite bits sobrantes.
+ * PHP's `base64_decode(..., strict: true)` covers none of the three: it
+ * accepts padding, ignores whitespace and allows leftover bits.
  */
 final class Base64Url
 {
@@ -35,10 +34,10 @@ final class Base64Url
     private const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 
     /**
-     * Codifica bytes binarios en base64url sin padding.
+     * Encodes binary bytes as base64url without padding.
      *
-     * @param  string  $binary  Cadena binaria de cualquier longitud (puede ser vacía).
-     * @return string Sólo caracteres del alfabeto base64url, sin `=`.
+     * @param  string  $binary  Binary string of any length (may be empty).
+     * @return string Only characters from the base64url alphabet, no `=`.
      */
     public static function encode(string $binary): string
     {
@@ -46,15 +45,16 @@ final class Base64Url
     }
 
     /**
-     * Decodifica base64url sin padding de forma estricta y canónica.
+     * Decodes base64url without padding, strictly and canonically.
      *
-     * @param  string  $encoded  Cadena recibida por HTTP.
-     * @param  string  $field  Nombre del campo, sólo para el mensaje de error.
-     * @return string Bytes decodificados.
+     * @param  string  $encoded  String received over HTTP.
+     * @param  string  $field  Field name, only for the error message.
+     * @return string Decoded bytes.
      *
-     * @throws InvalidMessageException Si hay caracteres fuera del alfabeto,
-     *                                 padding, espacios, longitud imposible o
-     *                                 la codificación no es canónica.
+     * @throws InvalidMessageException If there are characters outside the
+     *                                 alphabet, padding, whitespace, an
+     *                                 impossible length, or the encoding is not
+     *                                 canonical.
      */
     public static function decode(string $encoded, string $field = 'value'): string
     {
@@ -80,19 +80,19 @@ final class Base64Url
     }
 
     /**
-     * Decodifica y exige una longitud binaria exacta.
+     * Decodes and requires an exact binary length.
      *
-     * Aplica la regla de `docs/OPAQUE.md` §5 de rechazar cualquier longitud
-     * inesperada **antes** de tocar criptografía: los tamaños de los mensajes
-     * están fijados en §6 y no hay ninguno de longitud variable.
+     * It applies the `docs/OPAQUE.md` §5 rule of rejecting any unexpected
+     * length **before** touching cryptography: message sizes are fixed in §6
+     * and none of them is variable length.
      *
-     * @param  string  $encoded  Cadena recibida por HTTP.
-     * @param  int<0, max>  $expectedLength  Longitud binaria exigida, en bytes.
-     * @param  string  $field  Nombre del campo, sólo para el mensaje de error.
-     * @return string Bytes decodificados, de longitud exactamente `$expectedLength`.
+     * @param  string  $encoded  String received over HTTP.
+     * @param  int<0, max>  $expectedLength  Required binary length, in bytes.
+     * @param  string  $field  Field name, only for the error message.
+     * @return string Decoded bytes, exactly `$expectedLength` long.
      *
-     * @throws InvalidMessageException Si la codificación es inválida o la
-     *                                 longitud no coincide.
+     * @throws InvalidMessageException If the encoding is invalid or the length
+     *                                 does not match.
      */
     public static function decodeExactly(string $encoded, int $expectedLength, string $field = 'value'): string
     {

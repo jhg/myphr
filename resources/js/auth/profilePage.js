@@ -1,34 +1,34 @@
 /**
- * Componente Alpine de la página de perfil (ADR 0002, ADR 0004, ADR 0007, ADR 0009).
+ * Alpine component of the profile page (ADR 0002, ADR 0004, ADR 0007, ADR 0009).
  *
- * El contrato del DOM lo fija `resources/views/phr/pages/profile.blade.php`: nada de `wire:model`
- * (ADR 0002), los campos se leen por `x-ref` y las URL llegan por `data-*` del formulario. Aquí no
- * hay ninguna llamada a Livewire: los ajustes suben ya cifrados a `PUT /phr/settings` y el cambio de
- * contraseña habla directamente con las rutas de `/phr/auth/password/*`.
+ * The DOM contract is fixed by `resources/views/phr/pages/profile.blade.php`: no `wire:model`
+ * (ADR 0002), fields are read through `x-ref` and the URLs arrive in `data-*` of the form. There
+ * is no Livewire call here: the settings go up already encrypted to `PUT /phr/settings` and the
+ * password change talks straight to the `/phr/auth/password/*` routes.
  *
- * Además hay un bloque de **solo lectura** con las últimas medidas corporales (peso, estatura e
- * índice de masa corporal). No es un ajuste y por eso no tiene campos ni botón: esas medidas se
- * registran en la pantalla de peso y estatura, con su fecha, y ahí es donde se corrigen. Se calculan
- * aquí, en el navegador, descifrando los eventos que baja `$wire.fetchEvents` —la única llamada a
- * Livewire de este módulo—, porque el servidor no puede leerlas (ADR 0002, ADR 0004). El IMC se
- * enseña como cifra desnuda, sin categorías ni colores: el porqué clínico está en el JSDoc de
- * `health/bodyMassIndex.js`.
+ * There is also a **read-only** block with the latest body measurements (weight, height and body
+ * mass index). It is not a setting and that is why it has no fields and no button: those
+ * measurements are recorded on the weight and height screen, with their date, and that is where
+ * they are corrected. They are computed here, in the browser, decrypting the events
+ * `$wire.fetchEvents` brings down —the only Livewire call in this module—, because the server
+ * cannot read them (ADR 0002, ADR 0004). BMI is shown as a bare figure, with no categories and no
+ * colours: the clinical why is in the JSDoc of `health/bodyMassIndex.js`.
  *
- * Dos operaciones de escritura, dos botones y dos peticiones, deliberadamente separadas:
+ * Two write operations, two buttons and two requests, deliberately kept apart:
  *
- * * **Ajustes.** Idioma, unidad preferida y rango objetivo se guardan juntos, en una sola petición,
- *   porque el sobre cifrado es un documento único que se reemplaza entero (el servidor no puede
- *   parchear lo que no puede descifrar). El idioma viaja en claro en la misma petición para que no
- *   pueda quedar desincronizado con el resto.
- * * **Contraseña.** Es un re-registro OPAQUE completo con dos estiramientos de clave y una escritura
- *   transaccional. No comparte botón ni estado con los ajustes: mezclarlos haría que un error de
- *   validación de un rango abortase un cambio de contraseña ya a medias.
+ * * **Settings.** Language, preferred unit and target range are saved together, in a single
+ *   request, because the encrypted envelope is one document replaced whole (the server cannot
+ *   patch what it cannot decrypt). The language travels in the clear in the same request so that
+ *   it can never fall out of sync with the rest.
+ * * **Password.** It is a full OPAQUE re-registration with two key stretchings and one
+ *   transactional write. It shares neither button nor state with the settings: mixing them would
+ *   let a range validation error abort a password change already half-way through.
  *
- * **El rango objetivo empieza vacío y sin valor sugerido** (ADR 0007). Ni este módulo ni la
- * plantilla proponen números: un rango por defecto es una indicación clínica.
+ * **The target range starts empty and with no suggested value** (ADR 0007). Neither this module
+ * nor the template proposes numbers: a default range is a clinical instruction.
  *
- * Las funciones exportadas antes de `profilePage()` son la lógica pura, para poder probarlas sin
- * montar Alpine (`tests/js/profilePage.test.mjs`).
+ * The functions exported before `profilePage()` are the pure logic, so they can be tested without
+ * mounting Alpine (`tests/js/profilePage.test.mjs`).
  */
 
 import { bodyMassIndex, heightKnownAt, measurementUnitLabel } from '../health/bodyMassIndex.js';
@@ -43,39 +43,39 @@ import { saveSettings, settings } from './settings.js';
 import { changePassword } from './changePasswordPage.js';
 
 /*
- * `saveSettings` y `changePassword` se importaban con `import()` dentro de cada manejador. Los dos
- * motivos que lo justificaban ya no valen: los ficheros existen —no los está escribiendo nadie en
- * paralelo— y no diferían ni un byte. `settings.js` lo importan de forma estática `lock.js`,
- * `loginPage.js`, `recovery.js` y `setPasswordPage.js`, así que Vite avisaba con
- * `[INEFFECTIVE_DYNAMIC_IMPORT]` y lo dejaba donde estaba; y `changePasswordPage-*.js` se compilaba
- * a 0.02 kB con un único `import "./app-*.js"` dentro, es decir el WebAssembly de OPAQUE ya viajaba
- * en el bundle principal. Lo único que quedaba era mover el fallo de carga del módulo del arranque
- * al clic del usuario, sin ahorrar nada.
+ * `saveSettings` and `changePassword` used to be imported with `import()` inside each handler. The
+ * two reasons for that no longer hold: the files exist —nobody is writing them in parallel— and
+ * they did not differ by a single byte. `settings.js` is imported statically by `lock.js`,
+ * `loginPage.js`, `recovery.js` and `setPasswordPage.js`, so Vite warned with
+ * `[INEFFECTIVE_DYNAMIC_IMPORT]` and left it where it was; and `changePasswordPage-*.js` compiled
+ * to 0.02 kB with a single `import "./app-*.js"` inside, that is, the OPAQUE WebAssembly was
+ * already travelling in the main bundle. All that was left was moving the module load failure
+ * from startup to the user's click, saving nothing.
  */
 
-/** Unidad marcada de entrada cuando no hay preferencia guardada (la misma que `glucosePage.js`). */
+/** Unit selected by default when there is no saved preference (the same as `glucosePage.js`). */
 const DEFAULT_UNIT = 'mg/dL';
 
-/** Unidades válidas, en los códigos UCUM de `App\Catalog\UcumUnit`. */
+/** Valid units, in the UCUM codes of `App\Catalog\UcumUnit`. */
 const UNITS = Object.freeze(['mg/dL', 'mmol/L']);
 
 /**
- * Valida y normaliza el rango objetivo de glucemia tal cual se teclea en el formulario.
+ * Validates and normalizes the glucose target range exactly as it is typed in the form.
  *
- * Los dos límites en blanco significan «no configurado», que es un estado legítimo y el de partida
- * de toda cuenta (ADR 0007): devuelve `null`, y quien llama lo traduce a borrar la clave del sobre.
- * Un solo límite relleno es un error del formulario y nunca un rango a medias: un rango con un
- * extremo inventado es una indicación clínica falsa.
+ * Both limits blank mean "not configured", which is a legitimate state and the starting one of
+ * every account (ADR 0007): it returns `null`, and the caller translates that into deleting the
+ * key from the envelope. A single filled limit is a form error and never a half range: a range
+ * with one made-up end is a false clinical instruction.
  *
- * El límite de 2 decimales y la coma decimal los resuelve `parseNumericValue`, la misma función que
- * usan las pantallas de evento, para no tener dos criterios de qué es un número.
+ * The 2-decimal limit and the decimal comma are resolved by `parseNumericValue`, the same function
+ * the event screens use, to avoid having two criteria of what a number is.
  *
  * @param {object} params
- * @param {string} params.lowRaw Valor crudo del `<input type="number">` del límite inferior.
- * @param {string} params.highRaw Valor crudo del límite superior.
- * @param {string} params.unit Código UCUM de la unidad en la que están escritos los dos límites.
- * @returns {{low: number, high: number, unit: string}|null} `null` si no hay rango configurado.
- * @throws {Error} Con mensaje en el idioma activo si el rango está a medias, desordenado o no es numérico.
+ * @param {string} params.lowRaw Raw value of the lower limit `<input type="number">`.
+ * @param {string} params.highRaw Raw value of the upper limit.
+ * @param {string} params.unit UCUM code of the unit both limits are written in.
+ * @returns {{low: number, high: number, unit: string}|null} `null` if no range is configured.
+ * @throws {Error} With a message in the active language if the range is half filled, out of order or not numeric.
  */
 export function parseGlucoseTargetRange({ lowRaw, highRaw, unit }) {
     const low = parseNumericValue(String(lowRaw ?? '').trim(), t('field.rangeLow'));
@@ -105,27 +105,27 @@ export function parseGlucoseTargetRange({ lowRaw, highRaw, unit }) {
     }
 
     /**
-     * El rango guarda su propia unidad: `{low: 70, high: 180}` a secas es ambiguo, y en cuanto la
-     * unidad de presentación cambia se vuelve peligroso. Como no se convierte entre unidades (ADR
-     * 0007), quien lo lea compara la unidad y, si no coincide, no calcula el porcentaje.
+     * The range stores its own unit: a plain `{low: 70, high: 180}` is ambiguous, and it becomes
+     * dangerous as soon as the display unit changes. Since nothing is converted between units (ADR
+     * 0007), whoever reads it compares the unit and, if it does not match, does not compute the percentage.
      */
     return { low: lowNumber, high: highNumber, unit };
 }
 
 /**
- * Construye el parche que se mezcla sobre los ajustes en memoria antes de sellarlos.
+ * Builds the patch merged over the settings in memory before sealing them.
  *
- * Una clave con valor `null` **borra** esa clave del documento, que es como se deja de tener rango
- * objetivo. Nunca se escribe un objeto vacío ni un `null` como marcador de «sin configurar»: la
- * ausencia de la clave ya es ese estado (ADR 0007).
+ * A key with value `null` **deletes** that key from the document, which is how you stop having a
+ * target range. An empty object or a `null` is never written as a "not configured" marker: the
+ * absence of the key already is that state (ADR 0007).
  *
  * @param {object} params
- * @param {string} params.glucoseUnit Código UCUM de la unidad preferida.
+ * @param {string} params.glucoseUnit UCUM code of the preferred unit.
  * @param {string} params.lowRaw
  * @param {string} params.highRaw
  * @param {string} params.rangeUnit
  * @returns {{glucoseUnit: string, glucoseTargetRange: {low: number, high: number, unit: string}|null}}
- * @throws {Error} Con mensaje en el idioma activo si algún campo no vale.
+ * @throws {Error} With a message in the active language if any field is invalid.
  */
 export function buildSettingsPatch({ glucoseUnit, lowRaw, highRaw, rangeUnit }) {
     if (!UNITS.includes(glucoseUnit)) {
@@ -139,33 +139,33 @@ export function buildSettingsPatch({ glucoseUnit, lowRaw, highRaw, rangeUnit }) 
 }
 
 /**
- * Tamaño de página al leer eventos para el bloque de últimas medidas. Es el techo duro de
- * `HealthEventPage::MAX_FETCH_LIMIT`: aquí se busca hacia atrás en el tiempo hasta encontrar la
- * última pesada y la última estatura, y cuantas menos idas y vueltas, mejor.
+ * Page size when reading events for the latest measurements block. It is the hard ceiling of
+ * `HealthEventPage::MAX_FETCH_LIMIT`: here we search backwards in time until we find the last
+ * weighing and the last height, and the fewer round trips, the better.
  */
 const MEASUREMENTS_PAGE_SIZE = 500;
 
 /**
- * Cuántas páginas se recorren como mucho.
+ * How many pages are walked at most.
  *
- * Sin tope, una cuenta con años de comidas y glucemias y sin ninguna estatura recorrería el
- * historial entero descifrando sobre a sobre solo para acabar diciendo «todavía no». Con el tope, el
- * peor caso son 2500 eventos y el bloque dice lo mismo. Que una estatura de hace muchísimo no
- * aparezca es un mal menor frente a bloquear la pestaña: se registra de nuevo y vuelve a salir.
+ * Without a cap, an account with years of meals and glucose readings and no height at all would
+ * walk the whole history decrypting envelope by envelope only to end up saying "not yet". With the
+ * cap, the worst case is 2500 events and the block says the same thing. A height from very long
+ * ago not showing up is a lesser evil than freezing the tab: record it again and it shows up again.
  */
 const MEASUREMENTS_MAX_PAGES = 5;
 
 /**
- * Resume las últimas medidas corporales a partir de los eventos de peso ya descifrados.
+ * Summarizes the latest body measurements from the already decrypted weight events.
  *
- * El peso más reciente y la estatura más reciente pueden venir de registros distintos, y es lo
- * normal: la estatura es opcional en cada registro (ver `health/bodyWeightPage.js`). El IMC se
- * calcula con esa pareja, que es la mejor información disponible hoy.
+ * The most recent weight and the most recent height may come from different records, and that is
+ * normal: height is optional in each record (see `health/bodyWeightPage.js`). BMI is computed with
+ * that pair, which is the best information available today.
  *
- * **Sin ninguna estatura no hay IMC**: devuelve `null`, y la pantalla no enseña cifra. Nunca un
- * cero ni una estatura media inventada.
+ * **With no height at all there is no BMI**: it returns `null`, and the screen shows no figure.
+ * Never a zero, never a made-up average height.
  *
- * @param {list<{occurredAt: string, content: object}>} weightEvents Eventos `bodyWeight` descifrados.
+ * @param {list<{occurredAt: string, content: object}>} weightEvents Decrypted `bodyWeight` events.
  * @returns {{weight: {value: string, unit: string, occurredAt: string}|null,
  *           height: {value: string, unit: string, occurredAt: string}|null,
  *           bmi: number|null}}
@@ -187,14 +187,14 @@ export function summarizeBodyMeasurements(weightEvents) {
         weightTime = time;
     }
 
-    /** Sin cota superior (`null`): el perfil enseña la estatura más reciente de todas. */
+    /** No upper bound (`null`): the profile shows the most recent height of all. */
     const height = heightKnownAt(weightEvents, null);
 
     return { weight, height, bmi: bodyMassIndex({ weight, height }) };
 }
 
 /**
- * Traduce un fallo al mensaje que ve la persona. Nunca detalle técnico.
+ * Translates a failure into the message the person sees. Never technical detail.
  *
  * @param {unknown} failure
  * @param {string} fallback
@@ -229,7 +229,7 @@ function describe(failure, fallback) {
 }
 
 /**
- * Factoría del componente Alpine. Se registra como `phrProfilePage`.
+ * Alpine component factory. Registered as `phrProfilePage`.
  *
  * @returns {object}
  */
@@ -237,7 +237,7 @@ export function profilePage() {
     return {
         ...progressMixin(),
 
-        /** Cambio de contraseña en marcha. La barra de progreso se muestra con esta bandera. */
+        /** Password change in progress. The progress bar is shown with this flag. */
         busy: false,
 
         savingSettings: false,
@@ -246,13 +246,13 @@ export function profilePage() {
         passwordError: '',
         passwordChanged: false,
 
-        /** Idioma con el que se pintó la página, para saber si hay que recargar tras guardar. */
+        /** Language the page was painted in, to know whether to reload after saving. */
         initialLocale: '',
 
         /**
-         * Bloque de últimas medidas, ya como texto: la plantilla solo hace `x-text`. Arrancan con el
-         * aviso de sesión bloqueada y no en blanco, porque hasta que no hay clave no se puede
-         * descifrar nada y un hueco vacío se leería como «no tienes registros».
+         * Latest measurements block, already as text: the template only does `x-text`. They start
+         * with the locked-session notice and not blank, because nothing can be decrypted until
+         * there is a key and an empty gap would read as "you have no records".
          */
         lastWeightText: t('common.locked.summary'),
         lastWeightDate: '',
@@ -273,10 +273,10 @@ export function profilePage() {
             }
 
             /**
-             * Los ajustes viven descifrados en memoria y llegan al terminar el arranque de sesión
-             * (§6.2). Hasta entonces los campos se quedan como los pintó el servidor, que para la
-             * unidad y el rango es «vacío», nunca un valor inventado. Las últimas medidas dependen
-             * de la misma clave, así que esperan al mismo momento.
+             * The settings live decrypted in memory and arrive when the session bootstrap finishes
+             * (§6.2). Until then the fields stay as the server painted them, which for the unit
+             * and the range is "empty", never a made-up value. The latest measurements depend on
+             * the same key, so they wait for the same moment.
              */
             document.addEventListener(SESSION_READY_EVENT, () => {
                 this.fillFromSettings();
@@ -285,8 +285,8 @@ export function profilePage() {
         },
 
         /**
-         * Vuelca en el formulario los ajustes descifrados. Lo que no está configurado se queda en
-         * blanco: rellenar el rango con cualquier cosa sería inventarse una indicación clínica.
+         * Dumps the decrypted settings into the form. Whatever is not configured stays blank:
+         * filling the range with anything would be inventing a clinical instruction.
          */
         fillFromSettings() {
             const current = settings() ?? {};
@@ -301,17 +301,17 @@ export function profilePage() {
         },
 
         /**
-         * Lee, descifra y resume las últimas medidas corporales.
+         * Reads, decrypts and summarizes the latest body measurements.
          *
-         * El servidor no puede filtrar por tipo (ADR 0006: el tipo va dentro del sobre), así que se
-         * piden páginas de eventos hacia atrás en el tiempo y se descarta aquí todo lo que no sea
-         * `bodyWeight`. Se para en cuanto se tienen las dos cosas —último peso y última estatura—,
-         * que en una cuenta que registra la estatura de vez en cuando es casi siempre la primera
-         * página.
+         * The server cannot filter by type (ADR 0006: the type travels inside the envelope), so
+         * pages of events are requested backwards in time and everything that is not `bodyWeight`
+         * is discarded here. It stops as soon as both things are known —last weight and last
+         * height—, which in an account that records height now and then is almost always the first
+         * page.
          *
-         * Un sobre que no abre no tumba nada: se salta. Es lo mismo que hacen las pantallas de
-         * historial (ADR 0004), y aquí importa menos todavía, porque el bloque solo enseña la última
-         * medida y no un recuento.
+         * An envelope that does not open takes nothing down: it is skipped. It is the same thing
+         * the history screens do (ADR 0004), and it matters even less here, because the block only
+         * shows the latest measurement and not a count.
          */
         async loadBodyMeasurements() {
             this.measurementsError = '';
@@ -329,7 +329,7 @@ export function profilePage() {
                 let cursor = null;
 
                 for (let page = 0; page < MEASUREMENTS_MAX_PAGES; page += 1) {
-                    /** Mismo orden posicional que `HealthEventPage::fetchEvents(?string, int, ?string, ?string)`. */
+                    /** Same positional order as `HealthEventPage::fetchEvents(?string, int, ?string, ?string)`. */
                     const rawEvents = await this.$wire.fetchEvents(cursor, MEASUREMENTS_PAGE_SIZE);
 
                     for (const rawEvent of rawEvents) {
@@ -344,11 +344,11 @@ export function profilePage() {
                                 weightEvents.push({ occurredAt: rawEvent.occurredAt, content });
                             }
                         } catch {
-                            /** Un sobre ilegible se salta, no rompe la pantalla (ADR 0004). */
+                            /** An unreadable envelope is skipped, it does not break the screen (ADR 0004). */
                         }
                     }
 
-                    /** Menos filas que el tamaño de página significa que no hay más historial. */
+                    /** Fewer rows than the page size means there is no more history. */
                     if (rawEvents.length < MEASUREMENTS_PAGE_SIZE) {
                         break;
                     }
@@ -370,11 +370,11 @@ export function profilePage() {
         },
 
         /**
-         * Vuelca el resumen en los textos del bloque.
+         * Dumps the summary into the texts of the block.
          *
-         * `null` significa «no se pudo calcular» (sesión bloqueada o error) y se dice con la frase de
-         * sesión bloqueada, no con un hueco. Lo que sí falta de verdad —no hay ningún peso, no hay
-         * ninguna estatura— se dice con «todavía no hay registro», que es distinto y verdadero.
+         * `null` means "could not be computed" (locked session or error) and it is said with the
+         * locked-session sentence, not with a gap. What is really missing —no weight at all, no
+         * height at all— is said with "no record yet", which is different and true.
          *
          * @param {{weight: object|null, height: object|null, bmi: number|null}|null} summary
          */
@@ -403,14 +403,14 @@ export function profilePage() {
             this.lastHeightDate = height === null ? '' : formatDateTime(height.occurredAt);
 
             /**
-             * Sin estatura no hay IMC, y se dice por qué en vez de dejar el hueco: la persona puede
-             * hacer algo al respecto (registrar una estatura), así que merece saberlo.
+             * Without a height there is no BMI, and the reason is said instead of leaving the gap:
+             * the person can do something about it (record a height), so they deserve to know.
              */
             this.bodyMassIndexText = bmi === null ? t('profile.body.noBmi') : formatNumber(bmi);
             this.bodyMassIndexDate = bmi === null ? '' : t('profile.body.fromRecords');
         },
 
-        /** Guarda las tres secciones de ajustes en una única petición. */
+        /** Saves the three settings sections in a single request. */
         async submitSettings() {
             if (this.savingSettings) {
                 return;
@@ -446,9 +446,9 @@ export function profilePage() {
                 this.settingsSaved = true;
 
                 /**
-                 * El marco de Filament (menú, migas, títulos) ya está pintado en el idioma
-                 * anterior y lo resuelve el servidor, así que un cambio de idioma solo se ve
-                 * entero recargando. Se hace después del 2xx, nunca antes.
+                 * The Filament frame (menu, breadcrumbs, titles) is already painted in the
+                 * previous language and the server resolves it, so a language change is only seen
+                 * whole after a reload. It happens after the 2xx, never before.
                  */
                 if (locale !== this.initialLocale) {
                     window.location.reload();
@@ -461,12 +461,12 @@ export function profilePage() {
         },
 
         /**
-         * Cambia la contraseña: reautenticación con la actual, re-registro OPAQUE con la nueva y
-         * reenvoltura de la clave maestra, todo en `changePassword`.
+         * Changes the password: reauthentication with the current one, OPAQUE re-registration with
+         * the new one and rewrapping of the master key, all inside `changePassword`.
          *
-         * Aquí solo se leen los campos, se vacían en el acto y se pinta el progreso. Las tres
-         * contraseñas no pasan por el estado de Alpine: viven en variables locales de esta función
-         * y se sueltan al terminar.
+         * Here we only read the fields, empty them at once and paint the progress. The three
+         * passwords never go through Alpine state: they live in local variables of this function
+         * and are released when it ends.
          */
         async submitPassword() {
             if (this.busy) {
@@ -518,11 +518,11 @@ export function profilePage() {
         },
 
         /**
-         * Pinta una etapa del cambio de contraseña. Los dos tramos de Argon2id se anuncian por
-         * separado y con su duración estimada: si la barra los tratara como uno solo, la persona
-         * vería la misma pausa dos veces sin explicación y volvería a pulsar el botón.
+         * Paints a stage of the password change. The two Argon2id runs are announced separately
+         * and with their estimated duration: if the bar treated them as one, the person would see
+         * the same pause twice with no explanation and would press the button again.
          *
-         * @param {string} stage Nombre de etapa que emite `changePassword`.
+         * @param {string} stage Stage name emitted by `changePassword`.
          * @returns {Promise<void>}
          */
         announce(stage) {

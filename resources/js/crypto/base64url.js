@@ -1,26 +1,26 @@
 /**
- * Base64 URL-safe **sin padding** con decodificación estricta y canónica.
+ * URL-safe Base64 **without padding**, with strict and canonical decoding.
  *
- * Espejo exacto de `app/Security/Opaque/Base64Url.php` (`docs/OPAQUE.md` §5):
- * mismas tres reglas, mismo resultado byte a byte para la misma entrada.
+ * Exact mirror of `app/Security/Opaque/Base64Url.php` (`docs/OPAQUE.md` §5):
+ * same three rules, same byte-for-byte result for the same input.
  *
- * 1. Alfabeto `A-Z a-z 0-9 - _` únicamente: se rechazan `=`, espacios, saltos
- *    de línea y el alfabeto Base64 estándar (`+`, `/`).
- * 2. Longitud congruente: `length % 4 === 1` es imposible en Base64.
- * 3. Canonicidad: se vuelve a codificar el resultado y se exige igualdad
- *    exacta con la entrada, lo que rechaza los bits sobrantes distintos de
- *    cero en el último carácter.
+ * 1. Alphabet `A-Z a-z 0-9 - _` only: `=`, spaces, line breaks and the
+ *    standard Base64 alphabet (`+`, `/`) are rejected.
+ * 2. Congruent length: `length % 4 === 1` is impossible in Base64.
+ * 3. Canonicity: the result is encoded again and must be exactly equal to
+ *    the input, which rejects leftover bits other than zero in the last
+ *    character.
  *
- * `atob` no cubre ninguna de las tres: acepta padding, tolera bits sobrantes
- * y no conoce el alfabeto URL-safe.
+ * `atob` covers none of the three: it accepts padding, tolerates leftover
+ * bits and does not know the URL-safe alphabet.
  */
 
-/** Alfabeto Base64 URL-safe (RFC 4648 §5). */
+/** URL-safe Base64 alphabet (RFC 4648 §5). */
 const ALPHABET = /^[A-Za-z0-9_-]*$/;
 
 /**
- * Error de codificación. Se distingue de los errores de descifrado para que
- * quien llama pueda separar "entrada malformada" de "no descifra".
+ * Encoding error. Kept apart from decryption errors so that callers can
+ * tell "malformed input" from "does not decrypt".
  */
 export class Base64UrlError extends Error {
     /** @param {string} message */
@@ -31,10 +31,10 @@ export class Base64UrlError extends Error {
 }
 
 /**
- * Codifica bytes en base64url sin padding.
+ * Encodes bytes as base64url without padding.
  *
- * @param {Uint8Array} bytes Bytes de cualquier longitud (puede ser vacía).
- * @returns {string} Sólo caracteres del alfabeto base64url, sin `=`.
+ * @param {Uint8Array} bytes Bytes of any length (may be empty).
+ * @returns {string} Only base64url alphabet characters, no `=`.
  */
 export function encodeBase64Url(bytes) {
     if (!(bytes instanceof Uint8Array)) {
@@ -51,13 +51,13 @@ export function encodeBase64Url(bytes) {
 }
 
 /**
- * Decodifica base64url sin padding de forma estricta y canónica.
+ * Decodes base64url without padding, strictly and canonically.
  *
- * @param {string} encoded Cadena recibida (red, almacenamiento o DOM).
- * @param {string} [field] Nombre del campo, sólo para el mensaje de error.
- * @returns {Uint8Array} Bytes decodificados.
- * @throws {Base64UrlError} Alfabeto inválido, padding, espacios, longitud
- *         imposible o codificación no canónica.
+ * @param {string} encoded String received from network, storage or DOM.
+ * @param {string} [field] Field name, only for the error message.
+ * @returns {Uint8Array} Decoded bytes.
+ * @throws {Base64UrlError} Invalid alphabet, padding, spaces, impossible
+ *         length or non-canonical encoding.
  */
 export function decodeBase64Url(encoded, field = 'value') {
     if (typeof encoded !== 'string') {
@@ -97,13 +97,13 @@ export function decodeBase64Url(encoded, field = 'value') {
 }
 
 /**
- * Decodifica y exige una longitud binaria exacta, antes de tocar criptografía
+ * Decodes and demands an exact binary length, before any crypto is touched
  * (`docs/OPAQUE.md` §5).
  *
- * @param {string} encoded Cadena recibida.
- * @param {number} expectedLength Longitud binaria exigida, en bytes.
- * @param {string} [field] Nombre del campo, sólo para el mensaje de error.
- * @returns {Uint8Array} Bytes de longitud exactamente `expectedLength`.
+ * @param {string} encoded Received string.
+ * @param {number} expectedLength Required binary length, in bytes.
+ * @param {string} [field] Field name, only for the error message.
+ * @returns {Uint8Array} Bytes of exactly `expectedLength`.
  * @throws {Base64UrlError}
  */
 export function decodeBase64UrlExactly(encoded, expectedLength, field = 'value') {

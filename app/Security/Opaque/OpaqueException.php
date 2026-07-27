@@ -7,12 +7,12 @@ namespace App\Security\Opaque;
 use RuntimeException;
 
 /**
- * Excepción base de la implementación OPAQUE-3DH (RFC 9807).
+ * Base exception of the OPAQUE-3DH implementation (RFC 9807).
  *
- * Todas las excepciones del subsistema derivan de esta, de modo que los
- * controladores puedan colapsarlas en una única respuesta pública
- * (`docs/OPAQUE.md` §18) sin dejar escapar un error no controlado.
+ * Every exception in the subsystem extends this one, so controllers can
+ * collapse them into a single public response (`docs/OPAQUE.md` §18) without
+ * letting an unhandled error escape.
  *
- * No es `final`: la jerarquía de §18 depende de la herencia.
+ * Not `final`: the §18 hierarchy relies on inheritance.
  */
 class OpaqueException extends RuntimeException {}

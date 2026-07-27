@@ -7,8 +7,8 @@ use App\Security\Opaque\InvalidPointException;
 use App\Security\Opaque\Ristretto255;
 
 /**
- * Vector RFC 9807 Apéndice C.1.1 (suite ristretto255-SHA512): el escalar
- * privado estático del servidor y su clave pública.
+ * RFC 9807 Appendix C.1.1 vector (ristretto255-SHA512 suite): the server
+ * static private scalar and its public key.
  */
 const R255_SERVER_PRIVATE_KEY_HEX = '47451a85372f8b3537e249d7b54188091fb18edde78094b43e2ba42b5eb89f0d';
 const R255_SERVER_PUBLIC_KEY_HEX = 'b2fe7af9f48cc502d016729d2fe25cdd433f2c4bc904660b2a382c9b79df1a78';
@@ -39,7 +39,7 @@ describe('validatePoint', function (): void {
     it('rejects the identity element even though libsodium considers it valid', function (): void {
         $identity = r255Zeroes(32);
 
-        // Éste es exactamente el hueco que cubre el wrapper: libsodium acepta los ceros.
+        // This is exactly the gap the wrapper covers: libsodium accepts the zeros.
         expect(sodium_crypto_core_ristretto255_is_valid_point($identity))->toBeTrue();
 
         expect(fn () => Ristretto255::validatePoint($identity))
@@ -55,15 +55,15 @@ describe('validatePoint', function (): void {
     });
 
     /**
-     * Canonicidad completa, no solo el bit alto.
+     * Full canonicity, not just the high bit.
      *
-     * Entre `p = 2^255 - 19` y `2^255` hay diecinueve valores con el bit alto a cero que tampoco son
-     * codificaciones canónicas. Un chequeo que solo mire ese bit los deja pasar, y esta comprobación
-     * existe para que no se pueda sustituir por uno más corto.
+     * Between `p = 2^255 - 19` and `2^255` there are nineteen values with the high bit clear that are
+     * not canonical encodings either. A check that only looks at that bit lets them through, and
+     * this check exists so it cannot be replaced by a shorter one.
      *
-     * No se delega en libsodium: `sodium_crypto_core_ristretto255_is_valid_point()` rechaza estas
-     * entradas en unas versiones y las acepta en otras, y esta diferencia salió justamente al
-     * ejecutar la suite en integración continua.
+     * It is not delegated to libsodium: `sodium_crypto_core_ristretto255_is_valid_point()` rejects
+     * these inputs in some versions and accepts them in others, and that difference showed up
+     * precisely when running the suite in continuous integration.
      */
     it('rejects non-canonical encodings without the high bit set', function (string $description, string $point): void {
         expect(strlen($point))->toBe(32)

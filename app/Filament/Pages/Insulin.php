@@ -13,58 +13,57 @@ use Filament\Support\Icons\Heroicon;
 use Illuminate\Contracts\Support\Htmlable;
 
 /**
- * Pantalla de insulina inyectada (ADR 0002, ADR 0004, ADR 0005, ADR 0006).
+ * Injected insulin screen (ADR 0002, ADR 0004, ADR 0005, ADR 0006).
  *
- * Esta clase no ve nunca el contenido de una administración de insulina. El transporte común de
- * ciphertext —el sobre baja como valor de retorno y sube como parámetro de método, nunca en una
- * propiedad pública, así que no entra en el snapshot de Livewire (ADR 0002)— vive en
- * {@see HealthEventPage} y es compartido con el resto de pantallas de eventos clínicos. El servidor
- * valida la envoltura del sobre y la autorización, nunca el contenido: no hay forma de comprobar que
- * dentro dice «insulina» sin la clave del usuario.
+ * This class never sees the content of an insulin administration. The shared ciphertext transport
+ * —the envelope comes down as a return value and goes up as a method parameter, never in a public
+ * property, so it does not enter the Livewire snapshot (ADR 0002)— lives in {@see HealthEventPage}
+ * and is shared with the rest of the clinical event screens. The server validates the envelope
+ * wrapper and authorization, never the content: there is no way to check that it says "insulin"
+ * inside without the user's key.
  *
- * **No lleva código LOINC.** A diferencia de la glucemia, un evento de insulina no es una
- * observación de una magnitud: es el registro de una administración de medicación (ADR 0006, «tipo
- * rapid|long|mixed, dosis, y código del producto si procede, porque es una administración de
- * medicación y no una observación»). No hay tabla (tipo, unidad) → código que resolver aquí, y no
- * hay que añadir una: es la diferencia deliberada con {@see Glucose::catalog()}.
+ * **It carries no LOINC code.** Unlike blood glucose, an insulin event is not an observation of a
+ * quantity: it is the record of a medication administration (ADR 0006, "type rapid|long|mixed, dose,
+ * and the product code where applicable, because it is a medication administration and not an
+ * observation"). There is no (type, unit) → code table to resolve here, and none should be added: it
+ * is the deliberate difference from {@see Glucose::catalog()}.
  *
- * La vista (`resources/views/phr/pages/insulin.blade.php`) es un componente Alpine propio, no un
- * formulario de Filament: el ADR 0002 reserva los campos y columnas de Filament para datos en claro,
- * y aquí todo el contenido clínico está cifrado.
+ * The view (`resources/views/phr/pages/insulin.blade.php`) is an Alpine component of its own, not a
+ * Filament form: ADR 0002 reserves Filament fields and columns for plaintext data, and here all the
+ * clinical content is encrypted.
  *
- * **El formulario no pregunta el origen del dato** (manual o aparato): hoy no existe ninguna
- * integración con un aparato en esta pantalla, así que la entrada es siempre manual y preguntarlo
- * no tiene una respuesta real. `origin` sigue viajando en el contenido cifrado porque el ADR 0006
- * lo exige y no se puede añadir después sobre datos ya cifrados, pero `insulinPage.js` lo fija a
- * `manual` sin mostrar ningún control; el día que exista una importación automática desde un
- * aparato, será ella quien lo ponga a `device`. Por eso `catalog()` ya no publica `dataOrigins`:
- * nada en la vista lo necesita.
+ * **The form does not ask for the data origin** (manual or device): there is no device integration
+ * on this screen today, so entry is always manual and asking has no real answer. `origin` still
+ * travels in the encrypted content because ADR 0006 requires it and it cannot be added later over
+ * already encrypted data, but `insulinPage.js` fixes it to `manual` without showing any control; the
+ * day there is an automatic import from a device, that import will set it to `device`. That is why
+ * `catalog()` no longer publishes `dataOrigins`: nothing in the view needs it.
  */
 final class Insulin extends HealthEventPage
 {
     /**
-     * Código UCUM de la unidad internacional de insulina (ADR 0005: «la unidad internacional de
-     * insulina es `[iU]`, nadie la escribe espontáneamente»). Verificado contra
-     * https://unitsofmeasure.org: `[iU]` es el código UCUM de «international unit».
+     * UCUM code for the international unit of insulin (ADR 0005: "the international unit of insulin
+     * is `[iU]`, nobody writes it spontaneously"). Verified against https://unitsofmeasure.org:
+     * `[iU]` is the UCUM code for "international unit".
      *
-     * No sale de {@see UcumUnit} porque ese enum hoy solo cubre las unidades de la
-     * glucemia; añadirle un caso queda fuera del alcance de esta pantalla.
+     * It does not come from {@see UcumUnit} because that enum today only covers the blood glucose
+     * units; adding a case to it is out of the scope of this screen.
      */
     private const string UNIT_INTERNATIONAL_UNIT = '[iU]';
 
     /**
-     * Heroicons no trae una jeringuilla: `EyeDropper` (gotero) es el icono disponible más cercano
-     * a «dosis administrada», y distinto del `Beaker` (matraz) de {@see Glucose}.
+     * Heroicons has no syringe: `EyeDropper` is the closest available icon to "dose administered",
+     * and different from the `Beaker` used by {@see Glucose}.
      */
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedEyeDropper;
 
     protected string $view = 'phr.pages.insulin';
 
     /**
-     * El título y la etiqueta de navegación se resuelven por método y no como propiedad estática
-     * porque un inicializador de propiedad en PHP solo admite expresiones constantes: `__()` no
-     * puede llamarse ahí. Dejarlos como cadena fija es lo que mantenía el menú y las cabeceras en
-     * castellano aunque el resto de la pantalla ya estuviera traducido.
+     * The title and the navigation label are resolved by method and not as a static property because
+     * a property initializer in PHP only accepts constant expressions: `__()` cannot be called
+     * there. Leaving them as fixed strings is what kept the menu and the headers in Spanish even
+     * when the rest of the screen was already translated.
      */
     public function getTitle(): string|Htmlable
     {
@@ -77,8 +76,8 @@ final class Insulin extends HealthEventPage
     }
 
     /**
-     * Catálogo público en claro que el cliente necesita para construir el payload cifrado (ADR
-     * 0005, ADR 0006). No es dato clínico: son los mismos tokens para cualquier usuario.
+     * Public plaintext catalog the client needs to build the encrypted payload (ADR 0005,
+     * ADR 0006). It is not clinical data: the same tokens for every user.
      *
      * @return array{
      *     units: list<array{code: string, label: string}>,
@@ -89,8 +88,8 @@ final class Insulin extends HealthEventPage
      */
     public function catalog(): array
     {
-        /** El catálogo es en claro y lo pinta el servidor, así que las etiquetas salen ya en el
-         * idioma en vigor para esta petición (App\Support\SupportedLocale). */
+        /** The catalog is plaintext and the server paints it, so the labels already come out in the
+         * language in force for this request (App\Support\SupportedLocale). */
         $locale = app()->getLocale();
 
         return [
@@ -100,9 +99,9 @@ final class Insulin extends HealthEventPage
             'insulinTypes' => self::labelledOptions(InsulinType::cases(), $locale),
             'injectionSites' => self::labelledOptions(InjectionSite::cases(), $locale),
             /**
-             * Campo común a todo evento (ADR 0006), no propio de la insulina. `dataOrigins` no se
-             * publica: el formulario no pregunta el origen del dato (ver JSDoc de la clase), así
-             * que la vista no lo necesita.
+             * Field common to every event (ADR 0006), not specific to insulin. `dataOrigins` is not
+             * published: the form does not ask for the data origin (see the class JSDoc), so the
+             * view does not need it.
              */
             'recordedByRoles' => self::labelledOptions(RecordedBy::cases(), $locale),
         ];

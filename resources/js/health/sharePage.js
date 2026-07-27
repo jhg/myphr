@@ -57,6 +57,7 @@ import {
 } from '../crypto/shareKeys.js';
 import { encodeShareFragment, sealShareWrapper } from '../crypto/shareLink.js';
 import { zeroize } from '../crypto/zeroize.js';
+import { isStaleTabStatus } from '../guards/staleTabNotice.js';
 import { currentLocale, formatDateTime, joinList, t } from '../i18n/index.js';
 import { resolveCatalog } from '../reader/clinicalReport.js';
 import { renderClippingExplorer } from '../reader/clippingExplorer.js';
@@ -287,6 +288,49 @@ export class ShareScreenError extends Error {
 }
 
 /**
+ * Message for a failure of the Livewire call that reads the history.
+ *
+ * Livewire does not reject with an `Error`: it rejects with a bare
+ * `{status, body, json, errors}`, so anything downstream that tests `instanceof Error` misses it and
+ * falls through to the generic message. That generic message says «the clipping could not be built»,
+ * and when the read is what failed, that sentence is **false in the way that matters**: it points at
+ * the encryption, which never ran, and it leaves the person wondering whether something was shared.
+ * Nothing was: no package was built, no link was created and no request left this screen.
+ *
+ * A 404 or a 419 here means this tab and this server no longer agree — the classic case is a tab
+ * left open across a deploy. It is said as such, and `guards/staleTabNotice.js` puts the reload
+ * button on screen at the same time.
+ *
+ * @param {unknown} failure
+ * @returns {string}
+ */
+export function describeReadError(failure) {
+    const status = failure?.status ?? null;
+
+    if (isStaleTabStatus(status)) {
+        return t('common.staleTab');
+    }
+
+    return status === null ? t('common.network') : t('share.error.read');
+}
+
+/**
+ * Whether a rejection came from Livewire rather than from this screen's own code.
+ *
+ * Livewire's rejection is a plain object with a `status` key (`null` when the request never got an
+ * answer). Anything that is an `Error` came from here or from the crypto modules.
+ *
+ * @param {unknown} failure
+ * @returns {boolean}
+ */
+function isWireFailure(failure) {
+    return failure !== null
+        && typeof failure === 'object'
+        && !(failure instanceof Error)
+        && 'status' in failure;
+}
+
+/**
  * Traduce un fallo a algo que se pueda leer.
  *
  * Los tres casos con nombre propio existen porque tienen arreglo distinto: el tope se arregla
@@ -298,6 +342,10 @@ export class ShareScreenError extends Error {
 export function describeShareError(failure) {
     if (failure instanceof ShareScreenError) {
         return failure.message;
+    }
+
+    if (isWireFailure(failure)) {
+        return describeReadError(failure);
     }
 
     if (failure instanceof EnvelopeError) {
@@ -647,8 +695,20 @@ export function sharePage() {
             let cursor = null;
 
             for (let page = 0; page < MAX_FETCH_PAGES; page += 1) {
-                /** Mismo orden posicional que `HealthEventPage::fetchEvents(?string, int, ?string, ?string)`. */
-                const pageEvents = await this.$wire.fetchEvents(cursor, FETCH_PAGE_SIZE, range.from, range.to);
+                let pageEvents;
+
+                try {
+                    /** Mismo orden posicional que `HealthEventPage::fetchEvents(?string, int, ?string, ?string)`. */
+                    pageEvents = await this.$wire.fetchEvents(cursor, FETCH_PAGE_SIZE, range.from, range.to);
+                } catch (failure) {
+                    /**
+                     * Named right here, at the only door to the server this screen reads through, so
+                     * that a failure to **read** can never be reported as a failure to **encrypt**.
+                     * The two have different causes and different fixes, and the honest sentence is
+                     * the one that says nothing was shared.
+                     */
+                    throw new ShareScreenError(describeReadError(failure));
+                }
 
                 rawEvents.push(...pageEvents);
 

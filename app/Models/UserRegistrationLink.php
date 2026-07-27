@@ -11,10 +11,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * Spec 0001 §3.3: enlace de registro de un solo uso, con TTL de 24 horas (ADR 0009).
+ * Spec 0001 §3.3: single-use registration link, with a 24-hour TTL (ADR 0009).
  *
- * Solo se persiste `token_hash` (sha256 del token, 32 bytes); el token en claro nunca toca la base
- * de datos y se muestra una única vez a quien emite el enlace.
+ * Only `token_hash` is persisted (the sha256 of the token, 32 bytes); the plaintext token never
+ * touches the database and is shown once to whoever issues the link.
  */
 #[Fillable(['user_id', 'token_hash', 'expires_at', 'created_by'])]
 #[Hidden(['token_hash'])]
@@ -22,7 +22,7 @@ final class UserRegistrationLink extends Model
 {
     use HasUuids;
 
-    /** Spec 0001 §3.3: la tabla solo tiene `created_at`. */
+    /** Spec 0001 §3.3: the table only has `created_at`. */
     public const UPDATED_AT = null;
 
     /**
@@ -45,7 +45,7 @@ final class UserRegistrationLink extends Model
     }
 
     /**
-     * Spec 0001 §3.3: quién emitió el enlace, para auditoría.
+     * Spec 0001 §3.3: who issued the link, for auditing.
      *
      * @return BelongsTo<User, $this>
      */

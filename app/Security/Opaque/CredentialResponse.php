@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Security\Opaque;
 
 /**
- * `CredentialResponse` — primera mitad de `KE2`
- * (RFC 9807 §6.1 / `docs/OPAQUE.md` §6.2 y §11.3).
+ * `CredentialResponse` — first half of `KE2`
+ * (RFC 9807 §6.1 / `docs/OPAQUE.md` §6.2 and §11.3).
  *
  * ```
  * CredentialResponse (192 bytes)
@@ -15,32 +15,32 @@ namespace App\Security\Opaque;
  *   [64..191]  masked_response[Npk+Nn+Nm = 128]
  * ```
  *
- * `masked_response` es `credential_response_pad XOR (server_public_key ||
- * envelope)`, de forma que un usuario inexistente produce una respuesta
- * indistinguible de una real (RFC 9807 §6.3.2.2, `docs/OPAQUE.md` §13.3).
- * Por eso `masked_response` no se valida más allá de su longitud: sus bytes
- * son pseudoaleatorios y no deben inspeccionarse.
+ * `masked_response` is `credential_response_pad XOR (server_public_key ||
+ * envelope)`, so that a non-existent user produces a response you cannot tell
+ * apart from a real one (RFC 9807 §6.3.2.2, `docs/OPAQUE.md` §13.3). That is
+ * why `masked_response` is not validated beyond its length: its bytes are
+ * pseudorandom and must not be inspected.
  */
 final class CredentialResponse
 {
-    /** Longitud total de la estructura serializada, en bytes. */
+    /** Total length of the serialized structure, in bytes. */
     public const int LENGTH = 192;
 
-    /** `Noe` — elemento OPRF evaluado, en bytes. */
+    /** `Noe` — evaluated OPRF element, in bytes. */
     public const int EVALUATED_MESSAGE_LENGTH = 32;
 
-    /** `Nn` — longitud del nonce de enmascarado, en bytes. */
+    /** `Nn` — length of the masking nonce, in bytes. */
     public const int MASKING_NONCE_LENGTH = 32;
 
-    /** `Npk + Nn + Nm` — longitud de la respuesta enmascarada, en bytes. */
+    /** `Npk + Nn + Nm` — length of the masked response, in bytes. */
     public const int MASKED_RESPONSE_LENGTH = 128;
 
     /**
-     * @param  string  $evaluatedMessage  Elemento OPRF evaluado, 32 bytes.
-     * @param  string  $maskingNonce  Nonce de enmascarado, 32 bytes.
+     * @param  string  $evaluatedMessage  Evaluated OPRF element, 32 bytes.
+     * @param  string  $maskingNonce  Masking nonce, 32 bytes.
      * @param  string  $maskedResponse  `pad XOR (server_public_key || envelope)`, 128 bytes.
      *
-     * @throws InvalidMessageException Si alguna longitud no es la exacta.
+     * @throws InvalidMessageException If any length is not exact.
      */
     public function __construct(
         public readonly string $evaluatedMessage,
@@ -53,11 +53,11 @@ final class CredentialResponse
     }
 
     /**
-     * Parsea los 192 bytes de `CredentialResponse` con los offsets de §6.2.
+     * Parses the 192 bytes of `CredentialResponse` with the offsets from §6.2.
      *
-     * @param  string  $bytes  Estructura serializada, exactamente 192 bytes.
+     * @param  string  $bytes  Serialized structure, exactly 192 bytes.
      *
-     * @throws InvalidMessageException Si la longitud total no es 192.
+     * @throws InvalidMessageException If the total length is not 192.
      */
     public static function parse(string $bytes): self
     {
@@ -71,8 +71,8 @@ final class CredentialResponse
     }
 
     /**
-     * @return string Estructura serializada, exactamente 192 bytes. Entra tal
-     *                cual en el preamble (`docs/OPAQUE.md` §11.5).
+     * @return string Serialized structure, exactly 192 bytes. It goes into the
+     *                preamble verbatim (`docs/OPAQUE.md` §11.5).
      */
     public function serialize(): string
     {

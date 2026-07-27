@@ -7,7 +7,6 @@ use App\Models\ShareLink;
 use App\Models\User;
 use App\Security\Opaque\Base64Url;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Symfony\Component\Process\Process;
 
 uses(RefreshDatabase::class);
 
@@ -30,32 +29,7 @@ beforeEach(function (): void {
     config()->set('share.decoy_salt_key', Base64Url::encode(str_repeat("\x2a", 32)));
 });
 
-/**
- * Ejecuta una de las dos órdenes del ayudante de JavaScript.
- *
- * @param  array<string, mixed>  $input
- * @return array<string, mixed>
- */
-function runShareClient(string $command, array $input): array
-{
-    $process = new Process(
-        ['node', base_path('tests/js/support/shareRoundTrip.mjs'), $command],
-        base_path(),
-        null,
-        json_encode($input, JSON_THROW_ON_ERROR),
-        120,
-    );
-
-    $process->run();
-
-    expect($process->getExitCode())->toBe(0, $process->getErrorOutput());
-
-    /** @var array<string, mixed> $decoded */
-    $decoded = json_decode($process->getOutput(), true, 512, JSON_THROW_ON_ERROR);
-
-    return $decoded;
-}
-
+/** `runShareClient()`, the bridge to the JavaScript half, lives in `tests/Pest.php`. */
 it('cifra un recorte en el navegador y el lector lo abre tras pasar por el servidor', function (): void {
     $user = User::factory()->registered()->create();
 

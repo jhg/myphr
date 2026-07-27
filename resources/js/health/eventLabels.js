@@ -1,52 +1,52 @@
 /**
- * Etiquetas legibles de los tokens de catálogo y formato de las cifras clínicas (ADR 0005, ADR 0008).
+ * Readable labels of the catalog tokens and format of the clinical figures (ADR 0005, ADR 0008).
  *
- * **Por qué está aquí y no en cada pantalla.** Estas etiquetas están duplicadas a conciencia
- * respecto de `app/Catalog/*`: ni el panel de inicio ni el lector del profesional reciben el
- * catálogo del servidor —el lector no tiene servidor al que pedírselo, y el panel pinta tarjetas que
- * el servidor no sabe cuáles son—, así que traducen los tokens por su cuenta. Lo que no puede haber
- * es una copia por pantalla: «Capilar» y «Izquierdo, sentado» tienen que decir exactamente lo mismo
- * en el resumen del paciente y en el informe que lee el médico, o los dos están mirando datos que
- * parecen distintos.
+ * **Why it is here and not in each screen.** These labels are knowingly duplicated with respect to
+ * `app/Catalog/*`: neither the home dashboard nor the professional's reader receives the server
+ * catalog —the reader has no server to ask, and the dashboard paints cards the server does not
+ * know about—, so they translate the tokens on their own. What there cannot be is one copy per
+ * screen: "Capillary" and "Left, sitting" have to say exactly the same thing in the patient
+ * summary and in the report the doctor reads, or the two are looking at data that seems
+ * different.
  *
- * Un token que este módulo no conoce **nunca rompe la pantalla ni se traga**: se humaniza y se
- * enseña tal cual venía en el sobre, que es información verdadera aunque no esté traducida.
+ * A token this module does not know **never breaks the screen and is never swallowed**: it is
+ * humanized and shown as it came in the envelope, which is true information even if untranslated.
  *
- * Módulo puro: sin Livewire, sin `$wire`, sin DOM.
+ * Pure module: no Livewire, no `$wire`, no DOM.
  */
 
 import { formatNumber as formatLocalizedNumber, t } from '../i18n/index.js';
 
 /**
- * Claves de catálogo de los métodos de glucemia (`App\Catalog\GlucoseMeasurementMethod`, ADR 0008).
- * La lista de tokens es la del servidor y no puede cambiar: son los que viajan dentro del sobre.
+ * Catalog keys of the glucose methods (`App\Catalog\GlucoseMeasurementMethod`, ADR 0008).
+ * The token list is the server's and cannot change: they are the ones travelling inside the envelope.
  */
 const GLUCOSE_METHOD_KEYS = Object.freeze({
     capillary: 'dashboard.method.capillary',
     interstitial: 'dashboard.method.interstitial',
 });
 
-/** Claves de brazo de tensión (`App\Catalog\BloodPressureArm`, ADR 0008). */
+/** Blood pressure arm keys (`App\Catalog\BloodPressureArm`, ADR 0008). */
 const BLOOD_PRESSURE_ARM_KEYS = Object.freeze({
     left: 'dashboard.arm.left',
     right: 'dashboard.arm.right',
 });
 
-/** Claves de postura de tensión (`App\Catalog\BloodPressurePosture`, ADR 0008). */
+/** Blood pressure posture keys (`App\Catalog\BloodPressurePosture`, ADR 0008). */
 const BLOOD_PRESSURE_POSTURE_KEYS = Object.freeze({
     sitting: 'dashboard.posture.sitting',
     lying: 'dashboard.posture.lying',
     standing: 'dashboard.posture.standing',
 });
 
-/** Claves de tipo de insulina (`App\Catalog\InsulinType`). */
+/** Insulin type keys (`App\Catalog\InsulinType`). */
 export const INSULIN_TYPE_KEYS = Object.freeze({
     rapid: 'dashboard.timeline.insulinType.rapid',
     long: 'dashboard.timeline.insulinType.long',
     mixed: 'dashboard.timeline.insulinType.mixed',
 });
 
-/** Claves de tipo de comida (`App\Catalog\MealType`). */
+/** Meal type keys (`App\Catalog\MealType`). */
 export const MEAL_TYPE_KEYS = Object.freeze({
     breakfast: 'dashboard.timeline.mealType.breakfast',
     lunch: 'dashboard.timeline.mealType.lunch',
@@ -54,7 +54,7 @@ export const MEAL_TYPE_KEYS = Object.freeze({
     snack: 'dashboard.timeline.mealType.snack',
 });
 
-/** Claves de sitio de medición de temperatura (`App\Catalog\TemperatureMeasurementSite`). */
+/** Temperature measurement site keys (`App\Catalog\TemperatureMeasurementSite`). */
 export const TEMPERATURE_SITE_KEYS = Object.freeze({
     axillary: 'dashboard.timeline.site.axillary',
     oral: 'dashboard.timeline.site.oral',
@@ -64,8 +64,8 @@ export const TEMPERATURE_SITE_KEYS = Object.freeze({
 });
 
 /**
- * Último recurso para un token de catálogo que este módulo no sabe traducir: se capitaliza cada
- * palabra separada por `_`. Nunca devuelve cadena vacía ni inventa una etiqueta clínica.
+ * Last resort for a catalog token this module cannot translate: every word separated by `_` is
+ * capitalized. It never returns an empty string and never invents a clinical label.
  *
  * @param {string} token
  * @returns {string}
@@ -83,7 +83,7 @@ export function humanizeToken(token) {
 }
 
 /**
- * Etiqueta de un token de catálogo, con el humanizado genérico como respaldo.
+ * Label of a catalog token, with the generic humanizing as fallback.
  *
  * @param {Record<string, string>} keys
  * @param {unknown} token
@@ -98,11 +98,11 @@ export function catalogLabel(keys, token) {
 }
 
 /**
- * Etiqueta legible de un token de método (ADR 0008): glucemia (`capillary`, `interstitial`) o
- * tensión (`${brazo}_${postura}`, p. ej. `left_sitting`).
+ * Readable label of a method token (ADR 0008): glucose (`capillary`, `interstitial`) or blood
+ * pressure (`${arm}_${posture}`, e.g. `left_sitting`).
  *
- * Un token que no reconoce (una magnitud o combinación futura) no rompe nada: se humaniza, para que
- * la pantalla siga diciendo qué incluye aunque no sepa traducirlo con precisión clínica.
+ * A token it does not recognize (a future quantity or combination) breaks nothing: it is
+ * humanized, so the screen keeps saying what it includes even without a clinically precise translation.
  *
  * @param {string} token
  * @returns {string}
@@ -125,7 +125,7 @@ export function formatMethodLabel(token) {
 }
 
 /**
- * Nombre del tipo de evento, la etiqueta que encabeza su tarjeta y su línea temporal.
+ * Name of the event type, the label heading its card and its timeline.
  *
  * @param {string} type
  * @returns {string}
@@ -135,9 +135,9 @@ export function typeLabel(type) {
 }
 
 /**
- * Da forma de número localizado a un valor ya calculado por `statistics.js`. Los valores que llegan
- * aquí son siempre números JavaScript (media, mediana, mínimo, máximo, porcentaje), nunca la cadena
- * en reposo del ADR 0004: ver el JSDoc de `statistics.js` sobre precisión de presentación.
+ * Formats a value already computed by `statistics.js` as a localized number. The values arriving
+ * here are always JavaScript numbers (mean, median, minimum, maximum, percentage), never the ADR
+ * 0004 at-rest string: see the JSDoc of `statistics.js` about display precision.
  *
  * @param {number} value
  * @returns {string}
@@ -147,11 +147,11 @@ export function formatNumber(value) {
 }
 
 /**
- * Da forma localizada a un valor clínico en reposo (ADR 0004: siempre cadena, con el punto como
- * separador decimal).
+ * Localized format of a clinical value at rest (ADR 0004: always a string, with the dot as decimal
+ * separator).
  *
- * Si la cadena no representa un número finito se devuelve **tal cual**, sin tocarla: es el dato que
- * la persona guardó, y sustituirlo por un guion o por `NaN` sería esconder o inventar.
+ * If the string does not represent a finite number it is returned **as is**, untouched: it is the
+ * datum the person saved, and replacing it with a dash or with `NaN` would be hiding or inventing.
  *
  * @param {unknown} raw
  * @returns {string}

@@ -25,34 +25,34 @@ use App\Support\SupportedLocale;
 use BackedEnum;
 
 /**
- * Vocabulario en claro que la página del lector necesita para pintar un recorte (ADR 0011).
+ * Plaintext vocabulary the reader page needs to paint a clipping (ADR 0011).
  *
- * Todo lo que sale de aquí es **dato público de referencia** (ADR 0005): tokens de catálogo con su
- * etiqueta y términos oficiales LOINC. Nada depende de ninguna cuenta, nada distingue a un lector de
- * otro y nada dice qué contiene el recorte que se va a abrir: el mismo JSON se sirve para un enlace
- * vivo, uno caducado y uno que nunca existió. Los valores clínicos siguen dentro del paquete
- * cifrado, y esta clase no los ve ni puede verlos.
+ * Everything that comes out of here is **public reference data** (ADR 0005): catalog tokens with
+ * their labels and official LOINC terms. Nothing depends on any account, nothing tells one reader
+ * from another and nothing says what the clipping about to be opened contains: the same JSON is
+ * served for a live link, an expired one and one that never existed. The clinical values stay inside
+ * the encrypted package, and this class neither sees them nor can see them.
  *
- * **Por qué las etiquetas salen en los tres idiomas a la vez y no solo en el negociado.** La página
- * se pinta en el `Accept-Language` del profesional (nunca en el idioma del paciente, que es columna
- * en claro por el ADR 0007 y no tiene por qué salir de casa), pero esa cabecera dice el idioma del
- * navegador, no el de quien lo usa: en una consulta el portátil suele estar en el idioma que dejó
- * puesto quien lo instaló. Que el selector de idioma funcione sin recargar exige tener las tres
- * versiones ya en la página, porque una segunda petición para cambiar de idioma sería una petición
- * más que ata a ese lector con ese enlace, y una cookie de preferencia sería justo la cookie que
- * esta ruta se quita de encima. Son unos kilobytes de texto.
+ * **Why the labels come out in all three languages at once and not only the negotiated one.** The
+ * page is painted in the professional's `Accept-Language` (never in the patient's language, which is
+ * a plaintext column under ADR 0007 and has no reason to leave home), but that header says the
+ * browser's language, not the language of whoever uses it: in a practice the laptop is usually in
+ * whatever language the person who set it up left it in. Making the language selector work without a
+ * reload requires having all three versions already on the page, because a second request to change
+ * language would be one more request tying that reader to that link, and a preference cookie would
+ * be exactly the cookie this route shakes off. It is a few kilobytes of text.
  *
- * **Los términos oficiales LOINC no se traducen** (ADR 0005): van una sola vez, fuera del bloque por
- * idioma, en el inglés que publica Regenstrief. Es lo que se copia a una historia clínica.
+ * **Official LOINC terms are not translated** (ADR 0005): they go once, outside the per-language
+ * block, in the English Regenstrief publishes. That is what gets copied into a medical record.
  */
 final readonly class ReaderCatalog
 {
     /**
-     * Cómo se enseña cada código UCUM, que es notación de intercambio y no algo que se le pida leer
-     * a nadie (ADR 0005). No se traduce: `mg/dL` es `mg/dL` en los tres idiomas.
+     * How each UCUM code is displayed, since it is exchange notation and not something anyone should
+     * be asked to read (ADR 0005). It is not translated: `mg/dL` is `mg/dL` in all three languages.
      *
-     * Un código que no esté en esta tabla se enseña tal cual en el cliente, sin inventar nada: ver
-     * `unitLabel()` en `resources/js/reader/clinicalReport.js`.
+     * A code that is not in this table is shown as is on the client, without inventing anything: see
+     * `unitLabel()` in `resources/js/reader/clinicalReport.js`.
      *
      * @var array<string, string>
      */
@@ -67,7 +67,7 @@ final readonly class ReaderCatalog
         'cm' => 'cm',
         '[in_i]' => 'in',
         'mm[Hg]' => 'mmHg',
-        /** Pulso: el código UCUM es `/min`, pero lo que lee un clínico es «lpm/bpm». */
+        /** Pulse: the UCUM code is `/min`, but what a clinician reads is "bpm". */
         '/min' => 'bpm',
         /** Unidad internacional de insulina (`App\Filament\Pages\Insulin::UNIT_INTERNATIONAL_UNIT`). */
         '[iU]' => 'IU',
@@ -98,8 +98,9 @@ final readonly class ReaderCatalog
     }
 
     /**
-     * Nombre de cada idioma **en ese mismo idioma**, nunca traducido al de la página: quien busca
-     * su idioma en un selector busca la palabra que reconoce, no su traducción.
+     * Name of each language **in that same language**, never translated into the page's: someone
+     * looking for their language in a selector looks for the word they recognize, not its
+     * translation.
      *
      * @return list<array{code: string, label: string}>
      */
@@ -114,11 +115,11 @@ final readonly class ReaderCatalog
     }
 
     /**
-     * Etiquetas de catálogo en un idioma.
+     * Catalog labels in one language.
      *
-     * Los seis tipos clínicos se nombran con las mismas palabras que el menú del panel
-     * ({@see Sharing::SHAREABLE_TYPES}), para que quien comparte y quien lee
-     * estén hablando de lo mismo.
+     * The six clinical types are named with the same words as the panel menu
+     * ({@see Sharing::SHAREABLE_TYPES}), so whoever shares and whoever reads are talking about the
+     * same thing.
      *
      * @return array<string, array<string, string>>
      */
@@ -143,8 +144,8 @@ final readonly class ReaderCatalog
             'temperatureSites' => $this->tokens(TemperatureMeasurementSite::cases(), $locale),
             'recordedBy' => $this->tokens(RecordedBy::cases(), $locale),
             /**
-             * `FoodQuantityUnit` publica `code` en vez de `token` y no implementa
-             * {@see PatientLabelled}, pero su `label()` sí traduce: «pieza» no es notación UCUM.
+             * `FoodQuantityUnit` exposes `code` instead of `token` and does not implement
+             * {@see PatientLabelled}, but its `label()` does translate: "piece" is not UCUM notation.
              */
             'foodUnits' => array_reduce(
                 FoodQuantityUnit::cases(),
@@ -174,8 +175,8 @@ final readonly class ReaderCatalog
     }
 
     /**
-     * Término oficial de cada código LOINC que este proyecto emite, en inglés y sin traducir
-     * (ADR 0005): es el nombre que identifica la magnitud fuera de esta aplicación.
+     * Official term of every LOINC code this project emits, in English and untranslated
+     * (ADR 0005): it is the name that identifies the quantity outside this application.
      *
      * @return array<string, string>
      */

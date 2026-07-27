@@ -7,11 +7,11 @@ namespace App\Security\Opaque;
 use InvalidArgumentException;
 
 /**
- * Expand-Label y Derive-Secret de OPAQUE (RFC 9807 §6.4.2.1).
+ * OPAQUE Expand-Label and Derive-Secret (RFC 9807 §6.4.2.1).
  *
- * Reutiliza la codificación del struct `HkdfLabel` de TLS 1.3
- * (RFC 8446 §7.1) pero con el prefijo de etiqueta `"OPAQUE-"` en lugar de
- * `"tls13 "`, y sin ningún terminador nulo.
+ * It reuses the encoding of the TLS 1.3 `HkdfLabel` struct
+ * (RFC 8446 §7.1) but with the label prefix `"OPAQUE-"` instead of
+ * `"tls13 "`, and with no null terminator.
  *
  *   Expand-Label(Secret, Label, Context, Length) =
  *       Expand(Secret, CustomLabel, Length)
@@ -25,12 +25,12 @@ use InvalidArgumentException;
  *   Derive-Secret(Secret, Label, Transcript-Hash) =
  *       Expand-Label(Secret, Label, Transcript-Hash, Nx)
  *
- * Nx es la longitud de salida de la función hash del suite; con
- * ristretto255-SHA512 vale 64 bytes.
+ * Nx is the output length of the suite hash function; with
+ * ristretto255-SHA512 it is 64 bytes.
  *
- * Los enteros se serializan en big-endian con `pack('n', ...)` para uint16 y
- * `chr()` para uint8, nunca con `pack('L', ...)`, cuyo orden de bytes depende
- * de la plataforma.
+ * Integers are serialized big-endian with `pack('n', ...)` for uint16 and
+ * `chr()` for uint8, never with `pack('L', ...)`, whose byte order depends on
+ * the platform.
  *
  * @see https://www.rfc-editor.org/rfc/rfc9807#section-6.4.2.1 RFC 9807 §6.4.2.1
  * @see https://www.rfc-editor.org/rfc/rfc8446#section-7.1 RFC 8446 §7.1
@@ -38,22 +38,22 @@ use InvalidArgumentException;
 final class ExpandLabel
 {
     /**
-     * Prefijo que RFC 9807 §6.4.2.1 antepone a toda etiqueta.
+     * Prefix RFC 9807 §6.4.2.1 prepends to every label.
      */
     public const string LABEL_PREFIX = 'OPAQUE-';
 
     /**
-     * Nx del suite ristretto255-SHA512: longitud de salida de Derive-Secret.
+     * Nx of the ristretto255-SHA512 suite: the output length of Derive-Secret.
      */
     public const int SECRET_LENGTH = 64;
 
     /**
-     * Máximo que cabe en el uint8 de longitud de los campos `label` y `context`.
+     * Largest value that fits in the uint8 length of the `label` and `context` fields.
      */
     private const int MAX_VECTOR_LENGTH = 255;
 
     /**
-     * Máximo que cabe en el uint16 del campo `length`.
+     * Largest value that fits in the uint16 `length` field.
      */
     private const int MAX_LENGTH_FIELD = 65535;
 
@@ -62,29 +62,29 @@ final class ExpandLabel
     /**
      * Expand-Label (RFC 9807 §6.4.2.1).
      *
-     * Construye `CustomLabel` y lo pasa como `info` a HKDF-Expand-SHA-512.
+     * It builds `CustomLabel` and passes it as `info` to HKDF-Expand-SHA-512.
      *
-     * El contexto vacío se codifica exactamente como el RFC indica: un uint8
-     * con valor cero y ningún byte más. No se sustituye ni se rellena.
+     * An empty context is encoded exactly as the RFC says: a uint8 with value
+     * zero and not one byte more. It is neither replaced nor padded.
      *
-     * @param  string  $secret  Secreto binario usado como PRK de HKDF-Expand;
-     *                          al menos 64 bytes.
-     * @param  string  $label  Etiqueta ASCII sin el prefijo `"OPAQUE-"`.
-     *                         `strlen("OPAQUE-" . $label)` debe ser <= 255.
-     * @param  string  $context  Contexto binario, posiblemente vacío. Longitud <= 255.
-     * @param  int  $length  Longitud de salida en bytes. 1 <= length <= 65535 y
-     *                       <= 255 * 64 por el límite de HKDF-Expand.
-     * @return string Material derivado binario de exactamente `$length` bytes.
+     * @param  string  $secret  Binary secret used as the HKDF-Expand PRK;
+     *                          at least 64 bytes.
+     * @param  string  $label  ASCII label without the `"OPAQUE-"` prefix.
+     *                         `strlen("OPAQUE-" . $label)` must be <= 255.
+     * @param  string  $context  Binary context, possibly empty. Length <= 255.
+     * @param  int  $length  Output length in bytes. 1 <= length <= 65535 and
+     *                       <= 255 * 64 because of the HKDF-Expand limit.
+     * @return string Binary derived material of exactly `$length` bytes.
      *
-     * @throws InvalidArgumentException Si alguna longitud excede lo que admite
-     *                                  su codificación, o si HKDF-Expand rechaza
-     *                                  los parámetros.
+     * @throws InvalidArgumentException If a length exceeds what its encoding
+     *                                  allows, or if HKDF-Expand rejects the
+     *                                  parameters.
      */
     public static function expandLabel(string $secret, string $label, string $context, int $length): string
     {
         if ($length < 1 || $length > self::MAX_LENGTH_FIELD) {
             throw new InvalidArgumentException(
-                'Expand-Label: la longitud debe caber en un uint16 y ser positiva, recibida '.$length.'.'
+                'Expand-Label: the length must fit in a uint16 and be positive, got '.$length.'.'
             );
         }
 
@@ -93,7 +93,7 @@ final class ExpandLabel
 
         if ($prefixedLabelLength > self::MAX_VECTOR_LENGTH) {
             throw new InvalidArgumentException(
-                'Expand-Label: la etiqueta con prefijo mide '.$prefixedLabelLength.' bytes y no cabe en un uint8.'
+                'Expand-Label: the prefixed label is '.$prefixedLabelLength.' bytes long and does not fit in a uint8.'
             );
         }
 
@@ -101,7 +101,7 @@ final class ExpandLabel
 
         if ($contextLength > self::MAX_VECTOR_LENGTH) {
             throw new InvalidArgumentException(
-                'Expand-Label: el contexto mide '.$contextLength.' bytes y no cabe en un uint8.'
+                'Expand-Label: the context is '.$contextLength.' bytes long and does not fit in a uint8.'
             );
         }
 
@@ -117,17 +117,17 @@ final class ExpandLabel
     /**
      * Derive-Secret (RFC 9807 §6.4.2.1).
      *
-     * Equivale a Expand-Label con el hash del transcript como contexto y
-     * longitud fija Nx = 64.
+     * Equivalent to Expand-Label with the transcript hash as context and a
+     * fixed length Nx = 64.
      *
-     * @param  string  $secret  Secreto binario usado como PRK; al menos 64 bytes.
-     * @param  string  $label  Etiqueta ASCII sin prefijo, p. ej. `"HandshakeSecret"`,
+     * @param  string  $secret  Binary secret used as PRK; at least 64 bytes.
+     * @param  string  $label  ASCII label without the prefix, such as `"HandshakeSecret"`,
      *                         `"SessionKey"`, `"ServerMAC"`, `"ClientMAC"`.
-     * @param  string  $transcriptHash  Hash del transcript, o cadena vacía cuando
-     *                                  el RFC pasa contexto vacío (Km2 y Km3).
-     * @return string Secreto derivado binario de exactamente 64 bytes.
+     * @param  string  $transcriptHash  Transcript hash, or the empty string when
+     *                                  the RFC passes an empty context (Km2 and Km3).
+     * @return string Binary derived secret of exactly 64 bytes.
      *
-     * @throws InvalidArgumentException Si alguna longitud excede su codificación.
+     * @throws InvalidArgumentException If a length exceeds its encoding.
      */
     public static function deriveSecret(string $secret, string $label, string $transcriptHash): string
     {

@@ -1,19 +1,19 @@
 /**
- * Navegación tras el login y recarga dura tras el cierre de sesión (Spec 0001 §5, paso 20, y §8).
+ * Navigation after login and hard reload after sign-out (Spec 0001 §5, step 20, and §8).
  *
- * Dos operaciones distintas que no se pueden confundir:
+ * Two different operations that must not be mixed up:
  *
- * * `navigate()` conserva el contexto de JavaScript, y con él la clave maestra en memoria. Es lo
- *   que hace falta al entrar: si aquí ocurriera una recarga dura, la clave moriría justo después
- *   de nacer.
- * * `hardReload()` destruye el contexto de JavaScript, y con él las instantáneas de DOM que
- *   Livewire retiene con datos descifrados (ADR 0003). Es lo que hace falta al salir, y solo
- *   **después** de que el servidor confirme el cierre (§4.6).
+ * * `navigate()` keeps the JavaScript context, and with it the master key in memory. That is
+ *   what is needed when signing in: a hard reload here would kill the key right after it was
+ *   born.
+ * * `hardReload()` destroys the JavaScript context, and with it the DOM snapshots Livewire
+ *   keeps with decrypted data (ADR 0003). That is what is needed when signing out, and only
+ *   **after** the server confirms the sign-out (§4.6).
  */
 
 /**
- * Navega sin recargar. Usa el enrutador de Alpine cuando existe; si no, cae a una navegación
- * normal, que es correcta aunque cueste la clave en memoria.
+ * Navigates without reloading. Uses the Alpine router when it exists; otherwise it falls back to
+ * a normal navigation, which is correct even though it costs the key in memory.
  *
  * @param {string|undefined} url
  */
@@ -32,8 +32,8 @@ export function navigate(url) {
 }
 
 /**
- * Recarga dura. `location.reload()` puede servirse de la caché de vuelta atrás; una asignación a
- * `href` con la URL de destino no.
+ * Hard reload. `location.reload()` may be served from the back-forward cache; assigning the
+ * target URL to `href` is not.
  *
  * @param {string} url
  */

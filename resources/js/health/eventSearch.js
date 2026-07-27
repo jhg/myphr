@@ -1,52 +1,52 @@
 /**
- * Búsqueda de texto libre sobre eventos **ya descifrados**.
+ * Free text search over **already decrypted** events.
  *
- * ## Por qué esto puede existir aquí y el buscador global del panel está apagado a propósito
+ * ## Why this can exist here while the global panel search is switched off on purpose
  *
- * El buscador de Filament resuelve en el servidor: escribe un `where ... like` contra columnas de la
- * base de datos. En este proyecto las columnas de un evento son `user_id`, `occurred_at` y un blob
- * cifrado (ADR 0006), así que ese buscador o no encontraría nada nunca, o —peor— empujaría a
- * guardar en claro algo por lo que buscar. Un índice de «alimentos que come esta persona» o de
- * «aparato con el que se mide» en la base de datos es exactamente el metadato que el ADR 0006
- * cifró; leer `["insulina rápida"]` es saber que esa persona es diabética sin descifrar un byte. Por
- * eso está desactivado y por eso tiene que seguir estándolo.
+ * The Filament search resolves on the server: it writes a `where ... like` against database
+ * columns. In this project the columns of an event are `user_id`, `occurred_at` and an encrypted
+ * blob (ADR 0006), so that search would either never find anything or —worse— push somebody into
+ * storing something searchable in the clear. An index of "foods this person eats" or of "device
+ * they measure with" in the database is exactly the metadata ADR 0006 encrypted; reading
+ * `["fast insulin"]` is knowing that person is diabetic without decrypting a byte. That is why it
+ * is disabled and why it has to stay disabled.
  *
- * Esta búsqueda es lo contrario: corre **entera en el navegador**, sobre los eventos que ya se
- * bajaron y se abrieron para pintar la pantalla. No hay petición, no hay parámetro de consulta, no
- * hay `$wire`, no hay propiedad pública de Livewire (el snapshot viaja al servidor y se queda ahí,
- * ADR 0002) y el texto tecleado no sale del dispositivo. Es gratis por la misma razón que el filtro
- * por tipo: los datos ya están descifrados en memoria.
+ * This search is the opposite: it runs **entirely in the browser**, over the events already
+ * downloaded and opened to paint the screen. There is no request, no query parameter, no `$wire`,
+ * no public Livewire property (the snapshot travels to the server and stays there, ADR 0002) and
+ * the typed text never leaves the device. It is free for the same reason as the type filter: the
+ * data is already decrypted in memory.
  *
- * La consecuencia honesta, escrita para que nadie se lleve una sorpresa: **solo busca en lo
- * cargado**. Si el periodo elegido es el último día, no encuentra la nota de hace un mes. La salida
- * es ampliar el periodo, que sí viaja al servidor por `occurred_at`, columna en claro. Cualquier
- * intento de arreglarlo «buscando en todo el historial» sin ampliar el periodo significaría bajarlo
- * y descifrarlo entero, o pedírselo al servidor, y lo segundo no es posible sin romper el cifrado.
+ * The honest consequence, written down so nobody is surprised: **it only searches what is
+ * loaded**. If the chosen period is the last day, it does not find the note from a month ago. The
+ * way out is widening the period, which does travel to the server through `occurred_at`, a column
+ * in the clear. Any attempt to fix it by "searching the whole history" without widening the period
+ * would mean downloading and decrypting all of it, or asking the server, and the second is not possible without breaking the encryption.
  *
- * ## Qué se busca
+ * ## What is searched
  *
- * El texto que la persona **ve**: el tipo, el resumen y el detalle de la línea temporal (que ya
- * traducen los tokens de catálogo, así que «capilar» encuentra un `capillary`), más todas las
- * cadenas del contenido descifrado —nota, aparato, nombres de alimentos, unidades, valores—. Buscar
- * sobre lo que se lee es lo único que no sorprende: si aparece en pantalla, se encuentra.
+ * The text the person **sees**: the type, the summary and the detail of the timeline (which
+ * already translate the catalog tokens, so "capillary" finds a `capillary`), plus every string of
+ * the decrypted content —note, device, food names, units, values—. Searching over what is read is
+ * the only thing that does not surprise: if it shows on screen, it is found.
  */
 
 import { typeLabel } from './eventLabels.js';
 import { describeTimelineEvent } from './timelineView.js';
 
 /**
- * Profundidad máxima al recorrer el contenido en busca de cadenas. Los eventos del ADR 0006 son
- * planos o casi (`data.foods[].name` es lo más hondo); el tope existe para que un contenido
- * inesperado no pueda hacer entrar al recorrido en un bucle.
+ * Maximum depth when walking the content looking for strings. ADR 0006 events are flat or nearly
+ * so (`data.foods[].name` is the deepest); the cap exists so that unexpected content cannot send
+ * the walk into a loop.
  */
 const MAX_DEPTH = 4;
 
 /**
- * Normaliza para comparar: sin mayúsculas y sin tildes.
+ * Normalizes for comparison: no uppercase and no accents.
  *
- * Sin quitar tildes, buscar «desayuno» no encontraría «Desayúno» y, sobre todo, quien teclea sin
- * acentos —lo normal en un buscador— no encontraría «Café». Es comparación de texto, no
- * almacenamiento: el dato no se toca.
+ * Without stripping accents, searching "desayuno" would not find "Desayúno" and, above all,
+ * whoever types without accents —the normal thing in a search box— would not find "Café". It is
+ * text comparison, not storage: the datum is not touched.
  *
  * @param {string} text
  * @returns {string}
@@ -56,12 +56,12 @@ export function normalizeForSearch(text) {
 }
 
 /**
- * Trocea lo tecleado en términos. Varios términos se exigen **todos** (Y lógica, no O): quien
- * escribe «capilar 140» busca la lectura capilar de 140, no todo lo capilar más todo lo que valga
- * 140.
+ * Splits what was typed into terms. Several terms are **all** required (AND, not OR): whoever
+ * writes "capillary 140" is looking for the capillary reading of 140, not everything capillary
+ * plus everything worth 140.
  *
  * @param {unknown} query
- * @returns {list<string>} Vacía si no hay nada que buscar.
+ * @returns {list<string>} Empty if there is nothing to search for.
  */
 export function searchTerms(query) {
     if (typeof query !== 'string') {
@@ -72,9 +72,9 @@ export function searchTerms(query) {
 }
 
 /**
- * Todas las cadenas de un valor cualquiera, recursivamente. Los números también cuentan: el valor de
- * una glucemia viaja como cadena (ADR 0004), pero una `quantity` numérica de un futuro tipo de
- * evento se buscaría igual.
+ * Every string of any value, recursively. Numbers count too: the value of a glucose reading
+ * travels as a string (ADR 0004), but a numeric `quantity` of a future event type would be found
+ * all the same.
  *
  * @param {unknown} value
  * @param {number} depth
@@ -103,10 +103,10 @@ function collectStrings(value, depth, into) {
 }
 
 /**
- * Texto contra el que se busca un evento: lo que se ve en pantalla más el contenido en claro.
+ * Text an event is searched against: what is seen on screen plus the content in the clear.
  *
- * @param {object} event Evento descifrado y aplanado.
- * @returns {string} Ya normalizado.
+ * @param {object} event Decrypted and flattened event.
+ * @returns {string} Already normalized.
  */
 export function searchableText(event) {
     /** @type {list<string>} */
@@ -127,10 +127,10 @@ export function searchableText(event) {
     }
 
     /**
-     * Los campos comunes (`note`, `device`, `origin`, `recordedBy`) van en el nivel superior del
-     * contenido y `data` lleva lo propio del tipo, así que se recorre el evento entero menos la
-     * fecha, que ya tiene su propio control de periodo y solo añadiría ruido: buscar «11» no debe
-     * traer todo lo ocurrido a las 11:00.
+     * The common fields (`note`, `device`, `origin`, `recordedBy`) live at the top level of the
+     * content and `data` carries what belongs to the type, so the whole event is walked except the
+     * date, which already has its own period control and would only add noise: searching "11" must
+     * not bring back everything that happened at 11:00.
      */
     for (const [key, value] of Object.entries(event ?? {})) {
         if (key === 'occurredAt' || key === 'tz' || key === 'v') {
@@ -144,10 +144,10 @@ export function searchableText(event) {
 }
 
 /**
- * ¿Casa este evento con todos los términos?
+ * Does this event match every term?
  *
  * @param {object} event
- * @param {list<string>} terms Ya normalizados ({@see searchTerms}).
+ * @param {list<string>} terms Already normalized ({@see searchTerms}).
  * @returns {boolean}
  */
 export function matchesSearch(event, terms) {
@@ -161,11 +161,11 @@ export function matchesSearch(event, terms) {
 }
 
 /**
- * Filtra por texto libre. Una consulta vacía devuelve **la misma lista**, no una copia filtrada: no
- * buscar nada no puede esconder nada.
+ * Filters by free text. An empty query returns **the same list**, not a filtered copy: searching
+ * for nothing cannot hide anything.
  *
- * @param {list<object>} events Eventos descifrados y aplanados.
- * @param {unknown} query Lo tecleado.
+ * @param {list<object>} events Decrypted and flattened events.
+ * @param {unknown} query What was typed.
  * @returns {list<object>}
  */
 export function searchEvents(events, query) {

@@ -8,27 +8,27 @@ use App\Support\SupportedLocale;
 use ValueError;
 
 /**
- * Sitio del cuerpo donde se tomó la temperatura.
+ * Body site where the temperature was taken.
  *
- * Es el método de medición que exige el ADR 0008 (docs/adr/0008-measurement-method.md) para esta
- * magnitud: el sitio cambia el valor de forma conocida —la axilar va varias décimas por debajo de
- * la rectal para la misma persona en el mismo momento— y solo se sabe al medir, así que se pregunta
- * y nunca se deduce. Mezclar sitios en una misma serie sin decirlo produciría una curva que no
- * significa nada, igual que mezclar brazos en la tensión.
+ * It is the measurement method ADR 0008 (docs/adr/0008-measurement-method.md) requires for this
+ * quantity: the site changes the value in a known way —an axillary reading runs several tenths below
+ * a rectal one for the same person at the same moment— and is only known at the moment of measuring,
+ * so it is asked for and never inferred. Mixing sites in a single series without saying so would
+ * produce a curve that means nothing, just like mixing arms in blood pressure.
  *
- * A diferencia del brazo y la postura de la tensión, aquí el sitio **además determina el código
- * LOINC** ({@see TemperatureLoincCode}): LOINC publica un código distinto por sitio de medida. El
- * token de este enum sigue viajando aparte en `data.site`, porque el código es vocabulario de
- * intercambio y el token es lo que agrupa nuestras series.
+ * Unlike the arm and the posture in blood pressure, here the site **also determines the LOINC code**
+ * ({@see TemperatureLoincCode}): LOINC publishes a different code per measurement site. The token of
+ * this enum still travels separately in `data.site`, because the code is exchange vocabulary and the
+ * token is what groups our own series.
  *
- * El valor de cada caso es ese token, que se serializa dentro del payload que se cifra en el
- * navegador (ADR 0002, ADR 0006), así que **no puede cambiar nunca** una vez publicado: no hay forma
- * de recorrer los sobres ya guardados y re-cifrarlos sin la clave de cada usuario. Añadir un caso
- * nuevo es seguro; renombrar o eliminar uno existente no lo es.
+ * The value of each case is that token, which is serialized inside the payload encrypted in the
+ * browser (ADR 0002, ADR 0006), so it **can never change** once published: there is no way to walk
+ * the stored envelopes and re-encrypt them without each user's key. Adding a new case is safe;
+ * renaming or removing an existing one is not.
  *
- * El orden es el de la plantilla, y la axilar va primera a propósito: es la forma más habitual de
- * tomar la temperatura en casa, y el desplegable no ofrece opción vacía (el sitio es obligatorio),
- * así que la primera opción es la que se confirma o se cambia.
+ * The order is the one from the template, and axillary goes first on purpose: it is the most common
+ * way to take a temperature at home, and the dropdown offers no empty option (the site is
+ * mandatory), so the first option is the one you confirm or change.
  */
 enum TemperatureMeasurementSite: string implements PatientLabelled
 {
@@ -38,20 +38,20 @@ enum TemperatureMeasurementSite: string implements PatientLabelled
     /** Boca (sublingual). */
     case Oral = 'oral';
 
-    /** Oído, sobre la membrana timpánica. */
+    /** Ear, on the tympanic membrane. */
     case Tympanic = 'tympanic';
 
-    /** Frente, sobre la arteria temporal. */
+    /** Forehead, over the temporal artery. */
     case TemporalArtery = 'temporal';
 
     /** Recto. */
     case Rectal = 'rectal';
 
     /**
-     * Etiqueta en el idioma indicado, para mostrar al paciente (ADR 0005: la etiqueta no sustituye
-     * al token, que es lo único que entra en el sobre cifrado).
+     * Label in the given language, to show to the patient (ADR 0005: the label does not replace the
+     * token, which is the only thing that goes into the encrypted envelope).
      *
-     * @param  string  $locale  Cualquier código; los no soportados caen al idioma por defecto.
+     * @param  string  $locale  Any code; unsupported ones fall back to the default language.
      */
     public function label(string $locale): string
     {
@@ -73,7 +73,7 @@ enum TemperatureMeasurementSite: string implements PatientLabelled
             [self::Tympanic, 'zh_CN'] => '耳道（鼓膜）',
             [self::TemporalArtery, 'zh_CN'] => '额头（颞动脉）',
             [self::Rectal, 'zh_CN'] => '直肠',
-            default => throw new ValueError(sprintf('Falta la etiqueta de sitio de medición para el idioma "%s".', $locale)),
+            default => throw new ValueError(sprintf('Missing measurement site label for locale "%s".', $locale)),
         };
     }
 }

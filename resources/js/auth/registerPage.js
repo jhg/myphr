@@ -1,20 +1,20 @@
 /**
- * Componente Alpine de la pantalla de alta pública, sin invitación (Spec 0001 §4.1 y §5, con la
- * variante de `POST /phr/auth/opaque/registration/public/start`).
+ * Alpine component of the public sign-up screen, with no invitation (Spec 0001 §4.1 and §5, with
+ * the `POST /phr/auth/opaque/registration/public/start` variant).
  *
- * Es la misma secuencia que `setPasswordPage.js`, con dos diferencias únicamente:
+ * It is the same sequence as `setPasswordPage.js`, with only two differences:
  *
- * * No hay token en el fragmento de la URL: quien llega aquí no tiene invitación, así que el
- *   nombre y el login los escribe la propia persona y viajan en el cuerpo de `registration/public/
- *   start` junto con `registrationRequest` (`RegistrationPublicStartController`).
- * * El servidor puede responder 409 `login_taken` cuando el correo ya tiene cuenta. Es una decisión
- *   explícita del servidor (`RegistrationPublicStartController`, comentario junto a la clase), y
- *   aquí se traduce a un mensaje accionable, no a un error genérico: la plantilla ofrece un enlace a
- *   iniciar sesión cuando `loginTaken` es verdadero.
+ * * There is no token in the URL fragment: whoever lands here has no invitation, so the name and
+ *   the login are typed by the person and travel in the body of `registration/public/start`
+ *   together with `registrationRequest` (`RegistrationPublicStartController`).
+ * * The server may answer 409 `login_taken` when the email already has an account. It is an
+ *   explicit server decision (`RegistrationPublicStartController`, comment next to the class),
+ *   and here it is translated into an actionable message, not a generic error: the template
+ *   offers a link to sign in when `loginTaken` is true.
  *
- * El resto —nacimiento de la clave maestra, sellado de los sobres, la única petición transaccional
- * de `registration/finish` y el login OPAQUE inmediato con la misma contraseña— es idéntico a §5 y
- * no se reimplementa: mismos módulos de `opaqueClient.js`, `keyring.js`, `context.js`, `settings.js`.
+ * The rest —birth of the master key, sealing of the envelopes, the single transactional request
+ * of `registration/finish` and the immediate OPAQUE login with the same password— is identical to
+ * §5 and is not reimplemented: same `opaqueClient.js`, `keyring.js`, `context.js`, `settings.js` modules.
  */
 
 import { deriveKey, KDF_LABELS } from '../crypto/kdf.js';
@@ -44,12 +44,12 @@ import { navigate } from './navigate.js';
 import { KEY_STRETCHING_SECONDS, progressMixin } from './progress.js';
 import { forgetSettings, loadSettings } from './settings.js';
 
-/** Configuración vacía inicial (§3.1): nadie es distinguible por tenerla o no. */
+/** Empty initial configuration (§3.1): nobody is distinguishable by having it or not. */
 const EMPTY_SETTINGS = '{"v":1}';
 
 /**
- * Compara las dos contraseñas del formulario. Función pura, sin estado de Alpine, para poder
- * probarla sin montar DOM.
+ * Compares the two passwords of the form. A pure function, with no Alpine state, so it can be
+ * tested without mounting any DOM.
  *
  * @param {string} password
  * @param {string} confirmation
@@ -60,15 +60,15 @@ export function passwordsMatch(password, confirmation) {
 }
 
 /**
- * Traduce un fallo de la alta pública al mensaje que corresponde.
+ * Translates a public sign-up failure into the message that fits.
  *
- * El 409 `login_taken` es un caso propio, no una variante del genérico: quien lo lee tiene que
- * enterarse de que ya existe una cuenta con ese correo y de que hay una acción concreta que tomar
- * (ir a iniciar sesión), así que se devuelve también `loginTaken` para que la plantilla pueda ofrecer
- * ese enlace en vez de darlo por perdido en el texto del error.
+ * The 409 `login_taken` is a case of its own, not a variant of the generic one: whoever reads it
+ * has to learn that an account with that email already exists and that there is a concrete action
+ * to take (go and sign in), so `loginTaken` is returned as well, letting the template offer that
+ * link instead of burying it in the error text.
  *
- * Función pura sobre el propio error: no lee `document` ni `window`, así que se puede probar
- * construyendo los errores a mano.
+ * A pure function over the error itself: it reads neither `document` nor `window`, so it can be
+ * tested by building the errors by hand.
  *
  * @param {unknown} failure
  * @returns {{message: string, loginTaken: boolean}}
@@ -94,7 +94,7 @@ export function describeFailure(failure) {
 }
 
 /**
- * Factoría del componente Alpine. Se registra como `phrRegisterForm`.
+ * Alpine component factory. Registered as `phrRegisterForm`.
  *
  * @returns {object}
  */
@@ -105,7 +105,7 @@ export function registerPage() {
         busy: false,
         error: '',
 
-        /** ¿El último error fue un 409 `login_taken`? La plantilla ofrece entonces ir a acceder. */
+        /** Was the last error a 409 `login_taken`? The template then offers going to sign in. */
         loginTaken: false,
 
         /** @param {SubmitEvent} event */
@@ -123,7 +123,7 @@ export function registerPage() {
             const name = this.$refs.name.value.trim();
             const login = this.$refs.login.value.trim();
 
-            /** La contraseña sale del DOM y los campos quedan vacíos en el acto (§5, paso 2). */
+            /** The password leaves the DOM and the fields are emptied at once (§5, step 2). */
             let password = this.$refs.password.value;
             const confirmation = this.$refs.passwordConfirmation.value;
 
@@ -166,7 +166,7 @@ export function registerPage() {
 
             const pinned = opaqueParameters();
 
-            /** Sin `keyStretching` (§5, paso 3). */
+            /** Without `keyStretching` (§5, step 3). */
             const { clientRegistrationState, registrationRequest } = startRegistration(password);
 
             await this.advance(t('register.stage.contacting'), 0.1);
@@ -177,16 +177,16 @@ export function registerPage() {
                 registrationRequest,
             });
 
-            /** Antes de derivar nada (§5, paso 5): en el alta no existe todavía `server_mac`. */
+            /** Before deriving anything (§5, step 5): at sign-up there is no `server_mac` yet. */
             assertPinned(started, pinned);
 
             /**
-             * La barra se lanza antes y se espera a que el navegador la pinte: a partir de la
-             * siguiente línea el hilo principal está bloqueado y no pinta nada más.
+             * The bar starts first and we wait for the browser to paint it: from the next line on,
+             * the main thread is blocked and paints nothing else.
              */
             await this.advance(t('register.stage.stretching'), 0.4, KEY_STRETCHING_SECONDS);
 
-            /** Aquí corre el primer Argon2id (§5, paso 6). */
+            /** The first Argon2id runs here (§5, step 6). */
             const registered = finishRegistration({
                 password,
                 clientRegistrationState,
@@ -200,7 +200,7 @@ export function registerPage() {
             const umkContext = envelopeContext(userId, ENVELOPE_PURPOSES.UserMasterKey);
             const settingsContext = envelopeContext(userId, ENVELOPE_PURPOSES.Settings);
 
-            /** §5, pasos 7 a 11: la clave maestra nace del CSPRNG, nunca de la contraseña. */
+            /** §5, steps 7 to 11: the master key is born from the CSPRNG, never from the password. */
             const kek = deriveKey({ ikm: registered.exportKey, label: KDF_LABELS.KEK });
             let wrappedUserMasterKey;
             let encryptedSettings;
@@ -237,7 +237,7 @@ export function registerPage() {
 
             await this.advance(t('stage.saving'), 0.5);
 
-            /** Una única petición transaccional (§5, paso 12). */
+            /** A single transactional request (§5, step 12). */
             await postJson(form.dataset.registrationFinishUrl, {
                 registrationId: started.registrationId,
                 registrationRecord: registered.registrationRecord,
@@ -245,7 +245,7 @@ export function registerPage() {
                 encryptedSettings,
             });
 
-            /** Login OPAQUE completo con la misma contraseña, idéntico a §6.1 (§5, pasos 13 y 14). */
+            /** Full OPAQUE login with the same password, identical to §6.1 (§5, steps 13 and 14). */
             const { clientLoginState, startLoginRequest } = startLogin(password);
 
             const loginStarted = await postJson(form.dataset.loginStartUrl, {
@@ -255,7 +255,7 @@ export function registerPage() {
 
             assertPinned(loginStarted, pinned);
 
-            /** Segundo Argon2id, el del login inmediato. */
+            /** Second Argon2id, the one of the immediate login. */
             await this.advance(t('register.stage.verifying'), 0.9, KEY_STRETCHING_SECONDS);
 
             const loginFinished = finishLogin({
@@ -278,12 +278,12 @@ export function registerPage() {
                 finishLoginRequest: loginFinished.finishLoginRequest,
             });
 
-            /** La clave que devuelve el servidor tiene que ser la que acaba de nacer. */
+            /** The key the server returns has to be the one just born. */
             assertRoundTrip(loginFinished.exportKey, session.encryptedUserMasterKey, umkContext);
 
             /**
-             * Ajustes recién sellados más arriba, con la clave maestra ya verificada. Se reutiliza
-             * el sobre local en vez de depender de que `login/finish` lo repita en su respuesta.
+             * Settings sealed further up, with the master key already verified. The local envelope
+             * is reused instead of relying on `login/finish` repeating it in its response.
              */
             loadSettings({ envelope: encryptedSettings, userId });
 
@@ -295,7 +295,7 @@ export function registerPage() {
                 zeroize(sessionSecret);
             }
 
-            /** El CSRF nuevo antes de navegar, o el siguiente POST autenticado da 419. */
+            /** The new CSRF before navigating, or the next authenticated POST gives 419. */
             updateCsrfToken(session.csrf);
 
             await this.advance(t('stage.entering'), 1);
@@ -306,10 +306,10 @@ export function registerPage() {
 }
 
 /**
- * Reabre el sobre que devolvió el servidor y compara con la clave maestra en memoria.
+ * Reopens the envelope the server returned and compares it with the master key in memory.
  *
- * Es la verificación del alta: si no cuadra, la cuenta acaba de quedar con una clave que nadie puede
- * recuperar, y es mejor saberlo ahora, sin datos todavía, que en el primer login real.
+ * This is the sign-up verification: if it does not match, the account has just been left with a
+ * key nobody can recover, and it is better to know now, with no data yet, than at the first real login.
  *
  * @param {string} exportKey
  * @param {string} envelope
@@ -337,7 +337,7 @@ function assertRoundTrip(exportKey, envelope, context) {
 }
 
 /**
- * Comparación en tiempo constante de dos búferes.
+ * Constant-time comparison of two buffers.
  *
  * @param {Uint8Array} a
  * @param {Uint8Array} b

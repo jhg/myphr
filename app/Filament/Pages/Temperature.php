@@ -14,29 +14,31 @@ use Filament\Support\Icons\Heroicon;
 use Illuminate\Contracts\Support\Htmlable;
 
 /**
- * Pantalla de temperatura corporal (ADR 0002, ADR 0004, ADR 0005, ADR 0006, ADR 0008).
+ * Body temperature screen (ADR 0002, ADR 0004, ADR 0005, ADR 0006, ADR 0008).
  *
- * Un evento de temperatura guarda el valor, su unidad y el sitio donde se midió. El sitio es el
- * método de medición del ADR 0008: cambia el valor de forma conocida (la axilar va por debajo de la
- * rectal para la misma persona en el mismo momento) y solo se sabe al medir, así que se pregunta y
- * viaja como token propio (`data.site`), nunca deducido.
+ * A temperature event stores the value, its unit and the site where it was measured. The site is the
+ * ADR 0008 measurement method: it changes the value in a known way (axillary runs below rectal for
+ * the same person at the same moment) and is only known at the moment of measuring, so it is asked
+ * for and travels as a token of its own (`data.site`), never inferred.
  *
- * A diferencia de la tensión, aquí el sitio **además determina el código LOINC**: LOINC publica un
- * código por sitio de medida, así que esta pantalla sí necesita una tabla de resolución sitio →
- * código, al estilo de la glucemia. El porqué, y por qué no se usa el genérico 8310-5, está en
+ * Unlike blood pressure, here the site **also determines the LOINC code**: LOINC publishes a code
+ * per measurement site, so this screen does need a site → code resolution table, in the style of
+ * blood glucose. The why, and why the generic 8310-5 is not used, is in
  * {@see TemperatureLoincCode}.
  *
- * La unidad se pregunta y no se convierte: Celsius y Fahrenheit son la misma observación en otra
- * escala, cada registro conserva la suya (ADR 0006) y la gráfica traza una serie por pareja (sitio,
- * unidad) en vez de mezclar escalas, que daría una curva que salta de 36 a 98 sin decir nada.
+ * The unit is asked for and not converted: Celsius and Fahrenheit are the same observation on a
+ * different scale, each record keeps its own (ADR 0006) and the chart draws one series per (site,
+ * unit) pair instead of mixing scales, which would give a curve jumping from 36 to 98 without
+ * meaning anything.
  *
- * Igual que el resto de pantallas de eventos, esta clase no ve nunca el contenido de un registro: el
- * transporte común de ciphertext vive en {@see HealthEventPage}, que valida la envoltura del sobre y
- * la autorización, nunca el contenido.
+ * Like the rest of the event screens, this class never sees the content of a record: the shared
+ * ciphertext transport lives in {@see HealthEventPage}, which validates the envelope wrapper and
+ * authorization, never the content.
  *
- * El catálogo no publica {@see DataOrigin}: la vista no pregunta el origen del dato (siempre manual,
- * ver JSDoc de `resources/js/health/temperaturePage.js`), así que no hay `<select>` que rellenar con
- * esos tokens. `origin` sigue viajando dentro del sobre cifrado, fijo a `manual` desde el cliente.
+ * The catalog does not publish {@see DataOrigin}: the view does not ask for the data origin (always
+ * manual, see the JSDoc of `resources/js/health/temperaturePage.js`), so there is no `<select>` to
+ * fill with those tokens. `origin` still travels inside the encrypted envelope, fixed to `manual`
+ * from the client.
  */
 final class Temperature extends HealthEventPage
 {
@@ -45,9 +47,9 @@ final class Temperature extends HealthEventPage
     protected string $view = 'phr.pages.temperature';
 
     /**
-     * El título y la etiqueta de navegación se resuelven por método y no como propiedad estática
-     * porque un inicializador de propiedad en PHP solo admite expresiones constantes: `__()` no
-     * puede llamarse ahí.
+     * The title and the navigation label are resolved by method and not as a static property because
+     * a property initializer in PHP only accepts constant expressions: `__()` cannot be called
+     * there.
      */
     public function getTitle(): string|Htmlable
     {
@@ -60,13 +62,13 @@ final class Temperature extends HealthEventPage
     }
 
     /**
-     * Catálogo público en claro que el cliente necesita para construir el payload cifrado (ADR
-     * 0005, ADR 0008). No es dato clínico: son los mismos tokens y códigos para cualquier usuario.
+     * Public plaintext catalog the client needs to build the encrypted payload (ADR 0005,
+     * ADR 0008). It is not clinical data: the same tokens and codes for every user.
      *
-     * La etiqueta de la unidad no es su código UCUM: el código de Fahrenheit es `[degF]`, con los
-     * corchetes que UCUM reserva a las unidades no métricas, y enseñarlo así sería pedirle a la
-     * persona que lea notación de intercambio. Se guarda el código y se muestra `°C` o `°F`, que es
-     * exactamente la distinción del ADR 0005.
+     * The unit label is not its UCUM code: the Fahrenheit code is `[degF]`, with the brackets UCUM
+     * reserves for non-metric units, and showing it like that would be asking the person to read
+     * exchange notation. The code is stored and `°C` or `°F` is shown, which is exactly the ADR 0005
+     * distinction.
      *
      * @return array{
      *     units: list<array{code: string, label: string}>,
@@ -77,8 +79,8 @@ final class Temperature extends HealthEventPage
      */
     public function catalog(): array
     {
-        /** El catálogo es en claro y lo pinta el servidor, así que las etiquetas salen ya en el
-         * idioma en vigor para esta petición (App\Support\SupportedLocale). */
+        /** The catalog is plaintext and the server paints it, so the labels already come out in the
+         * language in force for this request (App\Support\SupportedLocale). */
         $locale = app()->getLocale();
 
         return [
@@ -88,19 +90,19 @@ final class Temperature extends HealthEventPage
             ],
             'sites' => self::labelledOptions(TemperatureMeasurementSite::cases(), $locale),
             'loinc' => self::loincTable(),
-            /** Campo común a todo evento (ADR 0006), no propio de la temperatura. */
+            /** Field common to every event (ADR 0006), not specific to temperature. */
             'recordedByRoles' => self::labelledOptions(RecordedBy::cases(), $locale),
         ];
     }
 
     /**
-     * Tabla que resuelve el sitio de medición al código LOINC (ADR 0005, ADR 0008), para que el
-     * cliente no tenga que reimplementar {@see TemperatureLoincCode::resolve()}.
+     * Table resolving the measurement site to the LOINC code (ADR 0005, ADR 0008), so the client
+     * does not have to reimplement {@see TemperatureLoincCode::resolve()}.
      *
-     * No lleva `try`/`catch` como la de la glucemia: allí hay combinaciones (método, unidad) sin
-     * código y la tabla las salta, mientras que aquí todo sitio publicado tiene el suyo. Si algún
-     * día se añade un sitio sin código, este método reventará al construir el catálogo —en el acto y
-     * a la vista— en vez de servir una pantalla que guardaría registros sin código.
+     * It carries no `try`/`catch` like the blood glucose one: there, some (method, unit) pairs have
+     * no code and the table skips them, whereas here every published site has its own. If a site
+     * without a code is ever added, this method will blow up while building the catalog —right away
+     * and in plain sight— instead of serving a screen that would store records with no code.
      *
      * @return list<array{site: string, code: string}>
      */

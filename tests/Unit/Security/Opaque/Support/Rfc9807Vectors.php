@@ -5,39 +5,40 @@ declare(strict_types=1);
 namespace Tests\Unit\Security\Opaque\Support;
 
 /**
- * Vectores oficiales del Apéndice C de RFC 9807, transcritos literalmente de
+ * Official Appendix C vectors of RFC 9807, transcribed verbatim from
  * <https://www.rfc-editor.org/rfc/rfc9807.txt>.
  *
- * Sólo se incluyen los del perfil de este despliegue:
+ * Only the ones for this deployment's profile are included:
  *
- * - C.1.1 — Real Test Vector 1, `ristretto255-SHA512`, sin identidades.
- * - C.1.2 — Real Test Vector 2, `ristretto255-SHA512`, con `client_identity`
- *   y `server_identity`.
- * - C.2.1 — Fake Test Vector 1, `ristretto255-SHA512`, usuario inexistente.
+ * - C.1.1 — Real Test Vector 1, `ristretto255-SHA512`, no identities.
+ * - C.1.2 — Real Test Vector 2, `ristretto255-SHA512`, with `client_identity`
+ *   and `server_identity`.
+ * - C.2.1 — Fake Test Vector 1, `ristretto255-SHA512`, non-existent user.
  *
- * **No** se transcriben C.1.3, C.1.4 y C.2.2 (`Group: curve25519`) ni C.1.5,
- * C.1.6 y C.2.3 (`Group: P-256`): no pertenecen a este perfil.
+ * C.1.3, C.1.4 and C.2.2 (`Group: curve25519`) and C.1.5, C.1.6 and C.2.3
+ * (`Group: P-256`) are **not** transcribed: they do not belong to this profile.
  *
- * Todos los vectores usan `KSF: Identity` (`Stretch(msg) = msg`) y
- * `Context: 4f50415155452d504f43` (`"OPAQUE-POC"`), mientras que el perfil de
- * producción usa Argon2id en el cliente y contexto vacío
- * (`docs/OPAQUE.md` §2). Por eso el contexto se pasa como parámetro explícito
- * a `ServerLogin::authServerRespond()` en lugar de leerse de `ServerSetup`.
+ * Every vector uses `KSF: Identity` (`Stretch(msg) = msg`) and
+ * `Context: 4f50415155452d504f43` (`"OPAQUE-POC"`), while the production profile
+ * uses Argon2id on the client and an empty context (`docs/OPAQUE.md` §2). That is
+ * why the context is passed as an explicit parameter to
+ * `ServerLogin::authServerRespond()` instead of being read from `ServerSetup`.
  *
- * Los valores se devuelven ya decodificados a binario; las cadenas hexadecimales
- * quedan a la vista para poder cotejarlas carácter a carácter con el RFC.
+ * The values are returned already decoded to binary; the hexadecimal strings are
+ * left in plain sight so they can be checked character by character against the
+ * RFC.
  */
 final class Rfc9807Vectors
 {
     private function __construct() {}
 
     /**
-     * RFC 9807 C.1.1 — Real Test Vector 1 (sin `client_identity` ni
-     * `server_identity`: se aplican los defaults de RFC 9807 §4, es decir
-     * `client_public_key` y `server_public_key`).
+     * RFC 9807 C.1.1 — Real Test Vector 1 (no `client_identity` and no
+     * `server_identity`: the RFC 9807 §4 defaults apply, that is,
+     * `client_public_key` and `server_public_key`).
      *
-     * @return array<string, string> Valores binarios indexados por el nombre
-     *                               exacto que usa el RFC.
+     * @return array<string, string> Binary values indexed by the exact name the
+     *                               RFC uses.
      */
     public static function realVector1(): array
     {
@@ -104,9 +105,9 @@ final class Rfc9807Vectors
     }
 
     /**
-     * RFC 9807 C.1.2 — Real Test Vector 2, idéntico a C.1.1 salvo que fija
-     * `client_identity = "alice"` y `server_identity = "bob"`, lo que cambia
-     * el `envelope`, el preamble y, con ellos, todas las claves del AKE.
+     * RFC 9807 C.1.2 — Real Test Vector 2, identical to C.1.1 except that it fixes
+     * `client_identity = "alice"` and `server_identity = "bob"`, which changes
+     * the `envelope`, the preamble and, with them, every AKE key.
      *
      * @return array<string, string>
      */
@@ -177,15 +178,14 @@ final class Rfc9807Vectors
     }
 
     /**
-     * RFC 9807 C.2.1 — Fake Test Vector 1: respuesta a un `KE1` de un usuario
-     * que no está registrado.
+     * RFC 9807 C.2.1 — Fake Test Vector 1: the answer to a `KE1` from a user who
+     * is not registered.
      *
-     * El vector no lista `envelope` porque el registro ficticio de
-     * RFC 9807 §6.3.2.2 lo fija a `Nn + Nm` bytes cero
-     * (`docs/OPAQUE.md` §13.2); `client_public_key` y `masking_key` son las
-     * entradas adicionales que completan ese registro. Tampoco publica
-     * `session_key`: al no existir el usuario, el servidor jamás llegará a
-     * liberarla.
+     * The vector does not list `envelope` because the fake record in
+     * RFC 9807 §6.3.2.2 fixes it to `Nn + Nm` zero bytes
+     * (`docs/OPAQUE.md` §13.2); `client_public_key` and `masking_key` are the
+     * extra inputs that complete that record. It does not publish `session_key`
+     * either: since the user does not exist, the server will never release it.
      *
      * @return array<string, string>
      */
@@ -225,10 +225,10 @@ final class Rfc9807Vectors
     }
 
     /**
-     * Decodifica todas las cadenas hexadecimales de un vector a binario.
+     * Decodes every hexadecimal string of a vector to binary.
      *
-     * @param  array<string, string>  $hex  Valores en hexadecimal minúsculo.
-     * @return array<string, string> Los mismos valores en binario.
+     * @param  array<string, string>  $hex  Values in lowercase hexadecimal.
+     * @return array<string, string> The same values in binary.
      */
     private static function decode(array $hex): array
     {

@@ -1,20 +1,20 @@
 /**
- * Ajustes cifrados del usuario, descifrados en memoria (Spec 0001 §6.1 paso 10 y §6.2 paso 4;
+ * Encrypted user settings, decrypted in memory (Spec 0001 §6.1 step 10 and §6.2 step 4;
  * ADR 0007).
  *
- * Igual que la clave maestra en `keyring.js`, los ajustes ya descifrados viven en el scope de este
- * módulo ES y no en el estado de un componente Alpine ni en una propiedad de Livewire: así no
- * acaban en una instantánea de DOM que Livewire retenga con datos en claro.
+ * Like the master key in `keyring.js`, the already decrypted settings live in the scope of this
+ * ES module and not in the state of an Alpine component or in a Livewire property: that way they
+ * do not end up in a DOM snapshot Livewire keeps with data in the clear.
  *
- * Una cuenta puede no tener sobre de ajustes todavía, y eso no es un error (`loadSettings` lo trata
- * como «nada que cargar»). Un sobre que sí existe pero no abre es otra cosa: un `EnvelopeError` que
- * aquí no se silencia, igual que `keyring.restoreFromSessionSecret` (ADR 0004). Quien llama decide
- * cómo degradar.
+ * An account may not have a settings envelope yet, and that is not an error (`loadSettings`
+ * treats it as "nothing to load"). An envelope that does exist but does not open is another
+ * matter: an `EnvelopeError` that is not silenced here, just like `keyring.restoreFromSessionSecret`
+ * (ADR 0004). The caller decides how to degrade.
  *
- * `saveSettings` es la vía de escritura (ADR 0007): sella con la MISMA derivación y el MISMO dato
- * asociado que la lectura —de ahí `withSettingsKey`, que las comparte— y manda el sobre a
- * `PUT /phr/settings`. El servidor solo valida la envoltura; el contenido nunca sale de aquí en
- * claro.
+ * `saveSettings` is the write path (ADR 0007): it seals with the SAME derivation and the SAME
+ * associated data as the read path —hence `withSettingsKey`, which shares them— and sends the
+ * envelope to `PUT /phr/settings`. The server only validates the wrapper; the content never
+ * leaves here in the clear.
  */
 
 import { bytesToHex } from '@noble/hashes/utils.js';
@@ -27,14 +27,14 @@ import { envelopeContext, ENVELOPE_PURPOSES } from './context.js';
 import { putJson } from './http.js';
 import { withMasterKey } from './keyring.js';
 
-/** Evento de DOM con el que las pantallas ya montadas recalculan sin recargar. */
+/** DOM event with which already mounted screens recompute without reloading. */
 export const SETTINGS_UPDATED_EVENT = 'phr:settings-updated';
 
 /** @type {object|null} */
 let decryptedSettings = null;
 
 /**
- * Sobre `v1.` que el cliente cree vigente en el servidor, para la precondición `If-Match`.
+ * `v1.` envelope the client believes is current on the server, for the `If-Match` precondition.
  *
  * @type {string|null}
  */
@@ -43,11 +43,11 @@ let currentEnvelope = null;
 const TEXT_ENCODER = new TextEncoder();
 
 /**
- * Deriva la clave del sobre de ajustes y ejecuta `use` con ella.
+ * Derives the settings envelope key and runs `use` with it.
  *
- * Existe para que el sellado y la apertura compartan **una sola** construcción de contexto y de
- * derivación: duplicarlas y dejar que diverjan un solo byte es dejar los ajustes sin abrir para
- * siempre, porque desde el servidor no se puede re-cifrar nada.
+ * It exists so that sealing and opening share **one single** construction of context and
+ * derivation: duplicating them and letting them diverge by one byte leaves the settings unopenable
+ * forever, because nothing can be re-encrypted from the server.
  *
  * @template T
  * @param {string} userId
@@ -73,15 +73,15 @@ function withSettingsKey(userId, use) {
 }
 
 /**
- * Descifra el sobre de ajustes y lo deja en memoria (§6.1, paso 10; §6.2, paso 4).
+ * Decrypts the settings envelope and leaves it in memory (§6.1, step 10; §6.2, step 4).
  *
  * @param {object} params
- * @param {string|null|undefined} params.envelope Sobre `v1.` de `encryptedSettings`. Si no es una
- *        cadena no vacía, la cuenta todavía no tiene ajustes: no hace nada.
- * @param {string} params.userId UUID del usuario, dato asociado del sobre.
- * @returns {object|null} Copia de los ajustes cargados, o `null` si no había sobre.
- * @throws {import('../crypto/envelope.js').EnvelopeError} Si el sobre no abre. No se silencia
- *         (ADR 0004).
+ * @param {string|null|undefined} params.envelope `v1.` envelope from `encryptedSettings`. If it
+ *        is not a non-empty string, the account has no settings yet: it does nothing.
+ * @param {string} params.userId User UUID, associated data of the envelope.
+ * @returns {object|null} Copy of the loaded settings, or `null` if there was no envelope.
+ * @throws {import('../crypto/envelope.js').EnvelopeError} If the envelope does not open. It is
+ *         not silenced (ADR 0004).
  */
 export function loadSettings({ envelope, userId }) {
     if (typeof envelope !== 'string' || envelope === '') {
@@ -99,29 +99,29 @@ export function loadSettings({ envelope, userId }) {
 }
 
 /**
- * Sella los ajustes y los guarda (`PUT /phr/settings`, ADR 0007).
+ * Seals the settings and stores them (`PUT /phr/settings`, ADR 0007).
  *
- * El merge es del cliente porque es el único que puede hacerlo: el servidor no puede parchear un
- * documento que no puede descifrar. Una clave del parche con valor `undefined` o `null` **borra**
- * ese ajuste, que es la representación de «no configurado» del ADR 0007: nunca se escribe un
- * marcador vacío. `v` no es parcheable.
+ * The merge happens on the client because it is the only one that can do it: the server cannot
+ * patch a document it cannot decrypt. A patch key with value `undefined` or `null` **deletes**
+ * that setting, which is the "not configured" representation of ADR 0007: an empty marker is
+ * never written. `v` is not patchable.
  *
- * La memoria y el sobre vigente solo se actualizan **después** de un 2xx: la pantalla no puede
- * mostrar un ajuste que el servidor no tiene.
+ * Memory and the current envelope are updated only **after** a 2xx: the screen cannot show a
+ * setting the server does not have.
  *
  * @param {object} params
- * @param {object} params.patch Ajustes a fijar o a borrar.
- * @param {string} params.userId UUID del usuario, dato asociado del sobre.
- * @param {string} [params.locale] Idioma de la aplicación. Es el único campo que viaja **fuera**
- *        del sobre, en claro (ADR 0007): el servidor tiene que resolverlo para pintar el panel y la
- *        pantalla de acceso, que existe antes que ninguna clave. No participa en el `If-Match`,
- *        que protege el sobre. Se omite del cuerpo cuando no se pasa, para no reescribirlo desde
- *        pantallas que no lo tocan.
- * @param {string} params.url Destino de `PUT /phr/settings`.
- * @returns {Promise<object>} Copia de los ajustes ya guardados.
- * @throws {import('./http.js').AuthRequestError} Fallo de red o respuesta no 2xx; entre ellas 412
- *         `settings_conflict`, que significa que otra pestaña guardó antes y hay que recargar los
- *         ajustes, reaplicar el cambio y reintentar una vez.
+ * @param {object} params.patch Settings to set or to delete.
+ * @param {string} params.userId User UUID, associated data of the envelope.
+ * @param {string} [params.locale] Application language. It is the only field that travels
+ *        **outside** the envelope, in the clear (ADR 0007): the server has to resolve it to paint
+ *        the panel and the sign-in screen, which exists before any key. It takes no part in the
+ *        `If-Match`, which protects the envelope. It is left out of the body when not passed, so
+ *        that screens which do not touch it never rewrite it.
+ * @param {string} params.url Target of `PUT /phr/settings`.
+ * @returns {Promise<object>} Copy of the settings as stored.
+ * @throws {import('./http.js').AuthRequestError} Network failure or non-2xx response; among them
+ *         412 `settings_conflict`, which means another tab saved first and the settings must be
+ *         reloaded, the change reapplied and the request retried once.
  */
 export async function saveSettings({ patch, userId, locale, url }) {
     const merged = { ...(decryptedSettings ?? {}), v: 1 };
@@ -163,8 +163,8 @@ export async function saveSettings({ patch, userId, locale, url }) {
 }
 
 /**
- * Precondición del `PUT`: sha256 del sobre que el cliente cree vigente, o `*` cuando la cuenta
- * todavía no tiene ninguno.
+ * Precondition of the `PUT`: sha256 of the envelope the client believes current, or `*` when the
+ * account has none yet.
  *
  * @returns {string}
  */
@@ -174,7 +174,7 @@ function ifMatchTag() {
         : `"${bytesToHex(sha256(TEXT_ENCODER.encode(currentEnvelope)))}"`;
 }
 
-/** @returns {object|null} Copia de los ajustes cargados, o `null` si no hay ninguno en memoria. */
+/** @returns {object|null} Copy of the loaded settings, or `null` if there is none in memory. */
 export function settings() {
     return decryptedSettings === null ? null : { ...decryptedSettings };
 }
@@ -184,7 +184,7 @@ export function hasSettings() {
     return decryptedSettings !== null;
 }
 
-/** Borra los ajustes de memoria, y con ellos el sobre vigente que respalda la precondición. */
+/** Wipes the settings from memory, and with them the current envelope backing the precondition. */
 export function forgetSettings() {
     decryptedSettings = null;
     currentEnvelope = null;

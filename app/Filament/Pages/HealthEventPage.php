@@ -16,29 +16,28 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Transporte común de ciphertext para las pantallas de eventos clínicos (ADR 0002, ADR 0004,
- * ADR 0006).
+ * Shared ciphertext transport for the clinical event screens (ADR 0002, ADR 0004, ADR 0006).
  *
- * Todas las pantallas de eventos clínicos (glucemia, tensión, comidas, insulina, ...) comparten el
- * mismo contrato: el ciphertext baja como valor de retorno de {@see self::fetchEvents()} y sube
- * como parámetro de {@see self::storeEvent()}. El servidor no ve nunca el contenido de un evento,
- * solo valida la envoltura del sobre y la autorización, nunca el contenido del sobre.
+ * Every clinical event screen (blood glucose, blood pressure, meals, insulin, ...) shares the same
+ * contract: the ciphertext comes down as the return value of {@see self::fetchEvents()} and goes up
+ * as a parameter of {@see self::storeEvent()}. The server never sees the content of an event, it
+ * only validates the envelope wrapper and authorization, never the envelope's content.
  *
- * Ninguna subclase debe introducir una propiedad pública que guarde un payload: eso lo metería en
- * el snapshot de Livewire, justo lo que el ADR 0002 prohíbe.
+ * No subclass should introduce a public property holding a payload: that would put it in the
+ * Livewire snapshot, exactly what ADR 0002 forbids.
  *
- * Hereda de {@see PhrPage}, que ya redeclara sin `#[Url]` las seis propiedades de
- * `InteractsWithActions`; no hace falta volver a tocarlas aquí.
+ * It extends {@see PhrPage}, which already redeclares the six `InteractsWithActions` properties
+ * without `#[Url]`; there is no need to touch them again here.
  */
 abstract class HealthEventPage extends PhrPage
 {
     /**
-     * Casos de un enum del catálogo, listos para el `catalog()` que consume el cliente.
+     * Cases of a catalog enum, ready for the `catalog()` the client consumes.
      *
-     * Cubre solo la forma exactamente repetida en las cuatro pantallas: token más etiqueta traducida
-     * y nada más. Lo que varía —`UcumUnit` y `FoodQuantityUnit`, que publican `code`, o las entradas
-     * con campos añadidos— se queda escrito en línea donde está, porque absorberlo aquí exigiría
-     * parámetros que costarían más de leer que las cuatro líneas que ahorran.
+     * It covers only the shape repeated exactly across the four screens: a token plus a translated
+     * label and nothing else. What varies —`UcumUnit` and `FoodQuantityUnit`, which expose `code`,
+     * or the entries with extra fields— stays written inline where it is, because absorbing it here
+     * would need parameters that cost more to read than the four lines they save.
      *
      * @param  list<PatientLabelled&BackedEnum>  $cases
      * @return list<array{token: string, label: string}>
@@ -55,19 +54,18 @@ abstract class HealthEventPage extends PhrPage
     }
 
     /**
-     * Techo duro de {@see self::fetchEvents()}, para que un `$limit` grande no fuerce una consulta
-     * sin límite práctico.
+     * Hard ceiling for {@see self::fetchEvents()}, so a large `$limit` does not force a query with
+     * no practical bound.
      */
     private const int MAX_FETCH_LIMIT = 500;
 
     /**
-     * Guarda un evento clínico cuyo contenido ya viene cifrado en el cliente.
+     * Stores a clinical event whose content already arrives encrypted from the client.
      *
-     * El servidor no interpreta `$payload`: solo comprueba que tiene forma de sobre válido
-     * ({@see EnvelopeValidator}) y que `$occurredAt` está en su forma canónica, porque participa en
-     * el dato asociado del AEAD con el que se cifró (ADR 0004, ADR 0006). Cualquiera de las dos
-     * comprobaciones que falle aborta antes de tocar la base de datos: nunca se guarda un payload
-     * mal formado.
+     * The server does not interpret `$payload`: it only checks that it has the shape of a valid
+     * envelope ({@see EnvelopeValidator}) and that `$occurredAt` is in its canonical form, because it
+     * takes part in the AEAD associated data it was encrypted with (ADR 0004, ADR 0006). If either
+     * check fails it aborts before touching the database: a malformed payload is never stored.
      *
      * @return array{id: string, occurredAt: string}
      */
@@ -96,40 +94,40 @@ abstract class HealthEventPage extends PhrPage
     }
 
     /**
-     * Devuelve eventos clínicos del usuario autenticado, cifrados, acotados por fecha y por cursor.
+     * Returns the authenticated user's clinical events, encrypted, bounded by date and by cursor.
      *
-     * El ADR 0006 no permite guardar el tipo en claro, así que el servidor no puede filtrar por
-     * tipo: esta lista trae **todos** los eventos del usuario en el tramo pedido, no solo de un
-     * tipo. El cliente descifra cada sobre y descarta los que no correspondan a la pantalla actual.
+     * ADR 0006 does not allow storing the type in the clear, so the server cannot filter by type:
+     * this list brings **every** event of the user in the requested stretch, not only one type. The
+     * client decrypts each envelope and discards those that do not belong to the current screen.
      *
-     * Por fecha sí puede filtrar, y por eso existen `$from` y `$to`: `occurred_at` es una de las
-     * tres columnas en claro del ADR 0006 y el servidor ya la usa para ordenar y paginar, así que
-     * acotarla no le revela nada que no supiera. El ahorro es real: hoy la pantalla de glucemia se
-     * baja y descifra meses de comidas y de insulina para tirarlos.
+     * By date it can filter, and that is why `$from` and `$to` exist: `occurred_at` is one of the
+     * three plaintext columns from ADR 0006 and the server already uses it to order and paginate, so
+     * bounding it reveals nothing it did not already know. The saving is real: today the blood
+     * glucose screen downloads and decrypts months of meals and insulin only to throw them away.
      *
-     * **El rango es semiabierto `[$from, $to)`**: `$from` entra (`>=`) y `$to` no (`<`). Se elige
-     * así, y no con las dos puntas cerradas, porque el borde superior natural de un día de
-     * calendario es la medianoche del siguiente: con `<` el cliente pasa esa medianoche tal cual y
-     * no tiene que fabricar un `23:59:59.999999` que dejaría fuera cualquier evento registrado en
-     * la última fracción de segundo del día. Además hace que las dos cotas superiores de este
-     * método —`$to` y `$before`— tengan exactamente la misma semántica.
+     * **The range is half-open `[$from, $to)`**: `$from` is included (`>=`) and `$to` is not (`<`).
+     * It is chosen this way, and not with both ends closed, because the natural upper edge of a
+     * calendar day is the next day's midnight: with `<` the client passes that midnight as is and
+     * does not have to make up a `23:59:59.999999` that would exclude any event recorded in the last
+     * fraction of a second of the day. It also makes the two upper bounds of this method —`$to` and
+     * `$before`— have exactly the same meaning.
      *
-     * **El rango y el cursor conviven, no se anulan.** Los tres filtros se combinan con `AND`, así
-     * que la cota superior efectiva es la más estricta de `$to` y `$before`, y `$from` sigue siendo
-     * el suelo pase lo que pase: un cursor nunca ensancha el rango. Paginar dentro de un rango
-     * significa dejar `$from` y `$to` fijos en todas las páginas y mover solo `$before` (la fecha
-     * del evento más antiguo de la página anterior); el recorrido termina cuando una página vuelve
-     * con menos de `$limit` filas. Por eso el cursor no se ha reutilizado como punta del rango: es
-     * un valor que se mueve en cada página, y confundirlo con `$to` haría que la segunda página
-     * reanclase en silencio el tramo que la persona pidió.
+     * **The range and the cursor coexist, they do not cancel out.** The three filters combine with
+     * `AND`, so the effective upper bound is the stricter of `$to` and `$before`, and `$from` stays
+     * the floor no matter what: a cursor never widens the range. Paginating within a range means
+     * keeping `$from` and `$to` fixed on every page and moving only `$before` (the date of the
+     * oldest event on the previous page); the walk ends when a page comes back with fewer than
+     * `$limit` rows. That is why the cursor has not been reused as the range's upper end: it is a
+     * value that moves on every page, and confusing it with `$to` would make the second page
+     * silently re-anchor the stretch the person asked for.
      *
-     * Los parámetros nuevos van al final porque el cliente los pasa por posición desde
-     * `$wire.fetchEvents(...)`, y las cuatro pantallas de historial más el panel de inicio ya
-     * llaman con la firma anterior.
+     * The new parameters go last because the client passes them positionally from
+     * `$wire.fetchEvents(...)`, and the four history screens plus the home dashboard already call
+     * with the previous signature.
      *
-     * @param  string|null  $before  Cursor de paginación, exclusivo; `null` para la primera página.
-     * @param  string|null  $from  Inicio del rango, canónico e incluido; `null` para no acotar.
-     * @param  string|null  $to  Fin del rango, canónico y excluido; `null` para no acotar.
+     * @param  string|null  $before  Pagination cursor, exclusive; `null` for the first page.
+     * @param  string|null  $from  Start of the range, canonical and included; `null` for no bound.
+     * @param  string|null  $to  End of the range, canonical and excluded; `null` for no bound.
      * @return list<array{id: string, occurredAt: string, payload: string}>
      */
     public function fetchEvents(?string $before = null, int $limit = 100, ?string $from = null, ?string $to = null): array
@@ -148,18 +146,19 @@ abstract class HealthEventPage extends PhrPage
         }
 
         /**
-         * Las dos puntas se validan con el mismo `parseCanonicalOccurredAt` que `storeEvent`, y no
-         * con un formato propio más laxo: un segundo criterio de fecha sería un segundo sitio donde
-         * equivocarse, y el que acabaría desviándose es justo el que no participa en el AEAD.
+         * Both ends are validated with the same `parseCanonicalOccurredAt` as `storeEvent`, and not
+         * with a looser format of their own: a second date criterion would be a second place to get
+         * it wrong, and the one that would drift is exactly the one that does not take part in the
+         * AEAD.
          */
         $fromDate = $from === null ? null : self::parseCanonicalOccurredAt($from);
         $toDate = $to === null ? null : self::parseCanonicalOccurredAt($to);
 
         /**
-         * Un rango del revés se rechaza en vez de devolver la lista vacía que produciría solo: sin
-         * error, la pantalla diría «no hay registros en este periodo» y esa frase, ante un historial
-         * clínico, se lee como «no tienes registros», que es una respuesta falsa a una pregunta mal
-         * formulada.
+         * A backwards range is rejected instead of returning the empty list it would produce on its
+         * own: without an error, the screen would say "no records in this period" and that sentence,
+         * in front of a medical history, reads as "you have no records", which is a false answer to a
+         * badly formed question.
          */
         if ($fromDate !== null && $toDate !== null && $fromDate->greaterThan($toDate)) {
             throw ValidationException::withMessages([
@@ -185,12 +184,12 @@ abstract class HealthEventPage extends PhrPage
     }
 
     /**
-     * Valida que `$occurredAt` tenga exactamente la forma canónica del ADR 0004 y la convierte.
+     * Validates that `$occurredAt` has exactly the canonical ADR 0004 form and converts it.
      *
-     * La comparación por ida y vuelta (parsear y volver a formatear) atrapa también los
-     * desbordamientos que `createFromFormat` no rechaza por sí solo, como un mes 13 o un día 32:
-     * si el valor se reinterpreta a otra fecha, la cadena reformateada ya no coincide con la
-     * recibida y la validación falla.
+     * The round-trip comparison (parse and format again) also catches the overflows
+     * `createFromFormat` does not reject on its own, such as a month 13 or a day 32: if the value is
+     * reinterpreted as another date, the reformatted string no longer matches the one received and
+     * validation fails.
      */
     private static function parseCanonicalOccurredAt(string $occurredAt): CarbonImmutable
     {

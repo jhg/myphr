@@ -7,10 +7,10 @@ use App\Catalog\GlucoseMeasurementMethod;
 use App\Catalog\UcumUnit;
 
 /**
- * Los cuatro códigos LOINC de glucemia (ADR 0005 y ADR 0008) están verificados contra la fuente
- * y no deben cambiar. Cada combinación de método y unidad resuelve exactamente al suyo.
+ * The four blood glucose LOINC codes (ADR 0005 and ADR 0008) are verified against the source and
+ * must not change. Every method and unit pair resolves to exactly its own.
  */
-it('resuelve cada combinación de método y unidad a su código LOINC verificado', function (
+it('resolves every method and unit pair to its verified LOINC code', function (
     GlucoseMeasurementMethod $method,
     UcumUnit $unit,
     string $expectedCode,
@@ -20,22 +20,22 @@ it('resuelve cada combinación de método y unidad a su código LOINC verificado
     'capilar en mg/dL' => [GlucoseMeasurementMethod::Capillary, UcumUnit::MilligramsPerDeciliter, '41653-7'],
     'capilar en mmol/L' => [GlucoseMeasurementMethod::Capillary, UcumUnit::MillimolesPerLiter, '14743-9'],
     'intersticial en mg/dL' => [GlucoseMeasurementMethod::Interstitial, UcumUnit::MilligramsPerDeciliter, '99504-3'],
-    'intersticial en mmol/L (código de seis dígitos)' => [GlucoseMeasurementMethod::Interstitial, UcumUnit::MillimolesPerLiter, '105272-9'],
+    'interstitial in mmol/L (six-digit code)' => [GlucoseMeasurementMethod::Interstitial, UcumUnit::MillimolesPerLiter, '105272-9'],
 ]);
 
 /**
- * El resolutor es total sobre las combinaciones soportadas y ruidoso ante las que no lo son: un
- * código LOINC equivocado es un dato clínico equivocado, así que nunca debe devolver uno por
- * defecto. `Gram` es una unidad real del catálogo (peso) que no tiene código de glucemia.
+ * The resolver is total over the supported pairs and loud about the unsupported ones: a wrong LOINC
+ * code is a wrong clinical fact, so it must never return a default one. `Gram` is a real catalog
+ * unit (weight) that has no blood glucose code.
  */
-it('lanza excepción ante una combinación de método y unidad no soportada', function (): void {
+it('throws on an unsupported method and unit pair', function (): void {
     GlucoseLoincCode::resolve(GlucoseMeasurementMethod::Capillary, UcumUnit::Gram);
 })->throws(ValueError::class);
 
 /**
- * La etiqueta al paciente convive con el término oficial LOINC, no lo sustituye (ADR 0005).
+ * The patient label lives alongside the official LOINC term, it does not replace it (ADR 0005).
  */
-it('mantiene el término oficial LOINC junto a la etiqueta propia del paciente', function (): void {
+it('keeps the official LOINC term alongside our own patient label', function (): void {
     $code = GlucoseLoincCode::CapillaryMilligramsPerDeciliter;
 
     expect($code->officialName())->toBe('Glucose [Mass/volume] in Capillary blood by Glucometer')
@@ -45,18 +45,18 @@ it('mantiene el término oficial LOINC junto a la etiqueta propia del paciente',
 });
 
 /**
- * Estos valores de cadena viajan dentro del sobre cifrado del evento de medición (ADR 0002,
- * ADR 0006, ADR 0008). Un sobre ya cifrado no se puede recorrer y re-cifrar con un token nuevo
- * sin la clave de cada usuario, así que este es un test de regresión contra un cambio accidental
- * del valor: si falla, el cambio propuesto es incompatible con datos ya guardados.
+ * These string values travel inside the encrypted envelope of a measurement event (ADR 0002,
+ * ADR 0006, ADR 0008). An already encrypted envelope cannot be walked and re-encrypted with a new
+ * token without each user's key, so this is a regression test against an accidental change of the
+ * value: if it fails, the proposed change is incompatible with already stored data.
  */
-it('no cambia el token de método de medición guardado en eventos cifrados', function (): void {
+it('does not change the measurement method token stored in encrypted events', function (): void {
     expect(GlucoseMeasurementMethod::Capillary->value)->toBe('capillary')
         ->and(GlucoseMeasurementMethod::Interstitial->value)->toBe('interstitial');
 });
 
-/** Igual que el anterior, pero para los códigos UCUM de unidad. */
-it('no cambia el código UCUM de unidad guardado en eventos cifrados', function (): void {
+/** Same as the previous one, but for the UCUM unit codes. */
+it('does not change the UCUM unit code stored in encrypted events', function (): void {
     expect(UcumUnit::MilligramsPerDeciliter->value)->toBe('mg/dL')
         ->and(UcumUnit::MillimolesPerLiter->value)->toBe('mmol/L');
 });

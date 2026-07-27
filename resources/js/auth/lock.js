@@ -1,24 +1,24 @@
 /**
- * Bloqueo por inactividad (Spec 0001 §8; ADR 0003 y 0009).
+ * Idle lock (Spec 0001 §8; ADR 0003 and 0009).
  *
- * Quince minutos sin actividad y la sesión se cierra **entera**: el secreto de sesión y la sesión
- * de Laravel mueren en la misma operación de servidor, y el navegador hace una recarga dura. No es
- * una pantalla superpuesta: una capa encima del panel deja vivos el contexto de JavaScript, la
- * clave maestra en memoria y las instantáneas de DOM que Livewire retiene con datos descifrados, de
- * modo que quitar un `display: none` desde la consola devolvería el panel entero con datos en claro.
+ * Fifteen minutes without activity and the session closes **entirely**: the session secret and
+ * the Laravel session die in the same server operation, and the browser does a hard reload. It is
+ * not an overlay screen: a layer on top of the panel leaves alive the JavaScript context, the
+ * master key in memory and the DOM snapshots Livewire keeps with decrypted data, so removing a
+ * `display: none` from the console would bring the whole panel back with data in the clear.
  *
- * **Quien cuenta el tiempo es el servidor**, sobre la última petición autenticada, en el middleware
- * `App\Http\Middleware\EnforceIdleTimeout`. Este temporizador no decide la caducidad: no se ejecuta
- * en una pestaña que el sistema operativo descartó por memoria ni en una que nunca llegó a abrirse.
- * Lo único que hace es avisar y disparar la llamada.
+ * **The server is the one counting the time**, over the last authenticated request, in the
+ * `App\Http\Middleware\EnforceIdleTimeout` middleware. This timer does not decide the expiry: it
+ * does not run in a tab the operating system dropped for memory, nor in one that was never opened.
+ * All it does is warn and fire the call.
  *
- * El orden del cierre es normativo (§4.6): la recarga dura va **después** de que el servidor
- * confirme. Recargar antes deja, ante una pérdida de red, el secreto vivo en servidor y al cliente
- * sin clave en memoria, que es un bloqueo que no bloqueó nada del lado servidor. La clave sí se
- * olvida de inmediato: eso no depende de la red y no tiene contrapartida.
+ * The order of the sign-out is normative (§4.6): the hard reload comes **after** the server
+ * confirms. Reloading first would leave, on a network loss, the secret alive on the server and
+ * the client without a key in memory, which is a lock that locked nothing server-side. The key is
+ * forgotten right away: that does not depend on the network and has no downside.
  *
- * `sessionStorage['phr.rk']` no se borra: al morir el secreto queda cifrado bajo algo que ya no
- * existe en ningún sitio (§8).
+ * `sessionStorage['phr.rk']` is not cleared: once the secret dies it stays encrypted under
+ * something that no longer exists anywhere (§8).
  */
 
 import { postJson } from './http.js';
@@ -26,24 +26,24 @@ import { forget } from './keyring.js';
 import { hardReload } from './navigate.js';
 import { forgetSettings } from './settings.js';
 
-/** Inactividad tolerada antes del cierre (ADR 0009). */
+/** Idle time tolerated before the sign-out (ADR 0009). */
 export const INACTIVITY_LIMIT_MS = 15 * 60 * 1000;
 
-/** Antelación con la que se avisa antes de cerrar. */
+/** How long before the sign-out the warning is given. */
 export const WARNING_BEFORE_MS = 60 * 1000;
 
-/** Espera antes de reintentar la llamada de cierre cuando la red falla. */
+/** Wait before retrying the sign-out call when the network fails. */
 const RETRY_DELAY_MS = 5 * 1000;
 
-/** Evento que se emite cuando quedan `WARNING_BEFORE_MS` para el cierre. */
+/** Event emitted when `WARNING_BEFORE_MS` are left before the sign-out. */
 export const LOCK_WARNING_EVENT = 'phr:lock-warning';
 
-/** Evento que se emite al empezar el cierre, ya sin clave en memoria. */
+/** Event emitted when the sign-out starts, already without a key in memory. */
 export const LOCK_EVENT = 'phr:locked';
 
 /**
- * Actividad que reinicia la cuenta. Solo gestos deliberados: `mousemove` la reiniciaría con el
- * ratón rozado por una manga, que es exactamente el puesto desatendido que esto cubre.
+ * Activity that resets the countdown. Only deliberate gestures: `mousemove` would reset it with
+ * the mouse brushed by a sleeve, which is exactly the unattended desk this covers.
  */
 const ACTIVITY_EVENTS = Object.freeze(['pointerdown', 'keydown', 'wheel', 'touchstart']);
 
@@ -64,7 +64,7 @@ function metaContent(name) {
     return document.head?.querySelector(`meta[name="${name}"]`)?.getAttribute('content') ?? null;
 }
 
-/** Reinicia la cuenta atrás. Se llama en cada gesto y en cada navegación de Livewire. */
+/** Restarts the countdown. Called on every gesture and on every Livewire navigation. */
 function reschedule() {
     clearTimers();
 
@@ -100,10 +100,10 @@ function onActivity(_event) {
 }
 
 /**
- * Cierra la sesión por completo y recarga.
+ * Closes the session completely and reloads.
  *
- * Es también el camino del cierre de sesión normal: el `POST /logout` de Filament no sabe nada del
- * secreto de sesión, así que salir por él dejaría el secreto vivo (§8).
+ * It is also the path of the normal sign-out: the Filament `POST /logout` knows nothing about the
+ * session secret, so leaving through it would keep the secret alive (§8).
  *
  * @returns {Promise<void>}
  */
@@ -115,7 +115,7 @@ export async function lock() {
     locking = true;
     clearTimers();
 
-    /** La clave se olvida ya: no depende de que la red funcione. Los ajustes van con ella. */
+    /** The key is forgotten right away: it does not depend on the network. Settings go with it. */
     forget();
     forgetSettings();
 
@@ -134,9 +134,9 @@ export async function lock() {
         await postJson(lockUrl);
     } catch {
         /**
-         * Sin confirmación no hay recarga (§4.6). Se reintenta en vez de rendirse: la pestaña sigue
-         * abierta, sin clave en memoria, y la sesión de servidor sigue viva hasta que la llamada
-         * llegue.
+         * Without confirmation there is no reload (§4.6). It retries instead of giving up: the tab
+         * stays open, without a key in memory, and the server session stays alive until the call
+         * gets through.
          */
         locking = false;
         setTimeout(() => { void lock(); }, RETRY_DELAY_MS);
@@ -148,11 +148,11 @@ export async function lock() {
 }
 
 /**
- * Arranca el temporizador. Idempotente: llamarlo en cada navegación de Livewire no acumula
- * escuchas.
+ * Starts the timer. Idempotent: calling it on every Livewire navigation does not stack
+ * listeners.
  *
- * @returns {boolean} `false` si la página no publica las URLs necesarias, y entonces no hay nada
- *          que armar.
+ * @returns {boolean} `false` if the page does not publish the needed URLs, and then there is
+ *          nothing to arm.
  */
 export function armInactivityLock() {
     if (armed) {
@@ -178,8 +178,8 @@ export function armInactivityLock() {
 }
 
 /**
- * Para el temporizador y suelta las escuchas. Las pantallas de autenticación no lo quieren armado:
- * ahí no hay sesión que cerrar y la llamada solo produciría un error.
+ * Stops the timer and releases the listeners. The authentication screens do not want it armed:
+ * there is no session to close there and the call would only produce an error.
  */
 export function disarmInactivityLock() {
     clearTimers();
@@ -198,12 +198,12 @@ export function disarmInactivityLock() {
 }
 
 /**
- * Desvía el `POST /logout` de Filament por el camino de destrucción de §8.
+ * Diverts the Filament `POST /logout` through the destruction path of §8.
  *
- * Interpretación de esta implementación, señalada en el informe: la spec exige que el cierre normal
- * pase por el mismo camino, pero no dice si eso se resuelve en cliente o en servidor. Si la marca
- * del formulario cambiara, el `submit` seguiría su curso y el cierre volvería a ser el de Filament,
- * que es el comportamiento de partida y no una regresión de seguridad nueva.
+ * Interpretation of this implementation, flagged in the report: the spec requires the normal
+ * sign-out to go through the same path, but it does not say whether that is solved on the client
+ * or on the server. If the form marker changed, the `submit` would run its course and the
+ * sign-out would be Filament's again, which is the starting behaviour and not a new security regression.
  */
 export function interceptLogout() {
     document.addEventListener('submit', (event) => {

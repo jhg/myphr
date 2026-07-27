@@ -1,18 +1,18 @@
 /**
- * Cliente HTTP de los endpoints de autenticación (Spec 0001 §4).
+ * HTTP client of the authentication endpoints (Spec 0001 §4).
  *
- * Todas las peticiones llevan el token CSRF y `credentials: 'same-origin'`. La respuesta de
- * `login/finish` trae un token nuevo, porque `session()->regenerate()` regeneró también el CSRF:
- * hay que escribirlo en el `<meta>` **antes** de navegar (§5, paso 19), o el siguiente POST
- * autenticado responde 419 de forma intermitente.
+ * Every request carries the CSRF token and `credentials: 'same-origin'`. The `login/finish`
+ * response brings a new token, because `session()->regenerate()` regenerated the CSRF too: it
+ * must be written into the `<meta>` **before** navigating (§5, step 19), or the next authenticated
+ * POST answers 419 now and then.
  */
 
-/** Error de transporte o de contrato. `status` es `null` cuando la petición ni salió. */
+/** Transport or contract error. `status` is `null` when the request never went out. */
 export class AuthRequestError extends Error {
     /**
      * @param {string} message
      * @param {number|null} status
-     * @param {string|null} code Campo `error` del cuerpo, cuando lo hay.
+     * @param {string|null} code Body `error` field, when there is one.
      */
     constructor(message, status = null, code = null) {
         super(message);
@@ -27,13 +27,13 @@ function csrfMeta() {
     return document.head?.querySelector('meta[name="csrf-token"]') ?? null;
 }
 
-/** @returns {string} Token CSRF vigente, o cadena vacía si la página no lo publica. */
+/** @returns {string} Current CSRF token, or an empty string if the page does not publish it. */
 export function csrfToken() {
     return csrfMeta()?.getAttribute('content') ?? '';
 }
 
 /**
- * Escribe el token CSRF nuevo en el `<meta>` (§5, paso 19).
+ * Writes the new CSRF token into the `<meta>` (§5, step 19).
  *
  * @param {string|undefined} token
  */
@@ -46,25 +46,25 @@ export function updateCsrfToken(token) {
 }
 
 /**
- * Petición con cuerpo JSON contra un endpoint del panel.
+ * Request with a JSON body against a panel endpoint.
  *
- * El método y las cabeceras extra son parámetros para que el CSRF y `credentials: 'same-origin'`
- * sigan viviendo en un único sitio: un segundo cliente HTTP sería un segundo sitio donde olvidarlos.
+ * The method and the extra headers are parameters so that the CSRF and `credentials:
+ * 'same-origin'` keep living in a single place: a second HTTP client would be a second place to forget them.
  *
  * @param {string} method
  * @param {string} url
- * @param {object|undefined} body Cuerpo JSON, o `undefined` para no mandar ninguno (`GET`).
- * @param {Record<string, string>} headers Cabeceras adicionales (`If-Match`, por ejemplo).
- * @returns {Promise<any>} Cuerpo decodificado de una respuesta 2xx.
- * @throws {AuthRequestError} Cualquier respuesta no 2xx, cualquier cuerpo que no sea JSON y
- *         cualquier fallo de red.
+ * @param {object|undefined} body JSON body, or `undefined` to send none (`GET`).
+ * @param {Record<string, string>} headers Extra headers (`If-Match`, for example).
+ * @returns {Promise<any>} Decoded body of a 2xx response.
+ * @throws {AuthRequestError} Any non-2xx response, any body that is not JSON and any network
+ *         failure.
  */
 async function sendJson(method, url, body, headers) {
     let response;
 
     /**
-     * `fetch` lanza un `TypeError` si a un `GET` se le adjunta cuerpo, así que el cuerpo se omite
-     * cuando no hay ninguno en vez de mandar el `"undefined"` que produciría `JSON.stringify`.
+     * `fetch` throws a `TypeError` if a body is attached to a `GET`, so the body is left out when
+     * there is none instead of sending the `"undefined"` that `JSON.stringify` would produce.
      */
     const request = {
         method,
@@ -110,7 +110,7 @@ async function sendJson(method, url, body, headers) {
 }
 
 /**
- * POST con cuerpo JSON contra un endpoint del panel.
+ * POST with a JSON body against a panel endpoint.
  *
  * @param {string} url
  * @param {object} [body]
@@ -122,7 +122,7 @@ export function postJson(url, body = {}, headers = {}) {
 }
 
 /**
- * PUT con cuerpo JSON contra un endpoint del panel.
+ * PUT with a JSON body against a panel endpoint.
  *
  * @param {string} url
  * @param {object} [body]
@@ -134,11 +134,11 @@ export function putJson(url, body = {}, headers = {}) {
 }
 
 /**
- * GET que espera JSON, con el mismo CSRF y las mismas credenciales que el resto.
+ * GET expecting JSON, with the same CSRF and the same credentials as the rest.
  *
- * Lo usa el listado de recortes compartidos (ADR 0011). Va por aquí y no por un `fetch` suelto para
- * que la sesión y el token sigan viviendo en un único sitio: un segundo cliente HTTP sería un
- * segundo sitio donde olvidarlos.
+ * The shared clippings listing uses it (ADR 0011). It goes through here and not through a loose
+ * `fetch` so that the session and the token keep living in a single place: a second HTTP client
+ * would be a second place to forget them.
  *
  * @param {string} url
  * @param {Record<string, string>} [headers]
@@ -149,7 +149,7 @@ export function getJson(url, headers = {}) {
 }
 
 /**
- * DELETE que espera JSON. Lo usa la revocación de un recorte compartido (ADR 0011).
+ * DELETE expecting JSON. The revocation of a shared clipping uses it (ADR 0011).
  *
  * @param {string} url
  * @param {Record<string, string>} [headers]

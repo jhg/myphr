@@ -8,17 +8,17 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Estado efímero de OPAQUE compartido por el alta, el login y el cambio de contraseña.
+ * Ephemeral OPAQUE state shared by signup, login and password change.
  *
- * Dos cambios, y ninguno es cosmético:
+ * Two changes, and neither is cosmetic:
  *
- * 1. `purpose` en las dos tablas. Sin él, un handshake de login se canjearía por un ticket de
- *    cambio de contraseña, y un pendiente nacido en el cambio se colaría por `registration/finish`,
- *    que consumiría un enlace de alta y reescribiría `encrypted_settings`. Las filas anteriores
- *    toman el valor por defecto que les corresponde por la tabla en la que viven.
- * 2. `invitation_ref` pasa a ser nullable. Un cambio de contraseña no nace de ningún enlace de
- *    registro, y exigir uno obligaría a inventar una fila en `user_registration_links` que nadie
- *    ha emitido y que quedaría consumible por el alta.
+ * 1. `purpose` on both tables. Without it, a login handshake could be traded for a password change
+ *    ticket, and a pending row born in a password change would slip through `registration/finish`,
+ *    which would consume a signup link and rewrite `encrypted_settings`. Existing rows take the
+ *    default value that matches the table they live in.
+ * 2. `invitation_ref` becomes nullable. A password change does not come from any registration link,
+ *    and requiring one would force us to invent a row in `user_registration_links` that nobody
+ *    issued and that signup could then consume.
  */
 return new class extends Migration
 {

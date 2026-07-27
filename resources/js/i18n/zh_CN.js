@@ -1,24 +1,24 @@
 /**
- * Catálogo de chino simplificado (`zh_CN`, el mismo nombre de carpeta que usan Laravel y Filament).
+ * Simplified Chinese catalog (`zh_CN`, the same folder name Laravel and Filament use).
  *
- * Dos cosas que no son traducción literal y sí decisiones del idioma:
+ * Two things that are not literal translation but decisions of the language:
  *
- * * **Puntuación de ancho completo.** El punto es `。`, la coma enumerativa `、` y los dos puntos
- *   `：`. Por eso el separador de listas y las frases con marcador se traducen enteras: una frase
- *   armada por concatenación en el código llevaría dentro la puntuación occidental.
- * * **Sin espacio de separación entre frases.** Las entradas que en inglés y castellano empiezan
- *   por un espacio (las que se pegan detrás de otra frase) aquí no lo llevan, porque el chino no
- *   separa oraciones con espacio.
+ * * **Full-width punctuation.** The full stop is `。`, the enumeration comma `、` and the colon
+ *   `：`. That is why the list separator and the sentences with placeholders are translated
+ *   whole: a sentence assembled by concatenation in the code would carry Western punctuation inside.
+ * * **No separating space between sentences.** The entries that in English and Spanish start with
+ *   a space (the ones glued behind another sentence) do not carry it here, because Chinese does
+ *   not separate sentences with a space.
  *
- * Los términos oficiales LOINC no aparecen aquí a propósito (ADR 0005): el `display` de FHIR lleva
- * el término publicado por Regenstrief, que no tiene traducción oficial al chino, y traducirlo
- * sería inventarse un término de la terminología. Lo que sí se traduce es la etiqueta al paciente,
- * que es nuestra.
+ * The official LOINC terms do not appear here on purpose (ADR 0005): the FHIR `display` carries
+ * the term published by Regenstrief, which has no official Chinese translation, and translating it
+ * would be inventing a term of the terminology. What is translated is the patient-facing label,
+ * which is ours.
  *
  * @type {Readonly<Record<string, string|{other: string}>>}
  */
 export const ZH_CN = Object.freeze({
-    // --- Comunes a varias pantallas -------------------------------------------------------------
+    // --- Shared by several screens --------------------------------------------------------------
     'common.listSeparator': '、',
     'common.locked.history': '需要先登录才能查看你的历史记录。',
     'common.locked.summary': '需要先登录才能查看你的概览。',
@@ -30,16 +30,18 @@ export const ZH_CN = Object.freeze({
     'common.badDatetime': '无法识别日期和时间：“{value}”。',
     'common.configuration': '本系统未正确配置，请告知系统管理员。',
     'common.network': '无法连接到服务器，请重试。',
+    'common.staleTab': '此页面已过期，很可能是页面打开期间应用完成了更新。请重新加载后再试。',
+    'common.reload': '重新加载页面',
     'common.noLoincCode': '方法“{method}”与单位“{unit}”没有对应的 LOINC 代码。',
     'common.recordsUndecrypted': { other: '有 {count} 条记录无法解密，未予显示。' },
 
-    // --- Rango de fechas del historial (`health/dateRange.js`) ----------------------------------
+    // --- History date range (`health/dateRange.js`) ---------------------------------------------
     'range.error.incomplete': '请选择自定义范围的两个日期。',
     'range.error.order': '开始日期必须早于结束日期。',
     'range.error.badDate': '无法读取范围的日期。',
     'range.error.badPreset': '不存在该时间段：“{preset}”。',
 
-    // --- Nombres de campo, para los mensajes de `numericValue.js` -------------------------------
+    // --- Field names, for the `numericValue.js` messages ----------------------------------------
     'field.value': '数值',
     'field.dose': '剂量',
     'field.quantity': '数量',
@@ -51,24 +53,24 @@ export const ZH_CN = Object.freeze({
     'field.rangeLow': '下限',
     'field.rangeHigh': '上限',
 
-    // --- Validación numérica --------------------------------------------------------------------
+    // --- Numeric validation ---------------------------------------------------------------------
     'numeric.notANumber': '{field}必须是数字。',
     'numeric.negative': '{field}不能为负数。',
     'numeric.tooManyDecimals': '{field}最多只能有 2 位小数。',
     'numeric.notANumberHint': '{field}必须是数字（小数点可用“.”或“,”）。',
 
-    // --- Etapas compartidas de la barra de progreso ---------------------------------------------
+    // --- Shared progress bar stages -------------------------------------------------------------
     'stage.preparing': '正在准备…',
     'stage.saving': '正在保存…',
     'stage.done': '完成。',
     'stage.entering': '正在登录…',
 
-    // --- Acceso ---------------------------------------------------------------------------------
+    // --- Sign in --------------------------------------------------------------------------------
     'login.stage.contacting': '正在核对你的信息…',
     'login.stage.stretching': '正在本设备上派生你的密钥，需要几秒钟…',
     'login.error.credentials': '无法用这些信息登录。',
 
-    // --- Alta de contraseña ---------------------------------------------------------------------
+    // --- Password set-up ------------------------------------------------------------------------
     'setPassword.stage.contacting': '正在检查链接…',
     'setPassword.stage.stretching': '正在本设备上派生你的密钥，需要几秒钟…',
     'setPassword.stage.wrapping': '正在创建并保护你的密钥…',
@@ -77,7 +79,7 @@ export const ZH_CN = Object.freeze({
     'setPassword.error.mismatch': '两次输入的密码不一致。',
     'setPassword.error.verification': '创建密钥时出错，无法完成验证。',
 
-    // --- Alta pública (registro) ------------------------------------------------------------------
+    // --- Public sign-up (registration) ------------------------------------------------------------
     'register.stage.contacting': '正在创建你的账户…',
     'register.stage.stretching': '正在本设备上派生你的密钥，需要几秒钟…',
     'register.stage.wrapping': '正在创建并保护你的密钥…',
@@ -86,7 +88,7 @@ export const ZH_CN = Object.freeze({
     'register.error.loginTaken': '该邮箱已存在账户。',
     'register.error.generic': '创建账户时出错，无法完成验证。',
 
-    // --- Cambio de contraseña -------------------------------------------------------------------
+    // --- Password change ------------------------------------------------------------------------
     'changePassword.stage.reauthenticating': '正在核对你的当前密码…',
     'changePassword.stage.stretchingOld': '正在本设备上核对你的当前密码，需要几秒钟…',
     'changePassword.stage.unwrapping': '正在打开你的密钥…',
@@ -101,7 +103,7 @@ export const ZH_CN = Object.freeze({
     'changePassword.error.verification': '保护你的密钥时出错，密码没有改变。',
     'changePassword.success': '你的密码已更改。你的数据没有变化，仍然可以读取。',
 
-    // --- Perfil ---------------------------------------------------------------------------------
+    // --- Profile --------------------------------------------------------------------------------
     'profile.stage.reauth': '正在本设备上核对你的当前密码，需要几秒钟…',
     'profile.stage.opening': '正在打开你的密钥…',
     'profile.stage.stretching': '正在本设备上派生你的新密钥，需要几秒钟…',
@@ -116,7 +118,7 @@ export const ZH_CN = Object.freeze({
     'profile.error.passwordExpired': '距离上次验证已过去太久，请重新输入你的当前密码。',
     'profile.error.passwordGeneric': '密码未能更改。',
 
-    // --- Glucemia -------------------------------------------------------------------------------
+    // --- Blood glucose --------------------------------------------------------------------------
     'glucose.empty': '目前还没有血糖记录。',
     'glucose.missingValue': '请填写数值。',
     'glucose.caption.includes': '包含：{methods}。',
@@ -125,7 +127,7 @@ export const ZH_CN = Object.freeze({
         other: '有 {count} 条记录使用了 {unit} 以外的单位，未予显示（不同单位之间不做换算）。',
     },
 
-    // --- Tensión arterial -----------------------------------------------------------------------
+    // --- Blood pressure -------------------------------------------------------------------------
     'bloodPressure.empty': '目前还没有血压记录。',
     'bloodPressure.missingSystolic': '请填写收缩压。',
     'bloodPressure.missingDiastolic': '请填写舒张压。',
@@ -140,13 +142,13 @@ export const ZH_CN = Object.freeze({
     'bloodPressure.pulseCaption.empty': '没有可显示的脉搏数据。',
     'bloodPressure.pulseCaption.missing': { other: '有 {count} 条记录没有脉搏，未显示在本图中。' },
 
-    // --- Comidas --------------------------------------------------------------------------------
+    // --- Meals ----------------------------------------------------------------------------------
     'meals.empty': '目前还没有用餐记录。',
     'meals.missingMealType': '请选择餐次。',
     'meals.incompleteFood': '请填写每种食物的名称、数量和单位，或者删除该行。',
     'meals.noFoods': '没有记录任何食物。',
 
-    // --- Insulina -------------------------------------------------------------------------------
+    // --- Insulin --------------------------------------------------------------------------------
     'insulin.empty': '目前还没有胰岛素记录。',
     'insulin.chartLocked': '图表需要你的密钥才能显示。',
     'insulin.chartEmpty': '保存第一条记录后，这里会显示每天的总剂量。',
@@ -155,14 +157,14 @@ export const ZH_CN = Object.freeze({
     'insulin.yAxisTitle': '每日总剂量（{unit}）',
     'insulin.caption': { other: '有 {count} 天存在记录。按类型累计的剂量 — {totals}。' },
 
-    // --- Peso corporal --------------------------------------------------------------------------
+    // --- Body weight ----------------------------------------------------------------------------
     'bodyWeight.empty': '目前还没有体重记录。',
     'bodyWeight.missingValue': '请填写体重。',
     'bodyWeight.missingUnit': '请选择单位。',
     'bodyWeight.caption.includes': '包含：{units}。每种单位各自成为一条曲线：千克与磅之间不做换算。',
     'bodyWeight.caption.empty': '没有可显示的体重数据。',
 
-    // --- Temperatura corporal -------------------------------------------------------------------
+    // --- Body temperature -----------------------------------------------------------------------
     'temperature.empty': '目前还没有体温记录。',
     'temperature.missingValue': '请填写体温。',
     'temperature.missingUnit': '请选择单位。',
@@ -172,7 +174,7 @@ export const ZH_CN = Object.freeze({
     'temperature.caption.includes': '包含：{series}。每个测量部位与单位各自成为一条曲线：彼此之间不可比较。',
     'temperature.caption.empty': '没有可显示的体温数据。',
 
-    // --- Panel de inicio ------------------------------------------------------------------------
+    // --- Home dashboard -------------------------------------------------------------------------
     'dashboard.truncated': '本概览只包含最近的记录：这段时间内的记录太多，无法全部载入。',
     'dashboard.empty': '这段时间内还没有任何记录。',
     'dashboard.addFirst': '添加第一条记录',
@@ -218,7 +220,7 @@ export const ZH_CN = Object.freeze({
     'dashboard.posture.lying': '卧位',
     'dashboard.posture.standing': '立位',
 
-    // --- Línea temporal unificada del panel de inicio --------------------------------------------
+    // --- Unified timeline of the home dashboard --------------------------------------------------
     'dashboard.timeline.capped': {
         other: '仅显示此期间最近的 {shown} 条记录，另有 {count} 条较早的记录未列出。',
     },
@@ -249,7 +251,7 @@ export const ZH_CN = Object.freeze({
     'dashboard.timeline.site.temporal': '额头（颞动脉）',
     'dashboard.timeline.site.rectal': '直肠',
 
-    // --- Compartir un recorte con un profesional (`health/sharePage.js`, ADR 0011) --------------
+    // --- Share a clipping with a professional (`health/sharePage.js`, ADR 0011) -----------------
     'share.stage.reading': '正在读取你的记录…',
     'share.stage.decrypting': '正在解密你的记录…',
     'share.stage.packing': '正在压缩并加密分享包…',
@@ -267,6 +269,7 @@ export const ZH_CN = Object.freeze({
     'share.error.limit': '你的有效分享包已达上限。请先撤销一个再分享。',
     'share.error.upload': '分享包上传失败，没有分享任何内容。',
     'share.error.copy': '链接复制失败。请手动选中并复制。',
+    'share.error.read': '无法读取你的记录，因此没有生成分享包，也没有分享任何内容。',
     'share.error.generic': '无法生成分享包。',
     'share.qr.alt': '包含分享包完整链接的二维码。',
     'share.range.all': '你的全部历史记录',
@@ -286,7 +289,7 @@ export const ZH_CN = Object.freeze({
     'share.list.confirmRevoke': '撤销会永久删除该分享包，但无法收回对方已经下载的内容。',
     'share.list.confirmRevokeAction': '永久撤销',
     'share.list.cancel': '取消',
-    // --- Estatura e índice de masa corporal (pantalla de peso y perfil) --------------------------
+    // --- Height and body mass index (weight screen and profile) ----------------------------------
     'field.height': '身高',
     'bodyWeight.missingHeightUnit': '请选择身高的单位。',
     'bodyWeight.heightInline': '身高 {value} {unit}',
@@ -297,7 +300,7 @@ export const ZH_CN = Object.freeze({
     'profile.body.fromRecords': '来自你最近一次的体重和身高',
     'profile.error.measurementsGeneric': '无法加载你的最新测量数据。',
 
-    // --- Gráficas del panel de inicio ------------------------------------------------------------
+    // --- Home dashboard charts -------------------------------------------------------------------
     'dashboard.chart.caption': '每日中位数（{unit}），阴影带表示当天最低到最高读数。包含：{series}。没有读数的日期留空。',
     'dashboard.chart.empty': '此时间段内还没有读数：一旦有读数，图表就会显示。',
     'dashboard.chart.omittedDays': {
@@ -308,7 +311,7 @@ export const ZH_CN = Object.freeze({
     'dashboard.chart.tooltipSingle': '{label}：{value} {unit}（仅一次读数）',
     'dashboard.chart.ariaLabel': '{type} 的每日中位数与每日范围',
 
-    // --- Curva de glucemia con marcas de comida e insulina (`glucoseContext.js`) -----------------
+    // --- Glucose curve with meal and insulin markers (`glucoseContext.js`) -----------------------
     'dashboard.chart.context.title': '血糖与进餐、胰岛素',
     'dashboard.chart.context.ariaLabel': '随时间变化的血糖曲线，每次进餐和每次注射胰岛素都有标记',
     'dashboard.chart.context.caption': '按时间顺序显示每次血糖读数（{unit}），时间轴上每次进餐和每次注射胰岛素各有一个标记。包含：{series}。超过 {hours} 小时没有读数的时段留空，绝不用线连接。',
@@ -329,7 +332,7 @@ export const ZH_CN = Object.freeze({
         other: '有 {count} 个标记早于所绘制的第一次读数，未予显示。',
     },
 
-    // --- Superposición de días sobre 24 horas (`dayOverlay.js`) ---------------------------------
+    // --- Day overlay over 24 hours (`dayOverlay.js`) --------------------------------------------
     'dashboard.chart.overlay.title': '24 小时曲线',
     'dashboard.chart.overlay.ariaLabel': '本时间段的每一天叠加在同一条 24 小时轴上，并显示每小时的中位数',
     'dashboard.chart.overlay.caption': '本时间段的全部读数（{unit}）叠加在同一条 24 小时轴上：每天一条浅色细线，每小时的中位数用粗线表示。包含：{series}。没有读数的小时留空。',
@@ -340,7 +343,7 @@ export const ZH_CN = Object.freeze({
     'dashboard.chart.overlay.tooltip': '{label}：{value} {unit}',
     'dashboard.chart.overlay.targetRange': '阴影带是你的目标范围：{low}\u2013{high} {unit}。',
 
-    // --- Recorte compartido: la vista que comparten el lector y la vista previa (ADR 0011) -------
+    // --- Shared clipping: the view the reader and the preview share (ADR 0011) -------------------
     'clip.controls.title': '你正在查看的内容',
     'clip.range.label': '此摘录内的时间段',
     'clip.range.all': '整份摘录',
@@ -358,9 +361,9 @@ export const ZH_CN = Object.freeze({
     'clip.empty.type': '本摘录在所示时段内没有此类记录。',
     'clip.range.outside': '你选择的时段超出了本摘录的范围（{from} 至 {to}），因此显示整份摘录。',
     /**
-     * La segunda línea de la cabecera: qué se está mirando **ahora**, después de acotar. Se imprime,
-     * a diferencia de los controles: en papel, un recorte de seis meses con una tabla de siete días
-     * y ninguna huella del filtro es un historial truncado que se lee como completo.
+     * The second line of the header: what is being looked at **now**, after narrowing. It is
+     * printed, unlike the controls: on paper, a six-month clipping with a seven-day table and no
+     * trace of the filter is a truncated history that reads as complete.
      */
     'clip.viewing.label': '当前查看',
     'clip.viewing.rangeAll': '整份摘录',
@@ -386,7 +389,7 @@ export const ZH_CN = Object.freeze({
     'clip.notice.unreadable': {
         other: '此摘录中有 {count} 条记录无法读取。它们不计入统计，也不会绘制在图表中；下方表格中仍会列出，以免遗漏。',
     },
-    // --- Página del lector de un recorte compartido (`reader/`, ADR 0011) -----------------------
+    // --- Reader page of a shared clipping (`reader/`, ADR 0011) ---------------------------------
     'reader.title': '共享的健康记录',
     'reader.intro': '有人与你共享了其本人健康记录的只读摘录。内容已加密：除本浏览器凭 PIN 码解密外，任何人都无法读取。',
     'reader.pin.title': '请输入 PIN 码',

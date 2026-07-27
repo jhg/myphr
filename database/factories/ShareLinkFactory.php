@@ -10,12 +10,12 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
 /**
- * ADR 0011: envoltorio de un enlace, con valores de la forma correcta y sin ningún significado
- * criptográfico. `pin_tag` son 32 bytes al azar precisamente porque un tag real es indistinguible de
- * eso sin conocer el PIN, que es lo que se pretende.
+ * ADR 0011: a link wrapper, with values of the right shape and no cryptographic meaning at all.
+ * `pin_tag` is 32 random bytes precisely because a real tag is indistinguishable from that without
+ * knowing the PIN, which is the whole point.
  *
- * Para probar la apertura con éxito hay que fijar `pin_tag` a mano al valor que el test vaya a
- * enviar: derivarlo aquí exigiría Argon2id en servidor, que este diseño no ejecuta nunca.
+ * To test a successful open you have to set `pin_tag` by hand to the value the test is going to
+ * send: deriving it here would need Argon2id on the server, which this design never runs.
  *
  * @extends Factory<ShareLink>
  */
@@ -37,13 +37,13 @@ final class ShareLinkFactory extends Factory
         ];
     }
 
-    /** Enlace ya caducado. */
+    /** Already expired link. */
     public function expired(): static
     {
         return $this->state(fn (): array => ['expires_at' => now()->subMinute()]);
     }
 
-    /** Enlace con un solo intento por delante, para probar el borrado al agotarlos. */
+    /** Link with a single attempt left, to test deletion once they run out. */
     public function lastAttempt(): static
     {
         return $this->state(fn (): array => ['attempts_remaining' => 1]);

@@ -1,29 +1,29 @@
 /**
- * Sella y abre el **descriptor** de un recorte compartido (ADR 0011).
+ * Seals and opens the **descriptor** of a shared clipping (ADR 0011).
  *
- * El descriptor es la mitad privada de un recorte: la clave de contenido `CK`, el rango exacto, los
- * tipos incluidos y excluidos, el número de eventos y las dos fechas. Va en la columna
- * `shares.descriptor` como sobre `v1.` corriente del ADR 0004 bajo la clave maestra, y es lo que
- * permite que la pantalla de comparticiones activas diga «glucemias, del 1 al 30 de junio» sin que
- * el servidor lo haya sabido nunca. Guardar `types` o `range_from` en columnas devolvería al
- * servidor justo el metadato que el ADR 0006 quitó del esquema.
+ * The descriptor is the private half of a clipping: the content key `CK`, the exact range, the
+ * included and excluded types, the event count and the two dates. It goes in the
+ * `shares.descriptor` column as a plain ADR 0004 `v1.` envelope under the master key, and it is
+ * what lets the active shares screen say "glucose, from 1 to 30 June" without the server ever
+ * having known it. Storing `types` or `range_from` in columns would hand the server back exactly
+ * the metadata ADR 0006 removed from the schema.
  *
- * **Por qué la etiqueta es `RECORD` y no una nueva.** El ADR 0011 añade a `KDF_LABELS` exactamente
- * tres etiquetas —`SHARE`, `SHARE_LINK` y `SHARE_PIN_TAG`—, y ninguna es esta: del descriptor dice
- * que es «un sobre normal del ADR 0004 bajo la clave maestra», es decir, una fila cifrada del
- * usuario como cualquier otra. `RECORD` es precisamente «UMK -> clave por registro, con el contexto
- * del registro concatenado», y la separación de dominios la aporta el contexto, que es
- * `<user>/share/<id>` frente al `<user>/event/<fecha>` de un evento clínico: dos contextos que no
- * pueden coincidir, así que dos claves que no pueden coincidir. Inventarse aquí una cuarta etiqueta
- * que el ADR no menciona sería decidir por mi cuenta algo ya decidido.
+ * **Why the label is `RECORD` and not a new one.** ADR 0011 adds exactly three labels to
+ * `KDF_LABELS` —`SHARE`, `SHARE_LINK` and `SHARE_PIN_TAG`—, and none is this one: of the
+ * descriptor it says that it is "a normal ADR 0004 envelope under the master key", that is, an
+ * encrypted user row like any other. `RECORD` is precisely "UMK -> per-record key, with the record
+ * context appended", and the domain separation comes from the context, which is
+ * `<user>/share/<id>` against the `<user>/event/<date>` of a clinical event: two contexts that
+ * cannot coincide, so two keys that cannot coincide. Inventing a fourth label the ADR does not
+ * mention would be deciding on my own something already decided.
  *
- * La clave derivada vive solo lo que dura la llamada y se borra en un `finally`, como en
+ * The derived key lives only for the duration of the call and is wiped in a `finally`, as in
  * `eventEnvelope.js` (ADR 0004).
  *
- * Un descriptor que no abre **no se silencia** y no se pinta como recorte vacío: la pantalla lo
- * muestra como fila de error (ADR 0004). Un recorte cuyo descriptor no abre sigue existiendo en el
- * servidor y sigue siendo legible por quien tenga el enlace y el PIN, así que esconderlo de la lista
- * sería esconder algo que sigue compartido.
+ * A descriptor that does not open is **not silenced** and is not painted as an empty clipping: the
+ * screen shows it as an error row (ADR 0004). A clipping whose descriptor does not open still
+ * exists on the server and is still readable by whoever has the link and the PIN, so hiding it
+ * from the list would be hiding something that is still shared.
  */
 
 import { shareDescriptorContext } from '../auth/context.js';
@@ -33,11 +33,11 @@ import { deriveKey, KDF_LABELS } from '../crypto/kdf.js';
 import { zeroize } from '../crypto/zeroize.js';
 
 /**
- * Deriva la clave del descriptor y ejecuta `use` con ella.
+ * Derives the descriptor key and runs `use` with it.
  *
- * Existe para que el sellado y la apertura compartan **una sola** construcción de contexto y de
- * derivación, como `withSettingsKey` en `auth/settings.js`: duplicarlas y dejar que diverjan un
- * byte es dejar el descriptor sin abrir para siempre, y con él `CK`.
+ * It exists so that sealing and opening share **one single** construction of context and
+ * derivation, like `withSettingsKey` in `auth/settings.js`: duplicating them and letting them
+ * diverge by one byte leaves the descriptor unopenable forever, and `CK` with it.
  *
  * @template T
  * @param {string} userId
@@ -60,14 +60,14 @@ function withDescriptorKey(userId, shareId, use) {
 }
 
 /**
- * Cierra el descriptor de un recorte.
+ * Seals the descriptor of a clipping.
  *
  * @param {object} params
- * @param {string} params.userId UUID del usuario, tal cual lo devuelve el servidor.
- * @param {string} params.shareId UUIDv4 del recorte, el mismo que va a la columna `shares.id`.
- * @param {object} params.descriptor Contenido en claro del descriptor.
- * @returns {string} `v1.` + base64url, listo para la columna `shares.descriptor`.
- * @throws {Error} Si no hay clave maestra en memoria (`withMasterKey`).
+ * @param {string} params.userId User UUID, exactly as the server returns it.
+ * @param {string} params.shareId Clipping UUIDv4, the same one that goes into the `shares.id` column.
+ * @param {object} params.descriptor Descriptor content in the clear.
+ * @returns {string} `v1.` + base64url, ready for the `shares.descriptor` column.
+ * @throws {Error} If there is no master key in memory (`withMasterKey`).
  */
 export function sealShareDescriptor({ userId, shareId, descriptor }) {
     return withDescriptorKey(userId, shareId, (key, context) =>
@@ -76,16 +76,16 @@ export function sealShareDescriptor({ userId, shareId, descriptor }) {
 }
 
 /**
- * Abre el descriptor de un recorte.
+ * Opens the descriptor of a clipping.
  *
  * @param {object} params
- * @param {string} params.userId Mismo `userId` que se usó al sellar.
- * @param {string} params.shareId Mismo identificador que se usó al sellar.
- * @param {string} params.envelope Sobre tal cual viene de la columna `descriptor`.
- * @returns {object} Contenido en claro ya parseado.
- * @throws {import('../crypto/envelope.js').EnvelopeError} Si el sobre no abre. No se silencia
- *         (ADR 0004).
- * @throws {Error} Si no hay clave maestra en memoria (`withMasterKey`).
+ * @param {string} params.userId Same `userId` used to seal it.
+ * @param {string} params.shareId Same identifier used to seal it.
+ * @param {string} params.envelope Envelope exactly as it comes from the `descriptor` column.
+ * @returns {object} Content in the clear, already parsed.
+ * @throws {import('../crypto/envelope.js').EnvelopeError} If the envelope does not open. It is not
+ *         silenced (ADR 0004).
+ * @throws {Error} If there is no master key in memory (`withMasterKey`).
  */
 export function openShareDescriptor({ userId, shareId, envelope }) {
     const plaintext = withDescriptorKey(userId, shareId, (key, context) =>

@@ -5,66 +5,67 @@ declare(strict_types=1);
 namespace App\Support;
 
 /**
- * Vocabulario del rastro de actividad de la cuenta.
+ * Vocabulary of the account activity trail.
  *
- * En una aplicación de conocimiento cero, esto es lo único que el servidor puede contar de lo que
- * hace una persona: **qué ocurrió y cuándo**, nunca qué contenía. Los datos clínicos son sobres
- * cifrados y los ajustes también, así que ninguna entrada lleva contenido: la fila del registro se
- * queda en el verbo, el sujeto, quién lo causó y la fecha.
+ * In a zero-knowledge application this is the only thing the server can tell about what a person
+ * does: **what happened and when**, never what it contained. Clinical data are encrypted envelopes
+ * and so are the settings, so no entry carries content: the log row stops at the verb, the subject,
+ * who caused it and the date.
  *
- * Tampoco se guarda la IP ni el agente de usuario. Serían útiles para investigar un acceso indebido,
- * pero son datos personales que el servidor hoy no retiene en ningún otro sitio, y añadirlos aquí
- * ampliaría en silencio lo que sabemos de la persona. Si algún día se decide lo contrario, que sea
- * una decisión explícita y documentada, no un efecto colateral de este registro.
+ * The IP and the user agent are not stored either. They would help investigate an improper access,
+ * but they are personal data the server does not retain anywhere else today, and adding them here
+ * would silently widen what we know about the person. If that is ever decided otherwise, let it be
+ * an explicit and documented decision, not a side effect of this log.
  *
- * Los valores son estables: se consultan y se agrupan por ellos, así que cambiarlos rompe el
- * historial ya escrito. Las transiciones del ciclo de vida de un evento clínico no están aquí; esas
- * las emite el propio modelo con los nombres de Eloquent, bajo el log `health-event`.
+ * The values are stable: we query and group by them, so changing them breaks the history already
+ * written. The lifecycle transitions of a clinical event are not here; the model itself emits those
+ * with Eloquent's names, under the `health-event` log.
  */
 enum AuditEvent: string
 {
-    /** Nombre del log donde viven todas estas entradas, frente al de eventos clínicos. */
+    /** Name of the log all these entries live in, as opposed to the clinical events one. */
     public const LOG_NAME = 'account';
 
-    /** Alta de la cuenta: existe la fila de usuario, todavía sin registro OPAQUE completo. */
+    /** Account created: the user row exists, still without a completed OPAQUE registration. */
     case AccountCreated = 'account-created';
 
-    /** El registro OPAQUE se completó: a partir de aquí la cuenta puede iniciar sesión. */
+    /** The OPAQUE registration completed: from here on the account can log in. */
     case RegistrationCompleted = 'registration-completed';
 
     /**
-     * Se emitió un enlace de registro para una cuenta. Es la acción más destructiva de la interfaz
-     * (Spec 0001 §3.4): si la cuenta ya tenía datos, completar el registro nuevo los deja
-     * inaccesibles. Quien la causa suele ser otra persona, y por eso importa que quede anotado.
+     * A registration link was issued for an account. It is the most destructive action in the
+     * interface (Spec 0001 §3.4): if the account already had data, completing the new registration
+     * leaves it inaccessible. Whoever causes it is usually another person, which is why it matters
+     * that it is recorded.
      */
     case RegistrationLinkIssued = 'registration-link-issued';
 
     case LoggedIn = 'logged-in';
 
-    /** Cierre de sesión explícito, incluido el bloqueo que descarta la clave maestra del navegador. */
+    /** Explicit logout, including the lock that discards the master key from the browser. */
     case LoggedOut = 'logged-out';
 
     case PasswordChanged = 'password-changed';
 
-    /** Cambió el sobre de ajustes, el idioma, o ambos. Cuál de los dos no se anota. */
+    /** The settings envelope changed, the language changed, or both. Which of the two is not recorded. */
     case SettingsUpdated = 'settings-updated';
 
     /**
-     * Se compartió un recorte con un profesional (ADR 0011).
+     * A clipping was shared with a professional (ADR 0011).
      *
-     * Anota únicamente que hubo una compartición y cuándo, que es lo que el servidor ya ve por el
-     * mero hecho de almacenar la fila. Nunca el rango, ni los tipos, ni el número de eventos: van
-     * cifrados dentro del descriptor, y repetirlos aquí devolvería al servidor justo el metadato que
-     * el ADR 0006 quitó del esquema.
+     * It records only that a share happened and when, which is what the server already sees from the
+     * mere fact of storing the row. Never the range, the types or the number of events: those go
+     * encrypted inside the descriptor, and repeating them here would hand the server exactly the
+     * metadata ADR 0006 removed from the schema.
      */
     case ShareCreated = 'share-created';
 
     /**
-     * Se revocó un recorte compartido (ADR 0011). Revocar es borrado físico, así que sin esta
-     * entrada no quedaría constancia de que ese recorte llegó a existir.
+     * A shared clipping was revoked (ADR 0011). Revoking is a physical delete, so without this entry
+     * there would be no record that the clipping ever existed.
      *
-     * No hay caso equivalente para las **descargas**: un rastro de accesos diría cuántas veces y
-     * cuándo se consultó cada envío, que es exactamente lo que el ADR 0006 descarta.
+     * There is no equivalent case for **downloads**: an access trail would tell how many times and
+     * when each delivery was read, which is exactly what ADR 0006 rules out.
      */
     case ShareRevoked = 'share-revoked';
 }

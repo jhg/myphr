@@ -7,16 +7,15 @@ namespace App\Sharing;
 use RuntimeException;
 
 /**
- * Se alcanzó uno de los topes del ADR 0011: recortes activos por usuario, o enlaces vivos por
- * recorte.
+ * One of the ADR 0011 caps was hit: active clippings per user, or live links per clipping.
  *
- * Los topes no son cosmética. Sin ellos, el endpoint que almacena el paquete es alojamiento anónimo
- * gratuito de hasta 4 MiB por petición para cualquiera con una cuenta, y el coste de almacenamiento
- * de una cuenta deja de estar acotado.
+ * The caps are not cosmetic. Without them, the endpoint that stores the package is free anonymous
+ * hosting of up to 4 MiB per request for anyone with an account, and the storage cost of an account
+ * stops being bounded.
  *
- * Este error sí es explícito, al contrario que {@see InvalidShareLinkException}: lo recibe la propia
- * persona dueña de los datos, en su sesión, y necesita entender que tiene que revocar algo antes de
- * compartir otra vez. Aquí no hay nada que ocultarle a nadie.
+ * This error is explicit, unlike {@see InvalidShareLinkException}: the person who owns the data
+ * receives it, in their own session, and they need to understand that they have to revoke something
+ * before sharing again. There is nothing to hide from anyone here.
  */
 final class ShareLimitExceededException extends RuntimeException
 {

@@ -13,7 +13,7 @@ use App\Security\Opaque\Oprf;
 use App\Security\Opaque\ServerLoginState;
 
 /**
- * Devuelve un elemento ristretto255 válido y distinto de la identidad.
+ * Returns a valid ristretto255 element other than the identity.
  */
 function opaqueTestPoint(string $seed): string
 {

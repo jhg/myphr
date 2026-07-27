@@ -12,13 +12,13 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
 /**
- * ADR 0011: el paquete se cifra en el cliente, así que la fábrica no puede producir contenido real.
- * Genera un sobre con la forma que valida {@see ShareEnvelopeValidator}: prefijo `s1.` más base64url
- * de bytes aleatorios cuyo tamaño total coincide con un escalón de la escalera de relleno, para que
- * el guardarraíl de {@see Share::booted()} lo acepte sin necesitar cifrado real.
+ * ADR 0011: the package is encrypted on the client, so the factory cannot produce real content. It
+ * generates an envelope with the shape {@see ShareEnvelopeValidator} validates: the `s1.` prefix
+ * plus base64url of random bytes whose total size matches one step of the padding ladder, so the
+ * {@see Share::booted()} guardrail accepts it without needing real encryption.
  *
- * Por defecto usa el escalón **más pequeño** (64 KiB): los mayores son de 1 y 4 MiB y llenar la
- * memoria de la suite con ellos en cada test no aporta nada.
+ * By default it uses the **smallest** step (64 KiB): the larger ones are 1 and 4 MiB, and filling
+ * the suite's memory with them on every test buys nothing.
  *
  * @extends Factory<Share>
  */
@@ -30,7 +30,7 @@ final class ShareFactory extends Factory
     public function definition(): array
     {
         return [
-            /** UUIDv4 explícito: el ADR descarta el v7, que lleva el instante de creación dentro. */
+            /** Explicit UUIDv4: the ADR rules out v7, which carries the creation instant inside. */
             'id' => (string) Str::uuid(),
             'user_id' => User::factory(),
             'expires_at' => now()->addDay(),
@@ -39,7 +39,7 @@ final class ShareFactory extends Factory
         ];
     }
 
-    /** Recorte ya caducado, para probar que ni se lista ni se sirve. */
+    /** Already expired clipping, to check it is neither listed nor served. */
     public function expired(): static
     {
         return $this->state(fn (): array => ['expires_at' => now()->subMinute()]);

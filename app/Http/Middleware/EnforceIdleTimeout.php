@@ -12,36 +12,36 @@ use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Caducidad por inactividad contada en el servidor (Spec 0001 §8; ADR 0009).
+ * Idle timeout counted on the server (Spec 0001 §8; ADR 0009).
  *
- * Quince minutos sin ninguna petición autenticada y la sesión se cierra entera: se destruye el
- * secreto de sesión, se cierra la sesión de Laravel y se rota el token CSRF, exactamente lo mismo
- * que hace `POST /phr/auth/lock`.
+ * Fifteen minutes without any authenticated request and the whole session is closed: the session
+ * secret is destroyed, the Laravel session is closed and the CSRF token is rotated, exactly what
+ * `POST /phr/auth/lock` does.
  *
- * **Quien cuenta el tiempo es el servidor, no el navegador.** El temporizador de `lock.js` no se
- * ejecuta en una pestaña que el sistema operativo descartó por memoria, ni en un portátil cerrado,
- * ni con JavaScript desactivado, ni si la llamada de cierre no llega a salir. Sin esta comprobación,
- * la sesión (y con ella el secreto, que es la mitad del material con el que se abre la clave
- * maestra) sobrevive hasta el `session.lifetime` de Laravel, hoy 120 minutos, que es justo el puesto
- * compartido desatendido que motiva la medida. El temporizador del cliente sigue siendo útil: es lo
- * que avisa y lo que dispara la recarga dura, no lo que decide la caducidad.
+ * **The server counts the time, not the browser.** The `lock.js` timer does not run in a tab the
+ * operating system discarded for memory, nor on a closed laptop, nor with JavaScript off, nor if the
+ * lock call never manages to leave. Without this check, the session (and with it the secret, which
+ * is half the material the master key is opened with) survives until Laravel's `session.lifetime`,
+ * today 120 minutes, which is exactly the unattended shared machine that motivates the measure. The
+ * client timer is still useful: it is what warns and what triggers the hard reload, not what decides
+ * the expiry.
  *
- * La marca de tiempo vive en la carga útil de la sesión, junto al secreto: no hace falta ninguna
- * columna y destruir la sesión la destruye.
+ * The timestamp lives in the session payload, next to the secret: no column is needed and destroying
+ * the session destroys it.
  *
- * La ruta de bloqueo queda exenta a propósito. Es la que ya hace esta misma destrucción, y contestar
- * a esa petición con un 401 dejaría al cliente reintentando su cierre en bucle contra un endpoint
- * que nunca le va a responder que sí.
+ * The lock route is exempt on purpose. It is the one that already performs this same destruction,
+ * and answering that request with a 401 would leave the client retrying its lock in a loop against
+ * an endpoint that is never going to say yes.
  */
 final readonly class EnforceIdleTimeout
 {
-    /** Clave de la marca de última actividad dentro de la sesión. */
+    /** Key of the last-activity mark inside the session. */
     public const string SESSION_KEY = 'phr.last_activity_at';
 
     /** Inactividad tolerada, en segundos (ADR 0009: quince minutos). */
     public const int IDLE_LIMIT_SECONDS = 15 * 60;
 
-    /** Ruta que ya destruye la sesión por su cuenta y no debe recibir un 401 por caducidad. */
+    /** Route that already destroys the session on its own and must not get a 401 for expiry. */
     private const string LOCK_ROUTE = 'filament.phr.auth.lock';
 
     public function __construct(private SessionSecrets $sessionSecrets) {}
@@ -66,12 +66,12 @@ final readonly class EnforceIdleTimeout
     }
 
     /**
-     * Cierra la sesión entera y corta la petición.
+     * Closes the whole session and cuts the request short.
      *
-     * Se lanza {@see AuthenticationException} en vez de construir la respuesta a mano para que el
-     * destino sea el mismo que el de cualquier otra petición sin autenticar: 401 con cuerpo JSON
-     * cuando el cliente pide JSON, que es lo que `recovery.js` ya sabe llevar a la pantalla de
-     * acceso, y redirección al login en una navegación normal.
+     * {@see AuthenticationException} is thrown instead of building the response by hand so the
+     * destination is the same as for any other unauthenticated request: 401 with a JSON body when
+     * the client asks for JSON, which is what `recovery.js` already knows how to take to the login
+     * screen, and a redirect to login on a normal navigation.
      *
      * @throws AuthenticationException
      */

@@ -10,38 +10,38 @@ use App\Security\Opaque\InvalidConfigurationException;
 use App\Security\Opaque\InvalidMessageException;
 
 /**
- * Sal señuelo del `challenge` (ADR 0011).
+ * Decoy salt for `challenge` (ADR 0011).
  *
- * `challenge` devuelve la `pin_salt` de un enlace vivo. Si devolviese un 404 cuando el enlace no
- * existe, caducó o se revocó, cualquiera con una lista de identificadores sabría cuáles siguen
- * abiertos, y de paso que esa persona compartió algo esa semana. Así que devuelve siempre una sal
- * con la misma forma: la real si el enlace vive, y si no una derivada por HMAC de una clave del
- * servidor sobre el `linkId`.
+ * `challenge` returns the `pin_salt` of a live link. If it returned a 404 when the link does not
+ * exist, has expired or was revoked, anyone with a list of identifiers would know which ones are
+ * still open, and along the way that this person shared something that week. So it always returns a
+ * salt of the same shape: the real one if the link is alive, and otherwise one derived by HMAC from
+ * a server key over the `linkId`.
  *
- * Dos propiedades que la señuelo tiene que cumplir, y de ahí sale el diseño:
+ * Two properties the decoy has to satisfy, and the design follows from them:
  *
- * * **Determinista**: preguntar dos veces por el mismo identificador muerto tiene que dar la misma
- *   sal. Una aleatoria distinta en cada petición delataría al muerto en el segundo intento.
- * * **Estable entre despliegues**: por eso la clave no cuelga de `APP_KEY`, que se regenera al
- *   reinstalar. Si cambiara, comparar la sal de hoy con la de ayer volvería a separar vivos de
- *   muertos.
+ * * **Deterministic**: asking twice about the same dead identifier has to give the same salt. A
+ *   different random one on each request would give the dead link away on the second try.
+ * * **Stable across deployments**: that is why the key does not hang off `APP_KEY`, which is
+ *   regenerated on a reinstall. If it changed, comparing today's salt with yesterday's would
+ *   separate live from dead links again.
  *
- * La clave sale de `config('share.decoy_salt_key')`; si no está configurada, de
- * `config('opaque.enumeration_key')`, que hace exactamente el mismo trabajo en el login —volver
- * indistinguible una cuenta que no existe— y es obligatoria en cualquier instalación que pueda
- * autenticar. Si no hay ninguna de las dos, esto falla en voz alta: una sal señuelo derivada de una
- * clave vacía sería la misma en todas las instalaciones del mundo y no protegería nada.
+ * The key comes from `config('share.decoy_salt_key')`; if that is not configured, from
+ * `config('opaque.enumeration_key')`, which does exactly the same job at login —making an account
+ * that does not exist indistinguishable— and is mandatory in any install that can authenticate. If
+ * neither is present, this fails loudly: a decoy salt derived from an empty key would be the same on
+ * every install in the world and would protect nothing.
  */
 final readonly class DecoySalt
 {
-    /** Etiqueta de dominio, para que este HMAC no colisione con ningún otro uso de la misma clave. */
+    /** Domain label, so this HMAC does not collide with any other use of the same key. */
     private const string LABEL = 'myphr/share-decoy-salt/v1';
 
     /**
-     * Sal señuelo de 16 bytes para un identificador de enlace, del mismo tamaño que la real.
+     * 16-byte decoy salt for a link identifier, the same size as the real one.
      *
-     * @param  string  $linkId  Identificador tal y como llegó, sin suponer que es un UUID: también
-     *                          hay que dar respuesta a una cadena con cualquier forma.
+     * @param  string  $linkId  Identifier exactly as it arrived, without assuming it is a UUID: a
+     *                          string of any shape also has to get an answer.
      */
     public function for(string $linkId): string
     {
@@ -71,7 +71,7 @@ final readonly class DecoySalt
         }
 
         throw new InvalidConfigurationException(
-            'Falta SHARE_DECOY_SALT_KEY (o, en su defecto, OPAQUE_ENUMERATION_KEY): sin ella la sal señuelo no protege nada.',
+            'SHARE_DECOY_SALT_KEY is missing (or, failing that, OPAQUE_ENUMERATION_KEY): without it the decoy salt protects nothing.',
         );
     }
 }

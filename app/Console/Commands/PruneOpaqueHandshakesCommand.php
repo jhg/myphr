@@ -13,27 +13,27 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 
 /**
- * Purga programada de filas caducadas de las tablas de arranque de sesión (Spec 0001 §3.2, §9, §11;
+ * Scheduled pruning of expired rows in the session bootstrap tables (Spec 0001 §3.2, §9, §11;
  * `docs/OPAQUE.md` §14.3).
  *
- * Cada `POST /phr/auth/opaque/login/start` sin autenticar inserta una fila en
- * `opaque_login_handshakes`; sin purga, el crecimiento de esa tabla lo dirige cualquiera desde fuera.
- * Lo mismo aplica a `opaque_registrations`, que acumula pendientes que nunca llaman a
- * `registration/finish`. Ambas se purgan solo por `expires_at` vencido: una vez caducada, la fila ya
- * no sirve a ningún flujo, así que no hace falta margen adicional.
+ * Every unauthenticated `POST /phr/auth/opaque/login/start` inserts a row into
+ * `opaque_login_handshakes`; without pruning, anyone outside drives the growth of that table. The
+ * same applies to `opaque_registrations`, which piles up pending rows that never call
+ * `registration/finish`. Both are pruned by expired `expires_at` alone: once expired, the row is no
+ * use to any flow, so no extra margin is needed.
  *
- * `user_registration_links` es distinta: `consumed_at` y `created_by` son señal de auditoría (quién
- * emitió el enlace y cuándo se usó), así que un enlace consumido o caducado no se borra al instante,
- * solo cuando además tiene cierta antigüedad. La spec (§3.3) no fija ese margen, solo pide "cierta
- * antigüedad"; aquí se fija explícitamente en {@see self::LINK_RETENTION_DAYS}, una decisión propia
- * de esta implementación y no un valor por defecto oculto.
+ * `user_registration_links` is different: `consumed_at` and `created_by` are an audit signal (who
+ * issued the link and when it was used), so a consumed or expired link is not deleted right away,
+ * only once it is also old enough. The spec (§3.3) does not fix that margin, it only asks for "a
+ * certain age"; it is set explicitly here in {@see self::LINK_RETENTION_DAYS}, a decision of this
+ * implementation and not a hidden default.
  */
 #[Signature('opaque:prune-handshakes')]
 #[Description('Purga handshakes de login, registros OPAQUE pendientes y enlaces de registro caducados o consumidos con cierta antigüedad.')]
 final class PruneOpaqueHandshakesCommand extends Command
 {
     /**
-     * Antigüedad mínima, en días, para purgar un enlace de registro ya consumido o caducado.
+     * Minimum age, in days, to prune a registration link that was consumed or has expired.
      */
     private const int LINK_RETENTION_DAYS = 30;
 

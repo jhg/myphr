@@ -7,26 +7,26 @@ namespace App\Security\Opaque;
 use Normalizer;
 
 /**
- * Única fuente de `normalize(login)` (`docs/OPAQUE.md` §13.1.1, Spec 0001 §10).
+ * The single source of `normalize(login)` (`docs/OPAQUE.md` §13.1.1, Spec 0001 §10).
  *
  * ```
  * normalize(login) = mb_strtolower(NFKC(trim(login)), 'UTF-8')
  * ```
  *
- * La misma cadena normalizada se usa para buscar la cuenta, para persistir la
- * columna de login y para calcular el `credential_identifier`. Si dos de esos
- * tres caminos difieren aparece un oráculo de enumeración en dos peticiones.
+ * The same normalized string is used to look the account up, to persist the
+ * login column and to compute the `credential_identifier`. If two of those
+ * three paths differ, an enumeration oracle appears in two requests.
  *
- * Opera sobre texto, nunca sobre material binario: `mb_strtolower` es correcto
- * aquí porque el login es una cadena UTF-8.
+ * It works on text, never on binary material: `mb_strtolower` is correct here
+ * because the login is a UTF-8 string.
  */
 final class LoginNormalizer
 {
     /**
-     * @param  string  $login  Identificador tal cual lo escribió la persona.
-     * @return string Forma canónica: sin espacios exteriores, NFKC y en minúsculas.
+     * @param  string  $login  Identifier exactly as the person typed it.
+     * @return string Canonical form: no outer whitespace, NFKC and lowercase.
      *
-     * @throws InvalidConfigurationException Si la cadena no se puede normalizar a NFKC.
+     * @throws InvalidConfigurationException If the string cannot be normalized to NFKC.
      */
     public static function normalize(string $login): string
     {

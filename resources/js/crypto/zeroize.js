@@ -1,17 +1,17 @@
 /**
- * Borrado best-effort de búferes de bytes.
+ * Best-effort wiping of byte buffers.
  *
- * **No es una garantía.** En JavaScript no hay forma de asegurar que un valor
- * desaparece de la memoria del proceso: el recolector de basura puede haber
- * copiado el búfer, las cadenas son inmutables (una contraseña no se puede
- * borrar), y el WebAssembly de OPAQUE mantiene sus propias copias mientras viva
- * la pestaña. Esto sólo reduce la ventana en la que los bytes propios siguen
- * legibles en el heap (ADR 0004, "El borrado de memoria solo aplica a los
- * búferes de bytes propios, y aun ahí es a lo sumo un intento").
+ * **Not a guarantee.** JavaScript offers no way to make sure a value leaves
+ * process memory: the garbage collector may already have copied the buffer,
+ * strings are immutable (a password cannot be wiped), and the OPAQUE
+ * WebAssembly keeps its own copies for as long as the tab lives. This only
+ * shortens the window in which our own bytes stay readable on the heap
+ * (ADR 0004, "Memory wiping only applies to our own byte buffers, and even
+ * there it is at most an attempt").
  */
 
 /**
- * Rellena de ceros los `Uint8Array` recibidos, ignorando `null`/`undefined`.
+ * Fills the given `Uint8Array`s with zeros, ignoring `null`/`undefined`.
  *
  * @param {...(Uint8Array|null|undefined)} buffers
  * @returns {void}
@@ -31,10 +31,10 @@ export function zeroize(...buffers) {
 }
 
 /**
- * Ejecuta `work` y borra los búferes indicados pase lo que pase.
+ * Runs `work` and wipes the given buffers no matter what.
  *
  * @template T
- * @param {Uint8Array[]} buffers Búferes a borrar al terminar.
+ * @param {Uint8Array[]} buffers Buffers to wipe when the work is done.
  * @param {() => T} work
  * @returns {T}
  */

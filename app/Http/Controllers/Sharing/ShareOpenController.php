@@ -13,34 +13,34 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
 /**
- * `POST /s/{link}/open` (ADR 0011): segundo paso de la lectura.
+ * `POST /s/{link}/open` (ADR 0011): second step of the read.
  *
- * Recibe el `pinTag` y, **solo si cuadra**, devuelve el envoltorio y el paquete en la misma
- * respuesta, más el identificador del recorte y la caducidad del enlace, que son las dos piezas de
- * los datos asociados que el lector no lleva consigo. Ninguna de las dos es una concesión: van
- * dentro del AEAD de las dos capas, así que un valor falso no abre nada. El instante de generación,
- * que también entra en el dato asociado del paquete, no está aquí porque el servidor no lo tiene:
- * viaja en el fragmento de la URL, que nunca le llega. Antes de eso no sale nada, y esa es la corrección del fallo crítico del diseño inicial:
- * el PIN se verifica en línea, con un contador de cinco intentos en columna, y no fuera de línea
- * contra un blob que el servidor ya entregó.
+ * It receives the `pinTag` and, **only if it matches**, returns the wrapper and the package in the
+ * same response, plus the clipping identifier and the link expiry, which are the two pieces of
+ * associated data the reader does not carry with it. Neither is a concession: they go inside the
+ * AEAD of both layers, so a false value opens nothing. The generation instant, which also goes into
+ * the package's associated data, is not here because the server does not have it: it travels in the
+ * URL fragment, which never reaches it. Before that nothing comes out, and that is the fix for the
+ * critical flaw in the original design: the PIN is verified online, with a five-attempt counter in a
+ * column, and not offline against a blob the server already handed over.
  *
- * Las cuatro causas de fallo —no existe, caducó, se revocó, PIN incorrecto— salen por la **misma
- * respuesta genérica**, con el mismo código HTTP y el mismo cuerpo. No se devuelven los intentos
- * restantes: serían un oráculo que distingue un enlace vivo de uno que nunca existió, y obligarían
- * además a inventar un contador estable para los identificadores inexistentes. El precio es real y
- * conviene decirlo: quien se equivoca de dedo no sabe cuántos intentos le quedan, y el caso
- * mayoritario es justamente ese. La pantalla del lector puede explicar que hay un número limitado de
- * intentos sin necesidad de que el servidor los cuente en voz alta.
+ * The four failure causes —does not exist, expired, revoked, wrong PIN— come out through the **same
+ * generic response**, with the same HTTP status and the same body. The remaining attempts are not
+ * returned: they would be an oracle telling a live link from one that never existed, and they would
+ * also force inventing a stable counter for non-existent identifiers. The price is real and worth
+ * saying: whoever fat-fingers the PIN does not know how many attempts are left, and that is by far
+ * the most common case. The reader screen can explain that there is a limited number of attempts
+ * without the server counting them out loud.
  *
- * Cabeceras: `Cache-Control: no-store` (lo pone el middleware `NoStore`),
- * `Content-Type: application/octet-stream`, y **sin** `ETag`, `Last-Modified` ni
- * `Content-Disposition` descriptivo. El nombre de un fichero adjunto es metadato clínico, y un
- * validador de caché sobre este cuerpo permitiría a un intermediario saber si el paquete cambió. La
- * ruta se excluye además de cualquier CDN.
+ * Headers: `Cache-Control: no-store` (set by the `NoStore` middleware),
+ * `Content-Type: application/octet-stream`, and **no** `ETag`, `Last-Modified` or descriptive
+ * `Content-Disposition`. An attachment's filename is clinical metadata, and a cache validator over
+ * this body would let an intermediary know whether the package changed. The route is also excluded
+ * from any CDN.
  *
- * Aquí no se registra ni IP ni agente de usuario, coherente con la exclusión deliberada de ambos en
- * `AuditEvent`: la IP de quien descarga revela el centro sanitario y de ahí el diagnóstico. Tampoco
- * hay entrada de auditoría por descarga.
+ * Neither IP nor user agent is logged here, consistent with the deliberate exclusion of both in
+ * `AuditEvent`: the IP of whoever downloads reveals the healthcare centre and from there the
+ * diagnosis. There is no audit entry per download either.
  */
 final readonly class ShareOpenController
 {
@@ -58,9 +58,9 @@ final readonly class ShareOpenController
     }
 
     /**
-     * El comprobante llega en base64url y se decodifica aquí. Una codificación inválida es una causa
-     * de fallo más y sale por el mismo sitio que las otras cuatro: devolver un error de validación
-     * distinguible daría un oráculo gratis.
+     * The proof arrives as base64url and is decoded here. An invalid encoding is one more failure
+     * cause and comes out through the same place as the other four: returning a distinguishable
+     * validation error would give away an oracle for free.
      */
     private function pinTag(Request $request): string
     {

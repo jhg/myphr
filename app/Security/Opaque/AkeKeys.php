@@ -5,16 +5,16 @@ declare(strict_types=1);
 namespace App\Security\Opaque;
 
 /**
- * Claves derivadas por `DeriveKeys` (RFC 9807 §6.4.2.2 /
+ * Keys derived by `DeriveKeys` (RFC 9807 §6.4.2.2 /
  * `docs/OPAQUE.md` §11.6).
  *
- * Contiene sólo las tres salidas que sobreviven a la derivación: la session
- * key y las dos claves de MAC. `prk` y `handshake_secret` no se guardan aquí
- * porque se zeroizan en cuanto dejan de hacer falta.
+ * It holds only the three outputs that survive the derivation: the session
+ * key and the two MAC keys. `prk` and `handshake_secret` are not kept here
+ * because they are zeroized as soon as they are no longer needed.
  */
 final class AkeKeys
 {
-    /** `Nx` / `Nm` — longitud de cada valor derivado, en bytes. */
+    /** `Nx` / `Nm` — length of each derived value, in bytes. */
     public const int LENGTH = 64;
 
     /**
@@ -22,7 +22,7 @@ final class AkeKeys
      * @param  string  $serverMacKey  `Km2`, 64 bytes.
      * @param  string  $clientMacKey  `Km3`, 64 bytes.
      *
-     * @throws InvalidMessageException Si alguna longitud no es 64.
+     * @throws InvalidMessageException If any length is not 64.
      */
     public function __construct(
         public readonly string $sessionKey,

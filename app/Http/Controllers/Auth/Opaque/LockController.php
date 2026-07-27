@@ -12,21 +12,21 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 /**
- * `POST /phr/auth/lock` (Spec 0001 §4.6 y §8).
+ * `POST /phr/auth/lock` (Spec 0001 §4.6 and §8).
  *
- * El bloqueo **cierra la sesión entera**, no solo el secreto: dejar viva la sesión de Laravel
- * mantendría a la persona dentro del panel, con acceso a datos en claro y a acciones destructivas
- * como reemitir un enlace, que es justo el riesgo del puesto compartido que motiva el bloqueo.
+ * Locking **closes the whole session**, not just the secret: leaving the Laravel session alive would
+ * keep the person inside the panel, with access to plaintext data and to destructive actions like
+ * reissuing a link, which is exactly the shared-machine risk that motivates locking.
  *
- * El cliente hace la recarga dura **después** de recibir esta respuesta, nunca antes: recargar antes
- * de la confirmación deja, ante una pérdida de red, el secreto vivo en servidor y al cliente sin
- * clave maestra en memoria, es decir, un bloqueo que no bloqueó nada del lado servidor.
+ * The client does the hard reload **after** receiving this response, never before: reloading before
+ * the confirmation leaves, on a network failure, the secret alive on the server and the client
+ * without a master key in memory, that is, a lock that locked nothing on the server side.
  *
- * `sessionStorage['phr.rk']` no se borra: al morir el secreto, ese paquete queda cifrado bajo algo
- * que ya no existe en ningún sitio y es inútil sin que nadie tenga que limpiarlo (§8).
+ * `sessionStorage['phr.rk']` is not cleared: once the secret dies, that bundle is encrypted under
+ * something that no longer exists anywhere and is useless without anyone having to clean it (§8).
  *
- * El logout propio de Filament no pasa por aquí, así que el cierre de sesión normal tiene que usar
- * este mismo camino de destrucción y no confiar en que aquel lo haga (§8).
+ * Filament's own logout does not go through here, so an ordinary logout has to use this same
+ * destruction path and not trust that it does it (§8).
  */
 final readonly class LockController
 {
@@ -40,7 +40,7 @@ final readonly class LockController
 
         $this->sessionSecrets->destroy($session);
 
-        /** Antes del `logout`, que es lo que deja de haber alguien a quien atribuirlo. */
+        /** Before the `logout`, which is what leaves nobody to attribute it to. */
         if ($user instanceof User) {
             activity(AuditEvent::LOG_NAME)
                 ->causedBy($user)

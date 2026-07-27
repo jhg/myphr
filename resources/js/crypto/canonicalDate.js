@@ -1,25 +1,25 @@
 /**
- * Forma canónica de fecha del ADR 0004: `YYYY-MM-DDTHH:MM:SS.ffffffZ`,
- * siempre UTC, sufijo `Z`, **seis dígitos de fracción siempre**.
+ * Canonical date form from ADR 0004: `YYYY-MM-DDTHH:MM:SS.ffffffZ`,
+ * always UTC, `Z` suffix, **always six fraction digits**.
  *
- * `Date` de JavaScript sólo tiene precisión de milisegundo, así que los tres
- * dígitos que faltan se rellenan con ceros. Cuando la fuente es una cadena con
- * más de tres dígitos de fracción (el servidor guarda `occurred_at` con
- * precisión 6, ADR 0006), se conservan tal cual leyéndolos de la propia cadena
- * en vez de pasar por `Date`, que los perdería.
+ * JavaScript `Date` only has millisecond precision, so the three missing
+ * digits are padded with zeros. When the source is a string with more than
+ * three fraction digits (the server stores `occurred_at` with precision 6,
+ * ADR 0006), they are kept as they are: they are read from the string
+ * itself instead of going through `Date`, which would lose them.
  *
- * ISO 8601 a secas no basta: admite variantes que son bytes distintos, y estos
- * bytes entran en el dato asociado del AEAD y en la derivación de clave, donde
- * un byte de diferencia es un descifrado fallido.
+ * Plain ISO 8601 is not enough: it allows variants that are different bytes,
+ * and these bytes go into the AEAD associated data and into the key
+ * derivation, where one byte of difference is a failed decryption.
  */
 
 /**
- * `YYYY-MM-DD` `T` o espacio, `HH:MM:SS`, fracción opcional, y desfase
- * obligatorio (`Z` o `±HH:MM`).
+ * `YYYY-MM-DD`, then `T` or a space, `HH:MM:SS`, an optional fraction, and a
+ * mandatory offset (`Z` or `±HH:MM`).
  */
 const ISO_LIKE = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?(Z|z|[+-]\d{2}:?\d{2})$/;
 
-/** Error de canonicalización, distinguible de los de cripto. */
+/** Canonicalization error, told apart from the crypto ones. */
 export class CanonicalDateError extends Error {
     /** @param {string} message */
     constructor(message) {
@@ -38,8 +38,8 @@ function pad(value, width) {
 }
 
 /**
- * @param {Date} date Instante válido.
- * @param {string} microseconds Exactamente seis dígitos.
+ * @param {Date} date Valid instant.
+ * @param {string} microseconds Exactly six digits.
  * @returns {string}
  */
 function format(date, microseconds) {
@@ -49,14 +49,14 @@ function format(date, microseconds) {
 }
 
 /**
- * Devuelve la forma canónica de un instante.
+ * Returns the canonical form of an instant.
  *
- * @param {Date|number|string} value `Date`, epoch en milisegundos, o cadena
- *        ISO 8601 con desfase explícito. Una cadena sin desfase se rechaza:
- *        adivinar la zona local produciría bytes distintos según el dispositivo.
+ * @param {Date|number|string} value `Date`, epoch in milliseconds, or ISO 8601
+ *        string with an explicit offset. A string without offset is rejected:
+ *        guessing the local zone would give different bytes on each device.
  * @returns {string} `YYYY-MM-DDTHH:MM:SS.ffffffZ`.
- * @throws {CanonicalDateError} Si el valor no es un instante válido o la
- *         cadena no lleva desfase.
+ * @throws {CanonicalDateError} If the value is not a valid instant or the
+ *         string carries no offset.
  */
 export function canonicalDate(value) {
     if (value instanceof Date) {
@@ -103,18 +103,18 @@ export function canonicalDate(value) {
         throw new CanonicalDateError(`canonicalDate cannot parse "${value}": not a valid instant.`);
     }
 
-    // Se trunca a seis dígitos, nunca se redondea: redondear movería el
-    // instante y con él el dato asociado.
+    // Truncated to six digits, never rounded: rounding would move the
+    // instant, and with it the associated data.
     const microseconds = fraction.slice(0, 6).padEnd(6, '0');
 
     return format(parsed, microseconds);
 }
 
 /**
- * Rechaza componentes de calendario imposibles. `Date` los desborda en
- * silencio (`2026-02-30` se convierte en `2026-03-02`), y aceptar ese
- * desbordamiento significaría que dos cadenas distintas producen la misma
- * forma canónica y por tanto la misma clave.
+ * Rejects impossible calendar components. `Date` overflows them silently
+ * (`2026-02-30` becomes `2026-03-02`), and accepting that overflow would
+ * mean two different strings produce the same canonical form, and therefore
+ * the same key.
  *
  * @param {string} value
  * @param {number} year
@@ -142,8 +142,8 @@ function assertCalendarComponents(value, year, month, day, hour, minute, second)
 }
 
 /**
- * Misma forma canónica, en bytes UTF-8, que es como entra en el dato asociado
- * del AEAD y en el `info` de la derivación.
+ * Same canonical form, as UTF-8 bytes, which is how it enters the AEAD
+ * associated data and the `info` of the derivation.
  *
  * @param {Date|number|string} value
  * @returns {Uint8Array}

@@ -5,26 +5,26 @@ declare(strict_types=1);
 namespace App\Security\Opaque;
 
 /**
- * Utilidades binarias del protocolo (`docs/OPAQUE.md` §4 y §5).
+ * Binary helpers for the protocol (`docs/OPAQUE.md` §4 and §5).
  *
- * Todos los formatos internos son binarios puros: concatenación de strings
- * con offsets exactos, sin JSON, `serialize()` ni enteros de plataforma.
- * Por eso aquí sólo se usan `strlen()` / `substr()` (nunca `mb_*`), `pack('n')`
- * para uint16 big-endian y `chr()` para uint8, y toda longitud se comprueba
- * antes de cualquier troceado.
+ * Every internal format is pure binary: string concatenation with exact
+ * offsets, no JSON, no `serialize()` and no platform integers. That is why we
+ * only use `strlen()` / `substr()` here (never `mb_*`), `pack('n')` for
+ * big-endian uint16 and `chr()` for uint8, and every length is checked before
+ * any slicing.
  *
- * Los errores derivados de datos remotos son `InvalidMessageException`; los
- * derivados de uso interno incorrecto (valores fuera de rango, anchos no
- * soportados) son `InvalidConfigurationException`, porque no deben colapsarse
- * en la respuesta genérica de autenticación de §18.
+ * Errors coming from remote data are `InvalidMessageException`; those coming
+ * from incorrect internal use (out-of-range values, unsupported widths) are
+ * `InvalidConfigurationException`, because they must not be collapsed into the
+ * generic §18 authentication response.
  */
 final class BinaryCodec
 {
     /**
-     * Concatenación binaria, `concat(...)` de RFC 9807 §1.2.
+     * Binary concatenation, `concat(...)` from RFC 9807 §1.2.
      *
-     * @param  string  ...$parts  Fragmentos binarios en orden.
-     * @return string Concatenación de todos ellos.
+     * @param  string  ...$parts  Binary fragments in order.
+     * @return string All of them concatenated.
      */
     public static function concat(string ...$parts): string
     {
@@ -32,12 +32,12 @@ final class BinaryCodec
     }
 
     /**
-     * `zeroes(n)` de RFC 9807 §1.2.
+     * `zeroes(n)` from RFC 9807 §1.2.
      *
-     * @param  int<0, max>  $length  Número de bytes cero.
-     * @return string Cadena de `$length` bytes `0x00`.
+     * @param  int<0, max>  $length  Number of zero bytes.
+     * @return string String of `$length` `0x00` bytes.
      *
-     * @throws InvalidConfigurationException Si `$length` es negativo.
+     * @throws InvalidConfigurationException If `$length` is negative.
      */
     public static function zeroes(int $length): string
     {
@@ -49,16 +49,16 @@ final class BinaryCodec
     }
 
     /**
-     * Exige una longitud binaria exacta.
+     * Requires an exact binary length.
      *
-     * Debe llamarse antes de cualquier troceado de un mensaje recibido
+     * It must be called before slicing any received message
      * (`docs/OPAQUE.md` §4, §5).
      *
-     * @param  string  $data  Cadena binaria a comprobar.
-     * @param  int<0, max>  $expectedLength  Longitud exigida, en bytes.
-     * @param  string  $field  Nombre del campo, sólo para el mensaje de error.
+     * @param  string  $data  Binary string to check.
+     * @param  int<0, max>  $expectedLength  Required length, in bytes.
+     * @param  string  $field  Field name, only for the error message.
      *
-     * @throws InvalidMessageException Si la longitud no coincide.
+     * @throws InvalidMessageException If the length does not match.
      */
     public static function ensureLength(string $data, int $expectedLength, string $field = 'value'): void
     {
@@ -72,19 +72,19 @@ final class BinaryCodec
     }
 
     /**
-     * Extrae `$length` bytes desde `$offset`, comprobando el rango antes.
+     * Extracts `$length` bytes from `$offset`, checking the range first.
      *
-     * Implementa los offsets de `docs/OPAQUE.md` §6. Nunca devuelve una
-     * cadena más corta de lo pedido: si el mensaje está truncado, lanza.
+     * It implements the offsets from `docs/OPAQUE.md` §6. It never returns a
+     * string shorter than requested: if the message is truncated, it throws.
      *
-     * @param  string  $data  Cadena binaria origen.
-     * @param  int<0, max>  $offset  Desplazamiento inicial en bytes.
-     * @param  int<0, max>  $length  Número de bytes a extraer.
-     * @param  string  $field  Nombre del campo, sólo para el mensaje de error.
-     * @return string Bytes extraídos, de longitud exactamente `$length`.
+     * @param  string  $data  Source binary string.
+     * @param  int<0, max>  $offset  Starting offset in bytes.
+     * @param  int<0, max>  $length  Number of bytes to extract.
+     * @param  string  $field  Field name, only for the error message.
+     * @return string Extracted bytes, exactly `$length` long.
      *
-     * @throws InvalidMessageException Si el rango excede los datos.
-     * @throws InvalidConfigurationException Si `$offset` o `$length` son negativos.
+     * @throws InvalidMessageException If the range runs past the data.
+     * @throws InvalidConfigurationException If `$offset` or `$length` are negative.
      */
     public static function slice(string $data, int $offset, int $length, string $field = 'value'): string
     {
@@ -104,12 +104,12 @@ final class BinaryCodec
     }
 
     /**
-     * `I2OSP(value, 1)` — entero sin signo de 8 bits (RFC 8017 §4.1).
+     * `I2OSP(value, 1)` — 8-bit unsigned integer (RFC 8017 §4.1).
      *
-     * @param  int<0, 255>  $value  Valor a serializar.
-     * @return string Un byte.
+     * @param  int<0, 255>  $value  Value to serialize.
+     * @return string One byte.
      *
-     * @throws InvalidConfigurationException Si el valor no cabe en 8 bits.
+     * @throws InvalidConfigurationException If the value does not fit in 8 bits.
      */
     public static function i2osp1(int $value): string
     {
@@ -121,15 +121,15 @@ final class BinaryCodec
     }
 
     /**
-     * `I2OSP(value, 2)` — entero sin signo de 16 bits big-endian (RFC 8017 §4.1).
+     * `I2OSP(value, 2)` — 16-bit big-endian unsigned integer (RFC 8017 §4.1).
      *
-     * Se usa `pack('n')`, que es big-endian por definición y no depende de la
-     * plataforma, a diferencia de `pack('L')` o `pack('S')`.
+     * We use `pack('n')`, which is big-endian by definition and does not depend
+     * on the platform, unlike `pack('L')` or `pack('S')`.
      *
-     * @param  int<0, 65535>  $value  Valor a serializar.
-     * @return string Dos bytes big-endian.
+     * @param  int<0, 65535>  $value  Value to serialize.
+     * @return string Two big-endian bytes.
      *
-     * @throws InvalidConfigurationException Si el valor no cabe en 16 bits.
+     * @throws InvalidConfigurationException If the value does not fit in 16 bits.
      */
     public static function i2osp2(int $value): string
     {
@@ -141,16 +141,16 @@ final class BinaryCodec
     }
 
     /**
-     * Serializa un vector de longitud variable `<1..2^16-1>` del RFC 8446
-     * como `uint16_be(len) || bytes`.
+     * Serializes an RFC 8446 variable-length vector `<1..2^16-1>` as
+     * `uint16_be(len) || bytes`.
      *
-     * Lo usan `CleartextCredentials` (RFC 9807 §4), el preamble (§6.4.2.1) y
-     * la entrada de `Finalize` del OPRF (RFC 9497 §3.3.1).
+     * It is used by `CleartextCredentials` (RFC 9807 §4), by the preamble
+     * (§6.4.2.1) and by the OPRF `Finalize` input (RFC 9497 §3.3.1).
      *
-     * @param  string  $data  Contenido binario, de 0 a 65535 bytes.
+     * @param  string  $data  Binary content, 0 to 65535 bytes.
      * @return string `uint16_be(strlen($data)) || $data`.
      *
-     * @throws InvalidConfigurationException Si el contenido excede 65535 bytes.
+     * @throws InvalidConfigurationException If the content exceeds 65535 bytes.
      */
     public static function lengthPrefixed(string $data): string
     {
@@ -158,16 +158,16 @@ final class BinaryCodec
     }
 
     /**
-     * `xor(a, b)` de RFC 9807 §1.2 — XOR byte a byte.
+     * `xor(a, b)` from RFC 9807 §1.2 — byte-by-byte XOR.
      *
-     * Se usa para el `masked_response` de `CredentialResponse`
-     * (`docs/OPAQUE.md` §6.2) y para `expand_message_xmd` (RFC 9380 §5.3.1).
+     * It is used for the `masked_response` of `CredentialResponse`
+     * (`docs/OPAQUE.md` §6.2) and for `expand_message_xmd` (RFC 9380 §5.3.1).
      *
-     * @param  string  $a  Primer operando binario.
-     * @param  string  $b  Segundo operando binario, de la misma longitud.
-     * @return string Resultado, de la misma longitud que los operandos.
+     * @param  string  $a  First binary operand.
+     * @param  string  $b  Second binary operand, of the same length.
+     * @return string Result, the same length as the operands.
      *
-     * @throws InvalidMessageException Si las longitudes difieren.
+     * @throws InvalidMessageException If the lengths differ.
      */
     public static function xorStrings(string $a, string $b): string
     {
@@ -181,15 +181,15 @@ final class BinaryCodec
     }
 
     /**
-     * `ct_equal(a, b)` de RFC 9807 §1.2 — comparación en tiempo constante
+     * `ct_equal(a, b)` from RFC 9807 §1.2 — constant-time comparison
      * (RFC 9807 §9.1).
      *
-     * La comprobación previa de longitud no filtra nada secreto: las
-     * longitudes del protocolo son públicas y fijas (§6).
+     * The length check up front leaks nothing secret: protocol lengths are
+     * public and fixed (§6).
      *
-     * @param  string  $a  Primer operando binario.
-     * @param  string  $b  Segundo operando binario.
-     * @return bool `true` si son idénticos en longitud y contenido.
+     * @param  string  $a  First binary operand.
+     * @param  string  $b  Second binary operand.
+     * @return bool `true` if they match in length and content.
      */
     public static function constantTimeEquals(string $a, string $b): bool
     {

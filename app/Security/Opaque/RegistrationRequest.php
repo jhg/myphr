@@ -5,28 +5,28 @@ declare(strict_types=1);
 namespace App\Security\Opaque;
 
 /**
- * `RegistrationRequest` de RFC 9807 §5.1 (`docs/OPAQUE.md` §6.1, §10.1).
+ * `RegistrationRequest` from RFC 9807 §5.1 (`docs/OPAQUE.md` §6.1, §10.1).
  *
  * ```
  * RegistrationRequest (32 bytes)
- *   [0..31]  blinded_message[Noe=32]   elemento OPRF serializado
+ *   [0..31]  blinded_message[Noe=32]   serialized OPRF element
  * ```
  *
- * Lo produce el cliente con `Blind(password)` y llega al servidor codificado
- * en base64url sin padding (43 caracteres, §5).
+ * The client produces it with `Blind(password)` and it reaches the server
+ * encoded as base64url without padding (43 characters, §5).
  *
- * El elemento se valida al construir el objeto, que es el
- * `DeserializeElement` que exige §10.2: longitud exacta, codificación
- * canónica, pertenencia al grupo y rechazo de la identidad (RFC 9807 §10.7).
+ * The element is validated when the object is built, which is the
+ * `DeserializeElement` §10.2 requires: exact length, canonical encoding, group
+ * membership and rejection of the identity (RFC 9807 §10.7).
  */
 final class RegistrationRequest
 {
     /**
-     * @param  string  $blindedMessage  Elemento OPRF serializado, `Noe` = 32 bytes.
+     * @param  string  $blindedMessage  Serialized OPRF element, `Noe` = 32 bytes.
      *
-     * @throws InvalidMessageException Si la longitud no es 32.
-     * @throws InvalidPointException Si el elemento no es un punto ristretto255
-     *                               válido, canónico y distinto de la identidad.
+     * @throws InvalidMessageException If the length is not 32.
+     * @throws InvalidPointException If the element is not a valid, canonical
+     *                               ristretto255 point other than the identity.
      */
     public function __construct(public readonly string $blindedMessage)
     {
@@ -40,15 +40,15 @@ final class RegistrationRequest
     }
 
     /**
-     * Deserializa los 32 bytes del mensaje por offsets exactos (§6.1).
+     * Deserializes the 32 bytes of the message by exact offsets (§6.1).
      *
-     * Rechaza tanto los mensajes truncados como los que traen bytes de más:
-     * no hay campos de longitud variable en el protocolo.
+     * It rejects both truncated messages and messages with extra bytes: there
+     * are no variable-length fields in the protocol.
      *
-     * @param  string  $binary  Mensaje binario de exactamente 32 bytes.
+     * @param  string  $binary  Binary message of exactly 32 bytes.
      *
-     * @throws InvalidMessageException Si la longitud no es 32.
-     * @throws InvalidPointException Si el elemento no valida.
+     * @throws InvalidMessageException If the length is not 32.
+     * @throws InvalidPointException If the element does not validate.
      */
     public static function parse(string $binary): self
     {
@@ -67,14 +67,14 @@ final class RegistrationRequest
     }
 
     /**
-     * Decodifica el mensaje tal y como viaja por HTTP: base64url estricto y
-     * canónico, sin padding, de 43 caracteres (§5).
+     * Decodes the message exactly as it travels over HTTP: strict, canonical
+     * base64url, no padding, 43 characters (§5).
      *
-     * @param  string  $encoded  Cadena recibida del cliente.
+     * @param  string  $encoded  String received from the client.
      *
-     * @throws InvalidMessageException Si la codificación no es canónica o la
-     *                                 longitud binaria no es 32.
-     * @throws InvalidPointException Si el elemento no valida.
+     * @throws InvalidMessageException If the encoding is not canonical or the
+     *                                 binary length is not 32.
+     * @throws InvalidPointException If the element does not validate.
      */
     public static function fromBase64Url(string $encoded): self
     {
@@ -86,7 +86,7 @@ final class RegistrationRequest
     }
 
     /**
-     * @return string Mensaje binario de 32 bytes (§6.1).
+     * @return string Binary message of 32 bytes (§6.1).
      */
     public function serialize(): string
     {
@@ -94,7 +94,7 @@ final class RegistrationRequest
     }
 
     /**
-     * @return string Mensaje en base64url sin padding, 43 caracteres (§5).
+     * @return string Message as base64url without padding, 43 characters (§5).
      */
     public function toBase64Url(): string
     {

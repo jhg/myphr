@@ -9,20 +9,20 @@ use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * `Cache-Control: no-store` en todas las respuestas de autenticación (Spec 0001 §4).
+ * `Cache-Control: no-store` on every authentication response (Spec 0001 §4).
  *
- * Vive en un middleware y no en cada controlador para que ninguna respuesta futura de este grupo de
- * rutas se quede sin la cabecera por olvido, incluidas las de error que genera el manejador de
- * excepciones y las que produce el limitador de tasa.
+ * It lives in a middleware and not in each controller so no future response in this route group is
+ * left without the header by oversight, including the error responses the exception handler
+ * generates and the ones the rate limiter produces.
  *
- * `Vary: Cookie` se añade a lo que depende de la sesión (§4.5): sin él, una caché compartida podría
- * servir la respuesta de una persona a otra.
+ * `Vary: Cookie` is added to whatever depends on the session (§4.5): without it, a shared cache
+ * could serve one person's response to another.
  *
- * `Referrer-Policy: no-referrer` cubre la página de establecimiento de contraseña: su URL lleva el
- * token del enlace en el fragmento, y aunque el fragmento no viaja en la cabecera `Referer`, el
- * resto de la URL sí delataría a cualquier recurso externo que la persona abriera desde ahí que
- * alguien está dando de alta una cuenta en este servidor. Se aplica a todo el grupo por el mismo
- * motivo por el que se aplica `no-store`: para que ninguna respuesta futura se quede sin ella.
+ * `Referrer-Policy: no-referrer` covers the set-password page: its URL carries the link token in the
+ * fragment, and although the fragment does not travel in the `Referer` header, the rest of the URL
+ * would tell any external resource the person opened from there that somebody is signing up on this
+ * server. It is applied to the whole group for the same reason `no-store` is: so no future response
+ * is left without it.
  */
 final class NoStore
 {

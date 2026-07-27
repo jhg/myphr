@@ -19,21 +19,21 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
 
 /**
- * `POST /phr/auth/password/reauth/finish`: fase A del cambio de contraseña, paso 7.
+ * `POST /phr/auth/password/reauth/finish`: phase A of the password change, step 7.
  *
- * Cierra el login OPAQUE de la reautenticación y, solo si el MAC cuadra, acuña el ticket que
- * autoriza el resto del flujo y devuelve el sobre vigente de la clave maestra para que el navegador
- * lo abra con la KEK vieja.
+ * It closes the OPAQUE login of the reauthentication and, only if the MAC matches, mints the ticket
+ * that authorizes the rest of the flow and returns the current master key envelope so the browser
+ * can open it with the old KEK.
  *
- * Como en `login/finish`, el handshake se consume **antes** de validar el MAC, por escritura
- * condicional decidida por el número de filas afectadas: invertir el orden abre un oráculo de
- * reintento, y un `SELECT` seguido de `DELETE` no sirve porque `lockForUpdate()` es un no-op en
- * SQLite (`docs/OPAQUE.md` §14.3).
+ * As in `login/finish`, the handshake is consumed **before** validating the MAC, by a conditional
+ * write decided by the number of affected rows: swapping the order opens a retry oracle, and a
+ * `SELECT` followed by a `DELETE` is no good because `lockForUpdate()` is a no-op on SQLite
+ * (`docs/OPAQUE.md` §14.3).
  *
- * A diferencia de `login/finish`, aquí **no** se llama a `Auth::login`, **no** se regenera la sesión
- * y **no** se acuña un secreto de sesión: la sesión ya existe, y regenerarla en este punto se
- * llevaría por delante el ticket que se acaba de guardar en ella. Ese es también el motivo de que el
- * flujo no reutilice `login/finish` y de que `purpose` distinga los dos tipos de handshake.
+ * Unlike `login/finish`, `Auth::login` is **not** called here, the session is **not** regenerated
+ * and no session secret is minted: the session already exists, and regenerating it at this point
+ * would take with it the ticket just stored in it. That is also why the flow does not reuse
+ * `login/finish` and why `purpose` tells the two kinds of handshake apart.
  */
 final readonly class PasswordChangeReauthFinishController
 {
@@ -95,10 +95,11 @@ final readonly class PasswordChangeReauthFinishController
     }
 
     /**
-     * Handshake inexistente, caducado, ya consumido, de otro propósito o de otra persona.
+     * Handshake that does not exist, has expired, was already consumed, is of another purpose or
+     * belongs to somebody else.
      *
-     * Se ejecuta igualmente la comparación de 64 bytes contra un valor imposible, para no distinguir
-     * por tiempo «no hay handshake» de «el MAC no cuadra».
+     * The 64-byte comparison against an impossible value is run anyway, so timing does not tell
+     * "there is no handshake" from "the MAC does not match".
      */
     private function fakeCompareAndFail(string $finishLoginRequest): JsonResponse
     {
@@ -113,7 +114,7 @@ final readonly class PasswordChangeReauthFinishController
         return $this->genericError();
     }
 
-    /** Un único error para todas las causas de fallo de la reautenticación, y nunca un ticket. */
+    /** A single error for every reauthentication failure cause, and never a ticket. */
     private function genericError(): JsonResponse
     {
         return response()->json(['error' => 'authentication_failed'], 401);

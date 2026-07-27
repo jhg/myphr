@@ -13,54 +13,54 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Alta, listado y revocación de recortes compartidos (ADR 0011), desde la sesión de quien es dueño
- * de los datos.
+ * Creating, listing and revoking shared clippings (ADR 0011), from the session of whoever owns the
+ * data.
  *
- * Concentra aquí, y no en los controladores, tres cosas que no pueden vivir en dos sitios:
+ * It gathers here, and not in the controllers, three things that cannot live in two places:
  *
- * * Los **topes**, porque un tope que solo esté en una de las dos vías de creación es un tope que no
- *   existe.
- * * El **rastro de actividad**, por el mismo motivo por el que `RegistrationLinks::issueFor()` lo
- *   emite dentro y no en quien llama.
- * * La regla de que **revocar es borrado físico**. Sin `SoftDeletes` y sin `deleted_at`: si revocar
- *   dejase la fila, el paquete seguiría en la base de datos y la promesa de que revocar cierra la
- *   lectura sería falsa.
+ * * The **caps**, because a cap that is only on one of the two creation paths is a cap that does not
+ *   exist.
+ * * The **activity trail**, for the same reason `RegistrationLinks::issueFor()` emits it inside and
+ *   not in the caller.
+ * * The rule that **revoking is a physical delete**. No `SoftDeletes` and no `deleted_at`: if
+ *   revoking left the row, the package would stay in the database and the promise that revoking
+ *   closes the read would be false.
  *
- * Lo que esta clase **no** hace, y conviene decirlo: no mira dentro de `payload` ni de `descriptor`.
- * No puede. Solo comprueba la forma de los sobres, cosa que ya hacen los guardarraíles de los
- * modelos, y las fechas.
+ * What this class does **not** do, and it is worth saying: it does not look inside `payload` or
+ * `descriptor`. It cannot. It only checks the shape of the envelopes, which the model guardrails
+ * already do, and the dates.
  */
 final readonly class Shares
 {
     /**
-     * Recortes activos —no caducados— por usuario.
+     * Active —not expired— clippings per user.
      *
-     * El ADR deja la cifra pendiente y aquí se fija de forma explícita. Veinte cubre con holgura el
-     * caso real (un recorte por consulta, unas pocas al mes, caducando a las 24 horas) y acota el
-     * peor caso de almacenamiento de una cuenta a veinte veces el escalón mayor.
+     * The ADR leaves the figure open and it is fixed explicitly here. Twenty comfortably covers the
+     * real case (one clipping per consultation, a few a month, expiring after 24 hours) and bounds
+     * the worst-case storage of an account to twenty times the largest step.
      */
     public const int MAX_ACTIVE_SHARES = 20;
 
     /**
-     * Enlaces vivos sobre el mismo recorte.
+     * Live links on the same clipping.
      *
-     * Existen varios a propósito: uno por destinatario, cada uno con su PIN y su contador, y uno
-     * nuevo cuando alguien quema los cinco intentos del anterior. Cinco es suficiente para ambos
-     * usos y evita que re-armar en bucle infle la tabla.
+     * Several exist on purpose: one per recipient, each with its own PIN and counter, and a new one
+     * when somebody burns the five attempts of the previous one. Five is enough for both uses and
+     * stops re-arming in a loop from inflating the table.
      */
     public const int MAX_LINKS_PER_SHARE = 5;
 
     /**
-     * Crea el recorte y su primer enlace en la misma transacción.
+     * Creates the clipping and its first link in the same transaction.
      *
-     * Van juntos porque un recorte sin enlace no sirve para nada y un enlace sin recorte no puede
-     * existir: dejar a medias cualquiera de los dos por un fallo de red produciría filas huérfanas
-     * que nadie va a limpiar a mano.
+     * They go together because a clipping without a link is useless and a link without a clipping
+     * cannot exist: leaving either half-done because of a network failure would produce orphan rows
+     * nobody is going to clean up by hand.
      *
      * @param  array{id: string, payload: string, descriptor: string, expiresAt: Carbon}  $share
      * @param  array{id: string, pinSalt: string, pinTag: string, wrapper: string}  $link
      *
-     * @throws ShareLimitExceededException Si la cuenta ya está en el tope de recortes activos.
+     * @throws ShareLimitExceededException If the account is already at the active clipping cap.
      */
     public function create(User $user, array $share, array $link): Share
     {
@@ -81,14 +81,14 @@ final readonly class Shares
         });
 
         /**
-         * Se anota que hubo una compartición y cuándo, nunca de qué. El servidor ya sabe ambas
-         * cosas: la fila existe y lleva fecha. Ni el rango, ni los tipos, ni el número de eventos
-         * pueden entrar aquí, porque están cifrados y el rastro no es sitio para reintroducir el
-         * metadato que el ADR 0006 quitó del esquema.
+         * We record that a share happened and when, never what of. The server already knows both:
+         * the row exists and carries a date. Neither the range, nor the types, nor the number of
+         * events can go in here, because they are encrypted and the trail is no place to reintroduce
+         * the metadata ADR 0006 removed from the schema.
          *
-         * El sujeto es el usuario y no el recorte, a propósito: el recorte se borra al revocarlo o
-         * al purgarlo, y una entrada de auditoría apuntando a una fila que ya no existe no es un
-         * rastro, es un identificador huérfano.
+         * The subject is the user and not the clipping, on purpose: the clipping is deleted when it
+         * is revoked or pruned, and an audit entry pointing at a row that no longer exists is not a
+         * trail, it is an orphan identifier.
          */
         activity(AuditEvent::LOG_NAME)
             ->causedBy($user)
@@ -100,15 +100,16 @@ final readonly class Shares
     }
 
     /**
-     * Re-arma un enlace sobre un recorte que ya existe, con `S` y PIN nuevos.
+     * Re-arms a link on a clipping that already exists, with a new `S` and PIN.
      *
-     * Es la razón de ser de las dos capas: agotar los intentos borra la fila del enlace y no el
-     * paquete, así que rehacer el acceso no obliga a recomponer ni a re-subir el recorte. Sigue
-     * exigiendo la clave maestra en el navegador, porque `CK` vive dentro del descriptor cifrado.
+     * This is the whole point of the two layers: running out of attempts deletes the link row and
+     * not the package, so redoing access does not force rebuilding or re-uploading the clipping. It
+     * still requires the master key in the browser, because `CK` lives inside the encrypted
+     * descriptor.
      *
      * @param  array{id: string, pinSalt: string, pinTag: string, wrapper: string}  $link
      *
-     * @throws ShareLimitExceededException Si el recorte ya está en su tope de enlaces vivos.
+     * @throws ShareLimitExceededException If the clipping is already at its live link cap.
      */
     public function issueLink(Share $share, array $link): ShareLink
     {
@@ -122,11 +123,11 @@ final readonly class Shares
     }
 
     /**
-     * Recortes vivos de una persona, con sus enlaces vivos.
+     * A person's live clippings, with their live links.
      *
-     * Lo que devuelve es deliberadamente pobre: identificadores, fechas y el descriptor cifrado. La
-     * pantalla de comparticiones activas se pinta descifrando ese descriptor en el navegador, que es
-     * el único sitio donde existe la clave maestra.
+     * What it returns is deliberately poor: identifiers, dates and the encrypted descriptor. The
+     * active shares screen is painted by decrypting that descriptor in the browser, which is the
+     * only place the master key exists.
      *
      * @return Collection<int, Share>
      */
@@ -143,11 +144,12 @@ final readonly class Shares
     }
 
     /**
-     * Revocación: borrado físico del recorte y, en cascada, de todos sus enlaces.
+     * Revocation: physical delete of the clipping and, in cascade, of all its links.
      *
-     * Sin lápida y sin `SoftDeletes`, excepción consciente al patrón del ADR 0006. Lo que esto **no**
-     * hace, y hay que decirlo sin adornos: no borra lo que la otra persona ya descargó. Una foto
-     * fija entregada es suya para siempre; revocar solo impide lecturas futuras.
+     * No tombstone and no `SoftDeletes`, a deliberate exception to the ADR 0006 pattern. What this
+     * does **not** do, and it has to be said plainly: it does not delete what the other person
+     * already downloaded. A still photo once handed over is theirs forever; revoking only prevents
+     * future reads.
      */
     public function revoke(User $user, Share $share): void
     {
@@ -173,9 +175,9 @@ final readonly class Shares
             'attempts_remaining' => ShareLink::MAX_ATTEMPTS,
             'wrapper' => $link['wrapper'],
             /**
-             * El enlace hereda la caducidad del recorte. No puede vivir más que él —serviría un
-             * paquete que ya no está— y hacerlo vivir menos exigiría una segunda fecha en la
-             * derivación de `wrapKey` sin ganar nada.
+             * The link inherits the clipping's expiry. It cannot outlive it —it would serve a
+             * package that is no longer there— and making it live less would require a second date
+             * in the `wrapKey` derivation for no gain.
              */
             'expires_at' => $share->expires_at,
         ]);

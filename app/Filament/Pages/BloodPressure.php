@@ -15,27 +15,27 @@ use Filament\Support\Icons\Heroicon;
 use Illuminate\Contracts\Support\Htmlable;
 
 /**
- * Pantalla de tensión arterial (ADR 0002, ADR 0004, ADR 0005, ADR 0006, ADR 0008).
+ * Blood pressure screen (ADR 0002, ADR 0004, ADR 0005, ADR 0006, ADR 0008).
  *
- * Un evento de tensión arterial guarda sistólica, diastólica y pulso juntos: el ADR 0006 es
- * explícito en que la tensión es «un solo evento», no tres, porque es lo que da el aparato y lo
- * que vive el paciente. El pulso es opcional: no todos los tensiómetros lo miden.
+ * A blood pressure event stores systolic, diastolic and pulse together: ADR 0006 is explicit that
+ * blood pressure is "a single event", not three, because that is what the device gives and what the
+ * patient experiences. The pulse is optional: not every monitor measures it.
  *
- * El ADR 0008 fija que el método de medición de la tensión lo forman el brazo y la postura, porque
- * los dos cambian el valor de forma conocida y solo se saben al medir; viajan como dos tokens
- * propios (`data.arm`, `data.posture`) y no como campos sueltos junto a la magnitud. El código
- * LOINC no depende de ninguno de los dos (ver JSDoc de {@see BloodPressureLoincCode}),
- * así que, a diferencia de la glucemia, no hace falta una tabla de resolución (método, unidad) →
- * código: los tres códigos son constantes.
+ * ADR 0008 states that the measurement method for blood pressure is made up of the arm and the
+ * posture, because both change the value in a known way and are only known at the moment of
+ * measuring; they travel as two tokens of their own (`data.arm`, `data.posture`) and not as loose
+ * fields next to the quantity. The LOINC code depends on neither of them (see the JSDoc of
+ * {@see BloodPressureLoincCode}), so, unlike blood glucose, no (method, unit) → code resolution
+ * table is needed: the three codes are constants.
  *
- * Igual que {@see Glucose}, esta clase no ve nunca el contenido de una lectura: el transporte común
- * de ciphertext vive en {@see HealthEventPage}, que valida la envoltura del sobre y la
- * autorización, nunca el contenido.
+ * Like {@see Glucose}, this class never sees the content of a reading: the shared ciphertext
+ * transport lives in {@see HealthEventPage}, which validates the envelope wrapper and
+ * authorization, never the content.
  *
- * El catálogo no publica {@see DataOrigin}: la vista no pregunta el origen del dato
- * (siempre manual, ver JSDoc de `resources/js/health/bloodPressurePage.js`), así que no hay
- * `<select>` que rellenar con esos tokens. `origin` sigue viajando dentro del sobre cifrado, fijo a
- * `manual` desde el cliente.
+ * The catalog does not publish {@see DataOrigin}: the view does not ask for the data origin (always
+ * manual, see the JSDoc of `resources/js/health/bloodPressurePage.js`), so there is no `<select>` to
+ * fill with those tokens. `origin` still travels inside the encrypted envelope, fixed to `manual`
+ * from the client.
  */
 final class BloodPressure extends HealthEventPage
 {
@@ -44,10 +44,10 @@ final class BloodPressure extends HealthEventPage
     protected string $view = 'phr.pages.blood-pressure';
 
     /**
-     * El título y la etiqueta de navegación se resuelven por método y no como propiedad estática
-     * porque un inicializador de propiedad en PHP solo admite expresiones constantes: `__()` no
-     * puede llamarse ahí. Dejarlos como cadena fija es lo que mantenía el menú y las cabeceras en
-     * castellano aunque el resto de la pantalla ya estuviera traducido.
+     * The title and the navigation label are resolved by method and not as a static property because
+     * a property initializer in PHP only accepts constant expressions: `__()` cannot be called
+     * there. Leaving them as fixed strings is what kept the menu and the headers in Spanish even
+     * when the rest of the screen was already translated.
      */
     public function getTitle(): string|Htmlable
     {
@@ -60,8 +60,8 @@ final class BloodPressure extends HealthEventPage
     }
 
     /**
-     * Catálogo público en claro que el cliente necesita para construir el payload cifrado (ADR
-     * 0005, ADR 0008). No es dato clínico: son los mismos tokens y códigos para cualquier usuario.
+     * Public plaintext catalog the client needs to build the encrypted payload (ADR 0005,
+     * ADR 0008). It is not clinical data: the same tokens and codes for every user.
      *
      * @return array{
      *     arms: list<array{token: string, label: string}>,
@@ -73,14 +73,14 @@ final class BloodPressure extends HealthEventPage
      */
     public function catalog(): array
     {
-        /** El catálogo es en claro y lo pinta el servidor, así que las etiquetas salen ya en el
-         * idioma en vigor para esta petición (App\Support\SupportedLocale). */
+        /** The catalog is plaintext and the server paints it, so the labels already come out in the
+         * language in force for this request (App\Support\SupportedLocale). */
         $locale = app()->getLocale();
 
         return [
             'arms' => self::labelledOptions(BloodPressureArm::cases(), $locale),
             'postures' => self::labelledOptions(BloodPressurePosture::cases(), $locale),
-            /** Sin selector: la tensión no ofrece unidad alternativa (ver BloodPressureUnit). */
+            /** No selector: blood pressure offers no alternative unit (see BloodPressureUnit). */
             'units' => [
                 'pressure' => BloodPressureUnit::MillimetersOfMercury->value,
                 'pulse' => BloodPressureUnit::BeatsPerMinute->value,
@@ -90,7 +90,7 @@ final class BloodPressure extends HealthEventPage
                 'diastolic' => BloodPressureLoincCode::Diastolic->value,
                 'pulse' => BloodPressureLoincCode::Pulse->value,
             ],
-            /** Campo común a todo evento (ADR 0006), no propio de la tensión. */
+            /** Field common to every event (ADR 0006), not specific to blood pressure. */
             'recordedByRoles' => self::labelledOptions(RecordedBy::cases(), $locale),
         ];
     }

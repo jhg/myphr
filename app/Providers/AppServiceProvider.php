@@ -9,8 +9,10 @@ use App\Support\Terminal;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Livewire\Livewire;
+use Livewire\Mechanisms\HandleRequests\RequireLivewireHeaders;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -28,27 +30,63 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        $this->registerPanelLivewireUpdateRoute();
         $this->prohibitFilamentUserCommand();
         $this->registerShareRateLimiters();
     }
 
     /**
-     * Limitadores por IP de las dos rutas de lectura de un recorte (ADR 0011), hermanos de los de
+     * Livewire's update endpoint, moved down into the panel prefix.
+     *
+     * Out of the box it lives at `/livewire-<hash>/update`, that is **outside** `/phr`, which forced
+     * the session cookie to use `path=/`. With `path=/` the browser also sends it on the top-level
+     * navigation to `/s/{link}` and on its subresources: taking `StartSession` off those routes stops
+     * Laravel from reading and writing it, but not the cookie from travelling. Any proxy, WAF, CDN or
+     * access log in front then sees, on the same line, the identifier of a clipping and the cookie of
+     * a specific account, which is exactly the correlation this design says it avoids (ADR 0011).
+     *
+     * With the route here, **everything that needs a session hangs off `/phr`** and the cookie can be
+     * scoped (`SESSION_PATH`, `config/session.php`). `tests/Feature/SessionCookieScopeTest.php` walks
+     * the route table and fails if any route with `StartSession` falls outside the prefix.
+     *
+     * **Why this lives in a provider and not in `routes/web.php`.** With `php artisan optimize` (which
+     * the deploy runs) the route files are never executed at runtime, so `setUpdateRoute()` was never
+     * called. Livewire's own `HandleRequests::boot()` runs before the compiled routes are loaded,
+     * finds no custom route and registers its default one, keeping that default `Route` object as the
+     * URI it advertises to the browser in `data-update-uri`. Every Livewire request in production then
+     * went to `/livewire-<hash>/update`, which `handleUpdate()` rejects **by design** with a bare 404
+     * as soon as a custom route exists — a 404 that never reaches application code and so leaves no
+     * trace in the log. A provider boots on every request, cached routes or not.
+     * `tests/Feature/LivewireUpdateRouteTest.php` caches the routes in a subprocess and fails if the
+     * advertised URI drifts back outside `/phr`.
+     *
+     * The name ends in `livewire.update` because that is how `HandleRequests::findUpdateRoute()`
+     * recognises a custom route and prefers it over its own.
+     */
+    private function registerPanelLivewireUpdateRoute(): void
+    {
+        Livewire::setUpdateRoute(fn ($handle) => Route::post('/phr/livewire/update', $handle)
+            ->middleware(['web', RequireLivewireHeaders::class])
+            ->name('phr.livewire.update'));
+    }
+
+    /**
+     * Per-IP limiters for the two clipping reading routes (ADR 0011), siblings of the ones in
      * {@see OpaqueServiceProvider}.
      *
-     * **No** sustituyen al contador de intentos del PIN, que vive en columna de base de datos. Son
-     * dos frenos distintos y no intercambiables: este vive en caché y un `cache:clear` operativo lo
-     * reiniciaría, así que confiarle la fuerza bruta sobre un PIN de seis dígitos sería devolver el
-     * ataque completo con un comando de mantenimiento rutinario. Lo que sí hace es acotar el ruido y
-     * el rastreo de identificadores desde una misma IP.
+     * They do **not** replace the PIN attempt counter, which lives in a database column. They are
+     * two different and non-interchangeable brakes: this one lives in cache and an operational
+     * `cache:clear` would reset it, so trusting it with brute force on a six-digit PIN would hand
+     * back the whole attack with a routine maintenance command. What it does do is bound the noise
+     * and the scanning of identifiers from a single IP.
      *
-     * La IP entra **hasheada** en la clave, y no en claro como en OPAQUE. En esta ruta la IP de
-     * quien descarga revela el centro sanitario y de ahí el diagnóstico, y el ADR decide de forma
-     * explícita que ninguna capa que operemos la registre; guardarla legible en el almacén de caché,
-     * aunque sea un minuto, sería registrarla.
+     * The IP goes into the key **hashed**, and not in the clear as in OPAQUE. On this route the IP
+     * of whoever downloads reveals the healthcare centre and from there the diagnosis, and the ADR
+     * explicitly decides that no layer we operate records it; storing it readable in the cache
+     * store, even for a minute, would be recording it.
      *
-     * `challenge` es más generoso que `open` porque no consume intentos y devuelve algo público por
-     * construcción: la sal. `open` es el que hay que apretar.
+     * `challenge` is more generous than `open` because it consumes no attempts and returns
+     * something public by construction: the salt. `open` is the one to squeeze.
      */
     private function registerShareRateLimiters(): void
     {
@@ -74,12 +112,12 @@ class AppServiceProvider extends ServiceProvider
     }
 
     /**
-     * Spec 0001 §9: `make:filament-user` y sus alias quedan deshabilitados.
+     * Spec 0001 §9: `make:filament-user` and its aliases are disabled.
      *
-     * Se registra en `boot()`, después de que el proveedor de Filament haya registrado el suyo en
-     * `register()`: la consola resuelve por nombre y la última definición gana, así que los tres
-     * nombres (`make:filament-user`, `filament:make-user`, `filament:user`) acaban apuntando al
-     * comando que aborta con la explicación.
+     * It is registered in `boot()`, after the Filament provider has registered its own in
+     * `register()`: the console resolves by name and the last definition wins, so all three names
+     * (`make:filament-user`, `filament:make-user`, `filament:user`) end up pointing at the command
+     * that aborts with the explanation.
      */
     private function prohibitFilamentUserCommand(): void
     {
@@ -89,17 +127,17 @@ class AppServiceProvider extends ServiceProvider
     }
 
     /**
-     * Spec 0001 §9 / ADR 0002: mitad de servidor del par de guardarraíles contra fugas de dato en
-     * claro. Se registra aquí, no en un proveedor propio, porque es la opción más simple: no hay hoy
-     * más de un par de piezas de arranque de Livewire en la aplicación que justifiquen un proveedor
-     * dedicado (decisión propia, la spec no concreta dónde engancharlo más allá de sugerir
-     * `AppServiceProvider::boot()` o un proveedor propio).
+     * Spec 0001 §9 / ADR 0002: the server half of the pair of guardrails against plaintext leaks.
+     * It is registered here, not in a provider of its own, because that is the simplest option:
+     * there is not more than a couple of Livewire bootstrap pieces in the application today to
+     * justify a dedicated provider (our own decision; the spec does not say where to hook it beyond
+     * suggesting `AppServiceProvider::boot()` or a provider of its own).
      *
-     * Se llama desde `register()`, no desde `boot()`: `LivewireServiceProvider::boot()` congela la
-     * lista de hooks de componente en cuanto arranca (`ComponentHookRegistry::boot()`), y Laravel
-     * ejecuta la fase `register()` de todos los proveedores antes que la fase `boot()` de ninguno.
-     * Registrar el hook en `boot()` lo dejaría fuera de esa lista si `AppServiceProvider` arranca
-     * después que el proveedor de Livewire, que es el orden real en esta aplicación.
+     * It is called from `register()`, not from `boot()`: `LivewireServiceProvider::boot()` freezes
+     * the list of component hooks as soon as it starts (`ComponentHookRegistry::boot()`), and
+     * Laravel runs the `register()` phase of every provider before the `boot()` phase of any.
+     * Registering the hook in `boot()` would leave it out of that list if `AppServiceProvider` boots
+     * after the Livewire provider, which is the real order in this application.
      */
     private function registerEncryptedPayloadGuard(): void
     {

@@ -1,19 +1,19 @@
 /**
- * Entrada de Vite de la página del lector (ADR 0011).
+ * Vite entry point of the reader page (ADR 0011).
  *
- * Es una entrada **aparte** de `app.js` a propósito, y no un módulo más del panel. `app.js` arrastra
- * el llavero de la clave maestra, el bloqueo por inactividad, el interceptor de Livewire y los
- * componentes Alpine de doce pantallas: nada de eso pinta aquí, y todo eso sería código con acceso
- * al mismo documento en un dispositivo ajeno. Esta página carga lo que necesita y ni un módulo más.
+ * It is a **separate** entry point from `app.js` on purpose, and not one more panel module.
+ * `app.js` drags in the master key ring, the idle lock, the Livewire interceptor and the Alpine
+ * components of twelve screens: none of that paints here, and all of it would be code with access
+ * to the same document on somebody else's device. This page loads what it needs and not one module more.
  *
- * Lo que sí comparte con el panel son las **vistas** de eventos (línea temporal, estadísticas y
- * gráficas, con Chart.js detrás), porque el profesional ve lo mismo que el paciente: una tabla de
- * trescientas glucemias no se lee en consulta. Son módulos que reciben eventos descifrados y
- * devuelven nodos, sin Livewire y sin `$wire` (`resources/js/reader/clippingExplorer.js`).
+ * What it does share with the panel are the event **views** (timeline, statistics and charts, with
+ * Chart.js behind them), because the professional sees the same thing as the patient: a table of
+ * three hundred glucose readings is not readable during an appointment. They are modules that take
+ * decrypted events and return nodes, with no Livewire and no `$wire` (`resources/js/reader/clippingExplorer.js`).
  *
- * Sin Livewire y sin Alpine: los controles son DOM corriente con `addEventListener`. Un framework
- * reactivo aquí solo añadiría superficie, y el de Livewire además mandaría al servidor todo lo que
- * tocara (ADR 0002).
+ * No Livewire and no Alpine: the controls are plain DOM with `addEventListener`. A reactive
+ * framework here would only add surface, and the Livewire one would also send to the server
+ * everything it touched (ADR 0002).
  */
 
 import { startReaderPage } from './reader/readerPage.js';

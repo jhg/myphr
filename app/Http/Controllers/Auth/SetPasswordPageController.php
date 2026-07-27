@@ -8,15 +8,16 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
 /**
- * `GET /phr/set-password`: página de establecimiento de contraseña (Spec 0001 §4.1 y §10).
+ * `GET /phr/set-password`: set-password page (Spec 0001 §4.1 and §10).
  *
- * Se sirve **genérica**, sin token en el path y sin ninguna consulta a base de datos: el token viaja
- * en el fragmento de la URL (`#<token>`), que el navegador no envía nunca al servidor. Solo llega al
- * servidor dentro del cuerpo de `registration/start`, que es también el único sitio donde se valida.
+ * It is served **generic**, with no token in the path and without a single database query: the token
+ * travels in the URL fragment (`#<token>`), which the browser never sends to the server. It only
+ * reaches the server inside the body of `registration/start`, which is also the only place where it
+ * is validated.
  *
- * Consecuencia deliberada: esta página responde igual para un token válido, uno caducado, uno ya
- * consumido y uno inventado. El error de enlace no válido lo muestra el cliente cuando
- * `registration/start` devuelve su error genérico (§7).
+ * A deliberate consequence: this page answers the same for a valid token, an expired one, an already
+ * consumed one and a made-up one. The invalid-link error is shown by the client when
+ * `registration/start` returns its generic error (§7).
  */
 final readonly class SetPasswordPageController
 {

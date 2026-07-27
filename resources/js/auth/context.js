@@ -1,37 +1,37 @@
 /**
- * Dato asociado de los sobres que nacen en el alta (Spec 0001 §5, pasos 9 y 10).
+ * Associated data of the envelopes born at sign-up (Spec 0001 §5, steps 9 and 10).
  *
- * La spec escribe ese contexto como `ctx(userId, "umk")` y `ctx(userId, "settings")`, pero **no
- * fija la cadena exacta**: ni el separador ni el orden aparecen en la spec ni en el ADR 0004. Aquí
- * se fija en un único sitio, y no repartido por los módulos que cifran, porque cambiarlo después
- * de que exista el primer sobre invalida el tag de todo el histórico y no hay forma de re-cifrar
- * desde el servidor.
+ * The spec writes that context as `ctx(userId, "umk")` and `ctx(userId, "settings")`, but it
+ * **does not fix the exact string**: neither the separator nor the order appear in the spec or in
+ * ADR 0004. It is fixed here in a single place, and not spread over the modules that encrypt,
+ * because changing it after the first envelope exists invalidates the tag of the whole history
+ * and there is no way to re-encrypt from the server.
  *
- * Del ADR 0004 sí viene la parte que no se inventa: el identificador de usuario entra en su forma
- * textual canónica en minúsculas, nunca como bytes crudos.
+ * What does come from ADR 0004 is the part nobody invents: the user identifier goes in its
+ * canonical text form, lowercase, never as raw bytes.
  *
- * Pendiente de confirmar en la spec antes del primer registro real.
+ * Still to be confirmed in the spec before the first real registration.
  *
- * `eventContext` de más abajo es harina de otro costal: no nace del alta sino del ADR 0006 (modelo
- * de eventos clínicos), pero vive aquí por el mismo motivo, un único sitio para cadenas que no se
- * pueden cambiar sin invalidar el histórico.
+ * `eventContext` below is a different matter: it does not come from sign-up but from ADR 0006
+ * (clinical event model), yet it lives here for the same reason, a single place for strings that
+ * cannot change without invalidating the history.
  */
 
 import { canonicalDate } from '../crypto/canonicalDate.js';
 
-/** Propósitos que hoy existen. Congelado para que un typo no produzca un contexto nuevo. */
+/** Purposes that exist today. Frozen so that a typo cannot produce a new context. */
 export const ENVELOPE_PURPOSES = Object.freeze({
-    /** Sobre que envuelve la clave maestra bajo la KEK derivada del `exportKey`. */
+    /** Envelope wrapping the master key under the KEK derived from `exportKey`. */
     UserMasterKey: 'umk',
-    /** Sobre de configuración del usuario (ADR 0007). */
+    /** User configuration envelope (ADR 0007). */
     Settings: 'settings',
 });
 
 /**
- * @param {string} userId UUID del usuario, tal cual lo devuelve el servidor.
- * @param {string} purpose Uno de `ENVELOPE_PURPOSES`.
- * @returns {string} Contexto que entra a la vez en el `info` de la derivación y en el dato
- *          asociado del AEAD.
+ * @param {string} userId User UUID, exactly as the server returns it.
+ * @param {string} purpose One of `ENVELOPE_PURPOSES`.
+ * @returns {string} Context that goes at once into the `info` of the derivation and into the
+ *          AEAD associated data.
  */
 export function envelopeContext(userId, purpose) {
     if (typeof userId !== 'string' || userId === '') {
@@ -46,24 +46,24 @@ export function envelopeContext(userId, purpose) {
 }
 
 /**
- * Dato asociado y contexto de derivación de un evento clínico (ADR 0006, párrafo "Lo que
- * identifica a un evento").
+ * Associated data and derivation context of a clinical event (ADR 0006, paragraph "What
+ * identifies an event").
  *
- * Lo que ata el sobre a su fila es `user_id` y `occurred_at`, nada más: **el tipo clínico no
- * entra aquí**, porque va cifrado dentro del propio sobre y no puede participar en su propia
- * autenticación (si `glucose` entrara en el dato asociado, el servidor lo leería en claro y se
- * rompería justo la propiedad que el ADR busca). Como en `envelopeContext`, la cadena se fija en
- * este único sitio: cambiarla después de que exista el primer sobre invalida el tag de todo el
- * histórico y no hay forma de re-cifrar desde el servidor.
+ * What ties the envelope to its row is `user_id` and `occurred_at`, nothing else: **the clinical
+ * type does not go in here**, because it travels encrypted inside the envelope itself and cannot
+ * take part in its own authentication (if `glucose` entered the associated data, the server would
+ * read it in the clear and it would break exactly the property the ADR is after). As in
+ * `envelopeContext`, the string is fixed in this single place: changing it after the first
+ * envelope exists invalidates the tag of the whole history and the server cannot re-encrypt.
  *
- * `occurredAt` entra en su forma canónica del ADR 0004 (`canonicalDate.js`), nunca formateada a
- * mano: tiene que ser byte a byte la misma cadena que produce el servidor a partir de la columna
- * `occurred_at`, y eso solo lo garantiza pasar por el mismo formateador siempre.
+ * `occurredAt` goes in its ADR 0004 canonical form (`canonicalDate.js`), never formatted by hand:
+ * it has to be byte for byte the same string the server produces from the `occurred_at` column,
+ * and only always going through the same formatter guarantees that.
  *
- * @param {string} userId UUID del usuario, tal cual lo devuelve el servidor.
- * @param {Date|number|string} occurredAt Instante del evento (columna `occurred_at`).
- * @returns {string} Contexto que entra a la vez en el `info` de la derivación de la clave por
- *          registro y en el dato asociado del AEAD.
+ * @param {string} userId User UUID, exactly as the server returns it.
+ * @param {Date|number|string} occurredAt Event instant (column `occurred_at`).
+ * @returns {string} Context that goes at once into the `info` of the per-record key derivation
+ *          and into the AEAD associated data.
  */
 export function eventContext(userId, occurredAt) {
     if (typeof userId !== 'string' || userId === '') {
@@ -74,27 +74,27 @@ export function eventContext(userId, occurredAt) {
 }
 
 /**
- * Dato asociado y contexto de derivación del **descriptor** de un recorte compartido (ADR 0011).
+ * Associated data and derivation context of the **descriptor** of a shared clipping (ADR 0011).
  *
- * El ADR lo fija así y sin más: «un sobre normal del ADR 0004 bajo la clave maestra, con dato
- * asociado `user_id` más el `id` del share». Lo que ata ese sobre a su fila es justo ese par, y
- * nada más: ni el rango, ni los tipos, ni el número de eventos pueden entrar aquí, porque el dato
- * asociado viaja en claro y son exactamente los metadatos que el descriptor existe para esconder
- * (leer `["glucose","insulin"]` es saber que esa persona es diabética sin descifrar un byte).
+ * The ADR fixes it plainly: "a normal ADR 0004 envelope under the master key, with associated
+ * data `user_id` plus the share `id`". What ties that envelope to its row is exactly that pair,
+ * and nothing else: neither the range, nor the types, nor the event count can go in here, because
+ * associated data travels in the clear and those are exactly the metadata the descriptor exists
+ * to hide (reading `["glucose","insulin"]` is knowing that person is diabetic without decrypting a byte).
  *
- * Vive en este fichero por el mismo motivo que sus dos hermanos: es una cadena que no se puede
- * cambiar sin invalidar el tag de todo lo ya cifrado, y no hay forma de re-cifrar desde el
- * servidor. Las dos mitades van en minúsculas porque son UUID y su forma canónica lo es (ADR 0004);
- * el `id` del recorte lo genera el cliente con `crypto.randomUUID()`, que ya emite minúsculas, pero
- * el que vuelve del servidor en el listado podría no hacerlo y produciría otro contexto.
+ * It lives in this file for the same reason as its two siblings: it is a string that cannot
+ * change without invalidating the tag of everything already encrypted, and the server cannot
+ * re-encrypt. Both halves go lowercase because they are UUIDs and their canonical form is (ADR 0004);
+ * the clipping `id` is generated by the client with `crypto.randomUUID()`, which already emits
+ * lowercase, but the one coming back from the server in the listing might not, and it would produce another context.
  *
- * Ojo con no confundirlo con el dato asociado del **paquete** (`sharePackageContext`, en
- * `crypto/shareEnvelope.js`), que deliberadamente **no** lleva `user_id`: aquel lo construye el
- * profesional que lee, y darle un identificador estable del paciente lo haría correlacionable entre
- * dos envíos. Este de aquí no sale nunca del navegador de la persona propietaria.
+ * Do not confuse it with the associated data of the **package** (`sharePackageContext`, in
+ * `crypto/shareEnvelope.js`), which deliberately does **not** carry `user_id`: that one is built
+ * by the professional who reads, and giving them a stable patient identifier would make it
+ * correlatable across two exports. This one never leaves the owner's browser.
  *
- * @param {string} userId UUID del usuario, tal cual lo devuelve el servidor.
- * @param {string} shareId UUIDv4 del recorte (columna `shares.id`).
+ * @param {string} userId User UUID, exactly as the server returns it.
+ * @param {string} shareId Clipping UUIDv4 (column `shares.id`).
  * @returns {string}
  */
 export function shareDescriptorContext(userId, shareId) {

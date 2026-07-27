@@ -12,15 +12,15 @@ use App\Security\Opaque\RegistrationRequest;
 use App\Security\Opaque\RegistrationResponse;
 
 /**
- * Mensajes de registro de `docs/OPAQUE.md` §6.1 y casos negativos de §20.6
- * (truncado, bytes de más, punto identidad, punto inválido, base64 no
- * canónico y con padding).
+ * Registration messages from `docs/OPAQUE.md` §6.1 and the negative cases from
+ * §20.6 (truncated, extra bytes, identity point, invalid point, non-canonical
+ * base64 and base64 with padding).
  */
 
-/** Alfabeto base64url, para construir codificaciones no canónicas. */
+/** base64url alphabet, to build non-canonical encodings. */
 const REGMSG_BASE64URL_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 
-/** Punto ristretto255 válido y determinista, distinto de la identidad. */
+/** A valid, deterministic ristretto255 point other than the identity. */
 function regmsgPoint(string $label): string
 {
     [, $publicKey] = Oprf::deriveDiffieHellmanKeyPair(hash('sha256', $label, true));
@@ -28,21 +28,21 @@ function regmsgPoint(string $label): string
     return $publicKey;
 }
 
-/** Los 32 bytes cero: elemento identidad del grupo (RFC 9496 §4). */
+/** The 32 zero bytes: the group identity element (RFC 9496 §4). */
 function regmsgIdentityPoint(): string
 {
     return str_repeat("\x00", 32);
 }
 
-/** 32 bytes que no son codificación válida de ningún elemento del grupo. */
+/** 32 bytes that are not a valid encoding of any group element. */
 function regmsgInvalidPoint(): string
 {
     return str_repeat("\xff", 32);
 }
 
 /**
- * Altera el último carácter de una codificación base64url para dejar bits
- * sobrantes distintos de cero, es decir, una codificación no canónica.
+ * Alters the last character of a base64url encoding to leave non-zero leftover
+ * bits, that is, a non-canonical encoding.
  */
 function regmsgNonCanonicalBase64Url(string $encoded): string
 {

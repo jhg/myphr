@@ -17,28 +17,29 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * `POST /phr/auth/password/registration/start`: fase B del cambio de contraseña, paso 13.
+ * `POST /phr/auth/password/registration/start`: phase B of the password change, step 13.
  *
- * Cambiar la contraseña es un **registro OPAQUE nuevo** (RFC 9807 §8 exige valores aleatorios
- * frescos), del que saldrá un `registrationRecord` de 192 bytes que sustituirá al almacenado. Lo que
- * no cambia es el `credential_identifier`: se reutiliza el **almacenado**, sin ningún respaldo por si
- * falta, porque una cuenta sin identificador almacenado no está cambiando de contraseña, está
- * registrándose por primera vez, y ese es otro camino. Regenerarlo delataría el cambio de contraseña
- * ante quien reenviara el mismo punto cegado (`docs/OPAQUE.md` §13.1, RFC 9807 §10.9).
+ * Changing the password is a **fresh OPAQUE registration** (RFC 9807 §8 requires fresh random
+ * values), which will yield a 192-byte `registrationRecord` replacing the stored one. What does not
+ * change is the `credential_identifier`: the **stored** one is reused, with no fallback in case it
+ * is missing, because an account with no stored identifier is not changing its password, it is
+ * registering for the first time, and that is a different path. Regenerating it would give the
+ * password change away to anyone replaying the same blinded point (`docs/OPAQUE.md` §13.1,
+ * RFC 9807 §10.9).
  *
- * El ticket se **comprueba pero no se consume**: consumirlo aquí dejaría sin autorización a quien
- * sufra un corte de red durante el Argon2id que corre justo después de esta respuesta, obligándole a
- * repetir también el Argon2id de la reautenticación. Es el mismo razonamiento por el que el alta no
- * consume el enlace en `registration/start`.
+ * The ticket is **checked but not consumed**: consuming it here would leave anyone who loses their
+ * network during the Argon2id that runs right after this response without authorization, forcing
+ * them to repeat the reauthentication Argon2id too. It is the same reasoning by which signup does
+ * not consume the link in `registration/start`.
  *
- * El pendiente nace con `invitation_ref` nulo y `purpose = password-change`, de modo que
- * `registration/finish` no lo pueda canjear: aquel consumiría un enlace de registro inexistente y
- * reescribiría `encrypted_settings`, que en un cambio de contraseña no se toca (la configuración va
- * bajo una clave derivada de la clave maestra, y la clave maestra no cambia).
+ * The pending row is born with a null `invitation_ref` and `purpose = password-change`, so
+ * `registration/finish` cannot redeem it: that endpoint would consume a registration link that does
+ * not exist and would rewrite `encrypted_settings`, which a password change does not touch (the
+ * settings go under a key derived from the master key, and the master key does not change).
  */
 final readonly class PasswordChangeRegistrationStartController
 {
-    /** Ventana de vida del pendiente, acotada además por la del ticket. */
+    /** Lifetime window of the pending row, further bounded by the ticket's. */
     public const int PENDING_TTL_MINUTES = 15;
 
     public function __construct(
@@ -74,7 +75,7 @@ final readonly class PasswordChangeRegistrationStartController
             return response()->json(['error' => 'invalid_request'], 422);
         }
 
-        /** El pendiente nunca sobrevive al ticket que lo autoriza. */
+        /** The pending row never outlives the ticket that authorizes it. */
         $expiresAt = now()
             ->addMinutes(self::PENDING_TTL_MINUTES)
             ->min(now()->setTimestamp($this->tickets->expiresAt($session) ?? time()));
@@ -98,7 +99,7 @@ final readonly class PasswordChangeRegistrationStartController
     }
 
     /**
-     * Ticket ausente, no coincidente o caducado. El cliente vuelve a pedir la contraseña actual.
+     * Ticket missing, not matching or expired. The client asks for the current password again.
      */
     private function expired(): JsonResponse
     {

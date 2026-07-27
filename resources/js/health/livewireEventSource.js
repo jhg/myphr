@@ -1,14 +1,14 @@
 /**
- * El origen de eventos del **panel del paciente**: pide páginas a Livewire y las abre aquí.
+ * The event source of the **patient panel**: it asks Livewire for pages and opens them here.
  *
- * Vive aparte de `eventSource.js` por perímetro, no por tamaño. `eventSource.js` lo importa el lector
- * del profesional (`reader.js`), y Rollup arrastra al trozo común la cadena entera de importaciones
- * de todo lo que alcanzan dos entradas: con `livewireEventSource` allí dentro, el lector se llevaba
- * `eventEnvelope.js` → `auth/keyring.js` —el llavero de la clave maestra, con su `sessionStorage`— al
- * navegador de una consulta ajena (ADR 0011). Este fichero es la mitad que **sí** puede depender del
- * llavero, y por eso solo lo importan las pantallas con sesión.
+ * It lives apart from `eventSource.js` for perimeter reasons, not size. `eventSource.js` is
+ * imported by the professional's reader (`reader.js`), and Rollup drags into the shared chunk the
+ * whole import chain of everything two entry points reach: with `livewireEventSource` in there,
+ * the reader took `eventEnvelope.js` → `auth/keyring.js` —the master key ring, with its
+ * `sessionStorage`— to the browser of somebody else's clinic (ADR 0011). This file is the half
+ * that **can** depend on the key ring, and that is why only the screens with a session import it.
  *
- * La forma de la abstracción y el porqué de las tres claves de la respuesta están documentados en
+ * The shape of the abstraction and the why of the three response keys are documented in
  * `eventSource.js`.
  */
 
@@ -16,21 +16,21 @@ import { openEvent } from './eventEnvelope.js';
 import { FETCH_PAGE_SIZE, flattenDecryptedEvent, MAX_FETCH_PAGES, needsAnotherPage, rangeStartMs } from './eventSource.js';
 
 /**
- * Origen del panel: pide páginas al servidor y las abre aquí, en el navegador.
+ * Panel source: it asks the server for pages and opens them here, in the browser.
  *
- * `fetchPage` se inyecta y es la **única** puerta al servidor de todo el camino de visualización:
- * quien lo llama pasa `(cursor, limit, range) => this.$wire.fetchEvents(cursor, limit, range.from,
- * range.to)`, y así este módulo no depende de Livewire. El rango viaja al servidor porque
- * `occurred_at` es una de las tres columnas en claro (ADR 0006) y acotarlo es la única optimización
- * que de verdad importa aquí: con «último día» se abren los sobres de 24 horas, no los de un mes.
+ * `fetchPage` is injected and is the **only** door to the server on the whole display path: the
+ * caller passes `(cursor, limit, range) => this.$wire.fetchEvents(cursor, limit, range.from,
+ * range.to)`, so this module does not depend on Livewire. The range travels to the server because
+ * `occurred_at` is one of the three columns in the clear (ADR 0006) and narrowing it is the only
+ * optimization that really matters here: with "last day" the envelopes of 24 hours are opened, not those of a month.
  *
- * `truncated` avisa de que se agotó el tope de páginas antes de llegar al inicio del rango: el
- * resumen sigue siendo el de los registros más recientes, pero no puede presentarse como si fuera el
- * del periodo entero.
+ * `truncated` warns that the page cap ran out before reaching the start of the range: the summary
+ * is still the one of the most recent records, but it cannot be presented as if it were the one of
+ * the whole period.
  *
  * @param {object} params
  * @param {(cursor: string|null, limit: number, range: object) => Promise<list<object>>} params.fetchPage
- * @param {string} params.userId Dato asociado del sobre (ADR 0004).
+ * @param {string} params.userId Associated data of the envelope (ADR 0004).
  * @param {number} [params.pageSize]
  * @param {number} [params.maxPages]
  * @returns {(range: {from: string|null, to: string|null}) => Promise<{events: list<object>, failedToOpen: number, truncated: boolean}>}
@@ -54,8 +54,8 @@ export function livewireEventSource({ fetchPage, userId, pageSize = FETCH_PAGE_S
             }
 
             /**
-             * El cursor es la fecha del evento más antiguo de la página y el servidor la aplica con
-             * `<` estricto, así que cada vuelta avanza de verdad.
+             * The cursor is the date of the oldest event of the page and the server applies it with
+             * a strict `<`, so every round really moves forward.
              */
             cursor = pageEvents[pageEvents.length - 1].occurredAt;
         }
@@ -65,11 +65,11 @@ export function livewireEventSource({ fetchPage, userId, pageSize = FETCH_PAGE_S
 }
 
 /**
- * Abre todos los sobres de una lista, contando los que no abren.
+ * Opens every envelope of a list, counting the ones that do not open.
  *
- * Un sobre que no abre **no tumba la pantalla** (ADR 0004): se cuenta y quien llama lo dice. Tirarlo
- * en silencio dejaría un historial con un hueco que se lee como «no hubo ninguna medición».
- *
+ * An envelope that does not open **does not take the screen down** (ADR 0004): it is counted and
+ * the caller says so. Dropping it in silence would leave a history with a gap that reads as "there
+ * was no measurement".
  * @param {list<{occurredAt: string, payload: string}>} rawEvents
  * @param {string} userId
  * @returns {{events: list<object>, failedToOpen: number}}

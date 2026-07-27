@@ -7,26 +7,26 @@ namespace App\Catalog;
 use ValueError;
 
 /**
- * Resolutor del sitio de medición al código LOINC de temperatura corporal.
+ * Resolver from the measurement site to the body temperature LOINC code.
  *
- * El ADR 0005 (docs/adr/0005-clinical-vocabulary-loinc-snomed.md) recuerda que un código LOINC no
- * nombra solo la magnitud. En la temperatura eso se ve con claridad: LOINC publica un código
- * distinto **por sitio de medida** —oral, axilar, timpánica…— además del genérico «Body temperature»
- * (8310-5), que no dice dónde se midió. Por eso esta magnitud sí necesita un resolutor, al contrario
- * que la tensión ({@see BloodPressureLoincCode}), donde el método viaja aparte y el código es
- * constante.
+ * ADR 0005 (docs/adr/0005-clinical-vocabulary-loinc-snomed.md) reminds us that a LOINC code does not
+ * name the quantity alone. With temperature that is easy to see: LOINC publishes a different code
+ * **per measurement site** —oral, axillary, tympanic…— on top of the generic "Body temperature"
+ * (8310-5), which does not say where it was measured. That is why this quantity does need a
+ * resolver, unlike blood pressure ({@see BloodPressureLoincCode}), where the method travels
+ * separately and the code is constant.
  *
- * Se resuelve por sitio y no por unidad: los grados Celsius y los Fahrenheit son la misma
- * observación en otra escala y comparten código; la unidad viaja aparte como código UCUM
- * ({@see UcumUnit}), que es lo que exige el ADR 0005.
+ * It resolves by site and not by unit: degrees Celsius and Fahrenheit are the same observation on a
+ * different scale and share a code; the unit travels separately as a UCUM code ({@see UcumUnit}),
+ * which is what ADR 0005 requires.
  *
- * El genérico 8310-5 **no se usa**: la pantalla exige elegir sitio (ver
- * {@see TemperatureMeasurementSite}), así que guardar «temperatura sin decir dónde» sería tirar un
- * dato que sí se tiene. Un código LOINC menos preciso de lo que permite el dato es un dato peor.
+ * The generic 8310-5 **is not used**: the screen requires picking a site (see
+ * {@see TemperatureMeasurementSite}), so recording "temperature without saying where" would throw
+ * away a fact we do have. A LOINC code less precise than the data allows is worse data.
  *
- * Los cinco códigos están verificados contra LOINC (herramienta de terminologías médicas,
- * 2026-07-27) y **no deben modificarse**: entran en el contenido que se cifra en el navegador (ADR
- * 0002, ADR 0004), donde ya no se pueden corregir.
+ * The five codes are verified against LOINC (medical terminology tool, 2026-07-27) and **must not be
+ * modified**: they go into the content encrypted in the browser (ADR 0002, ADR 0004), where they can
+ * no longer be fixed.
  */
 enum TemperatureLoincCode: string
 {
@@ -36,7 +36,7 @@ enum TemperatureLoincCode: string
     /** Oral. */
     case Oral = '8331-1';
 
-    /** Membrana timpánica. */
+    /** Tympanic membrane. */
     case Tympanic = '8333-7';
 
     /** Arteria temporal (frente). */
@@ -46,13 +46,13 @@ enum TemperatureLoincCode: string
     case Rectal = '8332-9';
 
     /**
-     * Resuelve el código LOINC de temperatura para un sitio de medición.
+     * Resolves the temperature LOINC code for a measurement site.
      *
-     * Falla de forma ruidosa ante un sitio sin código en vez de caer al genérico 8310-5: un código
-     * por defecto convertiría un caso nuevo sin revisar en un dato clínico menos preciso que se
-     * guardaría cifrado y en silencio.
+     * It fails loudly for a site with no code instead of falling back to the generic 8310-5: a
+     * default code would turn an unreviewed new case into less precise clinical data, stored
+     * encrypted and in silence.
      *
-     * @throws ValueError si el sitio no tiene código LOINC asignado.
+     * @throws ValueError if the site has no LOINC code assigned.
      */
     public static function resolve(TemperatureMeasurementSite $site): self
     {
@@ -63,13 +63,13 @@ enum TemperatureLoincCode: string
             TemperatureMeasurementSite::TemporalArtery => self::TemporalArtery,
             TemperatureMeasurementSite::Rectal => self::Rectal,
             default => throw new ValueError(sprintf(
-                'No existe código LOINC de temperatura para el sitio de medición "%s".',
+                'There is no temperature LOINC code for measurement site "%s".',
                 $site->value,
             )),
         };
     }
 
-    /** Término oficial LOINC, en inglés, tal y como lo publica Regenstrief Institute (ADR 0005). */
+    /** Official LOINC term, in English, exactly as published by the Regenstrief Institute (ADR 0005). */
     public function officialName(): string
     {
         return match ($this) {

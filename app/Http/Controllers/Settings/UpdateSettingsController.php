@@ -12,35 +12,35 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * `PUT /phr/settings` (ADR 0007): única vía de escritura del sobre de configuración.
+ * `PUT /phr/settings` (ADR 0007): the only write path for the settings envelope.
  *
- * Hasta aquí `users.encrypted_settings` era de escritura única, y solo lo escribía el alta
- * (`RegistrationFinishController`). Este controlador la reabre para el resto de la vida de la
- * cuenta.
+ * Until now `users.encrypted_settings` was write-once, and only signup wrote it
+ * (`RegistrationFinishController`). This controller reopens it for the rest of the account's life.
  *
- * `PUT` y no `PATCH` porque la escritura es **siempre** un reemplazo completo del documento: el
- * servidor no puede aplicar un parche sobre algo que no puede descifrar. El merge parcial ocurre en
- * el navegador antes de sellar (`resources/js/auth/settings.js`). Ser idempotente hace además que
- * reintentar tras un fallo de red sea seguro.
+ * `PUT` and not `PATCH` because the write is **always** a full replacement of the document: the
+ * server cannot apply a patch to something it cannot decrypt. The partial merge happens in the
+ * browser before sealing (`resources/js/auth/settings.js`). Being idempotent also makes retrying
+ * after a network failure safe.
  *
- * **Lo único que se valida es la envoltura**, con el mismo `EnvelopeValidator` que el alta: prefijo
- * `v1.`, base64url canónico y uno de los tamaños de relleno. Nada del contenido, porque el servidor
- * no tiene la clave y cualquier comprobación adicional sería una afirmación insostenible. Un segundo
- * criterio de validez sería además un segundo sitio donde equivocarse.
+ * **The only thing validated is the wrapper**, with the same `EnvelopeValidator` as signup: the
+ * `v1.` prefix, canonical base64url and one of the padding sizes. Nothing about the content, because
+ * the server has no key and any further check would be an untenable claim. A second validity
+ * criterion would also be a second place to get it wrong.
  *
- * El usuario sale **siempre** de la sesión, nunca del cuerpo: no hay forma de escribir la
- * configuración de otra persona.
+ * The user **always** comes from the session, never from the body: there is no way to write somebody
+ * else's settings.
  *
- * `If-Match` no es opcional (ADR 0007, vía de escritura §2.4). El sobre es un documento único y dos
- * pestañas abiertas —el escenario normal de un panel— perderían una de las dos escrituras en
- * silencio, con el usuario descubriendo semanas después que su rango objetivo desapareció. El
- * servidor lo detecta sin descifrar nada: le basta comparar el texto cifrado almacenado con el que
- * el cliente creía vigente. Se acepta `*` únicamente cuando la cuenta todavía no tiene sobre.
+ * `If-Match` is not optional (ADR 0007, write path §2.4). The envelope is a single document and two
+ * open tabs —the normal scenario in a panel— would silently lose one of the two writes, with the
+ * user finding out weeks later that their target range disappeared. The server detects it without
+ * decrypting anything: comparing the stored ciphertext with the one the client believed current is
+ * enough. `*` is accepted only when the account has no envelope yet.
  *
- * El único campo que viaja **fuera** del sobre es `locale`, opcional, que se escribe en claro en
- * `users.locale`: es la excepción consciente del ADR 0007, porque el servidor tiene que resolver el
- * idioma del panel antes de que exista ninguna clave. Se valida contra la lista cerrada de
- * `config('app.supported_locales')` y no participa en el `If-Match`, que protege el sobre.
+ * The only field that travels **outside** the envelope is `locale`, optional, which is written in
+ * the clear into `users.locale`: it is the deliberate exception in ADR 0007, because the server has
+ * to resolve the panel language before any key exists. It is validated against the closed list in
+ * `config('app.supported_locales')` and takes no part in the `If-Match`, which protects the
+ * envelope.
  */
 final readonly class UpdateSettingsController
 {
@@ -57,9 +57,9 @@ final readonly class UpdateSettingsController
         ]);
 
         /**
-         * El idioma se comprueba a mano y no con una regla de validación porque esta ruta responde
-         * siempre JSON con un código propio: una `ValidationException` saldría como redirección,
-         * igual que ya ocurre con el sobre.
+         * The language is checked by hand and not with a validation rule because this route always
+         * answers JSON with a code of its own: a `ValidationException` would come out as a redirect,
+         * as already happens with the envelope.
          */
         $locale = $request->input('locale');
 
@@ -82,9 +82,9 @@ final readonly class UpdateSettingsController
         }
 
         /**
-         * Las dos columnas se escriben juntas y **después** de validar el sobre y la precondición,
-         * para que un 412 o un 422 no dejen el idioma cambiado y los ajustes sin cambiar. Ninguna
-         * está en `$fillable`, igual que en el alta.
+         * Both columns are written together and **after** validating the envelope and the
+         * precondition, so a 412 or a 422 does not leave the language changed and the settings
+         * unchanged. Neither is in `$fillable`, same as at signup.
          */
         $columns = ['encrypted_settings' => $data['encryptedSettings']];
 
@@ -95,9 +95,9 @@ final readonly class UpdateSettingsController
         $user->forceFill($columns)->save();
 
         /**
-         * Se anota que los ajustes cambiaron, nunca cuáles: el sobre es opaco y el idioma, aunque
-         * esté en claro en la columna, es una preferencia de la persona que el rastro no necesita
-         * repetir para cumplir su función.
+         * We record that the settings changed, never which ones: the envelope is opaque and the
+         * language, even though it is in the clear in the column, is a preference of the person that
+         * the trail does not need to repeat to do its job.
          */
         activity(AuditEvent::LOG_NAME)
             ->causedBy($user)
@@ -112,10 +112,10 @@ final readonly class UpdateSettingsController
     }
 
     /**
-     * Validador de precondición del sobre vigente: su sha256, o `*` si todavía no hay ninguno.
+     * Precondition validator for the current envelope: its sha256, or `*` if there is none yet.
      *
-     * Es un hash del **texto cifrado**, así que no dice nada del contenido ni exige guardar una
-     * versión aparte que pudiera divergir de la columna.
+     * It is a hash of the **ciphertext**, so it says nothing about the content and requires no
+     * separate version that could drift from the column.
      */
     private function currentTag(?string $envelope): string
     {

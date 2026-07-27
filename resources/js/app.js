@@ -1,19 +1,19 @@
 /**
- * Entrada de Vite del panel (Spec 0001 §10).
+ * Vite entry point of the panel (Spec 0001 §10).
  *
- * Se emite en el `<head>` del panel. Tres trabajos: registrar los componentes Alpine de las
- * pantallas de autenticación, instalar el interceptor de §9 y armar el bloqueo por inactividad de
- * §8. Todo lo que toca claves vive en los módulos que importa, con la clave maestra encerrada en el
- * scope de `auth/keyring.js`.
+ * It is emitted in the panel `<head>`. Three jobs: register the Alpine components of the
+ * authentication screens, install the §9 interceptor and arm the §8 idle lock. Everything that
+ * touches keys lives in the modules it imports, with the master key locked inside the scope of
+ * `auth/keyring.js`.
  *
- * `auth/keyring.js` se importa **el primero**, y por su efecto de módulo, no por lo que exporta: es
- * el scope de ese módulo el que sostiene la clave maestra durante toda la vida de la pestaña. Al
- * cargarse desde la cabecera del documento, sobrevive a `wire:navigate`, que sustituye el `<body>`
- * pero no vuelve a evaluar los módulos ya cargados (ADR 0003). Ese es el mecanismo entero por el
- * que la clave no muere al cambiar de pantalla.
+ * `auth/keyring.js` is imported **first**, and for its module effect, not for what it exports: it
+ * is that module's scope that holds the master key for the whole life of the tab. Loaded from the
+ * document head, it survives `wire:navigate`, which replaces the `<body>` but does not re-evaluate
+ * modules already loaded (ADR 0003). That is the entire mechanism by which the key does not die
+ * when the screen changes.
  *
- * El registro va sobre `alpine:init` porque Alpine lo trae Livewire y arranca después. La rama
- * alternativa cubre el caso de que este módulo llegue tarde, con Alpine ya en marcha.
+ * The registration hangs off `alpine:init` because Alpine comes with Livewire and starts later.
+ * The alternative branch covers the case where this module arrives late, with Alpine already running.
  */
 
 import './auth/keyring.js';
@@ -26,6 +26,7 @@ import { registerPage } from './auth/registerPage.js';
 import { setPasswordForm } from './auth/setPasswordPage.js';
 import { bootstrapSession } from './auth/sessionBootstrap.js';
 import { installLivewirePayloadGuard } from './guards/livewirePayloadGuard.js';
+import { installStaleTabNotice } from './guards/staleTabNotice.js';
 import { bloodPressurePage } from './health/bloodPressurePage.js';
 import { bodyWeightPage } from './health/bodyWeightPage.js';
 import { dashboardPage } from './health/dashboardPage.js';
@@ -37,20 +38,20 @@ import { temperaturePage } from './health/temperaturePage.js';
 import { captureInstallPrompt, installButton } from './pwa/installPrompt.js';
 
 /**
- * Idioma de las cadenas que construye el cliente.
+ * Language of the strings the client builds.
  *
- * Sale de lo que el servidor ya emite a partir de `app()->getLocale()`: no hay petición nueva, y el
- * texto que pinta JavaScript no puede separarse del que pinta Blade.
+ * It comes from what the server already emits out of `app()->getLocale()`: no new request, and the
+ * text JavaScript paints cannot drift apart from the one Blade paints.
  *
- * Se relee **en cada navegación**, y no una sola vez al cargar, porque el idioma del servidor puede
- * cambiar sin que la pestaña se recargue. El caso normal es entrar: la pantalla de acceso no tiene
- * sesión y se sirve en el idioma de `Accept-Language`, y en cuanto hay sesión pasa a mandar el
- * guardado en la cuenta. Con una sola lectura, ese primer idioma se quedaba congelado y la persona
- * veía el panel en chino con las etiquetas de las gráficas en castellano.
+ * It is re-read **on every navigation**, and not once on load, because the server language can
+ * change without the tab reloading. The normal case is signing in: the sign-in screen has no
+ * session and is served in the `Accept-Language` language, and as soon as there is a session the
+ * one saved in the account takes over. With a single read, that first language stayed frozen and
+ * the person saw the panel in Chinese with the chart labels in Spanish.
  *
- * La fuente es un marcador del `<body>` y no el `lang` del `<html>`: la navegación de Livewire
- * reemplaza el primero y no los atributos del segundo. El `lang` se actualiza aquí a mano para que
- * los lectores de pantalla y `Intl` no se queden con el de la primera carga.
+ * The source is a marker on the `<body>` and not the `lang` of the `<html>`: Livewire navigation
+ * replaces the former and not the attributes of the latter. `lang` is updated here by hand so that
+ * screen readers and `Intl` do not keep the one from the first load.
  */
 function syncLocale() {
     const marker = document.querySelector('[data-phr-locale]');
@@ -65,12 +66,12 @@ function syncLocale() {
 syncLocale();
 
 /**
- * Componentes que las plantillas nombran en `x-data`.
+ * Components the templates name in `x-data`.
  *
- * Toda pantalla nueva tiene que aparecer aquí. Si falta, Alpine no encuentra el componente que
- * declara su `x-data` y la pantalla se queda inerte: se pinta, pero ningún botón responde y no hay
- * error visible en la interfaz. Es un fallo silencioso, así que conviene comprobarlo al añadir una
- * pantalla y no cuando alguien informa de que algo no funciona.
+ * Every new screen has to appear here. If it is missing, Alpine does not find the component its
+ * `x-data` declares and the screen stays inert: it paints, but no button responds and there is no
+ * visible error in the interface. It is a silent failure, so it is worth checking when adding a
+ * screen and not when somebody reports that something does not work.
  */
 const COMPONENTS = Object.freeze({
     phrLoginForm: loginForm,
@@ -89,13 +90,13 @@ const COMPONENTS = Object.freeze({
 });
 
 /**
- * Oyente de `beforeinstallprompt`, enganchado al evaluar el módulo y no al montar el botón.
+ * `beforeinstallprompt` listener, hooked when the module is evaluated and not when the button mounts.
  *
- * El navegador dispara ese evento cuando le parece, sin repetirlo, y a menudo antes de que Alpine
- * haya montado nada: quien llegue tarde se queda sin el único objeto capaz de abrir el diálogo de
- * instalación. Por eso vive en el scope del módulo, que además sobrevive a la navegación SPA
- * mientras el componente se reconstruye en cada pantalla. El porqué de las dos ramas —Chromium con
- * evento, iOS sin él— está en `pwa/installPrompt.js`.
+ * The browser fires that event when it feels like it, without repeating it, and often before
+ * Alpine has mounted anything: whoever arrives late loses the only object able to open the install
+ * dialog. That is why it lives in the module scope, which also survives SPA navigation while the
+ * component is rebuilt on every screen. The why of the two branches —Chromium with an event, iOS
+ * without it— is in `pwa/installPrompt.js`.
  */
 captureInstallPrompt(window);
 
@@ -113,20 +114,25 @@ if (window.Alpine !== undefined) {
 }
 
 /**
- * Interceptor de §9. `livewire:init` es el momento en que `window.Livewire` existe y todavía no ha
- * salido ningún mensaje.
+ * §9 interceptor. `livewire:init` is the moment `window.Livewire` exists and no message has gone
+ * out yet.
+ *
+ * The stale-tab notice rides on the same event and the same hook: it has to be in place before the
+ * first message goes out, because the message it exists for can be the first one.
  */
-document.addEventListener('livewire:init', () => installLivewirePayloadGuard(), { once: true });
+document.addEventListener('livewire:init', () => {
+    installLivewirePayloadGuard();
+    installStaleTabNotice();
+}, { once: true });
 
 /**
- * Bloqueo de §8 y arranque de sesión de §6.2, ambos solo dentro del panel.
+ * §8 lock and §6.2 session bootstrap, both only inside the panel.
  *
- * Las pantallas de autenticación se marcan con `data-phr-page` y quedan fuera: ahí no hay sesión que
- * cerrar ni que recuperar, y las dos llamadas solo producirían un error o una redirección de sobra.
- * La comprobación no puede hacerse al evaluar este módulo, que corre en la cabecera con el `<body>`
- * todavía sin analizar, así que se repite en cada navegación: `livewire:navigated` se dispara
- * también en la carga inicial, y la SPA del panel cambia de pantalla sin volver a evaluar los
- * módulos.
+ * The authentication screens are marked with `data-phr-page` and stay out: there is no session to
+ * close or to recover there, and the two calls would only produce an error or a needless redirect.
+ * The check cannot be done when this module is evaluated, which runs in the head with the `<body>`
+ * still unparsed, so it is repeated on every navigation: `livewire:navigated` also fires on the
+ * initial load, and the panel SPA changes screen without re-evaluating the modules.
  */
 function armLockForCurrentPage() {
     if (document.querySelector('[data-phr-page]') !== null) {
@@ -155,16 +161,16 @@ if (document.readyState === 'loading') {
 interceptLogout();
 
 /**
- * Registro del service worker, que es lo único que le falta al navegador para ofrecer instalar la
- * aplicación en la pantalla de inicio.
+ * Service worker registration, which is the only thing the browser is missing before it offers to
+ * install the application on the home screen.
  *
- * Ese worker no cachea nada a propósito: el porqué, largo y que conviene leer antes de tocarlo, está
- * en `public/sw.js`. Aquí basta con saber que registrarlo no cambia cómo viaja ninguna petición.
+ * That worker caches nothing on purpose: the why, long and worth reading before touching it, is in
+ * `public/sw.js`. Here it is enough to know that registering it changes how no request travels.
  *
- * Los fallos se ignoran en silencio y sin reintento. El registro no está disponible en contextos no
- * seguros ni en navegación privada de algunos navegadores, y en todos esos casos la aplicación
- * funciona igual: se pierde el icono en la pantalla de inicio, nada más. Avisar de eso sería ruido
- * sobre algo que la persona no puede arreglar.
+ * Failures are ignored silently and without retry. Registration is not available in insecure
+ * contexts nor in private browsing on some browsers, and in all those cases the application works
+ * the same: the home screen icon is lost, nothing else. Reporting that would be noise about
+ * something the person cannot fix.
  */
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {

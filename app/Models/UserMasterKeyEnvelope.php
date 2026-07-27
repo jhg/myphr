@@ -11,18 +11,18 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use LogicException;
 
 /**
- * Spec 0001 §3.4 / ADR 0009: sobre de la User Master Key. Tabla de solo añadir.
+ * Spec 0001 §3.4 / ADR 0009: User Master Key envelope. An append-only table.
  *
- * Reemitir un enlace no puede sobrescribir el sobre que la contraseña anterior sabía abrir: se
- * inserta uno nuevo y el anterior queda retirado con su fecha. La única mutación admitida sobre una
- * fila existente es pasar `retired_at` de nulo a una fecha, una sola vez; nunca se borra ninguna fila.
+ * Reissuing a link must not overwrite the envelope the previous password could open: a new one is
+ * inserted and the previous one is retired with its date. The only mutation allowed on an existing
+ * row is moving `retired_at` from null to a date, once; no row is ever deleted.
  */
 #[Fillable(['user_id', 'envelope'])]
 final class UserMasterKeyEnvelope extends Model
 {
     use HasUuids;
 
-    /** Spec 0001 §3.4: la tabla solo tiene `created_at` y `retired_at`. */
+    /** Spec 0001 §3.4: the table only has `created_at` and `retired_at`. */
     public const UPDATED_AT = null;
 
     /**
@@ -36,10 +36,10 @@ final class UserMasterKeyEnvelope extends Model
     }
 
     /**
-     * Guardias de solo añadir (Spec 0001 §3.4).
+     * Append-only guards (Spec 0001 §3.4).
      *
-     * Cubren el camino del modelo Eloquent. Una escritura directa con el constructor de consultas no
-     * pasa por aquí, así que ningún otro sitio del código debe tocar esta tabla sin el modelo.
+     * They cover the Eloquent model path. A direct write with the query builder does not go through
+     * here, so no other place in the code may touch this table without the model.
      */
     protected static function booted(): void
     {
@@ -48,31 +48,31 @@ final class UserMasterKeyEnvelope extends Model
 
             if ($changed !== ['retired_at']) {
                 throw new LogicException(
-                    'user_master_key_envelopes es de solo añadir: no se puede actualizar '
+                    'user_master_key_envelopes is append-only: cannot update '
                     .implode(', ', $changed).'.'
                 );
             }
 
             if ($envelope->getRawOriginal('retired_at') !== null) {
                 throw new LogicException(
-                    'user_master_key_envelopes es de solo añadir: un sobre ya retirado no se vuelve a tocar.'
+                    'user_master_key_envelopes is append-only: a retired envelope is never touched again.'
                 );
             }
         });
 
         self::deleting(function (self $envelope): void {
-            throw new LogicException('user_master_key_envelopes es de solo añadir: no se borran filas.');
+            throw new LogicException('user_master_key_envelopes is append-only: rows are never deleted.');
         });
     }
 
     /**
-     * Marca este sobre como retirado. Es la única mutación admitida sobre una fila existente.
+     * Marks this envelope as retired. It is the only mutation allowed on an existing row.
      */
     public function retire(): bool
     {
         if ($this->getRawOriginal('retired_at') !== null) {
             throw new LogicException(
-                'user_master_key_envelopes es de solo añadir: un sobre ya retirado no se vuelve a tocar.'
+                'user_master_key_envelopes is append-only: a retired envelope is never touched again.'
             );
         }
 

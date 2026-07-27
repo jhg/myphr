@@ -1,62 +1,62 @@
 /**
- * Botón para instalar el panel en la pantalla de inicio.
+ * Button to install the panel on the home screen.
  *
- * **Por qué hace falta un botón nuestro.** La aplicación ya es instalable —manifiesto, iconos y el
- * service worker de `public/sw.js`, que no cachea nada a propósito—, pero ofrecer la instalación se
- * lo dejábamos entero al navegador, y ahí cada uno hace lo que quiere: Chrome la esconde en el menú
- * de tres puntos, Edge en la barra de direcciones, y **Safari de iOS no la ofrece jamás**. En iOS la
- * única vía es «Compartir» → «Añadir a pantalla de inicio», que quien no lo sepa no encuentra. Un
- * botón visible en el panel unifica las tres situaciones en un solo sitio.
+ * **Why we need a button of our own.** The application is already installable —manifest, icons and
+ * the service worker of `public/sw.js`, which caches nothing on purpose—, but offering the
+ * install was left entirely to the browser, and there each one does as it pleases: Chrome hides it
+ * in the three-dot menu, Edge in the address bar, and **iOS Safari never offers it**. On iOS the
+ * only way is "Share" → "Add to Home Screen", which nobody finds unless they know. A visible
+ * button in the panel brings the three situations together in one place.
  *
- * **Por qué la decisión vive aquí y no en el menú de usuario de Filament.** Ese menú se construye en
- * PHP al registrar el panel, y aquí no hay nada que el servidor pueda saber: si el navegador acepta
- * instalar depende de un evento del cliente (`beforeinstallprompt`) que llega —o no— después de
- * pintar, y de si la aplicación ya está instalada, que solo sabe `matchMedia`. Un item de menú
- * renderizado en servidor aparecería también en Firefox de escritorio, donde pulsar no puede hacer
- * absolutamente nada.
+ * **Why the decision lives here and not in the Filament user menu.** That menu is built in PHP
+ * when the panel is registered, and here there is nothing the server can know: whether the browser
+ * accepts installing depends on a client event (`beforeinstallprompt`) that arrives —or not—
+ * after painting, and on whether the application is already installed, which only `matchMedia`
+ * knows. A server-rendered menu item would also show up in desktop Firefox, where pressing it can
+ * do absolutely nothing.
  *
- * **Las dos ramas, y por qué son distintas de verdad:**
+ * **The two branches, and why they really are different:**
  *
- * 1. *Chromium* (Chrome, Edge, Android). Dispara `beforeinstallprompt`. Se le llama
- *    `preventDefault()` para que el navegador no saque su propio aviso —tendríamos dos ofertas
- *    compitiendo— y se guarda el evento, que es lo único capaz de abrir el diálogo real. Un evento
- *    **se gasta al usarlo**: tras `prompt()` no sirve para una segunda vez, así que se descarta y el
- *    botón desaparece, acepte o rechace la persona. El navegador enviará uno nuevo si vuelve a
- *    considerar la instalación oportuna.
- * 2. *Safari de iOS* (iPhone y iPad). `beforeinstallprompt` **no existe** en WebKit y no hay ninguna
- *    API que abra el diálogo de instalación: no es que no la usemos, es que no la hay. Ahí el botón
- *    no puede instalar nada, y lo único honesto que puede hacer es decir dónde está la opción del
- *    sistema. Por eso esta rama enseña texto en vez de llamar a nada.
+ * 1. *Chromium* (Chrome, Edge, Android). It fires `beforeinstallprompt`. `preventDefault()` is
+ *    called on it so the browser does not raise its own notice —we would have two offers
+ *    competing— and the event is stored, as it is the only thing able to open the real dialog. An
+ *    event **is spent when used**: after `prompt()` it is no good a second time, so it is dropped
+ *    and the button disappears, whether the person accepts or declines. The browser will send a
+ *    new one if it again considers the install timely.
+ * 2. *iOS Safari* (iPhone and iPad). `beforeinstallprompt` **does not exist** in WebKit and there
+ *    is no API that opens the install dialog: it is not that we do not use it, it is that there
+ *    is none. There the button can install nothing, and the only honest thing it can do is say
+ *    where the system option is. That is why this branch shows text instead of calling anything.
  *
- * En cualquier otro caso el botón no se pinta. Sin evento y sin iOS no hay nada que ofrecer, y un
- * botón que al pulsarlo explica que no puede hacer su trabajo es peor que ningún botón.
+ * In any other case the button is not painted. With no event and no iOS there is nothing to offer,
+ * and a button that on press explains it cannot do its job is worse than no button.
  *
- * El evento guardado vive en el scope de este módulo, no en el componente de Alpine, y esa es la
- * razón de que el módulo exista aparte de la plantilla: el panel navega como SPA y sustituye el
- * `<body>` entero, así que el componente se reconstruye en cada pantalla mientras que el evento
- * —que llega una sola vez, normalmente al abrir— tiene que sobrevivir a esas navegaciones. Es el
- * mismo motivo por el que la clave maestra vive en el scope de `auth/keyring.js` (ADR 0003).
+ * The stored event lives in the scope of this module, not in the Alpine component, and that is the
+ * reason the module exists apart from the template: the panel navigates as an SPA and replaces the
+ * whole `<body>`, so the component is rebuilt on every screen while the event —which arrives once,
+ * usually on opening— has to survive those navigations. It is the same reason the master key lives
+ * in the scope of `auth/keyring.js` (ADR 0003).
  */
 
 /**
- * El `BeforeInstallPromptEvent` que el navegador nos cedió, o `null` si no ha llegado o ya se gastó.
+ * The `BeforeInstallPromptEvent` the browser handed us, or `null` if it has not arrived or is spent.
  *
  * @type {{prompt: () => Promise<unknown>}|null}
  */
 let deferredPrompt = null;
 
 /**
- * Evento propio con el que se avisa al botón ya pintado de que la disponibilidad de la instalación
- * ha cambiado (llegó la oferta del navegador, o la aplicación acaba de instalarse).
+ * Our own event, used to tell an already painted button that install availability has changed (the
+ * browser offer arrived, or the application has just been installed).
  */
 const AVAILABILITY_EVENT = 'phr:install-availability';
 
 /**
- * ¿Se está ejecutando ya como aplicación instalada?
+ * Is it already running as an installed application?
  *
- * Dos comprobaciones porque son dos mundos: `display-mode: standalone` es el estándar que responde
- * Chromium, y `navigator.standalone` es la propiedad no estándar de WebKit, la única señal en iOS.
- * Si alguna dice que sí, no hay nada que instalar y el botón sobra.
+ * Two checks because they are two worlds: `display-mode: standalone` is the standard Chromium
+ * answers, and `navigator.standalone` is the non-standard WebKit property, the only signal on iOS.
+ * If either says yes, there is nothing to install and the button is pointless.
  *
  * @param {Window} win
  * @returns {boolean}
@@ -70,12 +70,12 @@ export function isInstalled(win) {
 }
 
 /**
- * ¿Es un iPhone o un iPad?
+ * Is it an iPhone or an iPad?
  *
- * El iPad con iPadOS miente en el `userAgent` y se presenta como un Mac de escritorio, así que la
- * cadena no basta: se le suma que un Mac de verdad no tiene pantalla táctil, de ahí el
- * `maxTouchPoints`. No se distingue el navegador porque en iOS **todos** son WebKit por obligación
- * de plataforma: Chrome y Firefox de iPhone tienen exactamente la misma limitación que Safari.
+ * The iPad on iPadOS lies in its `userAgent` and presents itself as a desktop Mac, so the string
+ * is not enough: we add that a real Mac has no touch screen, hence the `maxTouchPoints`. The
+ * browser is not told apart because on iOS **all** of them are WebKit by platform rule: iPhone
+ * Chrome and Firefox have exactly the same limitation as Safari.
  *
  * @param {Window} win
  * @returns {boolean}
@@ -97,11 +97,11 @@ export function isIos(win) {
 }
 
 /**
- * Qué puede ofrecer el botón ahora mismo.
+ * What the button can offer right now.
  *
- * Función pura y separada de todo lo demás para poder probar las cuatro situaciones sin navegador.
- * El orden importa: «ya instalada» gana siempre, porque en iOS instalada se sigue detectando iOS.
- *
+ * A pure function, kept apart from everything else so the four situations can be tested without a
+ * browser. The order matters: "already installed" always wins, because on iOS an installed app is
+ * still detected as iOS.
  * @param {{installed: boolean, ios: boolean, hasPrompt: boolean}} signals
  * @returns {'hidden'|'prompt'|'ios'}
  */
@@ -118,25 +118,25 @@ export function installMode({ installed, ios, hasPrompt }) {
 }
 
 /**
- * Empieza a escuchar al navegador. Se llama una vez desde `app.js`, al evaluar el módulo.
+ * Starts listening to the browser. Called once from `app.js`, when the module is evaluated.
  *
- * Tiene que engancharse lo antes posible: `beforeinstallprompt` se dispara sin avisar y no se
- * repite, así que un oyente puesto cuando Alpine monta el botón llegaría tarde en la primera carga.
+ * It has to hook in as early as possible: `beforeinstallprompt` fires without warning and does not
+ * repeat, so a listener added when Alpine mounts the button would arrive late on the first load.
  *
  * @param {Window} win
  * @returns {void}
  */
 export function captureInstallPrompt(win) {
     win.addEventListener('beforeinstallprompt', (event) => {
-        /** Sin esto el navegador saca su propio aviso y habría dos ofertas de instalación a la vez. */
+        /** Without this the browser raises its own notice and there would be two install offers at once. */
         event.preventDefault();
         deferredPrompt = event;
         win.dispatchEvent(new CustomEvent(AVAILABILITY_EVENT));
     });
 
     /**
-     * Instalada desde el propio botón o desde el menú del navegador: el evento guardado ya no sirve
-     * y el botón tiene que irse sin esperar a que se recargue la página.
+     * Installed from the button itself or from the browser menu: the stored event is no longer any
+     * good and the button has to go without waiting for the page to reload.
      */
     win.addEventListener('appinstalled', () => {
         deferredPrompt = null;
@@ -145,7 +145,7 @@ export function captureInstallPrompt(win) {
 }
 
 /**
- * Componente Alpine del botón (`x-data="phrInstallButton"`).
+ * Alpine component of the button (`x-data="phrInstallButton"`).
  *
  * @param {Window} [win]
  * @returns {object}
@@ -156,33 +156,33 @@ export function installButton(win = window) {
         mode: 'hidden',
 
         /**
-         * Indicación de iOS, visible solo tras pulsar: es una respuesta, no un aviso permanente.
+         * iOS hint, visible only after pressing: it is an answer, not a permanent notice.
          *
-         * El texto no se construye aquí, lo escribe la plantilla con `__()`: es una frase fija, sin
-         * datos, y pintarla en Blade la deja en el mismo sitio que el resto del texto del panel en
-         * lugar de repartir la traducción entre `lang/` y los catálogos del cliente.
+         * The text is not built here, the template writes it with `__()`: it is a fixed sentence,
+         * with no data, and painting it in Blade keeps it in the same place as the rest of the
+         * panel text instead of splitting the translation between `lang/` and the client catalogs.
          */
         hintVisible: false,
 
-        /** Oyente vivo en `window`, guardado para poder retirarlo al destruir el componente. */
+        /** Live listener on `window`, stored so it can be removed when the component is destroyed. */
         onAvailability: null,
 
         init() {
             this.refresh();
 
             /**
-             * El evento puede llegar después de montar el botón —lo normal en una recarga— y también
-             * antes, si se navegó a otra pantalla. Se cubren los dos: aquí la llegada tardía, y en
-             * `refresh()` la que ya estaba guardada al montar.
+             * The event may arrive after the button mounts —the normal case on a reload— and also
+             * before, if the person navigated to another screen. Both are covered: the late arrival
+             * here, and in `refresh()` the one already stored at mount time.
              */
             this.onAvailability = () => this.refresh();
             win.addEventListener(AVAILABILITY_EVENT, this.onAvailability);
         },
 
         /**
-         * El oyente está en `window`, que sobrevive a la navegación SPA, mientras que el componente
-         * se reconstruye en cada pantalla: sin retirarlo se acumularía un oyente por pantalla
-         * visitada, todos apuntando a componentes ya desmontados.
+         * The listener is on `window`, which survives SPA navigation, while the component is
+         * rebuilt on every screen: without removing it, one listener per visited screen would pile
+         * up, all pointing at components already unmounted.
          */
         destroy() {
             win.removeEventListener(AVAILABILITY_EVENT, this.onAvailability);
@@ -203,7 +203,7 @@ export function installButton(win = window) {
 
         async install() {
             if (this.mode === 'ios') {
-                /** En iOS no hay diálogo que abrir: solo se puede señalar dónde está la opción. */
+                /** On iOS there is no dialog to open: all we can do is point at where the option is. */
                 this.hintVisible = !this.hintVisible;
 
                 return;
@@ -218,9 +218,9 @@ export function installButton(win = window) {
             }
 
             /**
-             * Se descarta **antes** de esperar la respuesta: el evento ya está gastado en cuanto se
-             * llama a `prompt()`, y dejarlo mientras el diálogo está abierto permitiría un segundo
-             * clic que fallaría con una excepción del navegador.
+             * It is dropped **before** awaiting the answer: the event is already spent as soon as
+             * `prompt()` is called, and keeping it while the dialog is open would allow a second
+             * click that would fail with a browser exception.
              */
             deferredPrompt = null;
             this.mode = 'hidden';
@@ -229,8 +229,8 @@ export function installButton(win = window) {
                 await event.prompt();
             } catch {
                 /**
-                 * Rechazar el diálogo, o pulsar dos veces demasiado rápido, lanza. No hay nada que
-                 * contar: la persona acaba de ver el diálogo y sabe mejor que nosotros qué eligió.
+                 * Dismissing the dialog, or clicking twice too fast, throws. There is nothing to
+                 * report: the person has just seen the dialog and knows better than us what they chose.
                  */
             }
         },

@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace App\Security\Opaque;
 
 /**
- * Error de parseo, Base64url, longitud o estructura en un mensaje del
- * protocolo (`docs/OPAQUE.md` §18).
+ * Parsing, Base64url, length or structure error in a protocol message
+ * (`docs/OPAQUE.md` §18).
  *
- * No es `final`: {@see InvalidPointException} deriva de ella.
+ * Not `final`: {@see InvalidPointException} extends it.
  */
 class InvalidMessageException extends OpaqueException {}

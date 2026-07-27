@@ -23,7 +23,7 @@ is encrypted in the browser with a key derived from the user's password that nev
 not the password, not the keys, not the plaintext data. Authentication uses OPAQUE (RFC 9807), which
 authenticates without sending the password. See [OPAQUE.md](OPAQUE.md).
 
-Sharing with professionals is **not implemented yet**, but it is already designed in
+Sharing with professionals is designed and implemented in
 [ADR 0011](adr/0011-shared-clipping-for-professionals.md): a clipping encrypted in the browser, a link
 with the key in the fragment, and a short PIN the server verifies online with an attempt counter. Who you
 share with and what you share are cryptographic decisions, not permissions in a table, because the server

@@ -8,11 +8,11 @@ use App\Security\Opaque\InvalidConfigurationException;
 use App\Security\Opaque\RandomSource;
 
 /**
- * Fuente de aleatoriedad determinista para tests (`docs/OPAQUE.md` §20.3).
+ * Deterministic source of randomness for tests (`docs/OPAQUE.md` §20.3).
  *
- * Devuelve, en orden, los bloques que se le han precargado, comprobando que
- * cada llamada pide exactamente la longitud del bloque siguiente. Así un test
- * falla en cuanto el orden o el tamaño de los `random()` del protocolo cambia.
+ * It returns, in order, the blocks preloaded into it, checking that every call
+ * asks for exactly the length of the next block. That way a test fails as soon
+ * as the order or the size of the protocol's `random()` calls changes.
  */
 final class QueuedRandomSource implements RandomSource
 {
@@ -20,7 +20,7 @@ final class QueuedRandomSource implements RandomSource
     private array $queue;
 
     /**
-     * @param  list<string>  $queue  Bloques binarios en el orden en que se consumirán.
+     * @param  list<string>  $queue  Binary blocks in the order they will be consumed.
      */
     public function __construct(array $queue)
     {

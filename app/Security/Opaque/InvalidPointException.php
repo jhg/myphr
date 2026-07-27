@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace App\Security\Opaque;
 
 /**
- * Un elemento de grupo o un escalar ristretto255 ha sido rechazado
+ * A ristretto255 group element or scalar was rejected
  * (RFC 9807 §10.7, `docs/OPAQUE.md` §7.1).
  *
- * Subtipo de {@see InvalidMessageException} según la jerarquía de
+ * A subtype of {@see InvalidMessageException} per the hierarchy in
  * `docs/OPAQUE.md` §18.
  */
 final class InvalidPointException extends InvalidMessageException {}

@@ -7,14 +7,14 @@ namespace App\Sharing;
 use Illuminate\Support\Str;
 
 /**
- * Identificador generado en el cliente para un recorte o un enlace (ADR 0011).
+ * Identifier generated on the client for a clipping or a link (ADR 0011).
  *
- * Tiene que ser UUID**v4** y se comprueba la versión, no solo la forma. No es quisquillosidad: el
- * ADR descarta el v7 para estos identificadores porque lleva el instante de creación en claro dentro
- * de sí mismo, y estos acaban en la URL que la persona enseña y en la foto del QR que el profesional
- * guarda en su carrete. Si el servidor solo comprobase «parece un UUID», bastaría un cliente
- * descuidado —o una versión futura de `HasUuids`, que en Laravel 12 ya genera v7 por defecto— para
- * reintroducir esa fuga sin que nada fallase.
+ * It has to be a UUID**v4** and the version is checked, not just the shape. This is not fussiness:
+ * the ADR rules out v7 for these identifiers because it carries the creation instant in the clear
+ * inside itself, and these end up in the URL the person shows and in the photo of the QR code the
+ * professional keeps in their camera roll. If the server only checked "looks like a UUID", a
+ * careless client —or a future version of `HasUuids`, which in Laravel 12 already generates v7 by
+ * default— would be enough to reintroduce that leak with nothing failing.
  */
 final class ClientUuid
 {
@@ -22,7 +22,7 @@ final class ClientUuid
 
     public static function isValid(mixed $value): bool
     {
-        /** Posición 14 de la forma canónica `8-4-4-4-12`: el dígito de versión. */
+        /** Position 14 of the canonical `8-4-4-4-12` form: the version digit. */
         return is_string($value) && Str::isUuid($value) && $value[14] === '4';
     }
 }

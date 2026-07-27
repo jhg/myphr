@@ -9,23 +9,23 @@ use App\Security\Opaque\RandomSource;
 use Illuminate\Contracts\Session\Session;
 
 /**
- * Secreto de sesión del ADR 0003 (Spec 0001 §3.5, §4.4, §4.5, §4.6).
+ * Session secret from ADR 0003 (Spec 0001 §3.5, §4.4, §4.5, §4.6).
  *
- * Vive **dentro de la carga útil de la sesión de Laravel**, sin tabla ni columna: lo protege el
- * mismo almacén de servidor que protege el resto de la sesión, y destruir la sesión lo destruye.
- * Lo que se pierde a cambio es poder revocar la sesión criptográfica de alguien sin deserializar su
- * carga útil; es una pérdida aceptada de forma explícita en §3.5.
+ * It lives **inside the Laravel session payload**, with no table and no column: the same server-side
+ * store that protects the rest of the session protects it, and destroying the session destroys it.
+ * What we give up is being able to revoke someone's cryptographic session without deserializing
+ * their payload; that loss is explicitly accepted in §3.5.
  *
- * Se acuña **después** de `session()->regenerate()` (Spec 0001 §5, paso 14): acuñarlo antes lo ata
- * al identificador de sesión anterior y se pierde en la regeneración, sin ningún síntoma hasta el
- * primer F5 de esa persona.
+ * It is minted **after** `session()->regenerate()` (Spec 0001 §5, step 14): minting it earlier ties
+ * it to the previous session identifier and it is lost on regeneration, with no symptom until that
+ * person's first page refresh.
  *
- * El valor se entrega en base64url para que viaje por JSON tal cual; el navegador deriva de él la
- * clave con la que abre el paquete de `sessionStorage`.
+ * The value is handed over as base64url so it travels over JSON as is; the browser derives from it
+ * the key that opens the `sessionStorage` bundle.
  */
 final readonly class SessionSecrets
 {
-    /** Clave dentro de la carga útil de la sesión. */
+    /** Key inside the session payload. */
     public const string SESSION_KEY = 'phr.session_secret';
 
     /** Longitud del secreto, en bytes. */
@@ -34,9 +34,9 @@ final readonly class SessionSecrets
     public function __construct(private RandomSource $random) {}
 
     /**
-     * Acuña un secreto nuevo y lo guarda en la sesión, sustituyendo cualquier anterior.
+     * Mints a fresh secret and stores it in the session, replacing any previous one.
      *
-     * @return string Secreto en base64url sin padding, 43 caracteres.
+     * @return string Secret as base64url without padding, 43 characters.
      */
     public function mint(Session $session): string
     {
@@ -48,10 +48,10 @@ final readonly class SessionSecrets
     }
 
     /**
-     * Devuelve el secreto vigente de la sesión, o `null` si no hay ninguno.
+     * Returns the session's current secret, or `null` if there is none.
      *
-     * `null` es el caso normal tras un bloqueo o un cierre de sesión, no un error: la interfaz
-     * degrada a pedir autenticación (Spec 0001 §6.2).
+     * `null` is the normal case after a lock or a logout, not an error: the interface degrades to
+     * asking for authentication (Spec 0001 §6.2).
      */
     public function current(Session $session): ?string
     {
@@ -61,9 +61,9 @@ final readonly class SessionSecrets
     }
 
     /**
-     * Destruye el secreto. El bloqueo y el cierre de sesión destruyen además la sesión entera
-     * (Spec 0001 §8), lo que lo destruiría igualmente; esto lo hace explícito y no dependiente
-     * de ese efecto lateral.
+     * Destroys the secret. Locking and logging out destroy the whole session as well
+     * (Spec 0001 §8), which would destroy it anyway; this makes it explicit instead of relying on
+     * that side effect.
      */
     public function destroy(Session $session): void
     {

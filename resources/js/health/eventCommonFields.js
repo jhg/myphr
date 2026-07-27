@@ -1,55 +1,55 @@
 /**
- * Campos comunes a todo evento clínico (ADR 0006, párrafo «Campos que se capturan aunque hoy no se
- * usen»): si el dato es manual o de un aparato, el aparato si lo hay, si lo registra la propia
- * persona o alguien que la cuida, y una nota libre opcional.
+ * Fields common to every clinical event (ADR 0006, paragraph "Fields captured even if unused
+ * today"): whether the datum is manual or from a device, the device if there is one, whether the
+ * person themselves or a carer records it, and an optional free note.
  *
- * **Van en el nivel superior del contenido descifrado**, junto a `v`, `type` y `tz`, nunca dentro de
- * `data`: no son propios de la glucemia, los va a reutilizar cualquier pantalla de evento (tensión,
- * comidas, insulina), así que esta función vive fuera de `glucosePage.js`.
+ * **They go at the top level of the decrypted content**, next to `v`, `type` and `tz`, never
+ * inside `data`: they are not specific to glucose, every event screen will reuse them (blood
+ * pressure, meals, insulin), so this function lives outside `glucosePage.js`.
  *
- * `origin` (token de `App\Catalog\DataOrigin`) distingue **cómo entró el dato en la aplicación**:
- * tecleado por una persona (`manual`) frente a importado automáticamente desde un aparato
- * (`device`). NO es cómo se midió la glucosa — eso es el campo `device` de más abajo, con qué
- * aparato se hizo la lectura. Esta confusión ya ocurrió una vez en este proyecto (se preguntaba
- * "origen del dato" con un selector manual/aparato en el formulario, cuando la inserción siempre es
- * manual: la persona lee el valor en su glucómetro o sensor y lo teclea), así que queda anotado
- * aquí para que no se repita. Por eso `buildCommonEventFields()` fija `origin` a `manual` sin
- * preguntarlo — hoy no existe ninguna integración ni sincronización automática con ningún aparato.
- * El día que exista una importación, será ella quien construya el evento con `origin: 'device'`,
- * no un `<select>` en un formulario de entrada manual.
+ * `origin` (token of `App\Catalog\DataOrigin`) tells apart **how the datum entered the
+ * application**: typed by a person (`manual`) versus imported automatically from a device
+ * (`device`). It is NOT how the glucose was measured — that is the `device` field below, which
+ * device the reading was taken with. This confusion already happened once in this project (the
+ * form asked for "data origin" with a manual/device selector, when the insertion is always manual:
+ * the person reads the value on their meter or sensor and types it in), so it is written down here
+ * so it does not happen again. That is why `buildCommonEventFields()` fixes `origin` to `manual`
+ * without asking — today there is no integration and no automatic sync with any device. The day an
+ * import exists, it will be the one building the event with `origin: 'device'`, not a `<select>`
+ * in a manual entry form.
  *
- * `origin` y `recordedBy` sí traen un valor por defecto razonable (`manual` y `self`, tokens de
- * `App\Catalog\DataOrigin` y `App\Catalog\RecordedBy`): no son afirmaciones clínicas, son hechos
- * sobre cómo entró el dato. `device` y `note` son texto libre y se omiten del contenido cuando están
- * vacíos, con el mismo criterio que el contexto de comida de `buildGlucoseContent`: ausencia tiene
- * que significar ausencia, nunca una cadena vacía guardada como si fuera un dato.
+ * `origin` and `recordedBy` do carry a sensible default (`manual` and `self`, tokens of
+ * `App\Catalog\DataOrigin` and `App\Catalog\RecordedBy`): they are not clinical claims, they are
+ * facts about how the datum entered. `device` and `note` are free text and are left out of the
+ * content when empty, with the same criterion as the meal context of `buildGlucoseContent`:
+ * absence has to mean absence, never an empty string stored as if it were data.
  */
 
-/** Token de `App\Catalog\DataOrigin` que usa esta función cuando no se indica `origin`. */
+/** `App\Catalog\DataOrigin` token this function uses when no `origin` is given. */
 export const DEFAULT_ORIGIN = 'manual';
 
-/** Token de `App\Catalog\RecordedBy` que usa esta función cuando no se indica `recordedBy`. */
+/** `App\Catalog\RecordedBy` token this function uses when no `recordedBy` is given. */
 export const DEFAULT_RECORDED_BY = 'self';
 
 /**
  * @param {unknown} value
- * @returns {string} `value` recortado, o cadena vacía si no era una cadena con contenido.
+ * @returns {string} `value` trimmed, or an empty string if it was not a string with content.
  */
 function trimmedOrEmpty(value) {
     return typeof value === 'string' ? value.trim() : '';
 }
 
 /**
- * Construye los campos comunes a todo evento, listos para desplegar en el nivel superior del
- * contenido en claro (`{v, type, tz, ...commonFields, data}`).
+ * Builds the fields common to every event, ready to spread at the top level of the content in the
+ * clear (`{v, type, tz, ...commonFields, data}`).
  *
  * @param {object} [params]
- * @param {string} [params.origin] Token de `DataOrigin`: cómo entró el dato (tecleado o importado),
- *     no con qué se midió. Por defecto `DEFAULT_ORIGIN`; ningún formulario de captura manual debe
- *     preguntarlo, solo lo fijará la futura importación automática con `device`.
- * @param {string} [params.device] Aparato en texto libre. Se omite si está vacío.
- * @param {string} [params.recordedBy] Token de `RecordedBy`. Por defecto `DEFAULT_RECORDED_BY`.
- * @param {string} [params.note] Nota libre. Se omite si está vacía.
+ * @param {string} [params.origin] `DataOrigin` token: how the datum entered (typed or imported),
+ *     not what it was measured with. `DEFAULT_ORIGIN` by default; no manual capture form should
+ *     ask for it, only the future automatic import will set it to `device`.
+ * @param {string} [params.device] Device as free text. Left out when empty.
+ * @param {string} [params.recordedBy] `RecordedBy` token. `DEFAULT_RECORDED_BY` by default.
+ * @param {string} [params.note] Free note. Left out when empty.
  * @returns {{origin: string, recordedBy: string, device?: string, note?: string}}
  */
 export function buildCommonEventFields({ origin, device, recordedBy, note } = {}) {

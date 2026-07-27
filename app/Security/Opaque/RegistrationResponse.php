@@ -5,31 +5,31 @@ declare(strict_types=1);
 namespace App\Security\Opaque;
 
 /**
- * `RegistrationResponse` de RFC 9807 §5.1 (`docs/OPAQUE.md` §6.1, §10.2).
+ * `RegistrationResponse` from RFC 9807 §5.1 (`docs/OPAQUE.md` §6.1, §10.2).
  *
  * ```
  * RegistrationResponse (64 bytes)
- *   [0..31]   evaluated_message[Noe=32]   elemento OPRF evaluado
- *   [32..63]  server_public_key[Npk=32]   clave pública estática AKE del servidor
+ *   [0..31]   evaluated_message[Noe=32]   evaluated OPRF element
+ *   [32..63]  server_public_key[Npk=32]   server static AKE public key
  * ```
  *
- * Lo produce el servidor en `CreateRegistrationResponse` y viaja al cliente
- * en base64url sin padding (86 caracteres, §5).
+ * The server produces it in `CreateRegistrationResponse` and it travels to the
+ * client as base64url without padding (86 characters, §5).
  *
- * Ambos campos son elementos ristretto255 y se validan al construir el objeto
- * (longitud, codificación canónica, pertenencia al grupo y rechazo de la
- * identidad, RFC 9807 §10.7).
+ * Both fields are ristretto255 elements and are validated when the object is
+ * built (length, canonical encoding, group membership and rejection of the
+ * identity, RFC 9807 §10.7).
  */
 final class RegistrationResponse
 {
     /**
-     * @param  string  $evaluatedMessage  Elemento OPRF evaluado, `Noe` = 32 bytes.
-     * @param  string  $serverPublicKey  Clave pública estática del servidor, `Npk` = 32 bytes.
+     * @param  string  $evaluatedMessage  Evaluated OPRF element, `Noe` = 32 bytes.
+     * @param  string  $serverPublicKey  Server static public key, `Npk` = 32 bytes.
      *
-     * @throws InvalidMessageException Si alguna longitud no es 32.
-     * @throws InvalidPointException Si alguno de los dos no es un punto
-     *                               ristretto255 válido, canónico y distinto
-     *                               de la identidad.
+     * @throws InvalidMessageException If either length is not 32.
+     * @throws InvalidPointException If either one is not a valid, canonical
+     *                               ristretto255 point other than the
+     *                               identity.
      */
     public function __construct(
         public readonly string $evaluatedMessage,
@@ -51,12 +51,12 @@ final class RegistrationResponse
     }
 
     /**
-     * Deserializa los 64 bytes del mensaje por offsets exactos (§6.1).
+     * Deserializes the 64 bytes of the message by exact offsets (§6.1).
      *
-     * @param  string  $binary  Mensaje binario de exactamente 64 bytes.
+     * @param  string  $binary  Binary message of exactly 64 bytes.
      *
-     * @throws InvalidMessageException Si la longitud no es 64.
-     * @throws InvalidPointException Si alguno de los dos elementos no valida.
+     * @throws InvalidMessageException If the length is not 64.
+     * @throws InvalidPointException If either element does not validate.
      */
     public static function parse(string $binary): self
     {
@@ -78,14 +78,14 @@ final class RegistrationResponse
     }
 
     /**
-     * Decodifica el mensaje tal y como viaja por HTTP: base64url estricto y
-     * canónico, sin padding, de 86 caracteres (§5).
+     * Decodes the message exactly as it travels over HTTP: strict, canonical
+     * base64url, no padding, 86 characters (§5).
      *
-     * @param  string  $encoded  Cadena base64url.
+     * @param  string  $encoded  base64url string.
      *
-     * @throws InvalidMessageException Si la codificación no es canónica o la
-     *                                 longitud binaria no es 64.
-     * @throws InvalidPointException Si alguno de los dos elementos no valida.
+     * @throws InvalidMessageException If the encoding is not canonical or the
+     *                                 binary length is not 64.
+     * @throws InvalidPointException If either element does not validate.
      */
     public static function fromBase64Url(string $encoded): self
     {
@@ -97,7 +97,7 @@ final class RegistrationResponse
     }
 
     /**
-     * @return string Mensaje binario de 64 bytes, `evaluated_message || server_public_key` (§6.1).
+     * @return string Binary message of 64 bytes, `evaluated_message || server_public_key` (§6.1).
      */
     public function serialize(): string
     {
@@ -105,7 +105,7 @@ final class RegistrationResponse
     }
 
     /**
-     * @return string Mensaje en base64url sin padding, 86 caracteres (§5).
+     * @return string Message as base64url without padding, 86 characters (§5).
      */
     public function toBase64Url(): string
     {

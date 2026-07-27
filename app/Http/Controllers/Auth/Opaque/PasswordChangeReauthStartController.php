@@ -17,30 +17,30 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
 
 /**
- * `POST /phr/auth/password/reauth/start`: fase A del cambio de contraseña, paso 4.
+ * `POST /phr/auth/password/reauth/start`: phase A of the password change, step 4.
  *
- * Empieza un login OPAQUE **completo** contra el registro almacenado. No es una formalidad: tener la
- * sesión abierta no basta (un puesto desatendido o una cookie robada cambiarían la contraseña de
- * otra persona), y sobre todo este login es la **única** forma de obtener el `exportKey` anterior,
- * sin el cual no hay KEK vieja y el sobre de la clave maestra no se puede abrir. Verificar y abrir
- * son aquí el mismo paso, no dos.
+ * It starts a **full** OPAQUE login against the stored registration. This is not a formality: having
+ * the session open is not enough (an unattended machine or a stolen cookie would change somebody
+ * else's password), and above all this login is the **only** way to obtain the previous
+ * `exportKey`, without which there is no old KEK and the master key envelope cannot be opened.
+ * Verifying and opening are the same step here, not two.
  *
- * El usuario sale de la **sesión**, nunca de un campo `login` del cuerpo: aceptarlo del cuerpo
- * convertiría esta ruta autenticada en un oráculo de login arbitrario y reintroduciría la
- * enumeración que `docs/OPAQUE.md` §13 cierra.
+ * The user comes from the **session**, never from a `login` field in the body: accepting it from the
+ * body would turn this authenticated route into an arbitrary login oracle and would reintroduce the
+ * enumeration `docs/OPAQUE.md` §13 closes.
  *
- * No hay rama falsa, al contrario que en `login/start`: quien llega aquí ya está autenticado, así
- * que no queda nada que enumerar y una rama falsa solo serviría para hacerle gastar un Argon2id de
- * doce segundos que jamás podría cuadrar. Una cuenta sin registro OPAQUE utilizable recibe un 409
- * explícito.
+ * There is no fake branch, unlike in `login/start`: whoever gets here is already authenticated, so
+ * there is nothing left to enumerate and a fake branch would only make them spend twelve seconds of
+ * Argon2id that could never match. An account with no usable OPAQUE registration gets an explicit
+ * 409.
  *
- * El `credential_identifier` es el **almacenado**, jamás uno nuevo (`docs/OPAQUE.md` §13.1):
- * regenerarlo cambiaría la clave OPRF del usuario y quien reenviara el mismo punto cegado antes y
- * después detectaría el cambio de contraseña (RFC 9807 §10.9).
+ * The `credential_identifier` is the **stored** one, never a new one (`docs/OPAQUE.md` §13.1):
+ * regenerating it would change the user's OPRF key and anyone replaying the same blinded point
+ * before and after would detect the password change (RFC 9807 §10.9).
  */
 final readonly class PasswordChangeReauthStartController
 {
-    /** TTL del handshake, en segundos: cubre el Argon2id del cliente, igual que en el login. */
+    /** Handshake TTL, in seconds: it covers the client's Argon2id, same as at login. */
     public const int HANDSHAKE_TTL_SECONDS = 180;
 
     public function __construct(
@@ -105,12 +105,12 @@ final readonly class PasswordChangeReauthStartController
     }
 
     /**
-     * Registro OPAQUE con el que se puede reautenticar hoy, o `null` si la cuenta no está en
-     * condiciones de cambiar la contraseña.
+     * OPAQUE registration that can be used to reauthenticate today, or `null` if the account is in
+     * no shape to change its password.
      *
-     * Exige las tres columnas OPAQUE, el perfil vigente y un sobre de clave maestra sin retirar: sin
-     * ese sobre no hay nada que reenvolver, y descubrirlo después del Argon2id sería gastar doce
-     * segundos de la persona para nada.
+     * It requires the three OPAQUE columns, the current profile and a master key envelope that is
+     * not retired: without that envelope there is nothing to rewrap, and finding out after the
+     * Argon2id would mean spending twelve seconds of the person's time for nothing.
      */
     private function usableRecord(User $user): ?RegistrationRecord
     {
@@ -129,8 +129,8 @@ final readonly class PasswordChangeReauthStartController
     }
 
     /**
-     * La cuenta no puede cambiar su contraseña por este camino. Se distingue del error de
-     * credenciales a propósito: la persona ya está autenticada y no hay nada que ocultarle.
+     * The account cannot change its password this way. It is deliberately told apart from the
+     * credentials error: the person is already authenticated and there is nothing to hide from them.
      */
     private function unavailable(): JsonResponse
     {

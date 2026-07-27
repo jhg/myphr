@@ -12,13 +12,14 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * Spec 0001 §3.2 / OPAQUE.md §14.2: registro OPAQUE pendiente entre `registration/start` y
- * `registration/finish`, consumido de forma atómica dentro de la transacción de `finish`.
+ * Spec 0001 §3.2 / OPAQUE.md §14.2: pending OPAQUE registration between `registration/start` and
+ * `registration/finish`, consumed atomically inside the `finish` transaction.
  *
- * `credential_identifier` son 32 bytes crudos: nunca se trata como texto ni pasa por funciones `mb_*`.
+ * `credential_identifier` is 32 raw bytes: it is never treated as text and never goes through `mb_*`
+ * functions.
  *
- * `purpose` separa el alta del cambio de contraseña: `invitation_ref` es nulo en el segundo, que no
- * nace de ningún enlace, y `registration/finish` solo acepta pendientes de alta.
+ * `purpose` separates signup from password change: `invitation_ref` is null in the latter, which
+ * comes from no link, and `registration/finish` only accepts signup pending rows.
  */
 #[Fillable(['user_id', 'invitation_ref', 'credential_identifier', 'profile', 'purpose', 'expires_at'])]
 #[Hidden(['credential_identifier'])]
@@ -26,7 +27,7 @@ final class OpaqueRegistration extends Model
 {
     use HasUuids;
 
-    /** Spec 0001 §3.2: la tabla solo tiene `created_at`. */
+    /** Spec 0001 §3.2: the table only has `created_at`. */
     public const UPDATED_AT = null;
 
     /**
@@ -49,7 +50,7 @@ final class OpaqueRegistration extends Model
     }
 
     /**
-     * Spec 0001 §3.2: enlace de registro que originó el pendiente.
+     * Spec 0001 §3.2: registration link the pending row came from.
      *
      * @return BelongsTo<UserRegistrationLink, $this>
      */

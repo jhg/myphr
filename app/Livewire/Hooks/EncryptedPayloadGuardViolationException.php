@@ -8,11 +8,10 @@ use App\Crypto\EnvelopeValidator;
 use RuntimeException;
 
 /**
- * Aborto del guardarraíl de servidor (Spec 0001 §9; ADR 0002).
+ * Abort from the server-side guardrail (Spec 0001 §9; ADR 0002).
  *
- * El mensaje lleva la ruta de la propiedad ofensora, nunca su valor: registrar el dato en claro en
- * un log o en el mensaje de una excepción sería reproducir el mismo fallo que el guardarraíl existe
- * para evitar.
+ * The message carries the path of the offending property, never its value: writing plaintext into a
+ * log or into an exception message would reproduce the very failure the guardrail exists to prevent.
  */
 final class EncryptedPayloadGuardViolationException extends RuntimeException
 {

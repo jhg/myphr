@@ -10,24 +10,24 @@ use Filament\Pages\SimplePage;
 use Illuminate\Contracts\Support\Htmlable;
 
 /**
- * Pantalla de login del panel `phr` (Spec 0001 §6.1 y §10; ADR 0001 y 0002).
+ * Login screen of the `phr` panel (Spec 0001 §6.1 and §10; ADR 0001 and 0002).
  *
- * Sustituye a `Filament\Auth\Pages\Login` a través de `->login(self::class)`. Hereda de
- * `SimplePage` **solo por el envoltorio visual**: el formulario no es un schema de Filament y no
- * lleva `wire:model` en ningún sitio.
+ * It replaces `Filament\Auth\Pages\Login` through `->login(self::class)`. It extends `SimplePage`
+ * **only for the visual wrapper**: the form is not a Filament schema and carries no `wire:model`
+ * anywhere.
  *
- * La contraseña vive en un `<input type="password">` de HTML plano gobernado por Alpine. Alpine
- * intercepta el `submit`, lee el valor del nodo del DOM, lo vacía y lo pasa al cliente OPAQUE, que
- * habla por `fetch` con `/phr/auth/opaque/login/{start,finish}`. Así la contraseña nunca entra en
- * el estado de un componente Livewire, no viaja en un `snapshot` ni queda en la instantánea de DOM
- * que Livewire retiene (ADR 0002, ADR 0003).
+ * The password lives in a plain HTML `<input type="password">` driven by Alpine. Alpine intercepts
+ * the `submit`, reads the value from the DOM node, clears it and hands it to the OPAQUE client,
+ * which talks to `/phr/auth/opaque/login/{start,finish}` over `fetch`. That way the password never
+ * enters the state of a Livewire component, does not travel in a `snapshot` and does not stay in the
+ * DOM snapshot Livewire keeps (ADR 0002, ADR 0003).
  *
- * Consecuencia de ese diseño: esta clase **no tiene `authenticate()`**. La sesión la crea
- * `LoginFinishController` y la navegación al panel la hace el propio JavaScript con el `redirect`
- * que devuelve ese endpoint, así que no hay que tocar el `LoginResponse` de Filament.
+ * A consequence of that design: this class **has no `authenticate()`**. The session is created by
+ * `LoginFinishController` and the navigation to the panel is done by the JavaScript itself with the
+ * `redirect` that endpoint returns, so there is no need to touch Filament's `LoginResponse`.
  *
- * Las seis propiedades `#[Url]` se redeclaran por el motivo de {@see PhrPage},
- * que esta clase no puede heredar por venir de `SimplePage`.
+ * The six `#[Url]` properties are redeclared for the reason given in {@see PhrPage}, which this
+ * class cannot inherit because it comes from `SimplePage`.
  */
 final class Login extends SimplePage
 {
@@ -52,10 +52,10 @@ final class Login extends SimplePage
     public $defaultTableActionArguments = null;
 
     /**
-     * Quien ya tiene sesión no vuelve a ver el formulario.
+     * Anyone who already has a session does not see the form again.
      *
-     * `intended()` conserva el destino que `redirect()->guest()` dejó guardado, igual que hace
-     * `login/finish` con `url.intended` (§4.4).
+     * `intended()` keeps the destination `redirect()->guest()` stored, the same as `login/finish`
+     * does with `url.intended` (§4.4).
      */
     public function mount(): void
     {

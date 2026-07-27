@@ -8,17 +8,17 @@ use App\Support\SupportedLocale;
 use ValueError;
 
 /**
- * Brazo en el que se tomó una lectura de tensión arterial.
+ * Arm a blood pressure reading was taken on.
  *
- * El ADR 0008 (docs/adr/0008-measurement-method.md) explica que en la tensión arterial «el método
- * lo forman el brazo y la postura»: los dos cambian el valor de forma conocida y solo se saben en
- * el momento de medir, así que viajan como tokens explícitos y nunca se deducen. El valor de cada
- * caso es ese token, que se serializa dentro del payload que se cifra en el navegador (ADR 0002 y
- * ADR 0006), así que **no puede cambiar nunca** una vez publicado. Cambiarlo dejaría ilegibles los
- * sobres cifrados ya guardados, porque no hay forma de recorrerlos y re-cifrarlos con el token
- * nuevo sin la clave de cada usuario.
+ * ADR 0008 (docs/adr/0008-measurement-method.md) explains that for blood pressure "the method is
+ * made up of the arm and the posture": both change the value in a known way and are only known at
+ * the moment of measuring, so they travel as explicit tokens and are never inferred. The value of
+ * each case is that token, which is serialized inside the payload encrypted in the browser (ADR
+ * 0002 and ADR 0006), so it **can never change** once published. Changing it would leave the
+ * already stored encrypted envelopes unreadable, because there is no way to walk them and
+ * re-encrypt them with the new token without each user's key.
  *
- * Añadir un caso nuevo es seguro; renombrar o eliminar uno existente no lo es.
+ * Adding a new case is safe; renaming or removing an existing one is not.
  */
 enum BloodPressureArm: string implements PatientLabelled
 {
@@ -29,10 +29,10 @@ enum BloodPressureArm: string implements PatientLabelled
     case Right = 'right';
 
     /**
-     * Etiqueta en el idioma indicado, para mostrar al paciente (ADR 0005: la etiqueta no sustituye
-     * al token, que es lo único que entra en el sobre cifrado).
+     * Label in the given language, to show to the patient (ADR 0005: the label does not replace the
+     * token, which is the only thing that goes into the encrypted envelope).
      *
-     * @param  string  $locale  Cualquier código; los no soportados caen al idioma por defecto.
+     * @param  string  $locale  Any code; unsupported ones fall back to the default language.
      */
     public function label(string $locale): string
     {
@@ -45,7 +45,7 @@ enum BloodPressureArm: string implements PatientLabelled
             [self::Right, 'en'] => 'Right',
             [self::Left, 'zh_CN'] => '左臂',
             [self::Right, 'zh_CN'] => '右臂',
-            default => throw new ValueError(sprintf('Falta la etiqueta de brazo para el idioma "%s".', $locale)),
+            default => throw new ValueError(sprintf('Missing arm label for locale "%s".', $locale)),
         };
     }
 }

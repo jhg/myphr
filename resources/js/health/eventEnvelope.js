@@ -1,21 +1,21 @@
 /**
- * Sella y abre el sobre de un evento clínico (ADR 0006).
+ * Seals and opens the envelope of a clinical event (ADR 0006).
  *
- * Un evento es un solo sobre, no uno por campo: `content` es el objeto `{v, type, tz, data}` en
- * claro entero, tal cual se guarda en la columna `payload`. Lo que ata ese sobre a su fila es
- * `user_id` y `occurred_at` (`eventContext` de `auth/context.js`), nunca el `type`, porque el tipo
- * va cifrado dentro del propio sobre y no puede participar en su propia autenticación.
+ * An event is one single envelope, not one per field: `content` is the whole `{v, type, tz, data}`
+ * object in the clear, exactly as it is stored in the `payload` column. What ties that envelope to
+ * its row is `user_id` and `occurred_at` (`eventContext` of `auth/context.js`), never the `type`,
+ * because the type travels encrypted inside the envelope and cannot take part in its own authentication.
  *
- * La clave no es la maestra directamente: es una clave por registro derivada de ella con
- * `KDF_LABELS.RECORD` y el mismo contexto, y solo vive el tiempo de esta llamada, borrada en un
- * `finally` (ADR 0004).
+ * The key is not the master one directly: it is a per-record key derived from it with
+ * `KDF_LABELS.RECORD` and the same context, and it only lives for the duration of this call, wiped
+ * in a `finally` (ADR 0004).
  *
- * **`occurredAt` tiene que ser exactamente el mismo instante que el servidor guarda en
- * `occurred_at`.** Un microsegundo de diferencia produce un contexto distinto y el descifrado
- * falla, no un dato atribuido al día equivocado (ese es justo el punto del ADR 0006). Por eso la
- * canonicalización vive en un solo sitio (`crypto/canonicalDate.js`, vía `eventContext`) y aquí no
- * se formatea nada a mano: quien llama pasa el valor que recibió del servidor (o que va a enviarle)
- * tal cual.
+ * **`occurredAt` has to be exactly the same instant the server stores in `occurred_at`.** One
+ * microsecond of difference produces a different context and decryption fails; it does not produce
+ * a datum attributed to the wrong day (that is precisely the point of ADR 0006). That is why
+ * canonicalization lives in a single place (`crypto/canonicalDate.js`, through `eventContext`) and
+ * nothing is formatted by hand here: the caller passes the value it received from the server (or
+ * is about to send it) as is.
  */
 
 import { eventContext } from '../auth/context.js';
@@ -25,14 +25,14 @@ import { openText, sealText } from '../crypto/envelope.js';
 import { zeroize } from '../crypto/zeroize.js';
 
 /**
- * Cierra el sobre de un evento.
+ * Seals the envelope of an event.
  *
  * @param {object} params
- * @param {string} params.userId UUID del usuario, tal cual lo devuelve el servidor.
- * @param {Date|number|string} params.occurredAt Mismo instante que va a la columna `occurred_at`.
- * @param {object} params.content Contenido en claro del evento: `{v, type, tz, data}`.
- * @returns {string} `v1.` + base64url, listo para guardar en `payload`.
- * @throws {Error} Si no hay clave maestra en memoria (`withMasterKey`).
+ * @param {string} params.userId User UUID, exactly as the server returns it.
+ * @param {Date|number|string} params.occurredAt Same instant that goes into the `occurred_at` column.
+ * @param {object} params.content Event content in the clear: `{v, type, tz, data}`.
+ * @returns {string} `v1.` + base64url, ready to store in `payload`.
+ * @throws {Error} If there is no master key in memory (`withMasterKey`).
  */
 export function sealEvent({ userId, occurredAt, content }) {
     const context = eventContext(userId, occurredAt);
@@ -56,18 +56,18 @@ export function sealEvent({ userId, occurredAt, content }) {
 }
 
 /**
- * Abre el sobre de un evento.
+ * Opens the envelope of an event.
  *
  * @param {object} params
- * @param {string} params.userId Mismo `userId` que se usó al sellar.
- * @param {Date|number|string} params.occurredAt Mismo instante que se usó al sellar: el que el
- *        servidor tiene en `occurred_at` para esta fila.
- * @param {string} params.envelope Sobre tal cual viene de `payload`.
- * @returns {object} Contenido en claro ya parseado: `{v, type, tz, data}`.
- * @throws {import('../crypto/envelope.js').EnvelopeError} Si el sobre no abre. No se silencia:
- *         un fallo de descifrado es siempre un error visible (ADR 0004), nunca un evento que se
- *         omite en la vista.
- * @throws {Error} Si no hay clave maestra en memoria (`withMasterKey`).
+ * @param {string} params.userId Same `userId` used to seal it.
+ * @param {Date|number|string} params.occurredAt Same instant used to seal it: the one the server
+ *        has in `occurred_at` for this row.
+ * @param {string} params.envelope Envelope exactly as it comes from `payload`.
+ * @returns {object} Content in the clear, already parsed: `{v, type, tz, data}`.
+ * @throws {import('../crypto/envelope.js').EnvelopeError} If the envelope does not open. It is not
+ *         silenced: a decryption failure is always a visible error (ADR 0004), never an event
+ *         left out of the view.
+ * @throws {Error} If there is no master key in memory (`withMasterKey`).
  */
 export function openEvent({ userId, occurredAt, envelope }) {
     const context = eventContext(userId, occurredAt);

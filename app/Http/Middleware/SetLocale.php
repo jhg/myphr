@@ -11,14 +11,14 @@ use Illuminate\Support\Facades\App;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Fija el idioma de la petición antes de que Filament pinte nada (ADR 0007).
+ * Sets the request language before Filament paints anything (ADR 0007).
  *
- * Va montado en el grupo del panel, detrás de `StartSession` y por delante de la autorización: así
- * cubre por igual las pantallas autenticadas y las que no lo están, que son justo donde no hay
- * usuario del que leer la preferencia y solo queda `Accept-Language`.
+ * It is mounted in the panel group, behind `StartSession` and ahead of authorization: that way it
+ * covers authenticated and unauthenticated screens alike, and the unauthenticated ones are exactly
+ * where there is no user to read the preference from and only `Accept-Language` is left.
  *
- * No toca la sesión ni escribe ninguna cookie: la preferencia vive en `users.locale` y lo demás se
- * negocia en cada petición.
+ * It touches neither the session nor any cookie: the preference lives in `users.locale` and the rest
+ * is negotiated on every request.
  */
 final class SetLocale
 {

@@ -7,15 +7,15 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Spec 0001 §3.1: clave primaria UUID (UUIDv7) en `users`, `password` nullable y columnas OPAQUE.
+ * Spec 0001 §3.1: UUID primary key (UUIDv7) on `users`, nullable `password` and OPAQUE columns.
  *
- * El cambio de tipo de la clave primaria no se puede expresar con `->change()` de forma portable
- * (SQLite es el driver por defecto y no admite alterar la clave primaria en sitio), así que la tabla
- * se reconstruye. La spec §3.6 fija que esta decisión se cierra antes del primer usuario, por lo que
- * la migración no traslada filas: sus identificadores enteros no tendrían forma UUID canónica y el
- * AAD de todo lo que se cifrase después quedaría atado a un valor inválido.
+ * Changing the type of the primary key cannot be expressed portably with `->change()` (SQLite is the
+ * default driver and cannot alter a primary key in place), so the table is rebuilt. Spec §3.6 states
+ * that this decision is settled before the first user exists, so the migration does not carry rows
+ * over: their integer identifiers would not have a canonical UUID shape and the AAD of everything
+ * encrypted afterwards would be tied to an invalid value.
  *
- * `sessions.user_id` se reconstruye a la vez porque su tipo debe seguir al de `users.id`.
+ * `sessions.user_id` is rebuilt at the same time because its type must follow `users.id`.
  */
 return new class extends Migration
 {
@@ -36,13 +36,13 @@ return new class extends Migration
             /** Spec 0001 §3.1: client_public_key || masking_key || envelope, 192 bytes. */
             $table->binary('opaque_registration_record')->nullable();
 
-            /** Spec 0001 §3.1 / OPAQUE.md §2: nombre del perfil, incluidos los parámetros del KSF. */
+            /** Spec 0001 §3.1 / OPAQUE.md §2: profile name, including the KSF parameters. */
             $table->string('opaque_profile', 96)->nullable();
 
-            /** Spec 0001 §3.1: NULL es indistinguible de "cuenta inexistente" para la rama falsa del login. */
+            /** Spec 0001 §3.1: NULL is indistinguishable from "no such account" for the fake login branch. */
             $table->timestamp('opaque_registered_at')->nullable();
 
-            /** Spec 0001 §3.1 / ADR 0007: sobre cifrado único de configuración, nunca vacío tras el alta. */
+            /** Spec 0001 §3.1 / ADR 0007: single encrypted settings envelope, never empty after signup. */
             $table->text('encrypted_settings')->nullable();
 
             $table->rememberToken();

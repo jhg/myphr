@@ -5,72 +5,72 @@ declare(strict_types=1);
 namespace App\Security\Opaque;
 
 /**
- * OPRF de RFC 9497, suite `ristretto255-SHA512`, `modeOPRF = 0x00`
+ * RFC 9497 OPRF, `ristretto255-SHA512` suite, `modeOPRF = 0x00`
  * (`docs/OPAQUE.md` §8).
  *
- * Cubre las funciones del servidor (`HashToScalar`, `DeriveKeyPair`,
- * `BlindEvaluate`) y, marcadas como tales, las del cliente (`HashToGroup`,
- * `Blind`, `Finalize`), que en producción ejecuta `@serenity-kit/opaque` pero
- * que aquí se necesitan para comprobar los vectores oficiales del Apéndice
- * A.1.1 y para generar fixtures de interoperabilidad.
+ * It covers the server functions (`HashToScalar`, `DeriveKeyPair`,
+ * `BlindEvaluate`) and, marked as such, the client ones (`HashToGroup`,
+ * `Blind`, `Finalize`), which in production run inside `@serenity-kit/opaque`
+ * but which we need here to check the official Appendix A.1.1 vectors and to
+ * generate interoperability fixtures.
  *
- * Todas las entradas y salidas son cadenas binarias. Se usan `strlen()` y
- * `substr()`, nunca `mb_*`.
+ * Every input and output is a binary string. We use `strlen()` and
+ * `substr()`, never `mb_*`.
  *
  * @see https://www.rfc-editor.org/rfc/rfc9497 RFC 9497
  * @see https://www.rfc-editor.org/rfc/rfc9807 RFC 9807
  */
 final class Oprf
 {
-    /** `modeOPRF` de RFC 9497 §3.1. */
+    /** `modeOPRF` from RFC 9497 §3.1. */
     public const int MODE_OPRF = 0x00;
 
-    /** Identificador de la suite (RFC 9497 §4.1). */
+    /** Suite identifier (RFC 9497 §4.1). */
     public const string SUITE_ID = 'ristretto255-SHA512';
 
-    /** Longitud de un elemento serializado `Noe` (RFC 9497 §4.1). */
+    /** Length of a serialized element `Noe` (RFC 9497 §4.1). */
     public const int ELEMENT_BYTES = 32;
 
-    /** Longitud de una clave OPRF serializada `Nok` (`docs/OPAQUE.md` §2). */
+    /** Length of a serialized OPRF key `Nok` (`docs/OPAQUE.md` §2). */
     public const int KEY_BYTES = 32;
 
-    /** Longitud de una semilla `Nseed` (`docs/OPAQUE.md` §2). */
+    /** Length of a seed `Nseed` (`docs/OPAQUE.md` §2). */
     public const int SEED_BYTES = 32;
 
-    /** Longitud de la salida del OPRF, `Nh` = salida de SHA-512 (RFC 9497 §4.1). */
+    /** OPRF output length, `Nh` = SHA-512 output (RFC 9497 §4.1). */
     public const int OUTPUT_BYTES = 64;
 
-    /** Bytes uniformes que consumen `HashToGroup` y `HashToScalar` en esta suite. */
+    /** Uniform bytes consumed by `HashToGroup` and `HashToScalar` in this suite. */
     private const int UNIFORM_BYTES = 64;
 
-    /** `info` de `DeriveKeyPair` para la clave OPRF del servidor (RFC 9807 §5.2.2). */
+    /** `DeriveKeyPair` `info` for the server OPRF key (RFC 9807 §5.2.2). */
     public const string OPRF_KEY_INFO = 'OPAQUE-DeriveKeyPair';
 
     /**
-     * `info` de `DeriveKeyPair` para las claves Diffie-Hellman del AKE
+     * `DeriveKeyPair` `info` for the AKE Diffie-Hellman keys
      * (RFC 9807 §6.4.1.1).
      *
-     * No confundir con {@see OPRF_KEY_INFO}: son dos cadenas distintas y
-     * usar una por otra produce claves incompatibles con `opaque-ke`.
+     * Do not confuse it with {@see OPRF_KEY_INFO}: they are two different
+     * strings and swapping them produces keys incompatible with `opaque-ke`.
      */
     public const string DIFFIE_HELLMAN_KEY_INFO = 'OPAQUE-DeriveDiffieHellmanKeyPair';
 
-    /** Sufijo del `info` de la Expand por usuario (RFC 9807 §5.2.2). */
+    /** Suffix of the per-user Expand `info` (RFC 9807 §5.2.2). */
     private const string OPRF_KEY_LABEL = 'OprfKey';
 
-    /** Límite del contador de `DeriveKeyPair` (RFC 9497 §3.2, paso 4). */
+    /** Limit of the `DeriveKeyPair` counter (RFC 9497 §3.2, step 4). */
     private const int MAX_DERIVE_KEY_PAIR_COUNTER = 255;
 
     private function __construct() {}
 
     /**
-     * `contextString` de RFC 9497 §3.1:
+     * `contextString` from RFC 9497 §3.1:
      * `"OPRFV1-" || I2OSP(mode, 1) || "-" || identifier`.
      *
-     * Para `modeOPRF` y la suite `ristretto255-SHA512` son 28 bytes:
+     * For `modeOPRF` and the `ristretto255-SHA512` suite it is 28 bytes:
      * `OPRFV1-\x00-ristretto255-SHA512`.
      *
-     * @return string Cadena binaria (contiene un byte 0x00).
+     * @return string Binary string (it contains a 0x00 byte).
      */
     public static function contextString(): string
     {
@@ -78,7 +78,7 @@ final class Oprf
     }
 
     /**
-     * DST de `HashToGroup`: `"HashToGroup-" || contextString` (RFC 9497 §4.1).
+     * `HashToGroup` DST: `"HashToGroup-" || contextString` (RFC 9497 §4.1).
      */
     public static function hashToGroupDomainSeparationTag(): string
     {
@@ -86,7 +86,7 @@ final class Oprf
     }
 
     /**
-     * DST de `HashToScalar`: `"HashToScalar-" || contextString` (RFC 9497 §4.1).
+     * `HashToScalar` DST: `"HashToScalar-" || contextString` (RFC 9497 §4.1).
      */
     public static function hashToScalarDomainSeparationTag(): string
     {
@@ -94,11 +94,11 @@ final class Oprf
     }
 
     /**
-     * DST de `DeriveKeyPair`: `"DeriveKeyPair" || contextString`
-     * (RFC 9497 §3.2, paso 3).
+     * `DeriveKeyPair` DST: `"DeriveKeyPair" || contextString`
+     * (RFC 9497 §3.2, step 3).
      *
-     * Nótese que aquí **no** hay guion separador, a diferencia de
-     * `HashToGroup-` y `HashToScalar-`.
+     * Note there is **no** separating dash here, unlike `HashToGroup-` and
+     * `HashToScalar-`.
      */
     public static function deriveKeyPairDomainSeparationTag(): string
     {
@@ -106,30 +106,30 @@ final class Oprf
     }
 
     /**
-     * `HashToScalar(msg)` para ristretto255-SHA512 (RFC 9497 §4.1).
+     * `HashToScalar(msg)` for ristretto255-SHA512 (RFC 9497 §4.1).
      *
      * ```
      * uniform_bytes = expand_message_xmd(msg, DST, 64)
      * scalar        = OS2IP(uniform_bytes) mod L        // little-endian
      * ```
      *
-     * RFC 9497 §4.1 especifica para esta suite que los 64 bytes uniformes se
-     * interpretan como entero **little-endian** antes de reducir módulo el
-     * orden `L` del grupo primo.
-     * `sodium_crypto_core_ristretto255_scalar_reduce()` interpreta su entrada
-     * exactamente así, en little-endian, de modo que el mapeo es directo: **no
-     * hay que invertir ni reordenar nada**. Se deja escrito porque invertir el
-     * orden de los bytes "para arreglar el endianismo" rompería todos los
-     * vectores y la interoperabilidad con `opaque-ke`.
+     * RFC 9497 §4.1 specifies for this suite that the 64 uniform bytes are
+     * read as a **little-endian** integer before reducing modulo the prime
+     * group order `L`.
+     * `sodium_crypto_core_ristretto255_scalar_reduce()` reads its input exactly
+     * that way, little-endian, so the mapping is direct: **nothing has to be
+     * reversed or reordered**. This is written down because flipping the byte
+     * order "to fix the endianness" would break every vector and
+     * interoperability with `opaque-ke`.
      *
-     * El DST se recibe como parámetro explícito porque `DeriveKeyPair` usa uno
-     * distinto del de `HashToScalar` genérico.
+     * The DST is taken as an explicit parameter because `DeriveKeyPair` uses a
+     * different one from the generic `HashToScalar`.
      *
-     * @param  string  $message  msg, cadena binaria de longitud arbitraria.
-     * @param  string  $dst  Domain separation tag, cadena binaria no vacía.
-     * @return string Escalar canónico de 32 bytes little-endian; puede ser cero.
+     * @param  string  $message  msg, binary string of arbitrary length.
+     * @param  string  $dst  Domain separation tag, non-empty binary string.
+     * @return string Canonical 32-byte little-endian scalar; it may be zero.
      *
-     * @throws InvalidPointException Si la reducción falla en libsodium.
+     * @throws InvalidPointException If the reduction fails in libsodium.
      */
     public static function hashToScalar(string $message, string $dst): string
     {
@@ -139,8 +139,8 @@ final class Oprf
     }
 
     /**
-     * `HashToGroup(msg)` para ristretto255-SHA512 (RFC 9497 §4.1): función del
-     * **cliente**, incluida para vectores de test e interoperabilidad
+     * `HashToGroup(msg)` for ristretto255-SHA512 (RFC 9497 §4.1): a **client**
+     * function, included for test vectors and interoperability
      * (`docs/OPAQUE.md` §8.1).
      *
      * ```
@@ -148,10 +148,10 @@ final class Oprf
      * element       = hash_to_ristretto255(uniform_bytes)   // RFC 9380 §B / RFC 9496 §4.3.4
      * ```
      *
-     * @param  string  $input  Cadena binaria de longitud arbitraria.
-     * @return string Elemento serializado de 32 bytes.
+     * @param  string  $input  Binary string of arbitrary length.
+     * @return string Serialized element of 32 bytes.
      *
-     * @throws InvalidPointException Si el mapeo produce el elemento neutro.
+     * @throws InvalidPointException If the mapping yields the neutral element.
      */
     public static function hashToGroup(string $input): string
     {
@@ -165,7 +165,7 @@ final class Oprf
     }
 
     /**
-     * `DeriveKeyPair(seed, info)` de RFC 9497 §3.2.
+     * `DeriveKeyPair(seed, info)` from RFC 9497 §3.2.
      *
      * ```
      * deriveInput = seed || I2OSP(len(info), 2) || info
@@ -179,15 +179,15 @@ final class Oprf
      * pkS = ScalarBaseMult(skS)
      * ```
      *
-     * @param  string  $seed  Semilla binaria; el protocolo usa `Nseed` = 32 bytes,
-     *                        pero RFC 9497 no fija la longitud aquí.
-     * @param  string  $info  Cadena de contexto, de 0 a 65535 bytes.
-     * @return array{0: string, 1: string} `[skS, pkS]`, ambos de 32 bytes.
+     * @param  string  $seed  Binary seed; the protocol uses `Nseed` = 32 bytes,
+     *                        but RFC 9497 does not fix the length here.
+     * @param  string  $info  Context string, 0 to 65535 bytes.
+     * @return array{0: string, 1: string} `[skS, pkS]`, both 32 bytes.
      *
-     * @throws InvalidConfigurationException Si `$info` no cabe en un uint16.
-     * @throws OpaqueException `DeriveKeyPairError`: 256 intentos consecutivos han
-     *                         producido el escalar cero (fallo interno fatal).
-     * @throws InvalidPointException Si la multiplicación por el generador falla.
+     * @throws InvalidConfigurationException If `$info` does not fit in a uint16.
+     * @throws OpaqueException `DeriveKeyPairError`: 256 consecutive attempts have
+     *                         produced the zero scalar (fatal internal failure).
+     * @throws InvalidPointException If multiplying by the generator fails.
      */
     public static function deriveKeyPair(string $seed, string $info): array
     {
@@ -206,21 +206,21 @@ final class Oprf
     }
 
     /**
-     * `DeriveDiffieHellmanKeyPair(seed)` de RFC 9807 §6.4.1.1.
+     * `DeriveDiffieHellmanKeyPair(seed)` from RFC 9807 §6.4.1.1.
      *
-     * Es `DeriveKeyPair(seed, "OPAQUE-DeriveDiffieHellmanKeyPair")`. Se usa
-     * para las claves DH del AKE: la estática del cliente derivada del
-     * `envelope`, las efímeras de ambos lados y la clave estática del servidor.
+     * It is `DeriveKeyPair(seed, "OPAQUE-DeriveDiffieHellmanKeyPair")`. It is
+     * used for the AKE DH keys: the client static key derived from the
+     * `envelope`, the ephemeral keys on both sides and the server static key.
      *
-     * La clave **OPRF** no se deriva con esta función, sino con
-     * `DeriveKeyPair(seed, "OPAQUE-DeriveKeyPair")` (véase
-     * {@see deriveOprfKey()}). Intercambiar los dos `info` produce claves
-     * silenciosamente incompatibles con `opaque-ke`.
+     * The **OPRF** key is not derived with this function but with
+     * `DeriveKeyPair(seed, "OPAQUE-DeriveKeyPair")` (see
+     * {@see deriveOprfKey()}). Swapping the two `info` strings produces keys
+     * silently incompatible with `opaque-ke`.
      *
-     * @param  string  $seed  Semilla binaria de `Nseed` = 32 bytes.
-     * @return array{0: string, 1: string} `[skS, pkS]`, ambos de 32 bytes.
+     * @param  string  $seed  Binary seed of `Nseed` = 32 bytes.
+     * @return array{0: string, 1: string} `[skS, pkS]`, both 32 bytes.
      *
-     * @throws OpaqueException Si `DeriveKeyPair` agota el contador.
+     * @throws OpaqueException If `DeriveKeyPair` exhausts the counter.
      */
     public static function deriveDiffieHellmanKeyPair(string $seed): array
     {
@@ -228,28 +228,28 @@ final class Oprf
     }
 
     /**
-     * Deriva la clave OPRF de un usuario a partir del `oprf_seed` del servidor
-     * (RFC 9807 §5.2.2 y §6.3.2.2; `docs/OPAQUE.md` §8.3).
+     * Derives a user's OPRF key from the server `oprf_seed`
+     * (RFC 9807 §5.2.2 and §6.3.2.2; `docs/OPAQUE.md` §8.3).
      *
      * ```
      * seed = Expand(oprf_seed, concat(credential_identifier, "OprfKey"), Nok)
      * (oprf_key, _) = DeriveKeyPair(seed, "OPAQUE-DeriveKeyPair")
      * ```
      *
-     * Se llama a `HKDF-Expand` **directamente sobre `oprf_seed`**, sin
-     * `Extract` previo: el `oprf_seed` ya es una PRK de 64 bytes.
+     * `HKDF-Expand` is called **directly on `oprf_seed`**, with no prior
+     * `Extract`: the `oprf_seed` is already a 64-byte PRK.
      *
-     * El RFC concatena `credential_identifier || "OprfKey"` sin prefijo de
-     * longitud, por lo que el identificador debe tener longitud fija en todo
-     * el sistema (32 bytes según `docs/OPAQUE.md` §13.1); esta función no
-     * puede comprobarlo por sí sola y no lo impone.
+     * The RFC concatenates `credential_identifier || "OprfKey"` without a
+     * length prefix, so the identifier must be fixed length across the whole
+     * system (32 bytes per `docs/OPAQUE.md` §13.1); this function cannot check
+     * that on its own and does not enforce it.
      *
-     * @param  string  $oprfSeed  PRK del servidor, al menos 64 bytes (`Nx`).
-     * @param  string  $credentialIdentifier  Identificador binario de longitud fija.
-     * @return string Clave OPRF de 32 bytes (`Nok`).
+     * @param  string  $oprfSeed  Server PRK, at least 64 bytes (`Nx`).
+     * @param  string  $credentialIdentifier  Fixed-length binary identifier.
+     * @return string 32-byte OPRF key (`Nok`).
      *
-     * @throws InvalidConfigurationException Si `$oprfSeed` mide menos de 64 bytes.
-     * @throws OpaqueException Si `DeriveKeyPair` agota el contador.
+     * @throws InvalidConfigurationException If `$oprfSeed` is shorter than 64 bytes.
+     * @throws OpaqueException If `DeriveKeyPair` exhausts the counter.
      */
     public static function deriveOprfKey(string $oprfSeed, string $credentialIdentifier): string
     {
@@ -265,22 +265,22 @@ final class Oprf
     }
 
     /**
-     * `BlindEvaluate(skS, blindedElement)` de RFC 9497 §3.3.1.
+     * `BlindEvaluate(skS, blindedElement)` from RFC 9497 §3.3.1.
      *
      * ```
      * evaluatedElement = skS * blindedElement
      * ```
      *
-     * El elemento recibido se valida antes de operar (longitud, codificación
-     * canónica, pertenencia al grupo y rechazo de la identidad), tal como
-     * exige RFC 9807 §10.7 para toda entrada remota.
+     * The received element is validated before operating (length, canonical
+     * encoding, group membership and rejection of the identity), exactly as
+     * RFC 9807 §10.7 requires for any remote input.
      *
-     * @param  string  $oprfKey  Escalar canónico distinto de cero, 32 bytes.
-     * @param  string  $blindedElement  Elemento recibido del cliente, 32 bytes.
-     * @return string `evaluatedElement` serializado, 32 bytes.
+     * @param  string  $oprfKey  Canonical non-zero scalar, 32 bytes.
+     * @param  string  $blindedElement  Element received from the client, 32 bytes.
+     * @return string Serialized `evaluatedElement`, 32 bytes.
      *
-     * @throws InvalidPointException Si la clave o el elemento no validan, o si
-     *                               el resultado es la identidad.
+     * @throws InvalidPointException If the key or the element do not validate, or
+     *                               if the result is the identity.
      */
     public static function blindEvaluate(string $oprfKey, string $blindedElement): string
     {
@@ -290,12 +290,12 @@ final class Oprf
     }
 
     /**
-     * `Blind(input)` de RFC 9497 §3.3.1 con el escalar de cegado dado: función
-     * del **cliente**, incluida para vectores de test e interoperabilidad
+     * `Blind(input)` from RFC 9497 §3.3.1 with the given blinding scalar: a
+     * **client** function, included for test vectors and interoperability
      * (`docs/OPAQUE.md` §8.1).
      *
-     * El escalar se recibe como parámetro en lugar de generarse aquí para poder
-     * reproducir los vectores oficiales; el cliente real lo sortea al azar.
+     * The scalar is taken as a parameter instead of being generated here so we
+     * can reproduce the official vectors; the real client draws it at random.
      *
      * ```
      * inputElement = HashToGroup(input)
@@ -303,12 +303,12 @@ final class Oprf
      * blindedElement = blind * inputElement
      * ```
      *
-     * @param  string  $input  Entrada binaria (en OPAQUE, la contraseña).
-     * @param  string  $blind  Escalar canónico distinto de cero, 32 bytes.
-     * @return string `blindedElement` serializado, 32 bytes.
+     * @param  string  $input  Binary input (in OPAQUE, the password).
+     * @param  string  $blind  Canonical non-zero scalar, 32 bytes.
+     * @return string Serialized `blindedElement`, 32 bytes.
      *
-     * @throws InvalidPointException Si el escalar no valida o si `HashToGroup`
-     *                               devuelve la identidad.
+     * @throws InvalidPointException If the scalar does not validate or if `HashToGroup`
+     *                               returns the identity.
      */
     public static function blind(string $input, string $blind): string
     {
@@ -316,8 +316,8 @@ final class Oprf
     }
 
     /**
-     * `Finalize(input, blind, evaluatedElement)` de RFC 9497 §3.3.1: función
-     * del **cliente**, incluida para vectores de test e interoperabilidad
+     * `Finalize(input, blind, evaluatedElement)` from RFC 9497 §3.3.1: a
+     * **client** function, included for test vectors and interoperability
      * (`docs/OPAQUE.md` §8.1).
      *
      * ```
@@ -328,13 +328,13 @@ final class Oprf
      *             "Finalize")
      * ```
      *
-     * @param  string  $input  La misma entrada que se pasó a `Blind`, de 0 a 65535 bytes.
-     * @param  string  $blind  El mismo escalar de cegado, 32 bytes.
-     * @param  string  $evaluatedElement  Elemento devuelto por el servidor, 32 bytes.
-     * @return string Salida del OPRF, 64 bytes.
+     * @param  string  $input  The same input passed to `Blind`, 0 to 65535 bytes.
+     * @param  string  $blind  The same blinding scalar, 32 bytes.
+     * @param  string  $evaluatedElement  Element returned by the server, 32 bytes.
+     * @return string OPRF output, 64 bytes.
      *
-     * @throws InvalidPointException Si el escalar o el elemento no validan.
-     * @throws InvalidConfigurationException Si `$input` excede 65535 bytes.
+     * @throws InvalidPointException If the scalar or the element do not validate.
+     * @throws InvalidConfigurationException If `$input` exceeds 65535 bytes.
      */
     public static function finalize(string $input, string $blind, string $evaluatedElement): string
     {

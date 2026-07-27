@@ -7,9 +7,10 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Spec 0001 §3.2 / OPAQUE.md §14.3: estado de un login OPAQUE en curso, con TTL de 180 segundos.
+ * Spec 0001 §3.2 / OPAQUE.md §14.3: state of an OPAQUE login in flight, with a 180-second TTL.
  *
- * `user_id` es nulo en la rama falsa (OPAQUE.md §13.3). El estado va cifrado con `Crypt` de Laravel.
+ * `user_id` is null on the fake branch (OPAQUE.md §13.3). The state is encrypted with Laravel's
+ * `Crypt`.
  */
 return new class extends Migration
 {

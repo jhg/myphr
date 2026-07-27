@@ -20,8 +20,8 @@ use App\Security\Opaque\ServerLoginState;
 use Tests\Unit\Security\Opaque\Support\QueuedRandomSource;
 
 /**
- * Escenario de login completo y determinista: claves del servidor, record del
- * usuario y KE1 del cliente, todo derivado de semillas fijas.
+ * A full deterministic login scenario: server keys, user record and client KE1,
+ * all derived from fixed seeds.
  *
  * @return array{
  *     ke1: Ke1,

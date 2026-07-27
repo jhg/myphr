@@ -7,7 +7,7 @@ namespace Tests\Support;
 use App\Support\Terminal;
 
 /**
- * Terminal inyectable para tests: la salida de PHPUnit nunca es un TTY.
+ * Injectable terminal for tests: PHPUnit's output is never a TTY.
  */
 final readonly class FakeTerminal implements Terminal
 {

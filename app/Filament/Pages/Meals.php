@@ -12,31 +12,30 @@ use Filament\Support\Icons\Heroicon;
 use Illuminate\Contracts\Support\Htmlable;
 
 /**
- * Pantalla de comidas (ADR 0002, ADR 0004, ADR 0005, ADR 0006).
+ * Meals screen (ADR 0002, ADR 0004, ADR 0005, ADR 0006).
  *
- * Esta clase no ve nunca el contenido de una comida. El transporte común de ciphertext vive en
- * {@see HealthEventPage} y es compartido con el resto de pantallas de eventos clínicos: el sobre
- * baja como valor de retorno y sube como parámetro de método, nunca en una propiedad pública, así
- * que no entra en el snapshot de Livewire (ADR 0002). El servidor valida la envoltura del sobre y
- * la autorización, nunca el contenido: no hay forma de comprobar que dentro dice «tortilla» sin la
- * clave del usuario.
+ * This class never sees the content of a meal. The shared ciphertext transport lives in
+ * {@see HealthEventPage} and is shared with the rest of the clinical event screens: the envelope
+ * comes down as a return value and goes up as a method parameter, never in a public property, so it
+ * does not enter the Livewire snapshot (ADR 0002). The server validates the envelope wrapper and
+ * authorization, never the content: there is no way to check that it says "omelette" inside without
+ * the user's key.
  *
- * A diferencia de la glucemia, los alimentos de una comida NO se codifican contra ningún
- * vocabulario clínico: es una decisión consciente que se aparta del criterio general del ADR 0005,
- * justificada en el ADR propio de esta pantalla. Lo que sí va codificado en UCUM es la unidad de
- * cada alimento ({@see FoodQuantityUnit}), que es lo que el ADR 0005 exige para no acabar con una
- * conversión imposible más adelante.
+ * Unlike blood glucose, the foods in a meal are NOT coded against any clinical vocabulary: it is a
+ * deliberate decision departing from the general ADR 0005 criterion, justified in this screen's own
+ * ADR. What is coded in UCUM is the unit of each food ({@see FoodQuantityUnit}), which is what ADR
+ * 0005 requires so we do not end up with an impossible conversion later on.
  *
- * El campo `origin` del ADR 0006 (cómo entró el dato: tecleado a mano o importado de un aparato) no
- * se pregunta aquí: hoy toda entrada es manual, no existe ninguna integración con un aparato de
- * comidas, así que el cliente lo fija siempre a `manual` sin mostrar un selector cuya única
- * respuesta posible sería esa. El día que exista una importación automática, será ella quien
- * escriba `device`, no un selector en este formulario. El catálogo de `dataOrigins` de la glucemia
- * no se publica aquí por el mismo motivo: no hay nada que el cliente necesite elegir.
+ * The ADR 0006 `origin` field (how the data got in: typed by hand or imported from a device) is not
+ * asked for here: every entry today is manual, there is no meals device integration, so the client
+ * always fixes it to `manual` without showing a selector whose only possible answer would be that.
+ * The day there is an automatic import, that import will write `device`, not a selector in this
+ * form. The blood glucose `dataOrigins` catalog is not published here for the same reason: there is
+ * nothing for the client to choose.
  *
- * La vista (`resources/views/phr/pages/meals.blade.php`) es un componente Alpine propio, no un
- * formulario de Filament: el ADR 0002 reserva los campos y columnas de Filament para datos en claro,
- * y aquí todo el contenido clínico está cifrado.
+ * The view (`resources/views/phr/pages/meals.blade.php`) is an Alpine component of its own, not a
+ * Filament form: ADR 0002 reserves Filament fields and columns for plaintext data, and here all the
+ * clinical content is encrypted.
  */
 final class Meals extends HealthEventPage
 {
@@ -45,10 +44,10 @@ final class Meals extends HealthEventPage
     protected string $view = 'phr.pages.meals';
 
     /**
-     * El título y la etiqueta de navegación se resuelven por método y no como propiedad estática
-     * porque un inicializador de propiedad en PHP solo admite expresiones constantes: `__()` no
-     * puede llamarse ahí. Dejarlos como cadena fija es lo que mantenía el menú y las cabeceras en
-     * castellano aunque el resto de la pantalla ya estuviera traducido.
+     * The title and the navigation label are resolved by method and not as a static property because
+     * a property initializer in PHP only accepts constant expressions: `__()` cannot be called
+     * there. Leaving them as fixed strings is what kept the menu and the headers in Spanish even
+     * when the rest of the screen was already translated.
      */
     public function getTitle(): string|Htmlable
     {
@@ -61,8 +60,8 @@ final class Meals extends HealthEventPage
     }
 
     /**
-     * Catálogo público en claro que el cliente necesita para construir el payload cifrado (ADR
-     * 0005, ADR 0006). No es dato clínico: son los mismos tokens y códigos para cualquier usuario.
+     * Public plaintext catalog the client needs to build the encrypted payload (ADR 0005,
+     * ADR 0006). It is not clinical data: the same tokens and codes for every user.
      *
      * @return array{
      *     mealTypes: list<array{token: string, label: string}>,
@@ -72,8 +71,8 @@ final class Meals extends HealthEventPage
      */
     public function catalog(): array
     {
-        /** El catálogo es en claro y lo pinta el servidor, así que las etiquetas salen ya en el
-         * idioma en vigor para esta petición (App\Support\SupportedLocale). */
+        /** The catalog is plaintext and the server paints it, so the labels already come out in the
+         * language in force for this request (App\Support\SupportedLocale). */
         $locale = app()->getLocale();
 
         return [
@@ -85,7 +84,7 @@ final class Meals extends HealthEventPage
                 ],
                 FoodQuantityUnit::cases(),
             ),
-            /** Campo común a todo evento (ADR 0006), no propio de las comidas. */
+            /** Field common to every event (ADR 0006), not specific to meals. */
             'recordedByRoles' => self::labelledOptions(RecordedBy::cases(), $locale),
         ];
     }

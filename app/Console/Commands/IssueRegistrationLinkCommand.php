@@ -14,25 +14,25 @@ use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 
 /**
- * Emite un enlace de registro de un solo uso (Spec 0001 §10, ADR 0009).
+ * Issues a single-use registration link (Spec 0001 §10, ADR 0009).
  *
- * Es el comando que crea el primer usuario del sistema, el que luego podrá dar de
- * alta a los demás desde el panel. Crea la fila de usuario si no existe, sin
- * contraseña y sin clave: la clave maestra nace en el navegador de esa persona
- * cuando abre el enlace (Spec 0001 §5).
+ * It is the command that creates the first user of the system, the one who can
+ * later sign the others up from the panel. It creates the user row if it does
+ * not exist, with no password and no key: the master key is born in that
+ * person's browser when they open the link (Spec 0001 §5).
  *
- * La URL se **imprime por pantalla y nada más**: no se envía por correo ni se
- * escribe en ningún fichero (ADR 0009). Por eso aborta si la salida no es un
- * terminal interactivo, para que no acabe en un log de despliegue o de cron.
+ * The URL is **printed on screen and nowhere else**: it is not emailed and not
+ * written to any file (ADR 0009). That is why it aborts if the output is not an
+ * interactive terminal, so it does not end up in a deployment or cron log.
  *
- * Nunca acepta ni imprime contraseñas.
+ * It never accepts or prints passwords.
  */
 #[Signature('phr:issue-registration-link {email : Email de la persona, se normaliza antes de guardarlo} {--name= : Nombre para mostrar, solo se usa al crear la cuenta}')]
 #[Description('Crea la cuenta si no existe y emite un enlace de registro de un solo uso, imprimiéndolo por pantalla.')]
 final class IssueRegistrationLinkCommand extends Command
 {
     /**
-     * @return int Código de salida: 0 si se emitió, 1 en cualquier otro caso.
+     * @return int Exit code: 0 if the link was issued, 1 in any other case.
      */
     public function handle(RegistrationLinks $links, Terminal $terminal): int
     {
@@ -80,11 +80,11 @@ final class IssueRegistrationLinkCommand extends Command
     }
 
     /**
-     * Emite el enlace y, si la cuenta ya tiene acceso, pide la confirmación explícita
-     * que exige el servicio (Spec 0001 §3.4). La guardia no se replica aquí: el comando
-     * solo recoge el email tecleado y se lo pasa al servicio, que vuelve a decidir.
+     * Issues the link and, if the account already has access, asks for the explicit confirmation
+     * the service requires (Spec 0001 §3.4). The guard is not duplicated here: the command only
+     * collects the typed email and hands it to the service, which decides again.
      *
-     * @return string|null La URL, o `null` si la reemisión no se confirmó.
+     * @return string|null The URL, or `null` if the reissue was not confirmed.
      */
     private function issue(RegistrationLinks $links, User $user): ?string
     {
@@ -121,7 +121,7 @@ final class IssueRegistrationLinkCommand extends Command
     }
 
     /**
-     * Imprime la URL. Es la única copia del token en claro que existirá nunca.
+     * Prints the URL. It is the only copy of the plaintext token that will ever exist.
      */
     private function printLink(string $url): void
     {

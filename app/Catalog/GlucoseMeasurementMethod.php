@@ -8,33 +8,33 @@ use App\Support\SupportedLocale;
 use ValueError;
 
 /**
- * Método con el que se obtuvo una medición de glucemia.
+ * Method a blood glucose measurement was obtained with.
  *
- * El ADR 0008 (docs/adr/0008-measurement-method.md) exige que el método viaje como un token
- * explícito dentro del propio evento de medición, y no se deduzca del código LOINC ni del
- * origen manual/aparato del dato. El valor de cada caso es ese token: se serializa dentro del
- * payload que se cifra en el navegador (ADR 0002 y ADR 0006), así que **no puede cambiar nunca**
- * una vez publicado. Cambiarlo dejaría ilegibles los sobres cifrados ya guardados, porque no hay
- * forma de recorrerlos y re-cifrarlos con el token nuevo sin la clave de cada usuario.
+ * ADR 0008 (docs/adr/0008-measurement-method.md) requires the method to travel as an explicit token
+ * inside the measurement event itself, and not to be inferred from the LOINC code or from whether
+ * the value came from a person or a device. The value of each case is that token: it is serialized
+ * inside the payload encrypted in the browser (ADR 0002 and ADR 0006), so it **can never change**
+ * once published. Changing it would leave the already stored encrypted envelopes unreadable, because
+ * there is no way to walk them and re-encrypt them with the new token without each user's key.
  *
- * Añadir un caso nuevo es seguro; renombrar o eliminar uno existente no lo es.
+ * Adding a new case is safe; renaming or removing an existing one is not.
  */
 enum GlucoseMeasurementMethod: string implements PatientLabelled
 {
-    /** Medición en sangre capilar con glucómetro, tras punción digital. */
+    /** Capillary blood measured with a glucose meter, after a finger prick. */
     case Capillary = 'capillary';
 
-    /** Medición en líquido intersticial mediante sensor continuo (CGM/FGM). */
+    /** Interstitial fluid measured with a continuous sensor (CGM/FGM). */
     case Interstitial = 'interstitial';
 
     /**
-     * Etiqueta en el idioma indicado, para mostrar al paciente (ADR 0005: la etiqueta no sustituye
-     * al token, que es lo único que entra en el sobre cifrado).
+     * Label in the given language, to show to the patient (ADR 0005: the label does not replace the
+     * token, which is the only thing that goes into the encrypted envelope).
      *
-     * Cada etiqueta nombra además el aparato entre paréntesis porque «capilar» e «intersticial» no
-     * le dicen nada a quien solo sabe si se pinchó el dedo o lleva un sensor puesto.
+     * Each label also names the device in brackets because "capillary" and "interstitial" mean
+     * nothing to someone who only knows whether they pricked a finger or wear a sensor.
      *
-     * @param  string  $locale  Cualquier código; los no soportados caen al idioma por defecto.
+     * @param  string  $locale  Any code; unsupported ones fall back to the default language.
      */
     public function label(string $locale): string
     {
@@ -47,7 +47,7 @@ enum GlucoseMeasurementMethod: string implements PatientLabelled
             [self::Interstitial, 'en'] => 'Interstitial (continuous sensor)',
             [self::Capillary, 'zh_CN'] => '毛细血管血（指尖采血）',
             [self::Interstitial, 'zh_CN'] => '组织液（连续监测传感器）',
-            default => throw new ValueError(sprintf('Falta la etiqueta de método de medición para el idioma "%s".', $locale)),
+            default => throw new ValueError(sprintf('Missing measurement method label for locale "%s".', $locale)),
         };
     }
 }

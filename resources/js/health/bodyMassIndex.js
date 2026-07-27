@@ -1,43 +1,43 @@
 /**
- * Índice de masa corporal y estatura conocida (ADR 0004, ADR 0005, ADR 0006).
+ * Body mass index and known height (ADR 0004, ADR 0005, ADR 0006).
  *
- * Lógica pura, compartida por la pantalla de peso y estatura (`health/bodyWeightPage.js`) y por el
- * bloque de solo lectura del perfil (`auth/profilePage.js`). Se calcula **siempre en el navegador**:
- * el servidor no ve ni el peso ni la estatura, así que tampoco puede derivar de ellos ninguna cifra
- * (ADR 0004, ADR 0006).
+ * Pure logic, shared by the weight and height screen (`health/bodyWeightPage.js`) and by the
+ * read-only block of the profile (`auth/profilePage.js`). It is **always computed in the browser**:
+ * the server sees neither the weight nor the height, so it cannot derive any figure from them
+ * either (ADR 0004, ADR 0006).
  *
- * **CUIDADO CLÍNICO — el IMC es una razón, no un diagnóstico.** Este módulo devuelve un número y
- * nada más: ni categoría («bajo peso», «sobrepeso»...), ni color, ni comparación. Es deliberado y no
- * es una simplificación pendiente de terminar:
+ * **CLINICAL CARE — BMI is a ratio, not a diagnosis.** This module returns a number and nothing
+ * else: no category ("underweight", "overweight"...), no colour, no comparison. That is deliberate
+ * and not a simplification waiting to be finished:
  *
- * * En niños y adolescentes el IMC no se lee como cifra absoluta, sino contra percentiles por edad y
- *   sexo. Esta aplicación no guarda ni la edad ni el sexo, así que no puede hacer esa lectura, y
- *   pintar «sobrepeso» sobre un niño usando el criterio del adulto es sencillamente un error.
- * * Incluso en adultos, la misma cifra significa cosas distintas según masa muscular, embarazo,
- *   edema o edad. Un umbral pintado de rojo se lee como un juicio médico, y aquí no hay ningún
- *   médico mirando.
+ * * In children and adolescents BMI is not read as an absolute figure, but against percentiles by
+ *   age and sex. This application stores neither age nor sex, so it cannot make that reading, and
+ *   painting "overweight" over a child using the adult criterion is simply wrong.
+ * * Even in adults, the same figure means different things depending on muscle mass, pregnancy,
+ *   oedema or age. A threshold painted red reads as a medical judgement, and there is no doctor
+ *   looking here.
  *
- * Quien lea la cifra sabe qué hacer con ella, o se la lleva a su consulta. La interfaz solo tiene
- * que decir de qué peso y de qué estatura sale.
+ * Whoever reads the figure knows what to do with it, or takes it to their appointment. The
+ * interface only has to say which weight and which height it comes from.
  *
- * **Sobre convertir unidades.** El resto del proyecto no convierte entre kilogramos y libras: la
- * gráfica traza una serie por unidad y el historial guarda la unidad con la que se escribió cada
- * registro (ADR 0006). Aquí sí se convierte, y no contradice aquello: el IMC es una cifra **derivada
- * y efímera**, que se calcula para mostrarla y no se guarda, no se cifra ni se compara con nada; y
- * los factores son exactos por definición (1 lb = 0,45359237 kg; 1 in = 0,0254 m), así que no hay
- * ninguna precisión que inventarse. Lo que el ADR 0006 evita es reescribir un dato guardado, y eso
- * aquí no ocurre.
+ * **About converting units.** The rest of the project does not convert between kilograms and
+ * pounds: the chart draws one series per unit and the history stores the unit each record was
+ * written in (ADR 0006). Here it does convert, and that does not contradict the above: BMI is a
+ * **derived and ephemeral** figure, computed to be shown and never stored, never encrypted and
+ * never compared with anything; and the factors are exact by definition (1 lb = 0.45359237 kg;
+ * 1 in = 0.0254 m), so there is no precision to invent. What ADR 0006 avoids is rewriting a stored
+ * datum, and that does not happen here.
  */
 
 /**
- * Etiqueta legible de cada unidad de peso y de estatura.
+ * Readable label of each weight and height unit.
  *
- * La pantalla de peso saca estas etiquetas del catálogo que publica el servidor (ADR 0005), que es
- * lo correcto ahí porque el `<select>` lo renderiza Blade. El perfil no tiene ese catálogo —no
- * registra nada, solo enseña— y enseñar `[lb_av]` o `[in_i]` sería pedirle a la persona que lea
- * notación de intercambio. Las cuatro parejas son públicas y fijas, así que repetirlas aquí no crea
- * ninguna verdad nueva que se pueda desincronizar con la del sobre: lo que se guarda sigue siendo
- * siempre el código.
+ * The weight screen takes these labels from the catalog the server publishes (ADR 0005), which is
+ * the right thing there because Blade renders the `<select>`. The profile has no such catalog —it
+ * records nothing, it only shows— and showing `[lb_av]` or `[in_i]` would be asking the person to
+ * read interchange notation. The four pairs are public and fixed, so repeating them here creates
+ * no new truth that could fall out of sync with the one in the envelope: what is stored is still
+ * always the code.
  */
 const UNIT_LABELS = Object.freeze({
     kg: 'kg',
@@ -47,28 +47,28 @@ const UNIT_LABELS = Object.freeze({
 });
 
 /**
- * @param {string} code Código UCUM.
- * @returns {string} La etiqueta, o el propio código si es desconocido: feo pero cierto.
+ * @param {string} code UCUM code.
+ * @returns {string} The label, or the code itself if unknown: ugly but true.
  */
 export function measurementUnitLabel(code) {
     return UNIT_LABELS[code] ?? code;
 }
 
-/** Exacto por definición internacional (misma libra avoirdupois que `UcumUnit::Pound`). */
+/** Exact by international definition (the same avoirdupois pound as `UcumUnit::Pound`). */
 const KILOGRAMS_PER_POUND = 0.45359237;
 
-/** Exacto por definición (pulgada internacional, `[in_i]`). */
+/** Exact by definition (international inch, `[in_i]`). */
 const METERS_PER_INCH = 0.0254;
 
 /**
- * Pasa un peso a kilogramos, que es el numerador de la fórmula.
+ * Turns a weight into kilograms, which is the numerator of the formula.
  *
- * Devuelve `null` —y no cero ni `NaN`— ante cualquier cosa que no sea un peso utilizable: unidad
- * desconocida, valor no numérico o cero. Un cero sería un peso falso, y quien llama tiene que poder
- * distinguir «no se puede calcular» de «vale cero».
+ * It returns `null` —and not zero and not `NaN`— for anything that is not a usable weight: unknown
+ * unit, non-numeric value or zero. A zero would be a false weight, and the caller has to be able
+ * to tell "cannot be computed" from "is worth zero".
  *
- * @param {string|number} value Tal cual viaja en el sobre (cadena, ADR 0004).
- * @param {string} unit Código UCUM.
+ * @param {string|number} value Exactly as it travels in the envelope (string, ADR 0004).
+ * @param {string} unit UCUM code.
  * @returns {number|null}
  */
 export function weightInKilograms(value, unit) {
@@ -90,11 +90,11 @@ export function weightInKilograms(value, unit) {
 }
 
 /**
- * Pasa una estatura a metros. Mismo criterio que {@see weightInKilograms} con lo que no se puede
- * usar: `null`, nunca cero (que además reventaría la división).
+ * Turns a height into metres. Same criterion as {@see weightInKilograms} for what cannot be used:
+ * `null`, never zero (which would also blow up the division).
  *
  * @param {string|number} value
- * @param {string} unit Código UCUM.
+ * @param {string} unit UCUM code.
  * @returns {number|null}
  */
 export function heightInMeters(value, unit) {
@@ -116,18 +116,18 @@ export function heightInMeters(value, unit) {
 }
 
 /**
- * Índice de masa corporal: kilogramos partido por metros al cuadrado.
+ * Body mass index: kilograms divided by metres squared.
  *
- * **Sin estatura no hay IMC y se devuelve `null`.** Ni cero, ni un guion, ni una estatura media
- * inventada: una cifra falsa en un historial clínico no se distingue después de una buena.
+ * **With no height there is no BMI and `null` is returned.** No zero, no dash, no invented average
+ * height: a false figure in a clinical history cannot be told apart from a good one afterwards.
  *
- * Se redondea a un decimal porque es la precisión con la que se publica en cualquier sitio serio;
- * dos decimales fingirían una exactitud que ni la báscula ni la cinta métrica tienen.
+ * It is rounded to one decimal because that is the precision it is published with anywhere
+ * serious; two decimals would fake an accuracy neither the scale nor the tape measure has.
  *
  * @param {object} params
  * @param {{value: string|number, unit: string}} params.weight
  * @param {{value: string|number, unit: string}|null|undefined} params.height
- * @returns {number|null} `null` cuando falta cualquiera de los dos o alguno no es utilizable.
+ * @returns {number|null} `null` when either is missing or one of them is unusable.
  */
 export function bodyMassIndex({ weight, height }) {
     if (weight === null || weight === undefined || height === null || height === undefined) {
@@ -145,20 +145,20 @@ export function bodyMassIndex({ weight, height }) {
 }
 
 /**
- * La estatura conocida en un instante dado: la del registro más reciente que **no sea posterior** a
- * ese instante.
+ * The known height at a given instant: the one of the most recent record that is **not later**
+ * than that instant.
  *
- * El «no posterior» es la parte que importa. Con una persona que crece, tomar una estatura medida
- * después haría que un peso de hace un año se dividiera por la talla de hoy, y el IMC resultante
- * sería más bajo de lo que fue. Es el mismo motivo por el que la estatura se guarda como evento con
- * fecha y no como dato de ficha. Un registro que trae su propia estatura la usa y no llama aquí; el
- * empate exacto de fecha entra (`<=`), que es el caso normal de peso y estatura en el mismo sobre.
+ * The "not later" is the part that matters. With a person who is growing, taking a height measured
+ * afterwards would divide a weight from a year ago by today's height, and the resulting BMI would
+ * be lower than it was. It is the same reason height is stored as a dated event and not as a
+ * profile field. A record that brings its own height uses it and does not call here; an exact date
+ * tie is included (`<=`), which is the normal case of weight and height in the same envelope.
  *
- * @param {list<{occurredAt: string, content: object}>} events Eventos de peso ya descifrados, en
- *        cualquier orden.
- * @param {string|null} occurredAt Fecha canónica del registro para el que se busca estatura; `null`
- *        significa «sin cota superior», que es lo que pide el perfil: allí la pregunta es «cuánto
- *        mides», no «cuánto medías cuando te pesaste».
+ * @param {list<{occurredAt: string, content: object}>} events Weight events already decrypted, in
+ *        any order.
+ * @param {string|null} occurredAt Canonical date of the record height is sought for; `null` means
+ *        "no upper bound", which is what the profile asks for: there the question is "how tall are
+ *        you", not "how tall were you when you weighed yourself".
  * @returns {{value: string, unit: string, occurredAt: string}|null}
  */
 export function heightKnownAt(events, occurredAt) {

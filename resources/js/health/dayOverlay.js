@@ -1,65 +1,65 @@
 /**
- * Superposición de días sobre un eje de 24 horas: el perfil glucémico ambulatorio (ADR 0004,
- * ADR 0006, ADR 0007, ADR 0008).
+ * Overlay of days on a 24-hour axis: the ambulatory glucose profile (ADR 0004, ADR 0006,
+ * ADR 0007, ADR 0008).
  *
- * **Qué enseña que ninguna serie cronológica enseña.** Todas las lecturas del periodo caen sobre un
- * solo eje de 0 a 24 h, una línea translúcida por día, y encima la mediana de cada hora en trazo
- * grueso. Es el formato del informe estándar de consulta, y revela lo que se repite todos los días
- * —la subida de madrugada, el pico de después de comer— que en una línea de tiempo continua queda
+ * **What it shows that no chronological series shows.** Every reading of the period falls on one
+ * single axis from 0 to 24 h, one translucent line per day, and on top the median of each hour in
+ * a thick stroke. It is the format of the standard clinic report, and it reveals what repeats
+ * every day —the dawn rise, the post-meal peak— which in a continuous timeline is dissolved among weeks.
  * disuelto entre semanas.
  *
- * Lógica pura: ni DOM ni Chart.js (`tests/js/dayOverlay.test.mjs`). Quien la pinta es
- * `health/dayOverlayChart.js`.
+ * Pure logic: no DOM and no Chart.js (`tests/js/dayOverlay.test.mjs`). `health/dayOverlayChart.js`
+ * paints it.
  *
- * Decisiones que implementa y que no le corresponde revisar:
+ * Decisions it implements and is not the place to revisit:
  *
- * - **Una serie por método de medición** (ADR 0008): capilar e intersticial tienen cada una sus
- *   días y **su propia mediana horaria**; promediarlas juntas mezclaría dos formas de medir.
- * - **La hora del día es la del reloj de quien registró** ({@see eventWallClockMs}), no la del
- *   navegador que mira: con la del navegador, un desayuno en Madrid visto desde México aparecería
- *   de madrugada y el patrón diario que se busca aquí quedaría desplazado entero.
- * - **Las horas sin lecturas van como hueco**, nunca como cero: la mediana horaria de una hora sin
- *   lecturas no existe, y un cero sería una hipoglucemia inventada.
- * - **No se convierte entre unidades** (ADR 0007): se cuenta lo excluido en `excludedByUnit`.
- * - **Nada se recorta en silencio**: los días que no caben se cuentan en `omittedDays`.
+ * - **One series per measurement method** (ADR 0008): capillary and interstitial each have their
+ *   own days and **their own hourly median**; averaging them together would mix two ways of measuring.
+ * - **The hour of the day is the one on the clock of whoever recorded it** ({@see eventWallClockMs}),
+ *   not the browser's: with the browser's, a breakfast in Madrid seen from Mexico would show up at
+ *   dawn and the daily pattern this is after would be shifted whole.
+ * - **Hours with no readings go as a gap**, never as a zero: the hourly median of an hour with no
+ *   readings does not exist, and a zero would be an invented hypoglycaemia.
+ * - **Nothing is converted between units** (ADR 0007): what is excluded is counted in `excludedByUnit`.
+ * - **Nothing is clipped in silence**: the days that do not fit are counted in `omittedDays`.
  */
 
 import { eventDayKey, eventWallClockMs } from './dailyBands.js';
 import { medianOf, toFiniteNumber } from './statistics.js';
 
 /**
- * Tope de días superpuestos.
+ * Cap on overlaid days.
  *
- * Cada día es una línea translúcida más; pasadas unas decenas, el fondo se satura y la mediana deja
- * de destacar sobre él, que es justo lo que hace legible este formato. Se conservan los días **más
- * recientes** y se dice cuántos quedaron fuera: un recorte callado se leería como «antes no había
- * nada». La mediana horaria se calcula solo con los días dibujados, para que la línea gruesa
- * describa exactamente la nube que hay debajo.
+ * Each day is one more translucent line; past a few dozen, the background saturates and the median
+ * stops standing out against it, which is exactly what makes this format readable. The **most
+ * recent** days are kept and how many were left out is stated: a silent clip would read as "there
+ * was nothing before". The hourly median is computed only with the days drawn, so the thick line
+ * describes exactly the cloud underneath it.
  */
 export const MAX_OVERLAY_DAYS = 45;
 
 const DAY_MS = 86_400_000;
 
 /**
- * Hora del día, con decimales, en el reloj de quien registró el evento.
+ * Hour of the day, with decimals, on the clock of whoever recorded the event.
  *
  * @param {number} wallClockMs
- * @returns {number} Entre 0 y 24.
+ * @returns {number} Between 0 and 24.
  */
 export function hourOfDay(wallClockMs) {
     return (((wallClockMs % DAY_MS) + DAY_MS) % DAY_MS) / 3_600_000;
 }
 
 /**
- * Construye la superposición de días de un tipo de evento.
+ * Builds the day overlay of an event type.
  *
  * @param {list<{type: string, tz?: string, occurredAt: string, data: object}>} events
  * @param {object} params
- * @param {string} [params.type] Token del tipo. Por defecto glucemia, que es para lo que existe este
- *        formato.
+ * @param {string} [params.type] Type token. Glucose by default, which is what this format exists
+ *        for.
  * @param {string} [params.valueKey]
- * @param {string} [params.groupBy] Campo que dice cómo se midió. Sin él, un único grupo `''`.
- * @param {string} [params.unit] Unidad de presentación; lo demás se cuenta en `excludedByUnit`.
+ * @param {string} [params.groupBy] Field that says how it was measured. Without it, a single `''` group.
+ * @param {string} [params.unit] Display unit; the rest is counted in `excludedByUnit`.
  * @param {number} [params.maxDays]
  * @returns {{
  *   groups: list<{
@@ -122,14 +122,14 @@ export function buildDayOverlay(events, {
     }
 
     /**
-     * A diferencia de la gráfica de bandas, aquí **no** se rellenan los días intermedios: el eje es
-     * de horas y un día sin lecturas simplemente no aporta línea. Lo que sí se conserva es el tramo
-     * más reciente, y se cuenta lo que queda fuera.
+     * Unlike the band chart, the intermediate days are **not** filled in here: the axis is one of
+     * hours and a day with no readings simply contributes no line. What is kept is the most recent
+     * stretch, and what falls outside is counted.
      */
     const observed = [...dayKeys].sort();
     const kept = new Set(observed.slice(-maxDays));
 
-    /** @type {Map<string, Map<string, list<{x: number, y: number}>>>} Grupo → día → puntos. */
+    /** @type {Map<string, Map<string, list<{x: number, y: number}>>>} Group → day → points. */
     const byGroup = new Map();
 
     for (const reading of readings) {
@@ -150,7 +150,7 @@ export function buildDayOverlay(events, {
         byDay.get(reading.day).push({ x: reading.x, y: reading.y });
     }
 
-    /** Orden estable por token, para que el color de un método no cambie entre dos cargas. */
+    /** Stable order by token, so the colour of a method does not change between two loads. */
     const groups = [...byGroup.keys()].sort((a, b) => a.localeCompare(b)).map((group) => {
         const byDay = byGroup.get(group);
         const days = [...byDay.keys()].sort().map((day) => ({
@@ -171,13 +171,13 @@ export function buildDayOverlay(events, {
 }
 
 /**
- * Mediana de cada hora del día, con las 24 franjas siempre presentes.
+ * Median of each hour of the day, with the 24 slots always present.
  *
- * Una hora sin ninguna lectura sale con `y` a `null` —hueco—, jamás con un cero: en glucemia un cero
- * es una hipoglucemia mortal, así que dibujarlo donde no hubo medición no es un detalle estético.
+ * An hour with no reading at all comes out with `y` at `null` —a gap—, never with a zero: in
+ * glucose a zero is a lethal hypoglycaemia, so drawing one where nothing was measured is no detail.
  *
- * El punto se coloca en el **centro** de la franja (`hora + 0,5`) porque representa toda la hora, no
- * su comienzo; colocarlo al principio desplazaría media hora a la izquierda el pico que se busca.
+ * The point is placed at the **centre** of the slot (`hour + 0.5`) because it stands for the whole
+ * hour, not its start; placing it at the beginning would shift the peak half an hour to the left.
  *
  * @param {list<{points: list<{x: number, y: number}>}>} days
  * @returns {list<{x: number, y: number|null}>}

@@ -8,25 +8,27 @@ use App\Models\User;
 use App\Provisioning\RegistrationLinks;
 
 /**
- * Autorización de la gestión de usuarios (Spec 0001 §10, ADR 0009).
+ * Authorization of user management (Spec 0001 §10, ADR 0009).
  *
- * El único criterio es tener el registro OPAQUE completo: cualquier criterio que dependa de que
- * otro usuario apruebe deja al primero sin quien lo apruebe (ADR 0009). Es el mismo criterio que
- * `canAccessPanel()`, deliberadamente, para que no haya dos definiciones de «cuenta usable».
+ * The only criterion is having a completed OPAQUE registration: any criterion that depends on
+ * another user approving leaves the first one with nobody to approve them (ADR 0009). It is
+ * deliberately the same criterion as `canAccessPanel()`, so there are not two definitions of "usable
+ * account".
  *
- * **La gestión de usuarios está desactivada.** Los cuatro permisos que la abrían devuelven `false`
- * a secas, así que el recurso no aparece en la navegación ni responde por URL. El alta de cuentas
- * ocurre por registro público (ADR 0009) y la emisión de enlaces por
- * `php artisan phr:issue-registration-link`, que no pasa por esta política. Ese es el único cambio
- * que hay que deshacer para volver a abrirla: devolver aquí el criterio de abajo.
+ * **User management is disabled.** The four permissions that opened it return a flat `false`, so the
+ * resource does not appear in the navigation and does not answer by URL. Accounts are created by
+ * public registration (ADR 0009) and links are issued by
+ * `php artisan phr:issue-registration-link`, which does not go through this policy. That is the only
+ * change to undo in order to open it again: return the criterion below here.
  *
- * El criterio original, `hasCompletedOpaqueRegistration()`, queda escrito en cada método para no
- * perderlo, porque es el mismo que `canAccessPanel()` y no hay dos definiciones de «cuenta usable».
+ * The original criterion, `hasCompletedOpaqueRegistration()`, is left written in each method so it
+ * is not lost, because it is the same one as `canAccessPanel()` and there are not two definitions of
+ * "usable account".
  *
- * No hay `update` ni `delete`: el login normalizado queda fijo una vez la cuenta está registrada,
- * porque el identificador de credencial se derivó de él y cambiarlo dejaría el sobre de la clave
- * maestra irrecuperable (ADR 0009). Cambiar la contraseña de alguien tampoco es una edición: es la
- * reemisión del enlace, con la pérdida de historial que describe ese mismo ADR.
+ * There is no `update` and no `delete`: the normalized login is fixed once the account is
+ * registered, because the credential identifier was derived from it and changing it would leave the
+ * master key envelope unrecoverable (ADR 0009). Changing somebody's password is not an edit either:
+ * it is reissuing the link, with the loss of history that same ADR describes.
  */
 final readonly class UserPolicy
 {
@@ -49,10 +51,10 @@ final readonly class UserPolicy
     }
 
     /**
-     * Reemitir el enlace de registro de otra cuenta (Spec 0001 §3.4).
+     * Reissue another account's registration link (Spec 0001 §3.4).
      *
-     * La confirmación explícita que exige una cuenta con acceso no vive aquí, sino en
-     * {@see RegistrationLinks}: esto solo decide quién puede intentarlo.
+     * The explicit confirmation an account with access requires does not live here but in
+     * {@see RegistrationLinks}: this only decides who may try.
      */
     public function issueRegistrationLink(User $user, User $model): bool
     {

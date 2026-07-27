@@ -12,52 +12,53 @@ use Filament\Support\Icons\Heroicon;
 use Illuminate\Contracts\Support\Htmlable;
 
 /**
- * Página de perfil: ajustes de la cuenta y cambio de contraseña (ADR 0002, ADR 0007, ADR 0009).
+ * Profile page: account settings and password change (ADR 0002, ADR 0007, ADR 0009).
  *
- * Esta clase no ve **nada** de lo que la página guarda. Los ajustes viajan cifrados a `PUT
- * /phr/settings` y el cambio de contraseña es un re-registro OPAQUE completo contra las rutas de
- * `/phr/auth/password/*`: en los dos casos el navegador cifra o deriva y el servidor solo valida
- * envoltura. Por eso aquí no hay formulario de Filament ni propiedad pública con contenido: el ADR
- * 0002 reserva los campos de Filament para datos en claro y la vista es un componente Alpine propio
- * (`resources/js/auth/profilePage.js`, registrado como `phrProfilePage`).
+ * This class sees **nothing** of what the page stores. The settings travel encrypted to `PUT
+ * /phr/settings` and the password change is a full OPAQUE re-registration against the
+ * `/phr/auth/password/*` routes: in both cases the browser encrypts or derives and the server only
+ * validates the wrapper. That is why there is no Filament form here and no public property with
+ * content: ADR 0002 reserves Filament fields for plaintext data and the view is an Alpine component
+ * of its own (`resources/js/auth/profilePage.js`, registered as `phrProfilePage`).
  *
- * La única excepción consciente es el idioma de la interfaz, que va en claro en `users.locale`
- * porque Filament resuelve en servidor el menú, las migas y la propia pantalla de acceso, que se
- * pinta antes de que exista ninguna clave (ADR 0007, con el mismo razonamiento que el ADR 0009 hace
- * para el correo y el nombre). No dice nada sobre la salud de nadie.
+ * The only deliberate exception is the interface language, which goes in the clear in `users.locale`
+ * because Filament resolves the menu, the breadcrumbs and the login screen itself on the server, and
+ * that screen is painted before any key exists (ADR 0007, with the same reasoning ADR 0009 makes for
+ * the email and the name). It says nothing about anyone's health.
  *
- * **Por qué hereda de {@see HealthEventPage}** y no directamente de {@see PhrPage}: el bloque de
- * últimas medidas (peso, estatura e índice de masa corporal) se calcula descifrando en el navegador,
- * y para eso el cliente necesita `fetchEvents`, el mismo método, la misma autorización y el mismo
- * criterio de fecha canónica que las pantallas de historial. Una segunda vía de lectura sería un
- * segundo sitio donde equivocarse. Es el mismo razonamiento —y el mismo precedente— de
- * {@see Sharing}; `storeEvent` viene de propina y no añade superficie, porque cualquier pantalla de
- * eventos del panel ya lo expone para el mismo usuario. `HealthEventPage` hereda a su vez de
- * `PhrPage`, así que siguen cerradas las seis propiedades `#[Url]` de `InteractsWithActions`.
+ * **Why it extends {@see HealthEventPage}** and not {@see PhrPage} directly: the latest measurements
+ * block (weight, height and body mass index) is computed by decrypting in the browser, and for that
+ * the client needs `fetchEvents`, the same method, the same authorization and the same canonical
+ * date criterion as the history screens. A second read path would be a second place to get it wrong.
+ * It is the same reasoning —and the same precedent— as {@see Sharing}; `storeEvent` comes along for
+ * free and adds no surface, because any events screen in the panel already exposes it for the same
+ * user. `HealthEventPage` in turn extends `PhrPage`, so the six `#[Url]` properties of
+ * `InteractsWithActions` stay closed.
  *
- * El servidor sigue sin ver nada: entrega ciphertext y no sabe cuánto pesa ni cuánto mide nadie.
+ * The server still sees nothing: it hands over ciphertext and does not know how much anyone weighs
+ * or how tall they are.
  */
 final class Profile extends HealthEventPage
 {
     protected static string|BackedEnum|null $navigationIcon = Heroicon::UserCircle;
 
     /**
-     * Fuera de la navegación lateral: al perfil se llega por el menú de usuario, que es donde
-     * cualquiera lo busca, y que ya lo registra {@see PhrPanelProvider}.
+     * Out of the sidebar navigation: the profile is reached from the user menu, which is where
+     * anyone looks for it, and {@see PhrPanelProvider} already registers it there.
      *
-     * La barra lateral es para el registro y la consulta de datos clínicos. Repetir ahí una entrada
-     * a la que ya se llega desde el avatar duplica el camino y le roba sitio a lo que la persona
-     * abre a diario.
+     * The sidebar is for recording and reviewing clinical data. Repeating there an entry already
+     * reachable from the avatar duplicates the path and steals room from what the person opens every
+     * day.
      */
     protected static bool $shouldRegisterNavigation = false;
 
     protected string $view = 'phr.pages.profile';
 
     /**
-     * El título y la etiqueta de navegación se resuelven por método y no como propiedad estática
-     * porque un inicializador de propiedad en PHP solo admite expresiones constantes: `__()` no
-     * puede llamarse ahí. Dejarlos como cadena fija es lo que mantenía el menú y las cabeceras en
-     * castellano aunque el resto de la pantalla ya estuviera traducido.
+     * The title and the navigation label are resolved by method and not as a static property because
+     * a property initializer in PHP only accepts constant expressions: `__()` cannot be called
+     * there. Leaving them as fixed strings is what kept the menu and the headers in Spanish even
+     * when the rest of the screen was already translated.
      */
     public function getTitle(): string|Htmlable
     {
@@ -70,10 +71,10 @@ final class Profile extends HealthEventPage
     }
 
     /**
-     * Idiomas que la interfaz sabe hablar, con el inglés primero por ser el de serie.
+     * Languages the interface speaks, with English first because it is the default.
      *
-     * Lista cerrada a propósito: el valor acaba en `App::setLocale()`, así que aceptar cualquier
-     * cadena sería dejar que el cliente elija un fichero de traducción.
+     * A closed list on purpose: the value ends up in `App::setLocale()`, so accepting any string
+     * would let the client pick a translation file.
      *
      * @return list<array{code: string, label: string}>
      */
@@ -87,8 +88,8 @@ final class Profile extends HealthEventPage
     }
 
     /**
-     * Unidades de glucemia entre las que se puede elegir la preferida (ADR 0006: es preferencia de
-     * presentación, no un requisito del evento; cada registro guarda la suya).
+     * Blood glucose units to pick a preferred one from (ADR 0006: it is a presentation preference,
+     * not a requirement of the event; each record stores its own).
      *
      * @return list<array{code: string, label: string}>
      */
@@ -101,11 +102,11 @@ final class Profile extends HealthEventPage
     }
 
     /**
-     * Idioma en vigor para esta cuenta: el que la persona guardó y, mientras `users.locale` siga
-     * vacía, el que se negoció con `Accept-Language` para esta petición.
+     * Language in force for this account: the one the person saved and, while `users.locale` is
+     * still empty, the one negotiated with `Accept-Language` for this request.
      *
-     * El ADR 0007 solo autoriza valor por defecto para lo que no es contenido clínico, y el idioma
-     * no lo es: se puede elegir uno por ella sin afirmar nada sobre su salud.
+     * ADR 0007 only allows a default for what is not clinical content, and the language is not:
+     * picking one for them claims nothing about their health.
      */
     public function currentLocale(): string
     {

@@ -1,67 +1,67 @@
 /**
- * Series diarias de mediana con banda de mínimo y máximo (ADR 0004, ADR 0006, ADR 0007, ADR 0008).
+ * Daily median series with a minimum and maximum band (ADR 0004, ADR 0006, ADR 0007, ADR 0008).
  *
- * Lógica pura: nada de DOM ni de Chart.js, para poder probarla sin montar nada
- * (`tests/js/dailyBands.test.mjs`). Quien la pinta es `health/medianBandChart.js`; quien la alimenta
- * es el panel de inicio, con los eventos que ya tiene descifrados en memoria.
+ * Pure logic: no DOM and no Chart.js, so it can be tested without mounting anything
+ * (`tests/js/dailyBands.test.mjs`). `health/medianBandChart.js` paints it; the home dashboard
+ * feeds it, with the events it already has decrypted in memory.
  *
- * **Por qué la mediana y no la media.** Un día con una hipoglucemia y cinco lecturas normales tiene
- * una media arrastrada por el valor extremo; la mediana dice cómo fue el día típico y la banda dice
- * hasta dónde llegó. Las dos cosas juntas responden a la pregunta que se lleva haciendo el proyecto
- * desde el principio —«¿cómo voy?»— sin esconder el extremo, que es lo que haría una media a secas.
+ * **Why the median and not the mean.** A day with one hypoglycaemia and five normal readings has a
+ * mean dragged by the extreme value; the median says how the typical day went and the band says
+ * how far it reached. Both together answer the question the project has been asking from the start
+ * —"how am I doing?"— without hiding the extreme, which is what a plain mean would do.
  *
- * Decisiones que este módulo implementa y que no le corresponde revisar:
+ * Decisions this module implements and is not the place to revisit:
  *
- * - **Una serie por método de medición** (ADR 0008): una glucemia capilar y una intersticial no son
- *   el mismo dato, así que no comparten línea ni banda. El campo que agrupa lo dice quien llama
- *   (`groupBy`), igual que en `statistics.js`.
- * - **Los días sin lecturas van como hueco**, nunca como cero: un cero es una lectura, y una falsa.
- *   Por eso `days` cubre el tramo completo entre el primer y el último día con datos, y los días sin
- *   nada llevan `null` en todas las series, que es lo que Chart.js dibuja como interrupción.
- * - **Un día con una sola lectura colapsa la banda a un punto** (mediana = mínimo = máximo), y está
- *   bien que se vea así: es exactamente lo que se sabe de ese día.
- * - **No se convierte entre unidades** (ADR 0007): se construye la serie de una única unidad y lo
- *   demás se cuenta en `excludedByUnit` para que la vista pueda decirlo.
- * - **El día se calcula con la zona horaria del propio evento**, no con la del navegador que mira
- *   ({@see eventDayKey}).
+ * - **One series per measurement method** (ADR 0008): a capillary glucose reading and an
+ *   interstitial one are not the same datum, so they share neither line nor band. The grouping
+ *   field is stated by the caller (`groupBy`), as in `statistics.js`.
+ * - **Days with no readings go as a gap**, never as a zero: a zero is a reading, and a false one.
+ *   That is why `days` covers the whole stretch between the first and the last day with data, and
+ *   days with nothing carry `null` in every series, which is what Chart.js draws as a break.
+ * - **A day with a single reading collapses the band into a point** (median = minimum = maximum),
+ *   and it is right that it looks like that: it is exactly what is known about that day.
+ * - **Nothing is converted between units** (ADR 0007): the series of one single unit is built and
+ *   the rest is counted in `excludedByUnit` so the view can say so.
+ * - **The day is computed with the time zone of the event itself**, not with that of the browser
+ *   looking at it ({@see eventDayKey}).
  */
 
 import { medianOf, toFiniteNumber } from './statistics.js';
 
 /**
- * Tope de días del eje.
+ * Cap on the days of the axis.
  *
- * El eje se rellena día a día para que los huecos sean huecos de verdad, así que un periodo de
- * «todos los registros» sobre varios años pediría miles de etiquetas y otros tantos puntos por
- * serie: la gráfica se vuelve ilegible mucho antes de volverse lenta. Cuando el tramo se pasa se
- * conservan los días **más recientes** y se devuelve cuántos quedaron fuera (`omittedDays`), que la
- * vista declara en el pie: un recorte silencioso haría leer «no hay nada antes» donde sí lo hay.
+ * The axis is filled day by day so that gaps are real gaps, so a period of "every record" over
+ * several years would ask for thousands of labels and as many points per series: the chart becomes
+ * unreadable long before it becomes slow. When the stretch goes over, the **most recent** days are
+ * kept and how many were left out is returned (`omittedDays`), which the view states in the
+ * caption: a silent clip would make people read "there is nothing before" where there is.
  */
 export const MAX_CHART_DAYS = 180;
 
 /**
- * Separador de la clave compuesta grupo + magnitud.
+ * Separator of the composite group + quantity key.
  *
- * Es el carácter nulo y no un espacio ni un guion porque los tokens de catálogo son libres de llevar
- * cualquiera de los dos (`left_sitting` hoy, otro mañana): una clave que se pudiera partir mal
- * mezclaría dos series clínicas distintas en una sola línea.
+ * It is the null character and not a space or a dash because catalog tokens are free to carry
+ * either (`left_sitting` today, another tomorrow): a key that could be split wrongly would mix two
+ * different clinical series into a single line.
  */
 const SERIES_KEY_SEPARATOR = '\u0000';
 
 /**
- * Día al que pertenece un evento, en la zona horaria **con la que se registró**.
+ * Day an event belongs to, in the time zone **it was recorded in**.
  *
- * No vale el calendario de la máquina que mira: una cena de las 23:30 en Madrid se registró el día 4
- * para quien la comió, y abrir la aplicación desde otro huso la movería al día 5 sin que el dato
- * haya cambiado. Tampoco vale UTC a secas, porque el día que importa es el de la persona. El desfase
- * viaja dentro del propio sobre, en `tz` (ADR 0006), así que es el que manda.
+ * The calendar of the machine looking is no good: a dinner at 23:30 in Madrid was recorded on the
+ * 4th for whoever ate it, and opening the application from another time zone would move it to the
+ * 5th without the datum having changed. Plain UTC is no good either, because the day that matters
+ * is the person's. The offset travels inside the envelope itself, in `tz` (ADR 0006), so it rules.
  *
- * Sin `tz`, o con uno que no se entiende, se cae a UTC de forma explícita: es el único valor que no
- * depende del dispositivo desde el que se mire.
+ * With no `tz`, or with one that cannot be read, it falls back to UTC explicitly: it is the only
+ * value that does not depend on the device it is looked at from.
  *
- * @param {string} occurredAt Instante en forma canónica (ADR 0004).
- * @param {string} [tz] Desfase del tipo `+02:00`, `-05:30` o `Z`.
- * @returns {string} `YYYY-MM-DD`, o cadena vacía si el instante no se pudo interpretar.
+ * @param {string} occurredAt Instant in canonical form (ADR 0004).
+ * @param {string} [tz] Offset of the form `+02:00`, `-05:30` or `Z`.
+ * @returns {string} `YYYY-MM-DD`, or an empty string if the instant could not be read.
  */
 export function eventDayKey(occurredAt, tz) {
     const shifted = eventWallClockMs(occurredAt, tz);
@@ -74,22 +74,22 @@ export function eventDayKey(occurredAt, tz) {
 }
 
 /**
- * Instante del evento **en el reloj de pared de quien lo registró**, expresado como milisegundos
- * desde la época leídos en UTC.
+ * Instant of the event **on the wall clock of whoever recorded it**, expressed as milliseconds
+ * since epoch read in UTC.
  *
- * Es la misma cuenta que hace {@see eventDayKey} y existe aparte porque las gráficas que colocan
- * cada lectura en un eje de tiempo —la curva con marcas de comida e insulina, y la superposición de
- * días sobre 24 horas— necesitan la hora, no solo el día. La regla es la misma y por el mismo
- * motivo: una cena de las 23:30 en Madrid ocurrió a las 23:30 para quien la comió, y colocarla a las
- * 21:30 porque quien mira está en Londres movería el pico posprandial a otra franja del día.
+ * It is the same computation {@see eventDayKey} does and it exists apart because the charts that
+ * place each reading on a time axis —the curve with meal and insulin markers, and the overlay of
+ * days over 24 hours— need the time, not just the day. The rule is the same and for the same
+ * reason: a dinner at 23:30 in Madrid happened at 23:30 for whoever ate it, and placing it at
+ * 21:30 because the viewer is in London would move the post-meal peak to another band of the day.
  *
- * Lo que devuelve **no es un instante absoluto** y no se puede comparar con `Date.now()`: es una
- * hora de pared codificada como si fuera UTC, así que quien la formatee tiene que hacerlo con
- * `timeZone: 'UTC'` o la desplazará por segunda vez.
+ * What it returns **is not an absolute instant** and cannot be compared with `Date.now()`: it is a
+ * wall clock time encoded as if it were UTC, so whoever formats it has to do so with
+ * `timeZone: 'UTC'` or it will be shifted a second time.
  *
- * @param {string} occurredAt Instante en forma canónica (ADR 0004).
- * @param {string} [tz] Desfase del tipo `+02:00`, `-05:30` o `Z`.
- * @returns {number|null} `null` si el instante no se pudo interpretar (nunca un cero, que sería 1970).
+ * @param {string} occurredAt Instant in canonical form (ADR 0004).
+ * @param {string} [tz] Offset of the form `+02:00`, `-05:30` or `Z`.
+ * @returns {number|null} `null` if the instant could not be read (never a zero, which would be 1970).
  */
 export function eventWallClockMs(occurredAt, tz) {
     const shifted = new Date(occurredAt).getTime() + tzOffsetMinutes(tz) * 60_000;
@@ -98,8 +98,8 @@ export function eventWallClockMs(occurredAt, tz) {
 }
 
 /**
- * @param {string} [tz] Desfase del tipo `+02:00`, `-05:30` o `Z`.
- * @returns {number} Minutos de desfase. Cero si no viene o no se entiende, nunca la zona local.
+ * @param {string} [tz] Offset of the form `+02:00`, `-05:30` or `Z`.
+ * @returns {number} Offset minutes. Zero if it is missing or unreadable, never the local zone.
  */
 export function tzOffsetMinutes(tz) {
     const match = /^([+-])(\d{2}):(\d{2})$/.exec(tz ?? '');
@@ -115,7 +115,7 @@ export function tzOffsetMinutes(tz) {
 
 /**
  * @param {Date} date
- * @returns {string} `YYYY-MM-DD` de los componentes UTC de la fecha.
+ * @returns {string} `YYYY-MM-DD` of the UTC components of the date.
  */
 function utcDayKey(date) {
     const pad = (value) => String(value).padStart(2, '0');
@@ -124,14 +124,14 @@ function utcDayKey(date) {
 }
 
 /**
- * Todos los días de calendario entre dos claves, las dos incluidas.
+ * Every calendar day between two keys, both included.
  *
- * Se cuenta con `Date.UTC` y no con el calendario local: las claves ya vienen resueltas en la zona
- * del evento, y volver a interpretarlas en la del navegador las movería un día en cuanto el desfase
- * fuera negativo.
+ * It counts with `Date.UTC` and not with the local calendar: the keys already come resolved in the
+ * time zone of the event, and reading them again in the browser's would move them by a day as soon
+ * as the offset was negative.
  *
  * @param {string} first `YYYY-MM-DD`.
- * @param {string} last `YYYY-MM-DD`, no anterior a `first`.
+ * @param {string} last `YYYY-MM-DD`, not earlier than `first`.
  * @returns {list<string>}
  */
 export function enumerateDays(first, last) {
@@ -152,25 +152,25 @@ export function enumerateDays(first, last) {
 }
 
 /**
- * Construye las series diarias de un tipo de evento.
+ * Builds the daily series of an event type.
  *
- * Las claves de agrupación y de valor son las mismas que usa `statistics.js` para ese tipo, y es a
- * propósito: la tarjeta de estadísticas y la gráfica de al lado tienen que estar contando lo mismo.
- * Un tipo con varias magnitudes en el mismo evento (la tensión: sistólica y diastólica) pide varias
- * `valueKeys` y sale con una serie por magnitud dentro de cada grupo.
+ * The grouping and value keys are the same `statistics.js` uses for that type, and that is on
+ * purpose: the statistics card and the chart next to it have to be counting the same thing. A type
+ * with several quantities in the same event (blood pressure: systolic and diastolic) asks for
+ * several `valueKeys` and comes out with one series per quantity inside each group.
  *
- * Un evento entra entero o no entra: si le falta cualquiera de las magnitudes pedidas se cuenta en
- * `discarded` y no aporta a ninguna serie, igual que hace `summarizeBloodPressurePeriod`. Media
- * lectura no es una lectura.
+ * An event goes in whole or does not go in: if any of the requested quantities is missing it is
+ * counted in `discarded` and contributes to no series, just as `summarizeBloodPressurePeriod` does.
+ * Half a reading is not a reading.
  *
- * @param {list<{type: string, tz?: string, occurredAt: string, data: object}>} events Eventos ya
- *        descifrados y aplanados, del periodo elegido (lo acota el servidor, ADR 0006).
+ * @param {list<{type: string, tz?: string, occurredAt: string, data: object}>} events Events
+ *        already decrypted and flattened, of the chosen period (the server clips it, ADR 0006).
  * @param {object} params
- * @param {string} params.type Token del tipo de evento.
- * @param {list<string>} [params.valueKeys] Campos numéricos del sobre. Por defecto `['value']`.
- * @param {string} [params.groupBy] Campo que dice cómo se midió. Sin él, un único grupo `''`.
- * @param {string} [params.unit] Unidad de presentación; el resto se cuenta en `excludedByUnit`. Sin
- *        unidad no se excluye nada (tipos cuyo sobre no la lleva).
+ * @param {string} params.type Event type token.
+ * @param {list<string>} [params.valueKeys] Numeric fields of the envelope. `['value']` by default.
+ * @param {string} [params.groupBy] Field that says how it was measured. Without it, a single `''` group.
+ * @param {string} [params.unit] Display unit; the rest is counted in `excludedByUnit`. With no
+ *        unit nothing is excluded (types whose envelope does not carry one).
  * @returns {{
  *   days: list<string>,
  *   series: list<{
@@ -184,7 +184,7 @@ export function enumerateDays(first, last) {
  * }}
  */
 export function buildDailyBands(events, { type, valueKeys = ['value'], groupBy, unit } = {}) {
-    /** @type {Map<string, Map<string, list<number>>>} Serie → día → valores de ese día. */
+    /** @type {Map<string, Map<string, list<number>>>} Series → day → values of that day. */
     const readings = new Map();
     const dayKeys = new Set();
     let excludedByUnit = 0;
@@ -247,9 +247,9 @@ export function buildDailyBands(events, { type, valueKeys = ['value'], groupBy, 
     const days = spanned.slice(-MAX_CHART_DAYS);
 
     /**
-     * Orden estable de las series: por grupo (alfabético por token) y, dentro del grupo, en el orden
-     * en que se pidieron las magnitudes. Sin esto, la gráfica repartiría los colores de otra forma
-     * entre una carga y la siguiente, y el color de una serie clínica dejaría de significar nada.
+     * Stable order of the series: by group (alphabetical by token) and, inside the group, in the
+     * order the quantities were asked for. Without this, the chart would hand out the colours
+     * differently between loads, and the colour of a clinical series would stop meaning anything.
      */
     const series = [...readings.keys()]
         .sort((a, b) => {
@@ -269,11 +269,11 @@ export function buildDailyBands(events, { type, valueKeys = ['value'], groupBy, 
 }
 
 /**
- * Punto de un día: mediana, mínimo y máximo, o hueco.
+ * Point of one day: median, minimum and maximum, or a gap.
  *
- * Un día sin lecturas devuelve `null` —hueco—, nunca un cero: un cero es una lectura, y una falsa.
- * Un día con una sola lectura devuelve los tres valores iguales, y la banda se ve colapsada en un
- * punto, que es justo lo que se sabe de ese día.
+ * A day with no readings returns `null` —a gap—, never a zero: a zero is a reading, and a false
+ * one. A day with a single reading returns the three values equal, and the band looks collapsed
+ * into a point, which is exactly what is known about that day.
  *
  * @param {list<number>|undefined} values
  * @returns {{median: number, min: number, max: number, count: number}|null}

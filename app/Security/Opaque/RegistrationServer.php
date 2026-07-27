@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace App\Security\Opaque;
 
 /**
- * Lado servidor de la fase de registro (`docs/OPAQUE.md` §10.2 y §10.4;
+ * Server side of the registration phase (`docs/OPAQUE.md` §10.2 and §10.4;
  * RFC 9807 §5.2.2).
  *
- * El servidor sólo interviene dos veces en el registro: evalúa el OPRF sobre
- * el punto cegado del cliente y, después, recibe el `RegistrationRecord` ya
- * construido. Nunca ve la contraseña, ni `randomized_password`, ni
- * `export_key`, y no puede abrir el `envelope`.
+ * The server takes part in registration only twice: it evaluates the OPRF over
+ * the client's blinded point and, later, receives the already built
+ * `RegistrationRecord`. It never sees the password, nor
+ * `randomized_password`, nor `export_key`, and it cannot open the `envelope`.
  */
 final class RegistrationServer
 {
@@ -19,7 +19,7 @@ final class RegistrationServer
 
     /**
      * `CreateRegistrationResponse(request, server_public_key, credential_identifier, oprf_seed)`
-     * de RFC 9807 §5.2.2 (`docs/OPAQUE.md` §10.2).
+     * from RFC 9807 §5.2.2 (`docs/OPAQUE.md` §10.2).
      *
      * ```
      * seed = Expand(oprf_seed, concat(credential_identifier, "OprfKey"), Nok)
@@ -31,26 +31,26 @@ final class RegistrationServer
      * response = SerializeElement(evaluated_element) || server_public_key
      * ```
      *
-     * `DeserializeElement` ya lo ha hecho {@see RegistrationRequest}, que
-     * valida el punto al construirse (longitud, canonicidad, pertenencia al
-     * grupo y rechazo de la identidad, RFC 9807 §10.7).
+     * `DeserializeElement` has already been done by {@see RegistrationRequest},
+     * which validates the point on construction (length, canonicity, group
+     * membership and rejection of the identity, RFC 9807 §10.7).
      *
-     * El `credential_identifier` debe medir exactamente 32 bytes
-     * (`docs/OPAQUE.md` §13.1): RFC 9807 §5.2.2 lo concatena con `"OprfKey"`
-     * sin prefijo de longitud, así que longitudes variables abrirían
-     * colisiones de dominio.
+     * The `credential_identifier` must be exactly 32 bytes
+     * (`docs/OPAQUE.md` §13.1): RFC 9807 §5.2.2 concatenates it with `"OprfKey"`
+     * without a length prefix, so variable lengths would open up domain
+     * collisions.
      *
-     * @param  RegistrationRequest  $request  Mensaje del cliente, 32 bytes ya validados.
-     * @param  string  $credentialIdentifier  Identificador binario de 32 bytes (§13.1).
-     * @return RegistrationResponse Respuesta de 64 bytes,
+     * @param  RegistrationRequest  $request  Client message, 32 already validated bytes.
+     * @param  string  $credentialIdentifier  Binary identifier of 32 bytes (§13.1).
+     * @return RegistrationResponse Response of 64 bytes,
      *                              `evaluated_message || server_public_key`.
      *
-     * @throws InvalidConfigurationException Si el `credential_identifier` no mide 32 bytes.
-     * @throws InvalidPointException Si la evaluación OPRF produce la identidad
-     *                               o alguna operación de grupo falla.
-     * @throws OpaqueException Si `DeriveKeyPair` agota el contador (probabilidad
-     *                         negligible; §10.2 manda elegir otro
-     *                         `credential_identifier` y repetir).
+     * @throws InvalidConfigurationException If the `credential_identifier` is not 32 bytes long.
+     * @throws InvalidPointException If the OPRF evaluation yields the identity
+     *                               or some group operation fails.
+     * @throws OpaqueException If `DeriveKeyPair` exhausts the counter (negligible
+     *                         probability; §10.2 says to pick another
+     *                         `credential_identifier` and retry).
      */
     public function createRegistrationResponse(
         RegistrationRequest $request,

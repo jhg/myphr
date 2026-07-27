@@ -8,29 +8,29 @@ use App\Security\Opaque\Base64Url;
 use App\Security\Opaque\InvalidMessageException;
 
 /**
- * Validación del **envoltorio** de un sobre cifrado del ADR 0004 (Spec 0001 §10).
+ * Validation of the **wrapper** of an ADR 0004 encrypted envelope (Spec 0001 §10).
  *
- * Comprueba tres cosas y ninguna más: prefijo `v1.`, base64url canónico y tamaño permitido.
- * **Nunca** su contenido: el servidor no tiene la clave, así que cualquier comprobación adicional
- * sería una afirmación que no puede sostener.
+ * It checks three things and nothing else: the `v1.` prefix, canonical base64url and an allowed
+ * size. **Never** the content: the server has no key, so any further check would be a claim it
+ * cannot back.
  *
- * El tamaño es una de las tres combinaciones que produce `resources/js/crypto/envelope.js`:
- * cabecera (64 bytes) + tag Poly1305 (16) + uno de los tamaños fijos de relleno (256, 1024, 4096).
- * Rechazar cualquier otro tamaño evita almacenar como sobre algo que el cliente nunca podrá abrir.
+ * The size is one of the three combinations `resources/js/crypto/envelope.js` produces: header
+ * (64 bytes) + Poly1305 tag (16) + one of the fixed padding sizes (256, 1024, 4096). Rejecting any
+ * other size avoids storing as an envelope something the client will never be able to open.
  */
 final class EnvelopeValidator
 {
-    /** Prefijo de transporte del ADR 0004, comprobado también por el guardarraíl del cliente. */
+    /** ADR 0004 transport prefix, also checked by the client-side guardrail. */
     public const string PREFIX = 'v1.';
 
-    /** Cabecera: versión, algoritmo, KDF, banderas, identificador de clave, sal y nonce. */
+    /** Header: version, algorithm, KDF, flags, key identifier, salt and nonce. */
     public const int HEADER_BYTES = 64;
 
     /** Tag del AEAD. */
     public const int TAG_BYTES = 16;
 
     /**
-     * Tamaños binarios completos admitidos: cabecera + tag + tamaño fijo de relleno.
+     * Accepted full binary sizes: header + tag + fixed padding size.
      *
      * @var list<int>
      */
@@ -43,7 +43,7 @@ final class EnvelopeValidator
     private function __construct() {}
 
     /**
-     * @param  mixed  $envelope  Valor recibido del cliente, sin ninguna suposición sobre su tipo.
+     * @param  mixed  $envelope  Value received from the client, with no assumption about its type.
      */
     public static function isValid(mixed $envelope): bool
     {

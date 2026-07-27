@@ -9,34 +9,33 @@ use DateTimeInterface;
 use Exception;
 
 /**
- * Formato canónico de fecha del ADR 0004: `YYYY-MM-DDTHH:MM:SS.ffffffZ`, siempre UTC, sufijo `Z`,
- * seis dígitos de fracción rellenados con ceros.
+ * Canonical date format from ADR 0004: `YYYY-MM-DDTHH:MM:SS.ffffffZ`, always UTC, `Z` suffix, six
+ * fraction digits zero-padded.
  *
- * No es un formateo de presentación: estas fechas entran en el dato asociado del AEAD y en el `info`
- * de la derivación de claves, así que una variante distinta de la misma fecha son bytes distintos y
- * produce un sobre indescifrable. ISO 8601 a secas no basta, porque admite varias formas del mismo
- * instante, y las propias herramientas del proyecto producen tres incompatibles entre sí.
+ * This is not presentation formatting: these dates go into the AEAD associated data and into the
+ * `info` of the key derivation, so a different variant of the same date is different bytes and
+ * produces an envelope that will not decrypt. Plain ISO 8601 is not enough, because it allows
+ * several forms of the same instant, and the project's own tools produce three incompatible ones.
  *
- * Vive en un solo sitio porque un segundo criterio de fecha sería un segundo sitio donde
- * equivocarse: lo usan tanto el `occurred_at` de los eventos (ADR 0006) como el `expiresAt` de los
- * recortes compartidos (ADR 0011), y el que se desviase sería justo el que participa en un AEAD.
+ * It lives in a single place because a second date criterion would be a second place to get it
+ * wrong: both the `occurred_at` of events (ADR 0006) and the `expiresAt` of shared clippings
+ * (ADR 0011) use it, and whichever one drifted would be exactly the one taking part in an AEAD.
  */
 final class CanonicalDate
 {
     public const string FORMAT = 'Y-m-d\TH:i:s.u\Z';
 
-    /** Forma exacta admitida. Se comprueba antes de parsear, porque Carbon es tolerante de más. */
+    /** The exact accepted form. It is checked before parsing, because Carbon is too permissive. */
     public const string REGEX = '/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/';
 
     private function __construct() {}
 
     /**
-     * Parsea una fecha canónica, o `null` si no lo es.
+     * Parses a canonical date, or returns `null` if it is not one.
      *
-     * La comprobación es de ida y vuelta: además del patrón, se vuelve a formatear el resultado y se
-     * exige igualdad con la entrada. Sin eso, Carbon acepta cosas como el 31 de febrero y las
-     * desplaza en silencio al 3 de marzo, con lo que el servidor guardaría una fecha distinta de la
-     * que el cliente usó al cifrar.
+     * The check is a round trip: on top of the pattern, the result is formatted again and must equal
+     * the input. Without that, Carbon accepts things like 31 February and silently shifts them to
+     * 3 March, so the server would store a date different from the one the client encrypted with.
      */
     public static function parse(mixed $value): ?CarbonImmutable
     {

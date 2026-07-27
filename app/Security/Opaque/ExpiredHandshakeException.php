@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace App\Security\Opaque;
 
 /**
- * Handshake de login caducado por TTL o ya consumido
+ * Login handshake expired by TTL or already consumed
  * (`docs/OPAQUE.md` §14.3, §18).
  *
- * Los handshakes son de un solo uso; un segundo intento sobre el mismo
- * identificador produce esta excepción.
+ * Handshakes are single use; a second attempt on the same identifier raises
+ * this exception.
  */
 final class ExpiredHandshakeException extends OpaqueException {}

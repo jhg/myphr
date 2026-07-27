@@ -7,24 +7,24 @@ namespace App\Sharing;
 use RuntimeException;
 
 /**
- * Error **genérico y único** de la lectura de un recorte (ADR 0011).
+ * The **single generic** error of reading a clipping (ADR 0011).
  *
- * Hay exactamente una instancia posible, sin variantes ni códigos internos, para que no exista la
- * tentación de dejar escapar la causa. Las cuatro causas —el enlace no existe, caducó, se revocó, o
- * el PIN es incorrecto— tienen que producir la misma respuesta byte a byte: si se distinguen, quien
- * tenga una lista de identificadores puede averiguar cuáles siguen vivos, y quien pruebe PINes sabe
- * cuándo ha dado con un enlace real.
+ * There is exactly one possible instance, with no variants and no internal codes, so there is no
+ * temptation to let the cause escape. The four causes —the link does not exist, expired, was
+ * revoked, or the PIN is wrong— have to produce the same response byte for byte: if they differ,
+ * anyone with a list of identifiers can work out which ones are still alive, and anyone trying PINs
+ * knows when they have hit a real link.
  *
- * Es la razón por la que esta clase no lleva un constructor con mensaje: cualquier detalle que
- * alguien añadiera aquí acabaría en el cuerpo de la respuesta.
+ * That is why this class has no constructor with a message: any detail somebody added here would
+ * end up in the response body.
  */
 final class InvalidShareLinkException extends RuntimeException
 {
-    /** Código que sale al cliente. Uno solo, y a propósito no dice qué falló. */
+    /** Code that reaches the client. Just one, and deliberately silent about what failed. */
     public const string CODE = 'invalid_link_or_pin';
 
     public static function generic(): self
     {
-        return new self('El enlace no existe, caducó, se revocó, o el PIN no es correcto.');
+        return new self('The link does not exist, expired, was revoked, or the PIN is wrong.');
     }
 }

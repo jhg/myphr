@@ -8,56 +8,56 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * ADR 0011: capa pequeña de la compartición. Un envoltorio por enlace.
+ * ADR 0011: the small layer of sharing. One wrapper per link.
  *
- * Existe separada de `shares` para que rotar un enlace —porque alguien quemó los cinco intentos, o
- * porque hay que dar uno por destinatario, cada uno con su PIN— no obligue a rehacer el recorte ni a
- * re-cifrar el paquete.
+ * It exists separately from `shares` so that rotating a link —because somebody burnt the five
+ * attempts, or because you need one per recipient, each with its own PIN— does not force redoing the
+ * clipping or re-encrypting the package.
  *
- * `wrapper` es un sobre `v1.` corriente cifrado con `wrapKey` que contiene `CK`. `wrapKey` se deriva
- * de `S` (32 bytes que viajan en el fragmento de la URL y **nunca** llegan al servidor) concatenado
- * con el Argon2id del PIN, así que la fila completa, robada de un volcado de base de datos, no abre
- * nada.
+ * `wrapper` is an ordinary `v1.` envelope encrypted with `wrapKey` that holds `CK`. `wrapKey` is
+ * derived from `S` (32 bytes that travel in the URL fragment and **never** reach the server)
+ * concatenated with the Argon2id of the PIN, so the whole row, stolen from a database dump, opens
+ * nothing.
  *
- * `attempts_remaining` va en **columna** y jamás en el `RateLimiter` de Laravel, que vive en caché:
- * un `cache:clear` operativo reiniciaría el contador y devolvería el millón de intentos que este
- * diseño existe para impedir. Se decrementa con la misma escritura condicional atómica de
- * `RegistrationLinks::consume()`, sin `lockForUpdate()`, que en SQLite es un no-op.
+ * `attempts_remaining` lives in a **column** and never in Laravel's `RateLimiter`, which lives in
+ * cache: an operational `cache:clear` would reset the counter and hand back the million attempts
+ * this design exists to prevent. It is decremented with the same atomic conditional write as
+ * `RegistrationLinks::consume()`, without `lockForUpdate()`, which is a no-op on SQLite.
  *
- * **Sin `updated_at`**: el único cambio en su sitio es ese decremento, y una marca de última
- * modificación convertiría la tabla en un registro con la hora exacta de cada intento de apertura.
- * **Sin `deleted_at`**: agotar los intentos y revocar borran la fila de verdad.
+ * **No `updated_at`**: the only in-place change is that decrement, and a last-modified mark would
+ * turn the table into a log with the exact time of every open attempt. **No `deleted_at`**: running
+ * out of attempts and revoking both delete the row for real.
  */
 return new class extends Migration
 {
     public function up(): void
     {
         Schema::create('share_links', function (Blueprint $table): void {
-            /** UUIDv4 del cliente: es el identificador que viaja en la URL del profesional. */
+            /** Client-side UUIDv4: it is the identifier that travels in the professional's URL. */
             $table->uuid('id')->primary();
 
-            /** Borrar el recorte se lleva por delante todos sus enlaces. */
+            /** Deleting the clipping takes all of its links with it. */
             $table->foreignUuid('share_id')->constrained('shares')->cascadeOnDelete();
 
-            /** Sal del Argon2id del PIN, 16 bytes por enlace. Longitud validada en aplicación. */
+            /** Salt for the Argon2id of the PIN, 16 bytes per link. Length validated in the application. */
             $table->binary('pin_salt');
 
-            /** Comprobante del PIN, 32 bytes. Se compara en tiempo constante con `hash_equals()`. */
+            /** PIN proof, 32 bytes. Compared in constant time with `hash_equals()`. */
             $table->binary('pin_tag');
 
-            /** Cinco intentos. Con PIN de seis dígitos, la probabilidad de acierto es 5 entre un millón. */
+            /** Five attempts. With a six-digit PIN, the odds of a lucky guess are 5 in a million. */
             $table->unsignedTinyInteger('attempts_remaining');
 
-            /** Sobre `v1.` con `CK` dentro, cifrado con `wrapKey`. */
+            /** `v1.` envelope with `CK` inside, encrypted with `wrapKey`. */
             $table->text('wrapper');
 
             /**
-             * `precision: 6` obligatoria: `canonicalDate(expires_at)` entra en el `info` de
-             * `wrapKey` y en el dato asociado del envoltorio (ADR 0011). Si el motor devuelve esta
-             * fecha truncada al segundo, la clave y el dato asociado del lector dejan de coincidir
-             * con los del cliente y el envoltorio no abre. Va junto al `$dateFormat` de
-             * {@see ShareLink}: la columna manda en MySQL y PostgreSQL, el modelo en
-             * SQLite, y hacen falta las dos.
+             * `precision: 6` is mandatory: `canonicalDate(expires_at)` goes into the `info` of
+             * `wrapKey` and into the wrapper's associated data (ADR 0011). If the engine returns this
+             * date truncated to the second, the reader's key and associated data stop matching the
+             * client's and the wrapper does not open. It goes together with the `$dateFormat` on
+             * {@see ShareLink}: the column rules on MySQL and PostgreSQL, the model rules on SQLite,
+             * and you need both.
              */
             $table->timestamp('expires_at', precision: 6);
             $table->timestamp('created_at');

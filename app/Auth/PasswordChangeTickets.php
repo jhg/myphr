@@ -9,24 +9,24 @@ use App\Security\Opaque\RandomSource;
 use Illuminate\Contracts\Session\Session;
 
 /**
- * Ticket que autoriza un cambio de contraseña ya reautenticado.
+ * Ticket that authorizes an already reauthenticated password change.
  *
- * Lo acuña `password/reauth/finish` **después** de validar el MAC de un login OPAQUE completo con la
- * contraseña actual, y lo consume `password/change`. Entre medias, `password/registration/start` solo
- * lo comprueba: consumirlo allí dejaría sin ticket a quien sufra un corte de red durante el Argon2id
- * del re-registro, obligándole a repetir también el Argon2id de la reautenticación.
+ * `password/reauth/finish` mints it **after** validating the MAC of a full OPAQUE login with the
+ * current password, and `password/change` consumes it. In between, `password/registration/start`
+ * only checks it: consuming it there would leave anyone who loses their network during the Argon2id
+ * of the re-registration without a ticket, forcing them to repeat the reauthentication Argon2id too.
  *
- * Vive **dentro de la carga útil de la sesión**, igual que el secreto de sesión de {@see SessionSecrets}
- * y por los mismos motivos: queda atado al identificador de sesión sin tabla nueva, muere con el
- * bloqueo y no sobrevive a una regeneración. La consecuencia deliberada es que un ticket no viaja
- * entre pestañas ni entre dispositivos: el cambio de contraseña se completa donde empezó.
+ * It lives **inside the session payload**, like the session secret in {@see SessionSecrets} and for
+ * the same reasons: it is tied to the session identifier without a new table, it dies with a lock
+ * and it does not survive a regeneration. The deliberate consequence is that a ticket does not
+ * travel across tabs or devices: a password change is finished where it started.
  *
- * La comparación es siempre en tiempo constante: el ticket es un secreto de 32 bytes y compararlo con
- * `===` filtraría por tiempo cuántos bytes iniciales acertó quien lo intenta.
+ * The comparison is always constant time: the ticket is a 32-byte secret and comparing it with
+ * `===` would leak by timing how many leading bytes the attacker got right.
  */
 final readonly class PasswordChangeTickets
 {
-    /** Clave del ticket dentro de la carga útil de la sesión. */
+    /** Key of the ticket inside the session payload. */
     public const string SESSION_KEY = 'phr.password_change_ticket';
 
     /** Clave de la caducidad, como marca de tiempo Unix. */
@@ -36,17 +36,17 @@ final readonly class PasswordChangeTickets
     public const int TICKET_BYTES = 32;
 
     /**
-     * Ventana de vida, en segundos. Cubre el Argon2id del re-registro con holgura sin dejar abierta
-     * durante minutos una autorización de cambio de contraseña en un puesto desatendido.
+     * Lifetime window, in seconds. It comfortably covers the re-registration Argon2id without
+     * leaving a password change authorization open for minutes on an unattended machine.
      */
     public const int TTL_SECONDS = 180;
 
     public function __construct(private RandomSource $random) {}
 
     /**
-     * Acuña un ticket nuevo, sustituyendo cualquier anterior.
+     * Mints a fresh ticket, replacing any previous one.
      *
-     * @return string Ticket en base64url sin padding, 43 caracteres.
+     * @return string Ticket as base64url without padding, 43 characters.
      */
     public function mint(Session $session): string
     {
@@ -59,7 +59,7 @@ final readonly class PasswordChangeTickets
     }
 
     /**
-     * ¿Es este el ticket vigente de la sesión y sigue dentro de su ventana?
+     * Is this the session's current ticket, and is it still inside its window?
      */
     public function verify(Session $session, string $ticket): bool
     {
@@ -74,8 +74,9 @@ final readonly class PasswordChangeTickets
     }
 
     /**
-     * Comprueba y destruye el ticket en un solo paso. Devuelve `false` sin destruir nada cuando no
-     * cuadra: un ticket ajeno o caducado no puede servir para invalidar el bueno.
+     * Checks and destroys the ticket in one step. It returns `false` and destroys nothing when it
+     * does not match: someone else's ticket or an expired one must not be usable to invalidate the
+     * good one.
      */
     public function consume(Session $session, string $ticket): bool
     {
@@ -89,10 +90,10 @@ final readonly class PasswordChangeTickets
     }
 
     /**
-     * Momento de caducidad del ticket vigente, o `null` si no hay ninguno vivo.
+     * Expiry moment of the current ticket, or `null` if none is alive.
      *
-     * Lo usa `password/registration/start` para que el pendiente nunca sobreviva al ticket que lo
-     * autoriza.
+     * `password/registration/start` uses it so the pending row never outlives the ticket that
+     * authorizes it.
      */
     public function expiresAt(Session $session): ?int
     {

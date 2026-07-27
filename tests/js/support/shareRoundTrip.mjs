@@ -24,6 +24,7 @@
  * un segundo por lado; su comportamiento lo cubre `tests/js/shareKeys.test.mjs`.
  */
 
+import { adoptMasterKey, forget } from '../../../resources/js/auth/keyring.js';
 import { decodeBase64Url, encodeBase64Url } from '../../../resources/js/crypto/base64url.js';
 import { canonicalDate } from '../../../resources/js/crypto/canonicalDate.js';
 import { openSharePackage, sealSharePackage } from '../../../resources/js/crypto/shareEnvelope.js';
@@ -35,6 +36,9 @@ import {
     openShareWrapper,
     sealShareWrapper,
 } from '../../../resources/js/crypto/shareLink.js';
+import { openEvent, sealEvent } from '../../../resources/js/health/eventEnvelope.js';
+import { sealShareDescriptor } from '../../../resources/js/health/shareDescriptor.js';
+import { buildSharePackageBody, partitionTypes } from '../../../resources/js/health/sharePage.js';
 
 /**
  * @returns {Promise<string>} Todo lo que llegue por la entrada estándar.
@@ -158,14 +162,150 @@ async function open(input) {
         generatedAt: canonicalDate(generatedAt),
     });
 
-    return { eventCount: body.eventCount, events: body.events.length, generatedAt: body.generatedAt };
+    return {
+        eventCount: body.eventCount,
+        events: body.events.length,
+        generatedAt: body.generatedAt,
+        /**
+         * The clipping as the professional reads it. The end-to-end test asserts on this, not just
+         * on the count: a clipping that opens but carries other people's numbers would pass a count.
+         */
+        includedTypes: body.includedTypes ?? null,
+        excludedTypes: body.excludedTypes ?? null,
+        contents: body.events.map((event) => ({ occurredAt: event.occurredAt, content: event.content })),
+    };
 }
+
+/**
+ * Seals health events the way any recording screen does, so the test can put
+ * envelopes in the database that the sharing screen will really be able to open.
+ *
+ * @param {{masterKey: string, userId: string, events: list<{occurredAt: string, content: object}>}} input
+ * @returns {Promise<{events: list<{occurredAt: string, payload: string}>}>}
+ */
+async function sealEvents(input) {
+    adoptMasterKey(decodeBase64Url(input.masterKey, 'masterKey'), input.userId);
+
+    try {
+        return {
+            events: input.events.map((event) => ({
+                occurredAt: event.occurredAt,
+                payload: sealEvent({
+                    userId: input.userId,
+                    occurredAt: event.occurredAt,
+                    content: event.content,
+                }),
+            })),
+        };
+    } finally {
+        forget();
+    }
+}
+
+/**
+ * Builds the clipping out of the envelopes the screen just read from the server,
+ * with the real functions of `health/sharePage.js`.
+ *
+ * This is the command that closes the loop the plain `seal` leaves open: `seal`
+ * makes its events up, so it proves the crypto seam but says nothing about the
+ * read that feeds it — which is exactly the step that broke in production.
+ *
+ * @param {{masterKey: string, userId: string, stretched: string, pin: string, ttlHours: number,
+ *          types: Record<string, boolean>, range: {from: string|null, to: string|null},
+ *          rawEvents: list<{occurredAt: string, payload: string}>}} input
+ * @returns {Promise<object>}
+ */
+async function sealFetched(input) {
+    const stretched = decodeBase64Url(input.stretched, 'stretched');
+
+    adoptMasterKey(decodeBase64Url(input.masterKey, 'masterKey'), input.userId);
+
+    try {
+        const { included, excluded } = partitionTypes(input.types);
+
+        const events = input.rawEvents
+            .map((rawEvent) => ({
+                occurredAt: rawEvent.occurredAt,
+                content: openEvent({
+                    userId: input.userId,
+                    occurredAt: rawEvent.occurredAt,
+                    envelope: rawEvent.payload,
+                }),
+            }))
+            .filter((event) => included.includes(event.content?.type));
+
+        const generatedAt = new Date();
+        const expiresAt = new Date(generatedAt.getTime() + input.ttlHours * 3600 * 1000);
+
+        const shareId = globalThis.crypto.randomUUID();
+        const linkId = globalThis.crypto.randomUUID();
+
+        const sendKey = globalThis.crypto.getRandomValues(new Uint8Array(32));
+        const contentKey = globalThis.crypto.getRandomValues(new Uint8Array(32));
+        const pinSalt = globalThis.crypto.getRandomValues(new Uint8Array(16));
+
+        const body = buildSharePackageBody({
+            events,
+            included,
+            excluded,
+            range: input.range,
+            generatedAt,
+        });
+
+        const packageEnvelope = await sealSharePackage({ contentKey, shareId, body });
+
+        const descriptor = sealShareDescriptor({
+            userId: input.userId,
+            shareId,
+            descriptor: {
+                v: 1,
+                contentKey: encodeBase64Url(contentKey),
+                generatedAt: body.generatedAt,
+                expiresAt: canonicalDate(expiresAt),
+                range: body.range,
+                includedTypes: body.includedTypes,
+                excludedTypes: body.excludedTypes,
+                eventCount: body.eventCount,
+            },
+        });
+
+        const pinTag = derivePinTag({ stretched, pinSalt, linkId });
+        const wrapKey = deriveWrapKey({ stretched, sendKey, pinSalt, linkId, expiresAt });
+
+        return {
+            request: {
+                id: shareId,
+                payload: packageEnvelope,
+                descriptor,
+                expiresAt: canonicalDate(expiresAt),
+                link: {
+                    id: linkId,
+                    pinSalt: encodeBase64Url(pinSalt),
+                    pinTag: encodeBase64Url(pinTag),
+                    wrapper: sealShareWrapper({ wrapKey, contentKey, linkId, expiresAt, packageEnvelope }),
+                },
+            },
+            linkId,
+            pinSalt: encodeBase64Url(pinSalt),
+            pinTag: encodeBase64Url(pinTag),
+            fragment: encodeShareFragment({ sendKey, generatedAt }),
+            expiresAtSealed: canonicalDate(expiresAt),
+            eventCount: body.eventCount,
+            includedTypes: body.includedTypes,
+            excludedTypes: body.excludedTypes,
+        };
+    } finally {
+        forget();
+    }
+}
+
+const COMMANDS = { seal, open, sealEvents, sealFetched };
 
 const command = process.argv[2];
 const input = JSON.parse(await readStdin());
 
 try {
-    const result = command === 'seal' ? await seal(input) : await open(input);
+    const result = await COMMANDS[command](input);
 
     process.stdout.write(JSON.stringify({ ok: true, result }));
 } catch (failure) {

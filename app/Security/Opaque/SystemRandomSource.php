@@ -7,22 +7,21 @@ namespace App\Security\Opaque;
 use Exception;
 
 /**
- * Implementación de producción de {@see RandomSource} sobre `random_bytes()`
+ * Production implementation of {@see RandomSource} on top of `random_bytes()`
  * (`docs/OPAQUE.md` §4, §20.3).
  *
- * `random_bytes()` es el CSPRNG del sistema y es la única fuente permitida en
- * producción. Los tests sustituyen esta clase por una fuente determinista con
- * los bytes exactos del vector.
+ * `random_bytes()` is the system CSPRNG and the only source allowed in
+ * production. Tests replace this class with a deterministic source carrying
+ * the exact bytes from the vector.
  */
 final class SystemRandomSource implements RandomSource
 {
     /**
-     * @param  int<1, max>  $length  Número de bytes solicitados.
-     * @return string Cadena binaria de longitud `$length`.
+     * @param  int<1, max>  $length  Number of bytes requested.
+     * @return string Binary string of length `$length`.
      *
-     * @throws InvalidConfigurationException Si `$length` no es positivo o el
-     *                                       CSPRNG del sistema no está
-     *                                       disponible.
+     * @throws InvalidConfigurationException If `$length` is not positive or the
+     *                                       system CSPRNG is not available.
      */
     public function bytes(int $length): string
     {

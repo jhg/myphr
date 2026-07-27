@@ -1,46 +1,46 @@
 /**
- * Conversión del `<input type="datetime-local">` de las pantallas de evento a la fecha canónica del
- * ADR 0004 y al desfase del campo `tz` del ADR 0006.
+ * Conversion of the `<input type="datetime-local">` of the event screens into the ADR 0004
+ * canonical date and into the offset of the ADR 0006 `tz` field.
  *
- * **Estas dos funciones viven juntas y en un solo sitio porque su resultado no es texto de
- * pantalla: es dato asociado del AEAD.** `occurredAt` entra en los datos autenticados del sobre con
- * el que se cifra cada evento (ADR 0004 y ADR 0006), así que un microsegundo de diferencia, un
- * redondeo distinto o un `tz` con otro convenio de signo no producen un error visible al guardar:
- * producen un sobre que ya no se puede abrir nunca más. Y lo produce solo en la pantalla que se
- * desvió, con lo que el fallo aparece meses después y en una parte del historial, no en todas.
+ * **These two functions live together and in a single place because their result is not screen
+ * text: it is AEAD associated data.** `occurredAt` goes into the authenticated data of the
+ * envelope each event is encrypted with (ADR 0004 and ADR 0006), so one microsecond of difference,
+ * a different rounding or a `tz` with another sign convention do not produce a visible error when
+ * saving: they produce an envelope that can never be opened again. And only on the screen that
+ * drifted, so the failure shows up months later and in one part of the history, not in all of it.
  *
- * Esta lógica estuvo copiada carácter a carácter en las seis pantallas de evento (glucemia,
- * tensión, insulina, temperatura, peso y comidas). Copiarla funcionaba mientras las seis copias
- * fueran idénticas; el problema es que nada obligaba a que lo siguieran siendo, y arreglar un caso
- * límite de horario de verano en una sola de ellas basta para que los eventos de esa pantalla
- * queden cifrados con una fecha que las otras no reproducen. **Si alguien vuelve a pegar estas
- * funciones dentro de una pantalla, lo que se rompe no es el estilo: es la posibilidad de descifrar
- * el historial.** Cualquier pantalla de evento nueva importa de aquí.
+ * This logic used to be copied character for character in the six event screens (glucose, blood
+ * pressure, insulin, temperature, weight and meals). Copying it worked while the six copies stayed
+ * identical; the problem is that nothing forced them to, and fixing a daylight saving edge case in
+ * one of them alone is enough to leave the events of that screen encrypted with a date the others
+ * do not reproduce. **If somebody pastes these functions back inside a screen, what breaks is not
+ * the style: it is the ability to decrypt the history.** Every new event screen imports from
+ * here.
  *
- * `formatTzOffset` acompaña a `datetimeLocalToCanonical` en vez de irse a un módulo de formato
- * porque comparte con ella el convenio de signo del ADR 0006, que es justo lo fácil de invertir al
- * reescribirlo: separarlas invitaría a redefinirlo dos veces.
+ * `formatTzOffset` stays next to `datetimeLocalToCanonical` instead of moving to a formatting
+ * module because it shares the ADR 0006 sign convention with it, which is exactly what is easy to
+ * invert when rewriting: splitting them would invite defining it twice.
  */
 
 import { canonicalDate } from '../crypto/canonicalDate.js';
 import { t } from '../i18n/index.js';
 
 /**
- * Patrón de un `<input type="datetime-local" step="1">`: sin desfase, porque es hora local del
- * dispositivo (`YYYY-MM-DDTHH:MM` o `YYYY-MM-DDTHH:MM:SS`).
+ * Pattern of an `<input type="datetime-local" step="1">`: no offset, because it is device local
+ * time (`YYYY-MM-DDTHH:MM` or `YYYY-MM-DDTHH:MM:SS`).
  */
 const DATETIME_LOCAL_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/;
 
 /**
- * Descompone el valor de un `datetime-local` en sus campos de calendario, sin interpretarlo todavía
- * en ninguna zona horaria.
+ * Breaks the value of a `datetime-local` into its calendar fields, without interpreting it in any
+ * time zone yet.
  *
- * No se exporta: fuera de este módulo nadie tiene por qué manipular la fecha a medio convertir, y
- * exponerla sería ofrecer la mitad del camino a quien luego termine la otra mitad a su manera.
- *
+ * It is not exported: outside this module nobody has any business handling the half-converted
+ * date, and exposing it would be offering half the road to whoever then finishes the other half
+ * their own way.
  * @param {string} value
  * @returns {{year: number, month: number, day: number, hour: number, minute: number, second: number}}
- * @throws {Error} Si el valor no tiene la forma esperada.
+ * @throws {Error} If the value does not have the expected shape.
  */
 function parseDatetimeLocalFields(value) {
     const match = DATETIME_LOCAL_PATTERN.exec(value);
@@ -62,10 +62,10 @@ function parseDatetimeLocalFields(value) {
 }
 
 /**
- * Da forma `±HH:MM` a un desfase, con el mismo convenio de signo que el campo `tz` del ADR 0006
- * (positivo cuando la hora local va por delante de UTC).
+ * Shapes an offset as `±HH:MM`, with the same sign convention as the ADR 0006 `tz` field
+ * (positive when local time is ahead of UTC).
  *
- * @param {number} offsetMinutes Local menos UTC, en minutos.
+ * @param {number} offsetMinutes Local minus UTC, in minutes.
  * @returns {string}
  */
 export function formatTzOffset(offsetMinutes) {
@@ -78,17 +78,17 @@ export function formatTzOffset(offsetMinutes) {
 }
 
 /**
- * Convierte un `datetime-local` (hora local sin desfase) al instante correcto y a su forma canónica
- * (ADR 0004), junto con el desfase para el campo `tz` del ADR 0006.
+ * Converts a `datetime-local` (local time with no offset) into the correct instant and into its
+ * canonical form (ADR 0004), together with the offset for the ADR 0006 `tz` field.
  *
- * `Date.prototype.getTimezoneOffset()` da el desfase del dispositivo en vigor **para ese calendario
- * concreto**, así que el horario de verano de la fecha registrada se respeta y no el de hoy.
+ * `Date.prototype.getTimezoneOffset()` gives the device offset in force **for that particular
+ * calendar date**, so the daylight saving of the recorded date is honoured and not today's.
  *
- * @param {string} value Valor crudo del `<input type="datetime-local">`.
+ * @param {string} value Raw value of the `<input type="datetime-local">`.
  * @param {object} [options]
- * @param {number} [options.timezoneOffsetMinutes] Desfase a usar en vez del de `Date` (convenio de
- *        `getTimezoneOffset`: UTC menos local), solo para poder probar esta función sin depender de
- *        la zona horaria de quien ejecuta los tests.
+ * @param {number} [options.timezoneOffsetMinutes] Offset to use instead of the `Date` one
+ *        (`getTimezoneOffset` convention: UTC minus local), only so this function can be tested
+ *        without depending on the time zone of whoever runs the tests.
  * @returns {{occurredAt: string, tz: string}}
  */
 export function datetimeLocalToCanonical(value, { timezoneOffsetMinutes } = {}) {

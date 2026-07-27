@@ -7,11 +7,11 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Spec 0001 §3.4 / ADR 0009: sobres de la User Master Key, tabla de solo añadir.
+ * Spec 0001 §3.4 / ADR 0009: User Master Key envelopes, an append-only table.
  *
- * Reemitir un enlace nunca sobrescribe el sobre que la contraseña anterior sabía abrir: se inserta
- * uno nuevo y el anterior queda marcado con `retired_at`. Como mucho una fila con `retired_at IS NULL`
- * por usuario, que es el sobre vigente.
+ * Reissuing a link never overwrites the envelope the previous password could open: a new row is
+ * inserted and the previous one is marked with `retired_at`. At most one row with `retired_at IS
+ * NULL` per user, which is the current envelope.
  */
 return new class extends Migration
 {
@@ -21,7 +21,7 @@ return new class extends Migration
             $table->uuid('id')->primary();
             $table->foreignUuid('user_id')->constrained('users')->cascadeOnDelete();
 
-            /** Spec 0001 §3.4 / ADR 0004: sobre cifrado con prefijo `v1.`. */
+            /** Spec 0001 §3.4 / ADR 0004: encrypted envelope with the `v1.` prefix. */
             $table->text('envelope');
 
             $table->timestamp('created_at');

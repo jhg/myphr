@@ -6,14 +6,14 @@ use App\Security\Opaque\Base64Url;
 use App\Security\Opaque\InvalidMessageException;
 
 /**
- * Alfabeto base64url (RFC 4648 §5) en orden de índice.
+ * base64url alphabet (RFC 4648 §5) in index order.
  */
 const B64URL_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 
 /**
- * Devuelve una variante NO canónica de `$encoded`: la misma cadena con el
- * último carácter sustituido por otro que decodifica a los mismos bytes
- * porque sólo difiere en los bits sobrantes.
+ * Returns a NON-canonical variant of `$encoded`: the same string with the
+ * last character replaced by another one that decodes to the same bytes
+ * because it only differs in the leftover bits.
  */
 function nonCanonicalVariant(string $encoded, int $unusedBits): string
 {
@@ -109,8 +109,8 @@ it('rejects other alphabets entirely', function (string $input): void {
 ])->throws(InvalidMessageException::class);
 
 /**
- * El caso importante de §20.6: dos cadenas distintas que decodifican a los
- * mismos bytes. Sólo la canónica se acepta.
+ * The important case from §20.6: two different strings that decode to the
+ * same bytes. Only the canonical one is accepted.
  */
 it('accepts only the canonical spelling when two strings decode to the same bytes', function (): void {
     $canonical = 'QQ';       // 0x41, bits sobrantes a cero
@@ -206,7 +206,7 @@ it('never throws anything but a protocol exception on arbitrary input', function
             $decoded = Base64Url::decode($input);
             expect(Base64Url::encode($decoded))->toBe($input);
         } catch (InvalidMessageException) {
-            // Único resultado aceptable para una entrada que no es canónica.
+            // The only acceptable outcome for an input that is not canonical.
         }
     }
 

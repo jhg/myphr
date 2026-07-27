@@ -1,22 +1,22 @@
 /**
- * Componente Alpine de la página del enlace de establecimiento de contraseña (Spec 0001 §5).
+ * Alpine component of the set-password link page (Spec 0001 §5).
  *
- * Recorre los veinte pasos de §5 en ese orden exacto. Los que más importan y por qué:
+ * It walks the twenty steps of §5 in that exact order. The ones that matter most, and why:
  *
- * * El token se lee del **fragmento** de la URL (`#<token>`), que el navegador no envía nunca al
- *   servidor: solo viaja dentro del cuerpo de `registration/start` (§4.1).
- * * El pinning del perfil y de la clave pública ocurre **antes** de `finishRegistration` (paso 5):
- *   en el registro no existe todavía `server_mac` y nada más autentica al servidor.
- * * La clave maestra nace en el paso 8, después del Argon2id, y es aleatoria: nunca derivada de la
- *   contraseña.
- * * El paso 12 es **una sola petición transaccional**. Partirla dejaría cuentas que se autentican
- *   sin clave utilizable y con el enlace ya consumido, el peor modo de fallo del diseño.
- * * Los pasos 13 a 20 son un login OPAQUE completo con la misma contraseña, idénticos a §6.1:
- *   cuestan un Argon2id de más y descubren aquí, cuando todavía no hay datos que perder, cualquier
- *   desajuste de KSF o de identidad de servidor.
+ * * The token is read from the URL **fragment** (`#<token>`), which the browser never sends to
+ *   the server: it only travels inside the body of `registration/start` (§4.1).
+ * * The pinning of the profile and the public key happens **before** `finishRegistration` (step
+ *   5): at registration there is no `server_mac` yet and nothing else authenticates the server.
+ * * The master key is born in step 8, after Argon2id, and it is random: never derived from the
+ *   password.
+ * * Step 12 is **one single transactional request**. Splitting it would leave accounts that
+ *   authenticate with no usable key and with the link already consumed, the worst failure mode of the design.
+ * * Steps 13 to 20 are a full OPAQUE login with the same password, identical to §6.1: they cost
+ *   one extra Argon2id and they surface here, while there is still no data to lose, any KSF or
+ *   server identity mismatch.
  *
- * La contraseña sigue en memoria hasta el paso 17 a propósito: zeroizarla antes haría imposible el
- * login del paso 13, con el enlace ya consumido y sin segunda oportunidad.
+ * The password stays in memory until step 17 on purpose: wiping it earlier would make the login
+ * of step 13 impossible, with the link already consumed and no second chance.
  */
 
 import { deriveKey, KDF_LABELS } from '../crypto/kdf.js';
@@ -46,11 +46,11 @@ import { navigate } from './navigate.js';
 import { KEY_STRETCHING_SECONDS, progressMixin } from './progress.js';
 import { forgetSettings, loadSettings } from './settings.js';
 
-/** Configuración vacía inicial (§3.1): nadie es distinguible por tenerla o no. */
+/** Empty initial configuration (§3.1): nobody is distinguishable by having it or not. */
 const EMPTY_SETTINGS = '{"v":1}';
 
 /**
- * Factoría del componente Alpine. Se registra como `phrSetPasswordForm`.
+ * Alpine component factory. Registered as `phrSetPasswordForm`.
  *
  * @returns {object}
  */
@@ -74,7 +74,7 @@ export function setPasswordForm() {
             const form = event.target;
             const login = this.$refs.login.value.trim();
 
-            /** §5, paso 2: las contraseñas salen del DOM y los campos quedan vacíos en el acto. */
+            /** §5, step 2: the passwords leave the DOM and the fields are emptied at once. */
             let password = this.$refs.password.value;
             const confirmation = this.$refs.passwordConfirmation.value;
 
@@ -108,7 +108,7 @@ export function setPasswordForm() {
         async run(form, login, password) {
             await this.advance(t('stage.preparing'), 0.05);
 
-            /** §5, paso 1. */
+            /** §5, step 1. */
             await opaqueReady();
 
             const pinned = opaqueParameters();
@@ -118,27 +118,27 @@ export function setPasswordForm() {
                 throw new AuthRequestError('The link carries no token.', 422, 'invalid_registration');
             }
 
-            /** §5, paso 3: sin `keyStretching`. */
+            /** §5, step 3: without `keyStretching`. */
             const { clientRegistrationState, registrationRequest } = startRegistration(password);
 
             await this.advance(t('setPassword.stage.contacting'), 0.1);
 
-            /** §5, paso 4. */
+            /** §5, step 4. */
             const started = await postJson(form.dataset.registrationStartUrl, {
                 registrationRequest,
                 registrationToken,
             });
 
-            /** §5, paso 5: antes de derivar nada. */
+            /** §5, step 5: before deriving anything. */
             assertPinned(started, pinned);
 
             /**
-             * La barra se lanza antes y se espera a que el navegador la pinte: a partir de la
-             * siguiente línea el hilo principal está bloqueado y no pinta nada más.
+             * The bar starts first and we wait for the browser to paint it: from the next line on,
+             * the main thread is blocked and paints nothing else.
              */
             await this.advance(t('setPassword.stage.stretching'), 0.4, KEY_STRETCHING_SECONDS);
 
-            /** §5, paso 6: aquí corre el Argon2id. */
+            /** §5, step 6: Argon2id runs here. */
             const registered = finishRegistration({
                 password,
                 clientRegistrationState,
@@ -152,7 +152,7 @@ export function setPasswordForm() {
             const umkContext = envelopeContext(userId, ENVELOPE_PURPOSES.UserMasterKey);
             const settingsContext = envelopeContext(userId, ENVELOPE_PURPOSES.Settings);
 
-            /** §5, pasos 7 a 11. */
+            /** §5, steps 7 to 11. */
             const kek = deriveKey({ ikm: registered.exportKey, label: KDF_LABELS.KEK });
             let wrappedUserMasterKey;
             let encryptedSettings;
@@ -189,7 +189,7 @@ export function setPasswordForm() {
 
             await this.advance(t('stage.saving'), 0.5);
 
-            /** §5, paso 12: una única petición transaccional. */
+            /** §5, step 12: one single transactional request. */
             await postJson(form.dataset.registrationFinishUrl, {
                 registrationId: started.registrationId,
                 registrationRecord: registered.registrationRecord,
@@ -197,7 +197,7 @@ export function setPasswordForm() {
                 encryptedSettings,
             });
 
-            /** §5, pasos 13 y 14: el mismo login que hará cualquier día futuro. */
+            /** §5, steps 13 and 14: the same login every future day will do. */
             const { clientLoginState, startLoginRequest } = startLogin(password);
 
             const loginStarted = await postJson(form.dataset.loginStartUrl, {
@@ -207,7 +207,7 @@ export function setPasswordForm() {
 
             assertPinned(loginStarted, pinned);
 
-            /** Segundo Argon2id, el del login inmediato del paso 13. */
+            /** Second Argon2id, the one of the immediate login of step 13. */
             await this.advance(t('setPassword.stage.verifying'), 0.9, KEY_STRETCHING_SECONDS);
 
             const loginFinished = finishLogin({
@@ -230,17 +230,17 @@ export function setPasswordForm() {
                 finishLoginRequest: loginFinished.finishLoginRequest,
             });
 
-            /** §5, pasos 15 y 16: la clave que devuelve el servidor tiene que ser la que nació. */
+            /** §5, steps 15 and 16: the key the server returns has to be the one that was born. */
             assertRoundTrip(loginFinished.exportKey, session.encryptedUserMasterKey, umkContext);
 
             /**
-             * Ajustes recién sellados en el paso 11, con la clave maestra ya verificada. Se
-             * reutiliza el sobre local: es el mismo que acaba de escribirse en el paso 12, y evita
-             * depender de que `login/finish` lo repita en su respuesta.
+             * Settings sealed in step 11, with the master key already verified. The local envelope
+             * is reused: it is the same one just written in step 12, and it avoids depending on
+             * `login/finish` repeating it in its response.
              */
             loadSettings({ envelope: encryptedSettings, userId });
 
-            /** §5, paso 18. */
+            /** §5, step 18. */
             const sessionSecret = decodeSessionSecret(session.sessionSecret);
 
             try {
@@ -249,22 +249,22 @@ export function setPasswordForm() {
                 zeroize(sessionSecret);
             }
 
-            /** §5, paso 19. */
+            /** §5, step 19. */
             updateCsrfToken(session.csrf);
 
             await this.advance(t('stage.entering'), 1);
 
-            /** §5, paso 20. */
+            /** §5, step 20. */
             navigate(session.redirect);
         },
     };
 }
 
 /**
- * §5, pasos 15 y 16: reabre el sobre que devolvió el servidor y compara con la clave en memoria.
+ * §5, steps 15 and 16: reopens the envelope the server returned and compares it with the key in memory.
  *
- * Es la verificación del alta. Si no cuadra, la cuenta acaba de quedar con una clave que nadie
- * puede recuperar, y es mejor saberlo ahora, sin datos todavía, que en el primer login real.
+ * This is the sign-up verification. If it does not match, the account has just been left with a
+ * key nobody can recover, and it is better to know now, with no data yet, than at the first real login.
  *
  * @param {string} exportKey
  * @param {string} envelope
@@ -292,7 +292,7 @@ function assertRoundTrip(exportKey, envelope, context) {
 }
 
 /**
- * Comparación en tiempo constante de dos búferes.
+ * Constant-time comparison of two buffers.
  *
  * @param {Uint8Array} a
  * @param {Uint8Array} b

@@ -18,10 +18,10 @@ use App\Catalog\TemperatureMeasurementSite;
 use App\Support\SupportedLocale;
 
 /**
- * Los enums del catálogo con etiqueta al paciente, con el nombre del método que la devuelve.
+ * The catalog enums with a patient label, together with the name of the method that returns it.
  *
- * `GlucoseLoincCode` usa `patientLabel()` en vez de `label()` porque ahí la etiqueta convive con el
- * término oficial LOINC y el ADR 0005 exige que no se confundan.
+ * `GlucoseLoincCode` uses `patientLabel()` instead of `label()` because there the label lives
+ * alongside the official LOINC term and ADR 0005 requires that they not be confused.
  *
  * @return list<array{class-string, string}>
  */
@@ -43,7 +43,7 @@ function catalogLabelSources(): array
     ];
 }
 
-/** Cada caso de cada enum del catálogo, con el método que da su etiqueta al paciente. */
+/** Every case of every catalog enum, with the method that gives its patient label. */
 dataset('catalog cases', function (): Generator {
     foreach (catalogLabelSources() as [$enum, $method]) {
         foreach ($enum::cases() as $case) {
@@ -53,11 +53,11 @@ dataset('catalog cases', function (): Generator {
 });
 
 /**
- * El chino simplificado es el tercer idioma, y la etiqueta al paciente es la única capa que podemos
- * ofrecer completa en los tres: LOINC no publica traducción oficial al chino de estos términos
- * (ADR 0005), así que el término oficial sigue en inglés y esta capa es nuestra.
+ * Simplified Chinese is the third language, and the patient label is the only layer we can offer
+ * complete in all three: LOINC publishes no official Chinese translation of these terms
+ * (ADR 0005), so the official term stays in English and this layer is ours.
  */
-it('devuelve etiqueta en los tres idiomas para cada caso del catálogo', function (
+it('returns a label in all three languages for every catalog case', function (
     BackedEnum $case,
     string $method,
 ): void {
@@ -67,10 +67,10 @@ it('devuelve etiqueta en los tres idiomas para cada caso del catálogo', functio
 })->with('catalog cases');
 
 /**
- * Un idioma sin traducir se detecta aquí y no en producción: si alguien añade un caso y solo
- * rellena el castellano, la etiqueta china sería la castellana y nadie se daría cuenta.
+ * An untranslated language is caught here and not in production: if somebody adds a case and only
+ * fills in Spanish, the Chinese label would be the Spanish one and nobody would notice.
  */
-it('no deja caer al castellano la etiqueta china de ningún caso', function (
+it('never falls back to Spanish for the Chinese label of any case', function (
     BackedEnum $case,
     string $method,
 ): void {
@@ -81,9 +81,9 @@ it('no deja caer al castellano la etiqueta china de ningún caso', function (
 })->with('catalog cases');
 
 /**
- * Un idioma desconocido no revienta la pantalla: cae al idioma por defecto, que es el inglés. Una
- * cuenta con una preferencia obsoleta o una cabecera rara del navegador es alguien que no entiende
- * la interfaz, no un error del que haya que enterarse con un 500.
+ * An unknown language does not blow the screen up: it falls back to the default language, which is
+ * English. An account with a stale preference or an odd browser header is somebody who does not
+ * understand the interface, not an error we need to hear about through a 500.
  */
 it('cae al idioma por defecto ante un idioma desconocido', function (
     BackedEnum $case,
@@ -97,10 +97,10 @@ it('cae al idioma por defecto ante un idioma desconocido', function (
 })->with('catalog cases');
 
 /**
- * Las variantes regionales que manda un navegador de verdad sí se reconocen: `zh-CN` con guion es
- * la forma de BCP 47, y `es-AR` casa por la parte de idioma.
+ * The regional variants a real browser sends are recognized: `zh-CN` with a dash is the BCP 47 form,
+ * and `es-AR` matches on the language part.
  */
-it('reconoce las variantes regionales del idioma', function (
+it('recognizes the regional variants of a language', function (
     BackedEnum $case,
     string $method,
 ): void {
@@ -110,10 +110,10 @@ it('reconoce las variantes regionales del idioma', function (
 })->with('catalog cases');
 
 /**
- * ADR 0005: el término publicado por Regenstrief va en `coding.display` y no se traduce nunca, ni
- * siquiera al chino. Nuestra etiqueta va aparte y es la que se traduce.
+ * ADR 0005: the term published by Regenstrief goes in `coding.display` and is never translated, not
+ * even into Chinese. Our label lives apart and is the one that gets translated.
  */
-it('no traduce el término oficial LOINC en ningún idioma', function (): void {
+it('never translates the official LOINC term into any language', function (): void {
     $code = GlucoseLoincCode::CapillaryMilligramsPerDeciliter;
 
     expect($code->officialName())->toBe('Glucose [Mass/volume] in Capillary blood by Glucometer')

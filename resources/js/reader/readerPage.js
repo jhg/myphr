@@ -1,42 +1,42 @@
 /**
- * La pantalla que abre el profesional (ADR 0011).
+ * The screen the professional opens (ADR 0011).
  *
- * Quien llega aquí **no tiene cuenta, no conoce esta aplicación y está en consulta**. La pantalla
- * está escrita para esa persona: una sola cosa que hacer (teclear el PIN), una espera explicada
- * mientras se deriva la clave, y después el recorte entero, con la **misma** interfaz que ve el
- * paciente en su panel: gráficas, estadísticas, línea temporal, búsqueda y subperiodos, más la tabla
- * clínica de siempre para leer e imprimir. Todo eso lo pinta `clippingExplorer.js`, que es el mismo
- * módulo que usa la vista previa de la pantalla de compartir: si esta pantalla tuviera su propia
- * copia, el paciente y el médico acabarían mirando dos documentos distintos del mismo dato.
+ * Whoever lands here **has no account, does not know this application and is in an appointment**.
+ * The screen is written for that person: one single thing to do (type the PIN), an explained wait
+ * while the key is derived, and then the whole clipping, with the **same** interface the patient
+ * sees in their panel: charts, statistics, timeline, search and sub-periods, plus the usual
+ * clinical table to read and print. All of that is painted by `clippingExplorer.js`, the same
+ * module the preview of the share screen uses: if this screen had its own copy, patient and doctor
+ * would end up looking at two different documents of the same data.
  *
- * **Lo que esta página no hace, y es deliberado:**
+ * **What this page does not do, and it is deliberate:**
  *
- * * No usa Livewire, ni Filament, ni ninguna cookie. La ruta ya se quita de encima la
- *   sesión y el CSRF (`routes/web.php`), y `fetch` va con `credentials: 'omit'` para que ni siquiera
- *   se mande una cookie que el navegador tuviera de antes: una cookie aquí sería un identificador
- *   estable de un profesional, correlacionable entre los recortes de dos pacientes distintos.
- * * No puede pedir un evento más. El único endpoint que sirve datos clínicos es el que ya está tras
- *   el PIN, y lo que entrega es el paquete entero de una vez. Acotar el subperiodo o buscar texto
- *   trabaja sobre lo que ya está descifrado en memoria: el profesional puede **estrechar** lo que
- *   mira, jamás ampliarlo más allá del recorte que el paciente decidió compartir.
- * * No escribe nada en el dispositivo. Ni `localStorage`, ni `sessionStorage`, ni IndexedDB, ni
- *   cookie, ni siquiera la preferencia de idioma: el paquete descifrado vive en memoria de esta
- *   pestaña y cerrarla lo borra, igual que la clave maestra del paciente (ADR 0003).
- * * No enseña nada de la cuenta del paciente. No lo enseña porque no lo tiene: el servidor no manda
- *   ni nombre, ni correo, ni cuántos recortes hay. Lo único que llega es el paquete cifrado.
- * * No distingue causas de fallo. Enlace inexistente, caducado, revocado y PIN incorrecto dan el
- *   **mismo** mensaje, porque distinguirlos convertiría esta página en un oráculo de qué recortes
- *   siguen vivos. Lo que sí se puede decir, y se dice, es cuántos intentos se llevan hechos desde
- *   este navegador.
+ * * It uses no Livewire, no Filament and no cookie. The route already drops the session and the
+ *   CSRF (`routes/web.php`), and `fetch` goes with `credentials: 'omit'` so that not even a
+ *   cookie the browser already had gets sent: a cookie here would be a stable identifier of a
+ *   professional, correlatable across the clippings of two different patients.
+ * * It cannot ask for one more event. The only endpoint serving clinical data is the one already
+ *   behind the PIN, and what it delivers is the whole package at once. Narrowing the sub-period
+ *   or searching text works on what is already decrypted in memory: the professional can
+ *   **narrow** what they look at, never widen it beyond the clipping the patient chose to share.
+ * * It writes nothing on the device. No `localStorage`, no `sessionStorage`, no IndexedDB, no
+ *   cookie, not even the language preference: the decrypted package lives in the memory of this
+ *   tab and closing it wipes it, just like the patient's master key (ADR 0003).
+ * * It shows nothing of the patient's account. It does not show it because it does not have it:
+ *   the server sends no name, no email, no clipping count. All that arrives is the encrypted package.
+ * * It does not tell failure causes apart. Non-existent link, expired, revoked and wrong PIN give
+ *   the **same** message, because telling them apart would turn this page into an oracle of which
+ *   clippings are still alive. What can be said, and is said, is how many attempts have been made
+ *   from this browser.
  *
- * **El orden criptográfico** (ADR 0011): `challenge` da la sal → Argon2id estira el PIN una sola vez
- * → de ese estiramiento salen el `pinTag` (que se manda) y, después, la `wrapKey` (que no sale de
- * aquí) → `open` devuelve envoltorio y paquete solo si el PIN cuadra → la `wrapKey` abre el
- * envoltorio y saca `CK` → `CK` abre el paquete. El servidor no ve el PIN, ni `S`, ni `CK`, ni una
- * sola línea del contenido.
+ * **The cryptographic order** (ADR 0011): `challenge` gives the salt → Argon2id stretches the PIN
+ * once → out of that stretching come the `pinTag` (which is sent) and, afterwards, the `wrapKey`
+ * (which never leaves here) → `open` returns wrapper and package only if the PIN matches → the
+ * `wrapKey` opens the wrapper and takes out `CK` → `CK` opens the package. The server sees no PIN,
+ * no `S`, no `CK`, and not a single line of the content.
  *
- * La lógica que se puede probar sin DOM vive en `clinicalReport.js`, en `clippingExplorer.js` y en
- * las funciones exportadas de este módulo (`tests/js/readerPage.test.mjs`,
+ * The logic that can be tested without a DOM lives in `clinicalReport.js`, in
+ * `clippingExplorer.js` and in the exported functions of this module (`tests/js/readerPage.test.mjs`,
  * `tests/js/clippingExplorer.test.mjs`).
  */
 
@@ -51,7 +51,7 @@ import { setLocale, t } from '../i18n/index.js';
 import { resolveCatalog } from './clinicalReport.js';
 import { renderClippingExplorer } from './clippingExplorer.js';
 
-/** Error de esta pantalla: lo provoca lo que se ha tecleado o lo que ha contestado el servidor. */
+/** Error of this screen: caused by what was typed or by what the server answered. */
 export class ReaderError extends Error {
     /** @param {string} message */
     constructor(message) {
@@ -61,17 +61,17 @@ export class ReaderError extends Error {
 }
 
 /**
- * Lee el fragmento de la URL, que es donde viajan `S` y el instante de generación.
+ * Reads the URL fragment, which is where `S` and the generation instant travel.
  *
- * **El fragmento nunca llega al servidor**, y esa es justo la mitad que hace que un volcado de la
- * base de datos no baste para leer el recorte. Pero se pierde con facilidad: los reescritores de URL
- * del correo sanitario y los portales cautivos se comen el `#`, y entonces el enlace llega
- * incompleto. Por eso, si falta, se avisa **antes** de tocar el servidor: pedir el PIN para acabar
- * en un error de descifrado sería gastar un intento de los cinco por un problema que no es del PIN.
+ * **The fragment never reaches the server**, and that is exactly the half that makes a database
+ * dump not enough to read the clipping. But it is easily lost: the URL rewriters of healthcare
+ * mail and captive portals eat the `#`, and then the link arrives incomplete. That is why, if it
+ * is missing, we warn **before** touching the server: asking for the PIN only to end in a
+ * decryption error would spend one of the five attempts on a problem that is not the PIN's.
  *
- * @param {string} hash Valor de `location.hash`, con `#` o sin él.
+ * @param {string} hash Value of `location.hash`, with or without the `#`.
  * @returns {{sendKey: Uint8Array, generatedAt: Date}}
- * @throws {ReaderError} Si no hay fragmento o no tiene la forma esperada.
+ * @throws {ReaderError} If there is no fragment or it does not have the expected shape.
  */
 export function readFragment(hash) {
     const raw = typeof hash === 'string' ? hash.replace(/^#/, '').trim() : '';
@@ -88,15 +88,15 @@ export function readFragment(hash) {
 }
 
 /**
- * PIN tal cual se teclea: seis dígitos, sin espacios y sin separadores.
+ * PIN exactly as typed: six digits, no spaces and no separators.
  *
- * Se limpia antes de comprobar porque quien lo dicta suele decirlo en dos mitades («cuatro dos uno,
- * ocho cero tres») y quien lo teclea escribe el espacio. Rechazar eso sería gastar un intento por un
- * espacio.
+ * It is cleaned before checking because whoever dictates it usually says it in two halves ("four
+ * two one, eight zero three") and whoever types it writes the space. Rejecting that would spend an
+ * attempt on a space.
  *
  * @param {string} value
- * @returns {string} Exactamente `PIN_LENGTH` dígitos.
- * @throws {ReaderError} Si no lo es.
+ * @returns {string} Exactly `PIN_LENGTH` digits.
+ * @throws {ReaderError} If it is not.
  */
 export function sanitizePin(value) {
     const digits = (typeof value === 'string' ? value : '').replace(/[\s-]/g, '');
@@ -109,15 +109,15 @@ export function sanitizePin(value) {
 }
 
 /**
- * Mensaje de un intento fallido.
+ * Message of a failed attempt.
  *
- * Dice cuántos intentos se llevan hechos **desde este navegador**, con esas palabras, y no «te
- * quedan N»: el contador de verdad vive en una columna del servidor y no sale de ahí, porque
- * responder «te quedan 4» sobre un enlace que nunca existió delataría cuáles existen. Contarlos aquí
- * no es un oráculo de nada y sí es lo que la persona necesita para saber si le queda margen.
+ * It says how many attempts have been made **from this browser**, in those words, and not "you
+ * have N left": the real counter lives in a server column and never leaves it, because answering
+ * "you have 4 left" about a link that never existed would reveal which ones exist. Counting them
+ * here is an oracle of nothing and it is what the person needs to know whether they have room left.
  *
- * @param {number} used Intentos fallidos en esta pestaña.
- * @param {number} max Tope de intentos del enlace (`ShareLink::MAX_ATTEMPTS`).
+ * @param {number} used Failed attempts in this tab.
+ * @param {number} max Attempt cap of the link (`ShareLink::MAX_ATTEMPTS`).
  * @returns {string}
  */
 export function attemptMessage(used, max) {
@@ -129,12 +129,12 @@ export function attemptMessage(used, max) {
 }
 
 /**
- * Traduce cualquier fallo a algo que se pueda leer, sin decir nunca de qué fallo se trata cuando la
- * causa está del lado del enlace.
+ * Translates any failure into something readable, never saying which failure it is when the cause
+ * is on the link side.
  *
- * `EnvelopeError` y `ShareEnvelopeError` sí tienen mensaje propio: a esas alturas el PIN ya era
- * correcto (el servidor entregó el paquete), así que lo que falla es la integridad de lo entregado y
- * eso hay que decirlo en voz alta y nunca enseñar el contenido a medias (ADR 0004).
+ * `EnvelopeError` and `ShareEnvelopeError` do get a message of their own: by then the PIN was
+ * already correct (the server delivered the package), so what fails is the integrity of what was
+ * delivered, and that has to be said out loud, never showing the content half-way (ADR 0004).
  *
  * @param {unknown} failure
  * @returns {string}
@@ -152,12 +152,12 @@ export function describeReaderError(failure) {
 }
 
 /**
- * Petición JSON contra las dos rutas públicas del lector.
+ * JSON request against the two public reader routes.
  *
- * `credentials: 'omit'` no es cosmética: sin ella el navegador mandaría cualquier cookie que ya
- * tuviera de este dominio —la sesión del panel, si quien abre el enlace es a la vez usuario— y esa
- * cookie ataría la lectura de un recorte a una cuenta concreta en los registros de cualquier
- * intermediario. No hay CSRF porque no hay sesión que falsificar (ADR 0011).
+ * `credentials: 'omit'` is not cosmetic: without it the browser would send any cookie it already
+ * had for this domain —the panel session, if whoever opens the link is also a user— and that
+ * cookie would tie the reading of a clipping to a concrete account in the logs of any
+ * intermediary. There is no CSRF because there is no session to forge (ADR 0011).
  *
  * @param {string} url
  * @param {object} body
@@ -191,20 +191,20 @@ async function post(url, body) {
 }
 
 /**
- * Abre el recorte entero: PIN → sal → Argon2id → comprobante → paquete → contenido en claro.
+ * Opens the whole clipping: PIN → salt → Argon2id → proof → package → content in the clear.
  *
- * Todo el material de clave se borra en el `finally` con `zeroize` (ADR 0004): el estiramiento del
- * PIN abre el envoltorio y `CK` abre el paquete, así que dejarlos en memoria después de usarlos es
- * dejar el recorte abierto en un dispositivo que no es de nadie de esta conversación.
+ * All key material is wiped in the `finally` with `zeroize` (ADR 0004): the PIN stretching opens
+ * the wrapper and `CK` opens the package, so leaving them in memory after use is leaving the
+ * clipping open on a device that belongs to nobody in this conversation.
  *
  * @param {object} params
  * @param {{challenge: string, open: string}} params.endpoints
  * @param {string} params.linkId
- * @param {string} params.pin Ya saneado por `sanitizePin`.
- * @param {Uint8Array} params.sendKey `S`, del fragmento.
- * @param {Date} params.generatedAt Instante de generación, del fragmento.
- * @param {(fraction: number) => void} [params.onProgress] Avance real del Argon2id.
- * @returns {Promise<object>} Cuerpo en claro del paquete.
+ * @param {string} params.pin Already cleaned by `sanitizePin`.
+ * @param {Uint8Array} params.sendKey `S`, from the fragment.
+ * @param {Date} params.generatedAt Generation instant, from the fragment.
+ * @param {(fraction: number) => void} [params.onProgress] Real Argon2id progress.
+ * @returns {Promise<object>} Package body in the clear.
  */
 export async function openClipping({ endpoints, linkId, pin, sendKey, generatedAt, onProgress }) {
     /** @type {Uint8Array|null} */
@@ -224,9 +224,9 @@ export async function openClipping({ endpoints, linkId, pin, sendKey, generatedA
         }
 
         /**
-         * La sal llega siempre, exista el enlace o no: para un enlace muerto el servidor devuelve
-         * una señuelo determinista, para que esta pantalla no pueda distinguirlos. Aquí eso se
-         * traduce en que el Argon2id corre igual y el fallo llega después, en `open`.
+         * The salt always arrives, whether the link exists or not: for a dead link the server
+         * returns a deterministic decoy, so this screen cannot tell them apart. Here that means
+         * Argon2id runs all the same and the failure arrives later, in `open`.
          */
         const pinSalt = decodeBase64Url(challenge.data.pinSalt, 'pin salt');
 
@@ -242,10 +242,10 @@ export async function openClipping({ endpoints, linkId, pin, sendKey, generatedA
         const { wrapper, package: packageEnvelope, shareId, expiresAt } = opened.data;
 
         /**
-         * `expiresAt` y `shareId` los pone el servidor y entran en los datos asociados de las dos
-         * capas, así que no hace falta confiar en ellos: si mintiera en cualquiera de los dos, el
-         * envoltorio o el paquete dejarían de abrir y saldría el aviso de integridad. El instante de
-         * generación no viene de ahí: viene del fragmento, que el servidor nunca ve.
+         * `expiresAt` and `shareId` are set by the server and go into the associated data of both
+         * layers, so there is no need to trust them: if it lied about either, the wrapper or the
+         * package would stop opening and the integrity warning would show. The generation instant
+         * does not come from there: it comes from the fragment, which the server never sees.
          */
         wrapKey = deriveWrapKey({ stretched, sendKey, pinSalt, linkId, expiresAt });
 
@@ -273,10 +273,10 @@ export async function openClipping({ endpoints, linkId, pin, sendKey, generatedA
 }
 
 /**
- * Arranca la pantalla sobre el DOM de `resources/views/share/reader.blade.php`.
+ * Starts the screen over the DOM of `resources/views/share/reader.blade.php`.
  *
- * El contrato es el conjunto de `data-phr-reader-*` de esa vista. Si alguno faltara, la página se
- * pintaría y no respondería nada, así que se leen todos aquí arriba y de una vez.
+ * The contract is the set of `data-phr-reader-*` of that view. If any were missing, the page would
+ * paint and respond to nothing, so they are all read up here and at once.
  *
  * @param {Document} document
  * @param {Window} window
@@ -303,13 +303,13 @@ export function startReaderPage(document, window) {
     const state = {
         locale: setLocale(config.locale),
         /**
-         * Cuerpo del paquete ya descifrado. Vive en memoria de esta pestaña y muere al recargar: no
-         * se escribe en `localStorage`, ni en `sessionStorage`, ni en IndexedDB, ni en ninguna
-         * cookie. Cerrar la pestaña lo borra, que es la única garantía real en un ordenador ajeno.
+         * Package body already decrypted. It lives in the memory of this tab and dies on reload: it
+         * is not written to `localStorage`, nor to `sessionStorage`, nor to IndexedDB, nor to any
+         * cookie. Closing the tab wipes it, which is the only real guarantee on somebody else's computer.
          */
         body: null,
 
-        /** Vista montada del recorte ({@see renderClippingExplorer}), para poder desmontarla. */
+        /** Mounted view of the clipping ({@see renderClippingExplorer}), so it can be unmounted. */
         explorer: null,
         attempts: 0,
         busy: false,
@@ -319,10 +319,10 @@ export function startReaderPage(document, window) {
     };
 
     /**
-     * El fragmento se lee **una sola vez** y se borra de la barra de direcciones acto seguido con
-     * `history.replaceState` (ADR 0011). No lo saca del historial del navegador —eso no lo puede
-     * hacer una página—, pero sí evita que quede a la vista en la pantalla de un ordenador de
-     * consulta y que se copie sin querer al compartir la dirección.
+     * The fragment is read **once** and erased from the address bar right afterwards with
+     * `history.replaceState` (ADR 0011). It does not remove it from the browser history —a page
+     * cannot do that—, but it does keep it from staying in plain sight on a clinic screen and from
+     * being copied by accident when the address is shared.
      */
     try {
         state.fragment = readFragment(window.location.hash);
@@ -343,7 +343,7 @@ export function startReaderPage(document, window) {
 
     nodes.print.addEventListener('click', () => window.print());
 
-    /** Textos fijos de la cáscara. Se pintan desde aquí para que el selector de idioma los cambie. */
+    /** Fixed texts of the shell. Painted from here so the language selector can change them. */
     function renderStaticText() {
         for (const element of document.querySelectorAll('[data-phr-reader-text]')) {
             element.textContent = t(element.dataset.phrReaderText);
@@ -355,13 +355,13 @@ export function startReaderPage(document, window) {
     }
 
     /**
-     * Selector de idioma.
+     * Language selector.
      *
-     * La página llega en el idioma del `Accept-Language` del profesional, que es el del navegador y
-     * no necesariamente el suyo: en una consulta el equipo suele estar en el idioma que dejó puesto
-     * quien lo instaló. El selector cambia el idioma **sin recargar y sin pedir nada al servidor**,
-     * porque el catálogo trae los tres dentro, y sin escribir ninguna preferencia en ninguna parte:
-     * una cookie de idioma sería justo la cookie que esta ruta se quita de encima.
+     * The page arrives in the language of the professional's `Accept-Language`, which is the
+     * browser's and not necessarily theirs: in a clinic the machine is usually in whatever language
+     * the person who installed it left. The selector changes the language **without reloading and
+     * without asking the server for anything**, because the catalog brings all three inside, and
+     * without writing any preference anywhere: a language cookie would be exactly the cookie this route drops.
      */
     function renderLocaleChoices() {
         nodes.locales.replaceChildren();
@@ -393,10 +393,10 @@ export function startReaderPage(document, window) {
     }
 
     /**
-     * Argon2id con los parámetros del KSF de OPAQUE tarda entre uno y varios segundos, y en un
-     * equipo de consulta puede tardar bastante más. Sin nada en pantalla eso se lee como una página
-     * colgada, así que la barra avanza con el progreso **real** que reporta el estiramiento y el
-     * texto dice qué está pasando: que está descifrando, no que se ha parado.
+     * Argon2id with the OPAQUE KSF parameters takes from one to several seconds, and on a clinic
+     * machine it can take much longer. With nothing on screen that reads as a hung page, so the bar
+     * advances with the **real** progress the stretching reports and the text says what is going
+     * on: that it is decrypting, not that it has stopped.
      *
      * @param {string} stage
      * @param {number} fraction
@@ -448,9 +448,9 @@ export function startReaderPage(document, window) {
             renderReport();
         } catch (failure) {
             /**
-             * Un `ReaderError` sin mensaje es el fallo genérico del servidor: no existe, caducó, se
-             * revocó o el PIN no era. Los cuatro llegan aquí exactamente igual, y aquí se les añade
-             * lo único que sí se puede contar, que son los intentos hechos desde este navegador.
+             * A `ReaderError` with no message is the generic server failure: it does not exist, it
+             * expired, it was revoked or the PIN was wrong. All four arrive here exactly alike, and
+             * here we add the only thing we can tell, the attempts made from this browser.
              */
             if (failure instanceof ReaderError && failure.message === '') {
                 state.attempts += 1;
@@ -461,7 +461,7 @@ export function startReaderPage(document, window) {
 
             renderError();
         } finally {
-            /** El PIN no se queda en el campo: la pestaña puede quedar abierta en una sala común. */
+            /** The PIN does not stay in the field: the tab may be left open in a shared room. */
             nodes.pin.value = '';
             state.busy = false;
             nodes.submit.disabled = false;
@@ -470,9 +470,9 @@ export function startReaderPage(document, window) {
     }
 
     /**
-     * Pinta el recorte entero. Se vuelve a llamar al cambiar de idioma, y entonces se desmonta la
-     * vista anterior antes de montar la nueva: sin el `destroy()`, la instancia de Chart.js del
-     * idioma anterior se quedaría atada a un lienzo que ya no está en el documento.
+     * Paints the whole clipping. It is called again when the language changes, and then the
+     * previous view is unmounted before mounting the new one: without the `destroy()`, the Chart.js
+     * instance of the previous language would stay tied to a canvas no longer in the document.
      */
     function renderReport() {
         if (state.body === null) {
@@ -485,7 +485,7 @@ export function startReaderPage(document, window) {
         state.explorer = renderClippingExplorer(nodes.report, {
             body: state.body,
             resolved: resolveCatalog(catalog, state.locale),
-            /** Prefijo propio de los `id` de las gráficas, para no chocar con los de otra pantalla. */
+            /** Own prefix for the chart `id`s, so they do not clash with those of another screen. */
             chartPrefix: 'reader',
         });
     }

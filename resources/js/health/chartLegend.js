@@ -1,47 +1,47 @@
 /**
- * Leyenda de las gráficas, en HTML y fuera del `<canvas>`.
+ * Chart legend, in HTML and outside the `<canvas>`.
  *
- * **Por qué se saca del lienzo.** En Chart.js 4 la leyenda no es un nodo del DOM: es un `Element`
- * dado de alta como caja de maquetación (`layouts.addBox(chart, legend)`), y su `fit()` calcula el
- * alto acumulando una fila por cada tanda de entradas que quepa, midiendo el texto con
- * `ctx.measureText()`. Con `maintainAspectRatio: false` dentro de un contenedor de 320px fijos, ese
- * alto se **resta** del área de datos y depende del número de series, de lo largas que sean sus
- * etiquetas y del ancho de la ventana; si las filas superan `maxHeight`, `Math.min` la recorta y
- * las entradas sobrantes desaparecen. La pantalla de tensión es el caso peor: genera dos series
- * por método (sistólica y diastólica de cada combinación brazo×postura), así que dos entradas
- * cortas se convierten en ocho largas sin que cambie nada del maquetado.
+ * **Why it is taken out of the canvas.** In Chart.js 4 the legend is not a DOM node: it is an
+ * `Element` registered as a layout box (`layouts.addBox(chart, legend)`), and its `fit()` computes
+ * the height by stacking one row per batch of entries that fits, measuring the text with
+ * `ctx.measureText()`. With `maintainAspectRatio: false` inside a container of a fixed 320px, that
+ * height is **subtracted** from the data area and depends on the number of series, on how long
+ * their labels are and on the window width; if the rows go over `maxHeight`, `Math.min` clips it
+ * and the leftover entries disappear. The blood pressure screen is the worst case: it generates
+ * two series per method (systolic and diastolic of each arm×posture combination), so two short
+ * entries become eight long ones without anything in the layout changing.
  *
- * **Qué se gana además del alto.** En el lienzo, `usePointStyle: true` dibuja solo la forma del
- * punto y pierde el patrón de trazo, así que las tres series de un mismo azul se distinguían
- * únicamente por el color — justo lo que DESIGN.md Do's #3 prohíbe para un dato clínico. Aquí cada
- * entrada lleva su línea con `stroke-dasharray` **y** su marca (círculo, triángulo, cuadrado), que
- * es lo mismo que distingue la gráfica. Y al ser HTML, el texto usa los tokens de tinta y conmuta
- * solo con el modo oscuro, cosa que un color escrito dentro del `<canvas>` no puede hacer.
+ * **What is gained besides the height.** On the canvas, `usePointStyle: true` draws only the point
+ * shape and loses the dash pattern, so the three series of one same blue were told apart by colour
+ * alone — exactly what DESIGN.md Do's #3 forbids for a clinical datum. Here each entry carries its
+ * line with `stroke-dasharray` **and** its marker (circle, triangle, square), which is the same
+ * thing that tells the chart apart. And being HTML, the text uses the ink tokens and switches with
+ * dark mode on its own, something a colour written inside the `<canvas>` cannot do.
  *
- * **No es interactiva, y es a propósito.** El defecto que se arregla es de maquetación, no de falta
- * de interacción. El pie de la gráfica es el `aria-describedby` del lienzo y la única fuente
- * textual de qué contiene (ADR 0008, «Incluye: …»); un conmutador por serie lo desincronizaría —la
- * gráfica mostraría tres de ocho series y el texto accesible seguiría diciendo que las incluye
- * todas— y ocultar una serie clínica sin dejar rastro en el texto es exactamente lo que Don'ts #10
- * quiere evitar. Si algún día hace falta filtrar de verdad, el sitio es un grupo de casillas sobre
- * la gráfica que filtre **los datos de entrada**, y por tanto también el pie.
+ * **It is not interactive, and that is on purpose.** The defect being fixed is one of layout, not
+ * of missing interaction. The chart caption is the `aria-describedby` of the canvas and the only
+ * textual source of what it contains (ADR 0008, "Includes: …"); a per-series toggle would put them
+ * out of sync —the chart would show three of eight series and the accessible text would keep
+ * saying it includes them all— and hiding a clinical series without a trace in the text is exactly
+ * what Don'ts #10 wants to avoid. If real filtering is ever needed, the place is a group of
+ * checkboxes above the chart filtering **the input data**, and therefore the caption too.
  */
 
 /**
- * Geometría de la marca de cada entrada, en el sistema de coordenadas del `<svg>` de 24×12.
+ * Geometry of the marker of each entry, in the coordinate system of the 24×12 `<svg>`.
  */
 const SWATCH = Object.freeze({ width: 24, height: 12, middle: 6 });
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 
 /**
- * Convierte los descriptores de serie que ya construye cada pantalla (los mismos que alimentan a
- * Chart.js) en las entradas de la leyenda.
+ * Turns the series descriptors each screen already builds (the same ones that feed Chart.js) into
+ * the legend entries.
  *
- * No se pasa por `chart.legend.options.labels.generateLabels()`: las tres pantallas ya tienen el
- * array con etiqueta, color, trazo y forma antes de crear el `Chart`, así que leerlo de ahí no toca
- * ningún interno de la librería y deja esta función pura y probable sin montar Chart.js, como el
- * resto de `tests/js`.
+ * It does not go through `chart.legend.options.labels.generateLabels()`: the three screens already
+ * have the array with label, colour, dash and shape before creating the `Chart`, so reading it
+ * from there touches no library internal and keeps this function pure and testable without
+ * mounting Chart.js, like the rest of `tests/js`.
  *
  * @param {list<{label: string, color: string, borderDash?: list<number>, pointStyle?: string}>} series
  * @returns {list<{text: string, color: string, dash: list<number>, shape: string}>}
@@ -53,16 +53,16 @@ export function legendItems(series) {
         dash: [...(entry.borderDash ?? [])],
         shape: entry.pointStyle ?? 'circle',
         /**
-         * Una serie que en la gráfica **no es una línea** —las marcas de comida y de insulina de la
-         * curva de glucemia, que son puntos sueltos sobre el eje temporal— tampoco la lleva en la
-         * leyenda: dibujarle un trazo diría que hay una serie continua donde solo hay sucesos.
+         * A series that in the chart **is not a line** —the meal and insulin markers of the glucose
+         * curve, which are loose points on the time axis— does not carry one in the legend either:
+         * drawing it a stroke would say there is a continuous series where there are only events.
          */
         line: entry.lineless !== true,
     }));
 }
 
 /**
- * Marca de la entrada: la misma forma que Chart.js pinta en los puntos de esa serie.
+ * Marker of the entry: the same shape Chart.js paints on the points of that series.
  *
  * @param {string} shape
  * @param {string} color
@@ -104,10 +104,10 @@ function createShape(shape, color) {
 }
 
 /**
- * Muestra de una entrada: la línea con su patrón de trazo más la marca encima.
+ * Sample of an entry: the line with its dash pattern plus the marker on top.
  *
- * `aria-hidden`: no lleva información que no esté ya en el texto de al lado (Do's #3, el color y la
- * forma acompañan al nombre de la serie, no lo sustituyen).
+ * `aria-hidden`: it carries no information that is not already in the text next to it (Do's #3,
+ * the colour and the shape accompany the series name, they do not replace it).
  *
  * @param {{color: string, dash: list<number>, shape: string}} item
  * @returns {SVGSVGElement}
@@ -142,13 +142,13 @@ function createSwatch(item) {
 }
 
 /**
- * Pinta la leyenda dentro de `element`, sustituyendo lo que hubiera.
+ * Paints the legend inside `element`, replacing whatever was there.
  *
- * Vaciar siempre antes de pintar no es cosmética: el historial se repinta entero después de guardar
- * un registro, y una leyenda que solo añadiera iría acumulando la misma serie una vez por guardado.
- * Con la lista vacía deja el nodo vacío, que es lo que corresponde cuando la gráfica no se pinta.
+ * Always emptying before painting is not cosmetic: the history is repainted whole after saving a
+ * record, and a legend that only appended would stack the same series once per save. With an empty
+ * list it leaves the node empty, which is what fits when the chart is not painted.
  *
- * @param {HTMLElement|null|undefined} element Contenedor `<ul>`; si no existe, no se hace nada.
+ * @param {HTMLElement|null|undefined} element `<ul>` container; if it does not exist, nothing happens.
  * @param {list<{text: string, color: string, dash: list<number>, shape: string}>} items
  */
 export function renderLegend(element, items) {
@@ -160,9 +160,9 @@ export function renderLegend(element, items) {
     element.replaceChildren(...items.map((item) => {
         const entry = document.createElement('li');
         /**
-         * Tinta principal por su papel (`text-ink`), no un tono de la rampa: en modo oscuro
-         * `gray-900` pasa a ser la superficie y el texto desaparecería. 13px es el tamaño Helper de
-         * § Typography, el mismo que tenía la leyenda del lienzo.
+         * Main ink by its role (`text-ink`), not a shade of the ramp: in dark mode `gray-900`
+         * becomes the surface and the text would disappear. 13px is the Helper size of
+         * § Typography, the same the canvas legend had.
          */
         entry.className = 'inline-flex items-center gap-2 text-helper text-ink';
         entry.appendChild(createSwatch(item));
@@ -176,21 +176,21 @@ export function renderLegend(element, items) {
 }
 
 /**
- * Resuelve el nodo donde va la leyenda de un lienzo, creándolo si la plantilla no lo trae.
+ * Resolves the node the legend of a canvas goes in, creating it if the template does not bring it.
  *
- * Se busca **por `id`, nunca por `x-ref`**, y es deliberado: `GlucosePageTest`, `DashboardPageTest`
- * y el contrato de DOM de `tests/js` exigen que los `$refs` del módulo y los `x-ref` de la
- * plantilla coincidan exactamente, así que un `$refs.chartLegend` obligaría a tocar las cinco
- * plantillas a la vez o rompería esos tests. Por `id` el módulo funciona con la plantilla tal como
- * está hoy, y sigue funcionando el día que Blade pinte el `<ul>` con ese mismo `id`.
+ * It is looked up **by `id`, never by `x-ref`**, and that is deliberate: `GlucosePageTest`,
+ * `DashboardPageTest` and the DOM contract of `tests/js` demand that the `$refs` of the module and
+ * the `x-ref` of the template match exactly, so a `$refs.chartLegend` would force touching the
+ * five templates at once or would break those tests. By `id` the module works with the template as
+ * it is today, and keeps working the day Blade paints the `<ul>` with that same `id`.
  *
- * El nodo va como hermano **del contenedor** del lienzo, no dentro: con
- * `maintainAspectRatio: false` Chart.js exige que el padre del `<canvas>` sea suyo en exclusiva, y
- * un hermano dentro puede disparar el bucle de redimensionado. Además se añade al
- * `aria-describedby` del lienzo, junto al pie, que admite varios identificadores.
+ * The node goes as a sibling **of the container** of the canvas, not inside it: with
+ * `maintainAspectRatio: false` Chart.js demands that the parent of the `<canvas>` be exclusively
+ * its own, and a sibling inside can trigger the resize loop. It is also added to the
+ * `aria-describedby` of the canvas, next to the caption, which accepts several identifiers.
  *
  * @param {HTMLCanvasElement} canvas
- * @param {string} id Identificador estable, para poder describir el lienzo con él.
+ * @param {string} id Stable identifier, so the canvas can be described with it.
  * @returns {HTMLElement|null}
  */
 export function legendElementFor(canvas, id) {

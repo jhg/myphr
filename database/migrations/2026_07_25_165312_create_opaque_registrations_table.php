@@ -7,8 +7,8 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Spec 0001 §3.2 / OPAQUE.md §14.2: registro OPAQUE pendiente entre `registration/start` y
- * `registration/finish`. Se consume de forma atómica dentro de la transacción de `registration/finish`.
+ * Spec 0001 §3.2 / OPAQUE.md §14.2: pending OPAQUE registration between `registration/start` and
+ * `registration/finish`. It is consumed atomically inside the `registration/finish` transaction.
  */
 return new class extends Migration
 {
@@ -18,12 +18,12 @@ return new class extends Migration
             $table->uuid('id')->primary();
             $table->foreignUuid('user_id')->constrained('users')->cascadeOnDelete();
 
-            /** Spec 0001 §3.2: enlace de registro que originó el pendiente. */
+            /** Spec 0001 §3.2: registration link the pending row came from. */
             $table->foreignUuid('invitation_ref')
                 ->constrained('user_registration_links')
                 ->cascadeOnDelete();
 
-            /** OPAQUE.md §13.1: 32 bytes. Longitud validada en aplicación, no por el esquema. */
+            /** OPAQUE.md §13.1: 32 bytes. Length validated in the application, not by the schema. */
             $table->binary('credential_identifier');
 
             $table->string('profile', 96);

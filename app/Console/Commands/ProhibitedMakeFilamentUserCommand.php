@@ -7,15 +7,16 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 
 /**
- * Sustituye a `make:filament-user` y a sus alias, que la Spec 0001 §9 deshabilita.
+ * Replaces `make:filament-user` and its aliases, which Spec 0001 §9 disables.
  *
- * El comando original pide `--password` y hace `Hash::make()` en el servidor. En este proyecto eso
- * produciría una cuenta que parece válida y no lo es: sin registro OPAQUE, sin clave maestra e
- * incapaz de cifrar nada, porque la clave maestra solo nace en el navegador (Spec 0001 §5).
+ * The original command asks for `--password` and calls `Hash::make()` on the server. In this
+ * project that would produce an account that looks valid and is not: no OPAQUE registration, no
+ * master key and unable to encrypt anything, because the master key is only born in the browser
+ * (Spec 0001 §5).
  *
- * Se registra después del proveedor de Filament, de forma que su nombre y sus dos alias quedan
- * ocupados por esta clase. El único flujo de alta disponible es
- * {@see IssueRegistrationLinkCommand} y la acción equivalente del panel.
+ * It is registered after the Filament provider, so its name and its two aliases end up taken by
+ * this class. The only signup flow available is {@see IssueRegistrationLinkCommand} and the
+ * equivalent action in the panel.
  */
 final class ProhibitedMakeFilamentUserCommand extends Command
 {
@@ -47,7 +48,7 @@ final class ProhibitedMakeFilamentUserCommand extends Command
     }
 
     /**
-     * El comando existe solo para ocupar el nombre; no tiene sentido ofrecerlo en la ayuda.
+     * The command exists only to occupy the name; there is no point offering it in the help.
      */
     public function isHidden(): bool
     {

@@ -18,9 +18,10 @@ use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\Activitylog\Support\LogOptions;
 
 /**
- * ADR 0006: un evento clínico es un sobre cifrado con solo las columnas en claro que el servidor
- * necesita para autorizar y paginar (`user_id`, `occurred_at`, `id`). No hay columna de tipo en
- * claro a propósito: si la hubiera, el esquema revelaría qué registra el usuario sin descifrar nada.
+ * ADR 0006: a clinical event is an encrypted envelope with only the plaintext columns the server
+ * needs to authorize and paginate (`user_id`, `occurred_at`, `id`). There is deliberately no
+ * plaintext type column: with one, the schema would reveal what the user records without decrypting
+ * anything.
  */
 #[Fillable(['user_id', 'occurred_at', 'payload'])]
 final class Event extends Model
@@ -29,29 +30,30 @@ final class Event extends Model
     use HasFactory, HasUuids, LogsActivity, SoftDeletes;
 
     /**
-     * Nombre del log de las transiciones del ciclo de vida, separado del de la cuenta
-     * ({@see AuditEvent::LOG_NAME}) para poder consultarlos por separado.
+     * Name of the lifecycle transitions log, separate from the account one
+     * ({@see AuditEvent::LOG_NAME}) so they can be queried apart.
      */
     public const LOG_NAME = 'health-event';
 
     /**
-     * El rastro va en el modelo y no en las páginas que escriben, para que ninguna vía de borrado
-     * futura se quede sin anotar por olvido: cualquiera que pase por Eloquent queda registrada.
+     * The trail lives on the model and not on the pages that write, so no future deletion path is
+     * left unrecorded by oversight: anything that goes through Eloquent gets logged.
      *
-     * `forceDeleted` no está entre los eventos que Spatie graba por defecto, y aquí hace falta
-     * porque el objetivo distingue entre marcar para borrar y borrar de verdad.
+     * `forceDeleted` is not among the events Spatie records by default, and it is needed here
+     * because the goal is to tell marking for deletion apart from actually deleting.
      *
      * @var array<int, string>
      */
     protected static array $recordEvents = ['created', 'updated', 'deleted', 'restored', 'forceDeleted'];
 
     /**
-     * Sin atributos y sin propiedades, a propósito.
+     * No attributes and no properties, on purpose.
      *
-     * `LogOptions::defaults()` no registra ni los `fillable` ni los `unguarded`, así que la fila
-     * anota el verbo, el sujeto, quién lo causó y la fecha, y nada más. Es lo único honesto que se
-     * puede guardar: `payload` es un sobre cifrado que el servidor no puede leer, y copiarlo al
-     * registro solo duplicaría texto cifrado y multiplicaría el sitio del que habría que borrarlo.
+     * `LogOptions::defaults()` records neither the `fillable` nor the `unguarded` ones, so the row
+     * records the verb, the subject, who caused it and the date, and nothing else. It is the only
+     * honest thing we can store: `payload` is an encrypted envelope the server cannot read, and
+     * copying it into the log would only duplicate ciphertext and multiply the places you would have
+     * to delete it from.
      */
     public function getActivitylogOptions(): LogOptions
     {
@@ -59,9 +61,9 @@ final class Event extends Model
             ->useLogName(self::LOG_NAME)
             ->setDescriptionForEvent(function (string $eventName): string {
                 /**
-                 * Un borrado definitivo dispara `deleted` y después `forceDeleted`, así que sin esto
-                 * quedarían dos filas para una sola acción. Una descripción vacía es la forma que
-                 * tiene el paquete de saltarse una entrada.
+                 * A permanent delete fires `deleted` and then `forceDeleted`, so without this there
+                 * would be two rows for a single action. An empty description is how the package
+                 * skips an entry.
                  */
                 if ($eventName === 'deleted' && $this->isForceDeleting()) {
                     return '';
@@ -72,17 +74,17 @@ final class Event extends Model
     }
 
     /**
-     * ADR 0006 (Consequences): el formato de fecha por defecto de Laravel, `Y-m-d H:i:s`, trunca los
-     * microsegundos en cualquier motor. `occurred_at` participa como dato asociado del AEAD con el
-     * que el cliente cifra el sobre, así que si el servidor la relee truncada, el sobre guardado
-     * queda indescifrable: la fecha que autentica ya no coincide con la que se usó al cifrar.
+     * ADR 0006 (Consequences): Laravel's default date format, `Y-m-d H:i:s`, truncates microseconds
+     * on every engine. `occurred_at` takes part as the AEAD associated data the client encrypts the
+     * envelope with, so if the server reads it back truncated, the stored envelope becomes
+     * undecryptable: the date that authenticates no longer matches the one used when encrypting.
      */
     protected $dateFormat = 'Y-m-d H:i:s.u';
 
     /**
-     * `payload` deliberadamente no aparece aquí: es un sobre cifrado, cadena opaca de extremo a
-     * extremo. El servidor no tiene la clave para interpretarlo ni debe intentarlo, así que no lleva
-     * cast ni mutador propio, solo el guardarraíl de formato de {@see self::booted()}.
+     * `payload` deliberately does not appear here: it is an encrypted envelope, an end-to-end opaque
+     * string. The server has no key to interpret it and must not try, so it gets no cast and no
+     * mutator of its own, only the format guardrail in {@see self::booted()}.
      *
      * @return array<string, string>
      */
@@ -94,18 +96,18 @@ final class Event extends Model
     }
 
     /**
-     * ADR 0006: guardarraíl de formato, no de contenido.
+     * ADR 0006: a guardrail on format, not on content.
      *
-     * El servidor nunca puede validar qué hay dentro del sobre porque no tiene la clave; lo único
-     * que puede y debe comprobar es que la columna tenga forma de sobre válido (prefijo, codificación
-     * y tamaño), para que ninguna ruta escriba basura en `payload` aunque el contenido cifrado
-     * siga siendo indescifrable para nosotros.
+     * The server can never validate what is inside the envelope because it has no key; the only
+     * thing it can and must check is that the column has the shape of a valid envelope (prefix,
+     * encoding and size), so no route writes rubbish into `payload` even though the encrypted
+     * content stays undecryptable to us.
      */
     protected static function booted(): void
     {
         self::saving(function (self $event): void {
             if (! EnvelopeValidator::isValid($event->payload)) {
-                throw new LogicException('events.payload no tiene forma de sobre cifrado válido.');
+                throw new LogicException('events.payload does not have the shape of a valid encrypted envelope.');
             }
         });
     }

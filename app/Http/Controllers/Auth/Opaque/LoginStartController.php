@@ -19,25 +19,26 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
 
 /**
- * `POST /phr/auth/opaque/login/start` (Spec 0001 §4.3 / `docs/OPAQUE.md` §15.3 y §13).
+ * `POST /phr/auth/opaque/login/start` (Spec 0001 §4.3 / `docs/OPAQUE.md` §15.3 and §13).
  *
- * Rama real y rama falsa recorren **el mismo código**: misma derivación OPRF, misma evaluación,
- * mismo enmascarado, los mismos tres Diffie-Hellman, los mismos MAC y la misma fila de handshake.
- * Lo único que cambia es de dónde sale el `RegistrationRecord` y si el handshake lleva `user_id`.
+ * The real branch and the fake branch run through **the same code**: same OPRF derivation, same
+ * evaluation, same masking, the same three Diffie-Hellman operations, the same MACs and the same
+ * handshake row. The only thing that changes is where the `RegistrationRecord` comes from and
+ * whether the handshake carries a `user_id`.
  *
- * La rama falsa se recorre siempre que la cuenta no exista, que no tenga `opaque_registration_record`
- * o que su `opaque_profile` no coincida con el perfil vigente (§13.3): darle un camino propio a una
- * cuenta en migración la delataría por forma o por tiempo de respuesta.
+ * The fake branch is taken whenever the account does not exist, has no `opaque_registration_record`
+ * or its `opaque_profile` does not match the current profile (§13.3): giving an account under
+ * migration its own path would give it away by shape or by response time.
  *
- * El `credential_identifier` sale del mismo HMAC en las dos ramas (§13.1), de modo que un atacante
- * que reenvíe el mismo `blinded_message` antes y después de un alta recibe el mismo
- * `evaluated_message` y no aprende nada del alta (RFC 9807 §10.9).
+ * The `credential_identifier` comes from the same HMAC on both branches (§13.1), so an attacker who
+ * replays the same `blinded_message` before and after a signup gets the same `evaluated_message` and
+ * learns nothing about the signup (RFC 9807 §10.9).
  *
- * `login` solo localiza la cuenta: nunca entra en la criptografía.
+ * `login` only locates the account: it never enters the cryptography.
  */
 final readonly class LoginStartController
 {
-    /** TTL del handshake, en segundos (`docs/OPAQUE.md` §14.3): cubre el Argon2id del cliente. */
+    /** Handshake TTL, in seconds (`docs/OPAQUE.md` §14.3): it covers the client's Argon2id. */
     public const int HANDSHAKE_TTL_SECONDS = 180;
 
     public function __construct(
@@ -62,9 +63,9 @@ final readonly class LoginStartController
         [$user, $record] = $this->resolveBranch($data['login']);
 
         /**
-         * §13.1: con cuenta se usa el identificador almacenado, sin cuenta se calcula el HMAC.
-         * Ambas ramas coinciden mientras el login no haya cambiado, que es el riesgo residual
-         * documentado en esa misma sección.
+         * §13.1: with an account we use the stored identifier, without one we compute the HMAC.
+         * Both branches agree as long as the login has not changed, which is the residual risk
+         * documented in that same section.
          */
         $credentialIdentifier = $user?->opaque_credential_identifier
             ?? $this->credentialIdentifier->for($data['login']);
@@ -101,13 +102,13 @@ final readonly class LoginStartController
     }
 
     /**
-     * Decide la rama y devuelve el par (cuenta, record) con el que se responde.
+     * Decides the branch and returns the (account, record) pair used to answer.
      *
-     * La cuenta es `null` —rama falsa, con el `fake_registration_record` de §13.2 materializado una
-     * vez en `opaque:setup`— en cuatro casos que §13.3 obliga a tratar igual: cuenta inexistente,
-     * cuenta sin registro OPAQUE, cuenta con un perfil distinto del vigente y record almacenado que
-     * no parsea. El último es la misma clase de estado inconsistente que los otros y no merece un
-     * camino propio.
+     * The account is `null` —the fake branch, using the §13.2 `fake_registration_record`
+     * materialized once in `opaque:setup`— in four cases §13.3 requires treating alike: the account
+     * does not exist, the account has no OPAQUE registration, the account has a profile other than
+     * the current one, and the stored record does not parse. The last one is the same class of
+     * inconsistent state as the others and does not deserve a path of its own.
      *
      * @return array{0: User|null, 1: RegistrationRecord}
      */

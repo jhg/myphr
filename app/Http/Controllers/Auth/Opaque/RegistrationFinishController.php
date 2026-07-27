@@ -22,19 +22,20 @@ use Illuminate\Support\Facades\DB;
 /**
  * `POST /phr/auth/opaque/registration/finish` (Spec 0001 §4.2 / `docs/OPAQUE.md` §15.2).
  *
- * Es el paso 12 del orden criptográfico (§5) y una **única petición transaccional** a propósito:
- * partirlo en dos dejaría cuentas que se autentican pero no tienen clave maestra utilizable, con el
- * enlace ya consumido y sin recuperación posible. Es el peor modo de fallo del diseño completo.
+ * This is step 12 of the cryptographic order (§5) and deliberately a **single transactional
+ * request**: splitting it in two would leave accounts that authenticate but have no usable master
+ * key, with the link already consumed and no way to recover. It is the worst failure mode of the
+ * whole design.
  *
- * Dentro de una sola transacción: consume el pendiente, consume el enlace, retira el sobre vigente
- * anterior, inserta el sobre nuevo en la tabla de solo añadir y actualiza las columnas OPAQUE y la
- * configuración cifrada del usuario. No abre el sobre de la clave maestra, no guarda la
- * `RegistrationResponse` y no guarda contraseñas.
+ * Inside a single transaction: it consumes the pending row, consumes the link, retires the previous
+ * current envelope, inserts the new envelope into the append-only table and updates the user's
+ * OPAQUE columns and encrypted settings. It does not open the master key envelope, does not store
+ * the `RegistrationResponse` and does not store passwords.
  *
- * **Idempotente** (§4.2 y §7): si la respuesta se perdió en la red pero la transacción ya corrió, un
- * reintento con el mismo `registrationId` encuentra el pendiente consumido, comprueba que la cuenta
- * quedó registrada con ese mismo `registrationRecord` y responde éxito otra vez, en vez de dejar a
- * la persona atascada creyendo que el registro falló cuando en realidad se completó.
+ * **Idempotent** (§4.2 and §7): if the response was lost on the network but the transaction already
+ * ran, a retry with the same `registrationId` finds the pending row consumed, checks that the
+ * account ended up registered with that same `registrationRecord` and answers success again,
+ * instead of leaving the person stuck believing the registration failed when it actually completed.
  */
 final readonly class RegistrationFinishController
 {
@@ -70,9 +71,9 @@ final readonly class RegistrationFinishController
                 $pending = OpaqueRegistration::query()->whereKey($data['registrationId'])->first();
 
                 /**
-                 * Consumo atómico por número de filas afectadas (`docs/OPAQUE.md` §14.3): dos
-                 * pestañas que terminen el mismo registro a la vez producen una única transacción
-                 * ganadora, y la otra cae en la rama idempotente.
+                 * Atomic consumption by number of affected rows (`docs/OPAQUE.md` §14.3): two tabs
+                 * finishing the same registration at once produce a single winning transaction, and
+                 * the other falls into the idempotent branch.
                  */
                 $consumed = OpaqueRegistration::query()
                     ->whereKey($data['registrationId'])
@@ -91,9 +92,9 @@ final readonly class RegistrationFinishController
                 }
 
                 /**
-                 * `invitation_ref` es nulo cuando el pendiente nace del alta pública
-                 * ({@see RegistrationPublicStartController}), que no consume ningún enlace porque
-                 * nunca hubo uno.
+                 * `invitation_ref` is null when the pending row comes from public signup
+                 * ({@see RegistrationPublicStartController}), which consumes no link because there
+                 * never was one.
                  */
                 if ($pending->invitation_ref !== null) {
                     $this->links->consumeById((string) $pending->invitation_ref);
@@ -115,10 +116,10 @@ final readonly class RegistrationFinishController
                 ])->save();
 
                 /**
-                 * Dentro de la transacción y después del `save`, para que solo lo anote la
-                 * transacción ganadora: la rama idempotente de arriba sale antes y no registra un
-                 * alta que en realidad ya estaba hecha. Si algo revienta, el rastro se deshace con
-                 * el resto.
+                 * Inside the transaction and after the `save`, so only the winning transaction
+                 * records it: the idempotent branch above returns earlier and does not log a signup
+                 * that had actually already happened. If something blows up, the trail is rolled
+                 * back with the rest.
                  */
                 activity(AuditEvent::LOG_NAME)
                     ->causedBy($user)
@@ -144,14 +145,15 @@ final readonly class RegistrationFinishController
     }
 
     /**
-     * Rama idempotente (§4.2): el pendiente ya no existe. Si la cuenta quedó registrada con
-     * exactamente este `registrationRecord`, la transacción anterior fue la buena.
+     * Idempotent branch (§4.2): the pending row is gone. If the account ended up registered with
+     * exactly this `registrationRecord`, the previous transaction was the good one.
      *
-     * La comparación se hace contra el record y no contra el `registrationId` porque el pendiente ya
-     * se borró: el record de 192 bytes es lo único que ata el reintento a la transacción original.
+     * The comparison is against the record and not against the `registrationId` because the pending
+     * row has already been deleted: the 192-byte record is the only thing tying the retry to the
+     * original transaction.
      *
-     * @param  string  $serialized  `registrationRecord` binario recibido en el reintento.
-     * @return string|null Identificador del usuario ya registrado, o `null` si no lo está.
+     * @param  string  $serialized  Binary `registrationRecord` received in the retry.
+     * @return string|null Identifier of the already registered user, or `null` if not registered.
      */
     private function alreadyRegistered(string $serialized): ?string
     {
@@ -164,8 +166,8 @@ final readonly class RegistrationFinishController
     }
 
     /**
-     * Pendiente inexistente o caducado, enlace ya consumido, sobre mal formado: un único error, sin
-     * distinguir la causa (§7).
+     * Pending row missing or expired, link already consumed, malformed envelope: a single error,
+     * without telling the cause apart (§7).
      */
     private function genericError(): JsonResponse
     {

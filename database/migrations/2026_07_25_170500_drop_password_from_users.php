@@ -7,15 +7,15 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Spec 0001 §3.1: la autenticación es OPAQUE zero-knowledge; el servidor nunca ve ni deriva una
- * contraseña, así que guardar una columna `password` es guardar un sitio donde alguien podría acabar
- * escribiendo un hash por error o por una migración futura descuidada. `User::getAuthPassword()`
- * (app/Models/User.php) ya devolvía `''` de forma incondicional, así que ningún guard dependía del
- * valor real de la columna; borrarla no cambia el comportamiento de autenticación, solo quita
- * superficie de ataque.
+ * Spec 0001 §3.1: authentication is zero-knowledge OPAQUE; the server never sees or derives a
+ * password, so keeping a `password` column means keeping a place where somebody could end up writing
+ * a hash by mistake or through a careless future migration. `User::getAuthPassword()`
+ * (app/Models/User.php) already returned `''` unconditionally, so no guard depended on the real
+ * value of the column; dropping it does not change authentication behaviour, it only removes attack
+ * surface.
  *
- * `down()` no restaura una columna `not null`: la tabla `users` nunca tuvo una contraseña real que
- * pudiera perderse, así que no hay nada que preservar salvo la forma de la columna.
+ * `down()` does not restore a `not null` column: the `users` table never held a real password that
+ * could be lost, so there is nothing to preserve beyond the shape of the column.
  */
 return new class extends Migration
 {

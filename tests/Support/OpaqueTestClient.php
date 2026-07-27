@@ -18,16 +18,16 @@ use App\Security\Opaque\Ristretto255;
 use RuntimeException;
 
 /**
- * Cliente OPAQUE mínimo, **solo para pruebas** (RFC 9807 §5.2.1, §5.2.3, §6.2 y §6.4.3).
+ * Minimal OPAQUE client, **for tests only** (RFC 9807 §5.2.1, §5.2.3, §6.2 and §6.4.3).
  *
- * En producción el cliente es `@serenity-kit/opaque` corriendo en el navegador; aquí se reimplementa
- * lo justo para poder ejercitar los cuatro endpoints contra el servidor real en un test de
- * integración, sin fixtures grabados y sin poder engañarse a sí mismo con valores precalculados.
+ * In production the client is `@serenity-kit/opaque` running in the browser; here we reimplement
+ * just enough to exercise the four endpoints against the real server in an integration test, with
+ * no recorded fixtures and with no way to fool itself with precomputed values.
  *
- * `Stretch` es la identidad, igual que en los vectores oficiales del Apéndice C: el KSF vive
- * enteramente en el cliente y el servidor es agnóstico a él, así que un Argon2id de 64 MiB por test
- * costaría segundos sin comprobar nada del servidor. El desajuste de KSF tiene su propia prueba de
- * regresión (`docs/OPAQUE.md` §20.5), que no es esta.
+ * `Stretch` is the identity, just as in the official Appendix C vectors: the KSF lives entirely on
+ * the client and the server is agnostic to it, so a 64 MiB Argon2id per test would cost seconds
+ * without checking anything on the server. A KSF mismatch has its own regression test
+ * (`docs/OPAQUE.md` §20.5), which is not this one.
  */
 final class OpaqueTestClient
 {
@@ -36,7 +36,7 @@ final class OpaqueTestClient
     /**
      * `CreateRegistrationRequest` (RFC 9807 §5.2.1).
      *
-     * @return array{blind: string, registrationRequest: string} `blind` binario, petición en base64url.
+     * @return array{blind: string, registrationRequest: string} `blind` binary, request as base64url.
      */
     public static function startRegistration(string $password): array
     {
@@ -106,14 +106,15 @@ final class OpaqueTestClient
     }
 
     /**
-     * `GenerateKE3` (RFC 9807 §6.4.3): desenmascara, recupera el envelope, hace los tres
-     * Diffie-Hellman en el orden espejo del servidor, verifica `server_mac` y produce `KE3`.
+     * `GenerateKE3` (RFC 9807 §6.4.3): unmasks, recovers the envelope, does the three
+     * Diffie-Hellman operations in the mirror order of the server, verifies `server_mac` and
+     * produces `KE3`.
      *
      * @param  array{blind: string, ephemeralPrivateKey: string, ke1: Ke1, startLoginRequest: string}  $started
      * @return array{finishLoginRequest: string, exportKey: string, sessionKey: string}
      *
-     * @throws RuntimeException Si el envelope o el `server_mac` no verifican, que es lo que el
-     *                          cliente real traduce a «contraseña incorrecta».
+     * @throws RuntimeException If the envelope or the `server_mac` do not verify, which is what the
+     *                          real client turns into "wrong password".
      */
     public static function finishLogin(
         string $password,
@@ -150,7 +151,7 @@ final class OpaqueTestClient
         );
 
         if (! hash_equals($credentials['authTag'], $authTag)) {
-            throw new RuntimeException('El envelope no verifica: contraseña incorrecta o servidor distinto.');
+            throw new RuntimeException('The envelope does not verify: wrong password or a different server.');
         }
 
         $authResponse = $ke2->authResponse;
@@ -175,7 +176,7 @@ final class OpaqueTestClient
         $serverMac = AkeKeySchedule::serverMac($keys->serverMacKey, $preamble);
 
         if (! hash_equals($serverMac, $authResponse->serverMac)) {
-            throw new RuntimeException('server_mac inválido: contraseña incorrecta.');
+            throw new RuntimeException('Invalid server_mac: wrong password.');
         }
 
         return [
@@ -199,8 +200,8 @@ final class OpaqueTestClient
     }
 
     /**
-     * `Store` / `Recover` (RFC 9807 §4.1.2 y §4.1.3): de `randomized_password` y el nonce salen la
-     * clave del cliente, la `export_key` y el `auth_tag` sobre las credenciales en claro.
+     * `Store` / `Recover` (RFC 9807 §4.1.2 and §4.1.3): from `randomized_password` and the nonce
+     * come the client key, the `export_key` and the `auth_tag` over the plaintext credentials.
      *
      * @return array{clientPrivateKey: string, clientPublicKey: string, exportKey: string, authTag: string}
      */

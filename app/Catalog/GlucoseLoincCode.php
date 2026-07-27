@@ -8,21 +8,21 @@ use App\Support\SupportedLocale;
 use ValueError;
 
 /**
- * Resolutor de la combinación (método, unidad) al código LOINC de glucemia correspondiente.
+ * Resolver from the (method, unit) pair to the matching blood glucose LOINC code.
  *
- * El ADR 0005 (docs/adr/0005-clinical-vocabulary-loinc-snomed.md) explica que un código LOINC no
- * identifica solo la magnitud: incluye también la unidad y, en mediciones como la glucemia, el
- * método. Por eso un mismo concepto clínico para el paciente puede necesitar más de un código
- * según cómo y con qué se midió. El ADR 0008 (docs/adr/0008-measurement-method.md) añade que esa
- * decisión se toma con método y unidad explícitos, nunca deducidos.
+ * ADR 0005 (docs/adr/0005-clinical-vocabulary-loinc-snomed.md) explains that a LOINC code does not
+ * identify the quantity alone: it also includes the unit and, in measurements like blood glucose,
+ * the method. That is why the same clinical concept for the patient may need more than one code
+ * depending on how and with what it was measured. ADR 0008 (docs/adr/0008-measurement-method.md)
+ * adds that this decision is taken with an explicit method and unit, never inferred ones.
  *
- * Los cuatro códigos siguientes están verificados contra LOINC y no deben modificarse. El código
- * de líquido intersticial en mmol/L tiene seis dígitos antes del guion (`105272-9`); es un formato
- * válido de LOINC y cualquier validación de formato futura debe aceptarlo.
+ * The four codes below are verified against LOINC and must not be modified. The interstitial fluid
+ * code in mmol/L has six digits before the dash (`105272-9`); that is a valid LOINC format and any
+ * future format validation must accept it.
  *
- * La etiqueta al paciente (`patientLabel()`) no sustituye al término oficial LOINC
- * (`officialName()`): ambos conviven, tal y como exige el ADR 0005. La etiqueta es nuestra, en el
- * idioma del paciente; el término oficial es el que se usa en consulta o al exportar.
+ * The patient label (`patientLabel()`) does not replace the official LOINC term (`officialName()`):
+ * both live side by side, exactly as ADR 0005 requires. The label is ours, in the patient's
+ * language; the official term is the one used in a consultation or when exporting.
  */
 enum GlucoseLoincCode: string
 {
@@ -35,13 +35,13 @@ enum GlucoseLoincCode: string
     case InterstitialMillimolesPerLiter = '105272-9';
 
     /**
-     * Resuelve el código LOINC de glucemia para una combinación de método y unidad.
+     * Resolves the blood glucose LOINC code for a method and unit pair.
      *
-     * El resolutor es total sobre las combinaciones soportadas: para cada una devuelve siempre el
-     * mismo código, y ante una combinación no soportada falla de forma ruidosa en vez de devolver
-     * un código por defecto, porque un código LOINC equivocado es un dato clínico equivocado.
+     * The resolver is total over the supported combinations: for each one it always returns the same
+     * code, and given an unsupported combination it fails loudly instead of returning a default
+     * code, because a wrong LOINC code is a wrong clinical fact.
      *
-     * @throws ValueError si la combinación de método y unidad no tiene código LOINC asignado.
+     * @throws ValueError if the method and unit pair has no LOINC code assigned.
      */
     public static function resolve(GlucoseMeasurementMethod $method, UcumUnit $unit): self
     {
@@ -51,14 +51,14 @@ enum GlucoseLoincCode: string
             [GlucoseMeasurementMethod::Interstitial, UcumUnit::MilligramsPerDeciliter] => self::InterstitialMilligramsPerDeciliter,
             [GlucoseMeasurementMethod::Interstitial, UcumUnit::MillimolesPerLiter] => self::InterstitialMillimolesPerLiter,
             default => throw new ValueError(sprintf(
-                'No existe código LOINC de glucemia para el método "%s" en unidad "%s".',
+                'There is no blood glucose LOINC code for method "%s" in unit "%s".',
                 $method->value,
                 $unit->value,
             )),
         };
     }
 
-    /** Término oficial LOINC, en inglés, tal y como lo publica Regenstrief Institute. */
+    /** Official LOINC term, in English, exactly as published by the Regenstrief Institute. */
     public function officialName(): string
     {
         return match ($this) {
@@ -70,13 +70,13 @@ enum GlucoseLoincCode: string
     }
 
     /**
-     * Etiqueta propia para el paciente, en el idioma indicado. No sustituye a `officialName()`.
+     * Our own label for the patient, in the given language. It does not replace `officialName()`.
      *
-     * Esta es la única capa que podemos ofrecer completa en los tres idiomas: LOINC no publica
-     * traducción oficial al chino simplificado de estos cuatro términos, así que `officialName()`
-     * sigue en inglés siempre y aquí va la redacción nuestra, que sí traducimos.
+     * This is the only layer we can offer complete in all three languages: LOINC publishes no
+     * official Simplified Chinese translation of these four terms, so `officialName()` stays in
+     * English always and our own wording, which we do translate, goes here.
      *
-     * @param  string  $locale  Cualquier código; los no soportados caen al idioma por defecto.
+     * @param  string  $locale  Any code; unsupported ones fall back to the default language.
      */
     public function patientLabel(string $locale): string
     {
@@ -95,7 +95,7 @@ enum GlucoseLoincCode: string
             [self::CapillaryMillimolesPerLiter, 'zh_CN'] => '毛细血管血糖',
             [self::InterstitialMilligramsPerDeciliter, 'zh_CN'],
             [self::InterstitialMillimolesPerLiter, 'zh_CN'] => '组织液葡萄糖',
-            default => throw new ValueError(sprintf('Falta la etiqueta al paciente para el idioma "%s".', $locale)),
+            default => throw new ValueError(sprintf('Missing patient label for locale "%s".', $locale)),
         };
     }
 }

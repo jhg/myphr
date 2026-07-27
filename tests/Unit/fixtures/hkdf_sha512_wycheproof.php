@@ -3,12 +3,12 @@
 declare(strict_types=1);
 
 /**
- * Vectores oficiales de HKDF-SHA-512 del proyecto Wycheproof (C2SP).
+ * Official HKDF-SHA-512 vectors from the Wycheproof project (C2SP).
  *
- * Fuente: https://github.com/C2SP/wycheproof/blob/main/testvectors_v1/hkdf_sha512_test.json
- * Fichero `testvectors_v1/hkdf_sha512_test.json`, algoritmo "HKDF-SHA-512", 83 casos.
- * Cada caso aplica HKDF completo: PRK = Extract(salt, ikm); OKM = Expand(PRK, info, size).
- * Los casos con result === 'invalid' llevan la bandera SizeTooLarge (size > 255 * 64).
+ * Source: https://github.com/C2SP/wycheproof/blob/main/testvectors_v1/hkdf_sha512_test.json
+ * File `testvectors_v1/hkdf_sha512_test.json`, algorithm "HKDF-SHA-512", 83 cases.
+ * Each case applies full HKDF: PRK = Extract(salt, ikm); OKM = Expand(PRK, info, size).
+ * The cases with result === 'invalid' carry the SizeTooLarge flag (size > 255 * 64).
  *
  * @return list<array{tcId: int, result: string, comment: string, ikm: string, salt: string, info: string, size: int, okm: string}>
  */

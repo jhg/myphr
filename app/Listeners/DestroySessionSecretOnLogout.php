@@ -10,22 +10,22 @@ use Illuminate\Auth\Events\Logout;
 use Illuminate\Contracts\Session\Session;
 
 /**
- * El cierre de sesión destruye el secreto de sesión por el mismo camino que el bloqueo
+ * Logging out destroys the session secret through the same path as locking
  * (Spec 0001 §8).
  *
- * Filament monta su propio `POST /phr/logout` (`Filament\Auth\Http\Controllers\LogoutController`),
- * que no sabe nada del secreto: hace `Filament::auth()->logout()` y `session()->invalidate()`. Hoy
- * ese `invalidate()` se lleva por delante toda la carga útil, secreto incluido, pero eso es un
- * efecto lateral de un controlador de terceros, no una garantía de este proyecto: un cambio futuro
- * en ese controlador —o cualquier otro punto que llame a `Auth::logout()` sin invalidar— dejaría el
- * secreto vivo sin ningún síntoma visible.
+ * Filament mounts its own `POST /phr/logout` (`Filament\Auth\Http\Controllers\LogoutController`),
+ * which knows nothing about the secret: it calls `Filament::auth()->logout()` and
+ * `session()->invalidate()`. Today that `invalidate()` takes the whole payload with it, secret
+ * included, but that is a side effect of a third-party controller, not a guarantee of this project:
+ * a future change in that controller —or any other place that calls `Auth::logout()` without
+ * invalidating— would leave the secret alive with no visible symptom.
  *
- * Engancharse al evento `Logout` en vez de sustituir el controlador cubre los tres caminos con una
- * sola pieza: el logout de Filament, {@see LockController} y
- * cualquier `Auth::logout()` futuro. Se descubre por la firma de `handle()`.
+ * Hooking the `Logout` event instead of replacing the controller covers all three paths with one
+ * piece: Filament's logout, {@see LockController} and any future `Auth::logout()`. It is discovered
+ * from the signature of `handle()`.
  *
- * `SessionSecrets::destroy()` es idempotente, así que ejecutarlo sobre una sesión que ya no tiene
- * secreto no es un error: es el caso normal cuando el bloqueo ya lo había borrado.
+ * `SessionSecrets::destroy()` is idempotent, so running it on a session that no longer has a secret
+ * is not an error: it is the normal case when locking already cleared it.
  */
 final readonly class DestroySessionSecretOnLogout
 {

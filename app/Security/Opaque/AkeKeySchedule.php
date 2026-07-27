@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Security\Opaque;
 
 /**
- * `DeriveKeys` y los dos MAC del AKE 3DH
+ * `DeriveKeys` and the two MACs of the 3DH AKE
  * (RFC 9807 §6.4.2.2 / `docs/OPAQUE.md` §11.6).
  *
  * ```
@@ -20,44 +20,44 @@ namespace App\Security\Opaque;
  * expected_client_mac = HMAC-SHA-512(Km3, SHA512(preamble || server_mac))
  * ```
  *
- * El hash del preamble entra como `Context` de `Expand-Label` en
- * `HandshakeSecret` y `SessionKey`; `Km2` y `Km3` llevan contexto vacío. Esta
- * interpretación procede del pseudocódigo de `docs/OPAQUE.md` §11.6, que exige
- * contrastarla contra los vectores del Apéndice C de RFC 9807 antes de darla
- * por buena.
+ * The preamble hash goes in as the `Context` of `Expand-Label` in
+ * `HandshakeSecret` and `SessionKey`; `Km2` and `Km3` carry an empty context.
+ * This reading comes from the pseudocode in `docs/OPAQUE.md` §11.6, which
+ * demands checking it against the RFC 9807 Appendix C vectors before taking it
+ * as correct.
  *
- * Obsérvese que `expected_client_mac` hashea `preamble || server_mac`, no
- * `SHA512(preamble) || server_mac`: por eso las funciones de MAC reciben el
- * preamble completo y no su hash.
+ * Note that `expected_client_mac` hashes `preamble || server_mac`, not
+ * `SHA512(preamble) || server_mac`: that is why the MAC functions take the
+ * whole preamble and not its hash.
  */
 final class AkeKeySchedule
 {
-    /** Etiqueta de `Derive-Secret` para el handshake secret. */
+    /** `Derive-Secret` label for the handshake secret. */
     public const string LABEL_HANDSHAKE_SECRET = 'HandshakeSecret';
 
-    /** Etiqueta de `Derive-Secret` para la session key. */
+    /** `Derive-Secret` label for the session key. */
     public const string LABEL_SESSION_KEY = 'SessionKey';
 
-    /** Etiqueta de `Derive-Secret` para `Km2`. */
+    /** `Derive-Secret` label for `Km2`. */
     public const string LABEL_SERVER_MAC = 'ServerMAC';
 
-    /** Etiqueta de `Derive-Secret` para `Km3`. */
+    /** `Derive-Secret` label for `Km3`. */
     public const string LABEL_CLIENT_MAC = 'ClientMAC';
 
-    /** Algoritmo de hash y de HMAC del perfil (`docs/OPAQUE.md` §2). */
+    /** Hash and HMAC algorithm of the profile (`docs/OPAQUE.md` §2). */
     private const string HASH_ALGORITHM = 'sha512';
 
     /**
      * `DeriveKeys(ikm, preamble)` (RFC 9807 §6.4.2.2).
      *
-     * `prk` y `handshake_secret` se zeroizan antes de devolver: no forman
-     * parte del resultado. PHP no garantiza el borrado de todas las copias
-     * internas de un string, así que la zeroización es best effort
+     * `prk` and `handshake_secret` are zeroized before returning: they are not
+     * part of the result. PHP does not guarantee that every internal copy of a
+     * string is wiped, so zeroization is best effort
      * (`docs/OPAQUE.md` §11.6).
      *
-     * @param  string  $ikm  `dh1 || dh2 || dh3`, 96 bytes en este perfil.
-     * @param  string  $preamble  Preamble completo (§11.5), longitud variable.
-     * @return AkeKeys Session key, `Km2` y `Km3`, de 64 bytes cada uno.
+     * @param  string  $ikm  `dh1 || dh2 || dh3`, 96 bytes in this profile.
+     * @param  string  $preamble  Full preamble (§11.5), variable length.
+     * @return AkeKeys Session key, `Km2` and `Km3`, 64 bytes each.
      */
     public static function deriveKeys(string $ikm, string $preamble): AkeKeys
     {
@@ -80,8 +80,8 @@ final class AkeKeySchedule
      * `server_mac = HMAC-SHA-512(Km2, SHA512(preamble))` (RFC 9807 §6.4.4).
      *
      * @param  string  $serverMacKey  `Km2`, 64 bytes.
-     * @param  string  $preamble  Preamble completo, longitud variable.
-     * @return string Etiqueta de 64 bytes (`Nm`).
+     * @param  string  $preamble  Full preamble, variable length.
+     * @return string 64-byte tag (`Nm`).
      */
     public static function serverMac(string $serverMacKey, string $preamble): string
     {
@@ -92,15 +92,15 @@ final class AkeKeySchedule
      * `client_mac = HMAC-SHA-512(Km3, SHA512(preamble || server_mac))`
      * (RFC 9807 §6.4.3 / §6.4.4).
      *
-     * En el servidor es el `expected_client_mac` contra el que se compara el
-     * `KE3` recibido.
+     * On the server this is the `expected_client_mac` the received `KE3` is
+     * compared against.
      *
      * @param  string  $clientMacKey  `Km3`, 64 bytes.
-     * @param  string  $preamble  Preamble completo, longitud variable.
-     * @param  string  $serverMac  Etiqueta del servidor, 64 bytes.
-     * @return string Etiqueta de 64 bytes (`Nm`).
+     * @param  string  $preamble  Full preamble, variable length.
+     * @param  string  $serverMac  Server tag, 64 bytes.
+     * @return string 64-byte tag (`Nm`).
      *
-     * @throws InvalidMessageException Si `$serverMac` no mide 64 bytes.
+     * @throws InvalidMessageException If `$serverMac` is not 64 bytes long.
      */
     public static function clientMac(string $clientMacKey, string $preamble, string $serverMac): string
     {
@@ -110,10 +110,10 @@ final class AkeKeySchedule
     }
 
     /**
-     * `Hash` del perfil: SHA-512 en binario (`docs/OPAQUE.md` §2).
+     * The profile `Hash`: SHA-512 in binary (`docs/OPAQUE.md` §2).
      *
-     * @param  string  $data  Entrada binaria de longitud arbitraria.
-     * @return string Digest de 64 bytes (`Nh`).
+     * @param  string  $data  Binary input of arbitrary length.
+     * @return string 64-byte digest (`Nh`).
      */
     public static function hash(string $data): string
     {

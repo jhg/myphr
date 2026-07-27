@@ -15,16 +15,16 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * `POST /phr/shares/{share}/links` (ADR 0011): re-arma un enlace sobre un recorte ya subido.
+ * `POST /phr/shares/{share}/links` (ADR 0011): re-arms a link on an already uploaded clipping.
  *
- * Es para lo que existen las dos capas. Agotar los cinco intentos borra la fila del enlace y **no**
- * el paquete, así que quien vio cómo alguien quemaba los intentos fotografiando el QR vuelve a
- * armar un acceso nuevo, con `S` y PIN nuevos, sin recomponer el recorte ni volver a subir hasta
- * 4 MiB. Sirve igual para dar un enlace por destinatario, cada uno con su PIN y su contador.
+ * This is what the two layers exist for. Burning the five attempts deletes the link row and **not**
+ * the package, so someone who watched a person burn the attempts while photographing the QR code can
+ * arm fresh access, with a new `S` and PIN, without rebuilding the clipping or re-uploading up to
+ * 4 MiB. It is equally useful for giving one link per recipient, each with its own PIN and counter.
  *
- * Sigue exigiendo la clave maestra en el navegador, porque `CK` vive dentro del descriptor cifrado:
- * tras el bloqueo por inactividad del ADR 0009 hay que volver a autenticarse. Eso ocurre en el
- * cliente; aquí solo se comprueba que la sesión es de la dueña del recorte.
+ * It still requires the master key in the browser, because `CK` lives inside the encrypted
+ * descriptor: after the ADR 0009 idle lock you have to authenticate again. That happens on the
+ * client; here we only check that the session belongs to the clipping's owner.
  */
 final readonly class IssueShareLinkController
 {
@@ -43,9 +43,9 @@ final readonly class IssueShareLinkController
         }
 
         /**
-         * Acotado por `user_id` y por caducidad: un recorte ajeno y uno muerto responden lo mismo
-         * que uno inexistente, y sobre un recorte caducado no tiene sentido armar un enlace que
-         * nacería sin poder servir nada.
+         * Scoped by `user_id` and by expiry: somebody else's clipping and a dead one answer the same
+         * as a non-existent one, and arming a link on an expired clipping makes no sense since it
+         * would be born unable to serve anything.
          */
         $record = Share::query()
             ->where('user_id', $user->id)

@@ -1,12 +1,12 @@
 /**
- * Componente Alpine del formulario de login (Spec 0001 §6.1).
+ * Alpine component of the login form (Spec 0001 §6.1).
  *
- * La contraseña se lee del nodo del DOM y el `<input>` se vacía en el paso 2, antes de que exista
- * ningún estado que pudiera retenerla. No hay `wire:model` en ningún punto de este camino: nada de
- * lo que se escribe aquí entra en el `snapshot` de Livewire (ADR 0002).
+ * The password is read from the DOM node and the `<input>` is emptied in step 2, before any state
+ * that could retain it exists. There is no `wire:model` anywhere on this path: nothing typed here
+ * enters the Livewire `snapshot` (ADR 0002).
  *
- * La navegación al panel la hace este módulo con el `redirect` que devuelve `login/finish`, así que
- * no hace falta tocar el `LoginResponse` de Filament.
+ * This module does the navigation to the panel with the `redirect` that `login/finish` returns, so
+ * there is no need to touch the Filament `LoginResponse`.
  */
 
 import { deriveKey, KDF_LABELS } from '../crypto/kdf.js';
@@ -33,7 +33,7 @@ import { KEY_STRETCHING_SECONDS, progressMixin } from './progress.js';
 import { loadSettings } from './settings.js';
 
 /**
- * Factoría del componente Alpine. Se registra como `phrLoginForm`.
+ * Alpine component factory. Registered as `phrLoginForm`.
  *
  * @returns {object}
  */
@@ -57,7 +57,7 @@ export function loginForm() {
             const form = event.target;
             const login = this.$refs.login.value.trim();
 
-            /** §6.1, paso 2: la contraseña sale del DOM y el campo queda vacío en el acto. */
+            /** §6.1, step 2: the password leaves the DOM and the field is emptied at once. */
             let password = this.$refs.password.value;
             this.$refs.password.value = '';
 
@@ -96,9 +96,9 @@ export function loginForm() {
             assertPinned(started, pinned);
 
             /**
-             * La barra se lanza **antes** de la llamada, y se espera a que el navegador la pinte:
-             * `finishLogin` corre Argon2id de forma síncrona y a partir de aquí el hilo principal no
-             * pinta nada más hasta que termine.
+             * The bar starts **before** the call, and we wait for the browser to paint it:
+             * `finishLogin` runs Argon2id synchronously and from here on the main thread paints
+             * nothing else until it finishes.
              */
             await this.advance(t('login.stage.stretching'), 0.85, KEY_STRETCHING_SECONDS);
 
@@ -109,7 +109,7 @@ export function loginForm() {
                 serverIdentity: pinned.serverIdentity,
             });
 
-            /** §6.1, paso 5: `undefined` es «la contraseña no cuadra», no un error técnico. */
+            /** §6.1, step 5: `undefined` means "the password does not match", not a technical error. */
             if (finished === undefined) {
                 throw new AuthRequestError('Login failed.', null, 'authentication_failed');
             }
@@ -123,10 +123,10 @@ export function loginForm() {
 
             unwrapMasterKey(finished.exportKey, session);
 
-            /** §6.1, paso 10: los ajustes cifrados, ya con la clave maestra en memoria. */
+            /** §6.1, step 10: the encrypted settings, now with the master key in memory. */
             loadSettings({ envelope: session.encryptedSettings, userId: session.userId });
 
-            /** §6.1, paso 9: el paquete de recuperación, ya con sesión creada y clave verificada. */
+            /** §6.1, step 9: the recovery package, now with a session created and the key verified. */
             const sessionSecret = decodeSessionSecret(session.sessionSecret);
 
             try {
@@ -135,7 +135,7 @@ export function loginForm() {
                 zeroize(sessionSecret);
             }
 
-            /** §6.1, paso 10: el CSRF nuevo antes de navegar, o el siguiente POST da 419. */
+            /** §6.1, step 10: the new CSRF before navigating, or the next POST gives 419. */
             updateCsrfToken(session.csrf);
 
             await this.advance(t('stage.entering'), 1);
@@ -146,9 +146,9 @@ export function loginForm() {
 }
 
 /**
- * §6.1, paso 7: KEK a partir del `exportKey` y apertura del sobre vigente de la clave maestra.
+ * §6.1, step 7: KEK from the `exportKey` and opening of the current master key envelope.
  *
- * Un fallo aquí es visible: nunca se oculta el registro ni se degrada en silencio (ADR 0004).
+ * A failure here is visible: the record is never hidden and nothing degrades in silence (ADR 0004).
  *
  * @param {string} exportKey
  * @param {{userId?: string, encryptedUserMasterKey: string}} session
@@ -157,10 +157,10 @@ function unwrapMasterKey(exportKey, session) {
     const userId = session.userId;
 
     /**
-     * El dato asociado del sobre lleva el identificador del usuario (§5, paso 9), así que sin él
-     * el sobre no abre. Hoy `login/finish` no lo devuelve: §4.4 no lo lista entre sus campos,
-     * aunque §4.1 sí lo devuelve en el registro por esta misma razón. Es un hueco del contrato,
-     * no un caso de ejecución, y por eso falla de forma ruidosa en vez de intentar adivinarlo.
+     * The associated data of the envelope carries the user identifier (§5, step 9), so without it
+     * the envelope does not open. Today `login/finish` does not return it: §4.4 does not list it
+     * among its fields, although §4.1 does return it at registration for this very reason. It is a
+     * gap in the contract, not a runtime case, and that is why it fails loudly instead of guessing.
      */
     if (typeof userId !== 'string' || userId === '') {
         throw new OpaqueConfigurationError('login/finish did not return the user identifier.');
@@ -187,7 +187,7 @@ function unwrapMasterKey(exportKey, session) {
 }
 
 /**
- * Traduce un fallo al único mensaje que corresponde.
+ * Translates a failure into the one message that fits.
  *
  * @param {unknown} failure
  * @returns {string}

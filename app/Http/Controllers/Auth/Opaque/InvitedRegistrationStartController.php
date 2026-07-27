@@ -21,23 +21,23 @@ use Illuminate\Http\Request;
 /**
  * `POST /phr/auth/opaque/registration/start` (Spec 0001 §4.1 / `docs/OPAQUE.md` §15.1).
  *
- * Orden fijado por la Spec 0001 §5, paso 4: valida el token del enlace, **sin consumirlo**, evalúa
- * el OPRF sobre el punto cegado e inserta el registro pendiente. Consumir el enlace aquí dejaría sin
- * enlace y sin cuenta usable a quien sufriera un corte de red durante el Argon2id del navegador,
- * que corre después de esta respuesta.
+ * The order is fixed by Spec 0001 §5, step 4: it validates the link token, **without consuming it**,
+ * evaluates the OPRF over the blinded point and inserts the pending registration. Consuming the link
+ * here would leave anyone who lost their network during the browser's Argon2id, which runs after
+ * this response, without a link and without a usable account.
  *
- * El token llega en el cuerpo y no en la URL: la página de establecimiento de contraseña se sirve
- * genérica y el navegador lee el token del fragmento (`#<token>`), que nunca viaja al servidor salvo
- * dentro de esta petición.
+ * The token arrives in the body and not in the URL: the set-password page is served generic and the
+ * browser reads the token from the fragment (`#<token>`), which never travels to the server except
+ * inside this request.
  *
- * `userId` va en la respuesta porque el cliente lo necesita para construir el dato asociado del AEAD
- * antes de cifrar la clave maestra (§4.1). `serverPublicKey` permite el pinning del paso 5.
+ * `userId` is in the response because the client needs it to build the AEAD associated data before
+ * encrypting the master key (§4.1). `serverPublicKey` allows the pinning in step 5.
  */
 final readonly class InvitedRegistrationStartController
 {
     /**
-     * Ventana de vida del registro pendiente. Cubre con holgura el Argon2id del navegador sin dejar
-     * filas pendientes durante las 24 horas de vida del enlace.
+     * Lifetime window of the pending registration. It comfortably covers the browser's Argon2id
+     * without leaving pending rows around for the link's whole 24-hour life.
      */
     public const int PENDING_TTL_MINUTES = 15;
 
@@ -69,9 +69,9 @@ final readonly class InvitedRegistrationStartController
         }
 
         /**
-         * §13.1: si la cuenta ya tiene identificador se **reutiliza**; si no, se deriva del login
-         * normalizado. Regenerarlo delataría el cambio de contraseña ante quien reenvíe el mismo
-         * punto cegado (RFC 9807 §10.9).
+         * §13.1: if the account already has an identifier it is **reused**; if not, it is derived
+         * from the normalized login. Regenerating it would give the password change away to anyone
+         * who replays the same blinded point (RFC 9807 §10.9).
          */
         $credentialIdentifier = $user->opaque_credential_identifier
             ?? $this->credentialIdentifier->for((string) $user->email);
@@ -101,8 +101,8 @@ final readonly class InvitedRegistrationStartController
     }
 
     /**
-     * Token inexistente, caducado o ya consumido, y mensaje OPAQUE mal formado: el mismo error, para
-     * no delatar cuál de los casos ocurrió (Spec 0001 §4.1 y §7).
+     * Non-existent, expired or already consumed token, and malformed OPAQUE message: the same
+     * error, so as not to give away which case happened (Spec 0001 §4.1 and §7).
      */
     private function genericError(): JsonResponse
     {

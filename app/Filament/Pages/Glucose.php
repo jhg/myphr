@@ -15,18 +15,18 @@ use Illuminate\Contracts\Support\Htmlable;
 use ValueError;
 
 /**
- * Pantalla de glucemia (ADR 0002, ADR 0004, ADR 0005, ADR 0006, ADR 0008).
+ * Blood glucose screen (ADR 0002, ADR 0004, ADR 0005, ADR 0006, ADR 0008).
  *
- * Esta clase no ve nunca el contenido de una glucemia. El transporte común de ciphertext —el
- * sobre baja como valor de retorno y sube como parámetro de método, nunca en una propiedad
- * pública, así que no entra en el snapshot de Livewire (ADR 0002)— vive en {@see HealthEventPage}
- * y es compartido con el resto de pantallas de eventos clínicos. El servidor valida la envoltura
- * del sobre y la autorización, nunca el contenido: no hay forma de comprobar que dentro dice
- * «glucosa» sin la clave del usuario.
+ * This class never sees the content of a blood glucose reading. The shared ciphertext transport —the
+ * envelope comes down as a return value and goes up as a method parameter, never in a public
+ * property, so it does not enter the Livewire snapshot (ADR 0002)— lives in {@see HealthEventPage}
+ * and is shared with the rest of the clinical event screens. The server validates the envelope
+ * wrapper and authorization, never the content: there is no way to check that it says "glucose"
+ * inside without the user's key.
  *
- * La vista (`resources/views/phr/pages/glucose.blade.php`) es un componente Alpine propio, no un
- * formulario de Filament: el ADR 0002 reserva los campos y columnas de Filament para datos en claro,
- * y aquí todo el contenido clínico está cifrado.
+ * The view (`resources/views/phr/pages/glucose.blade.php`) is an Alpine component of its own, not a
+ * Filament form: ADR 0002 reserves Filament fields and columns for plaintext data, and here all the
+ * clinical content is encrypted.
  */
 final class Glucose extends HealthEventPage
 {
@@ -35,10 +35,10 @@ final class Glucose extends HealthEventPage
     protected string $view = 'phr.pages.glucose';
 
     /**
-     * El título y la etiqueta de navegación se resuelven por método y no como propiedad estática
-     * porque un inicializador de propiedad en PHP solo admite expresiones constantes: `__()` no
-     * puede llamarse ahí. Dejarlos como cadena fija es lo que mantenía el menú y las cabeceras en
-     * castellano aunque el resto de la pantalla ya estuviera traducido.
+     * The title and the navigation label are resolved by method and not as a static property because
+     * a property initializer in PHP only accepts constant expressions: `__()` cannot be called
+     * there. Leaving them as fixed strings is what kept the menu and the headers in Spanish even
+     * when the rest of the screen was already translated.
      */
     public function getTitle(): string|Htmlable
     {
@@ -51,8 +51,8 @@ final class Glucose extends HealthEventPage
     }
 
     /**
-     * Catálogo público en claro que el cliente necesita para construir el payload cifrado (ADR
-     * 0005, ADR 0008). No es dato clínico: son los mismos tokens y códigos para cualquier usuario.
+     * Public plaintext catalog the client needs to build the encrypted payload (ADR 0005,
+     * ADR 0008). It is not clinical data: the same tokens and codes for every user.
      *
      * @return array{
      *     units: list<array{code: string, label: string}>,
@@ -64,8 +64,8 @@ final class Glucose extends HealthEventPage
      */
     public function catalog(): array
     {
-        /** El catálogo es en claro y lo pinta el servidor, así que las etiquetas salen ya en el
-         * idioma en vigor para esta petición (App\Support\SupportedLocale). */
+        /** The catalog is plaintext and the server paints it, so the labels already come out in the
+         * language in force for this request (App\Support\SupportedLocale). */
         $locale = app()->getLocale();
 
         return [
@@ -81,8 +81,8 @@ final class Glucose extends HealthEventPage
     }
 
     /**
-     * Tabla que resuelve (método, unidad) al código LOINC de glucemia (ADR 0005, ADR 0008), para
-     * que el cliente no tenga que reimplementar {@see GlucoseLoincCode::resolve()}.
+     * Table resolving (method, unit) to the blood glucose LOINC code (ADR 0005, ADR 0008), so the
+     * client does not have to reimplement {@see GlucoseLoincCode::resolve()}.
      *
      * @return list<array{method: string, unit: string, code: string}>
      */

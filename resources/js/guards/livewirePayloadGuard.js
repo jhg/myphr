@@ -1,34 +1,34 @@
 /**
- * Interceptor de las peticiones de Livewire (Spec 0001 §9; ADR 0002).
+ * Interceptor of the Livewire requests (Spec 0001 §9; ADR 0002).
  *
- * Revisa lo que sale del navegador en cada mensaje de Livewire y **aborta** si encuentra un valor
- * largo que no lleve el prefijo `v1.` del sobre cifrado. Es un guardarraíl contra el descuido, no
- * una medida de seguridad: quien controla el navegador puede quitarlo. Lo que evita es que un
- * `wire:model` puesto sin pensar mande datos clínicos en claro al servidor y nadie se entere hasta
- * que están escritos en la base de datos.
+ * It inspects what leaves the browser in every Livewire message and **aborts** if it finds a long
+ * value without the `v1.` prefix of the encrypted envelope. It is a guard rail against oversight,
+ * not a security measure: whoever controls the browser can remove it. What it prevents is a
+ * thoughtlessly added `wire:model` sending clinical data in the clear to the server with nobody
+ * noticing until it is written in the database.
  *
- * Es la mitad de cliente del par de §9. La otra mitad es el listener de servidor, que cubre lo que
- * este no puede cubrir: si el descuido está en el propio cliente, es el cliente quien genera la
- * carga y no tiene sentido pedirle que se audite a sí mismo con garantías.
+ * It is the client half of the §9 pair. The other half is the server listener, which covers what
+ * this one cannot: if the oversight is in the client itself, it is the client that builds the
+ * payload and asking it to audit itself with any guarantee makes no sense.
  *
- * **Qué se revisa y qué no.** Solo los tres sitios por los que viajan datos del usuario:
- * `snapshot.data`, `updates` y los parámetros de `calls`. El `memo` y el `checksum` del snapshot son
- * metadatos del propio Livewire (identificadores, ruta, errores de validación) y se dejan pasar: no
- * los escribe la aplicación y bloquearlos rompería el marco sin proteger nada.
+ * **What is inspected and what is not.** Only the three places user data travels through:
+ * `snapshot.data`, `updates` and the parameters of `calls`. The snapshot `memo` and `checksum` are
+ * Livewire's own metadata (identifiers, route, validation errors) and are let through: the
+ * application does not write them and blocking them would break the framework while protecting nothing.
  *
- * **El umbral.** Un sobre cifrado del ADR 0004, con el menor de los tamaños de relleno, no baja de
- * unos 450 caracteres. Cualquier cadena por encima de `MAX_PLAINTEXT_LENGTH` que no empiece por
- * `v1.` es, o un dato en claro que no debería salir, o un valor que hay que envolver. El umbral es
- * un compromiso, no un número de la spec: bajarlo dispara falsos positivos sobre metadatos legítimos
- * de Filament, y subirlo deja pasar párrafos enteros en claro.
+ * **The threshold.** An ADR 0004 encrypted envelope, with the smallest padding size, does not go
+ * below some 450 characters. Any string above `MAX_PLAINTEXT_LENGTH` that does not start with
+ * `v1.` is either data in the clear that should not leave, or a value that has to be wrapped. The
+ * threshold is a compromise, not a number from the spec: lowering it triggers false positives on
+ * legitimate Filament metadata, and raising it lets whole paragraphs through in the clear.
  */
 
 import { ENVELOPE_PREFIX } from '../crypto/envelope.js';
 
-/** Longitud a partir de la cual una cadena tiene que ser un sobre cifrado. */
+/** Length above which a string has to be an encrypted envelope. */
 export const MAX_PLAINTEXT_LENGTH = 256;
 
-/** Aborto del guardarraíl. Nunca lleva el valor ofensor, solo su ruta dentro de la carga. */
+/** Guard rail abort. It never carries the offending value, only its path inside the payload. */
 export class LivewirePayloadGuardError extends Error {
     /** @param {string} path */
     constructor(path) {
@@ -42,11 +42,11 @@ export class LivewirePayloadGuardError extends Error {
 }
 
 /**
- * Primera ruta que incumple la regla, recorriendo en profundidad.
+ * First path that breaks the rule, walking depth first.
  *
  * @param {unknown} value
  * @param {string} path
- * @returns {string|null} Ruta del valor ofensor, o `null` si no hay ninguno.
+ * @returns {string|null} Path of the offending value, or `null` if there is none.
  */
 export function firstViolation(value, path) {
     if (typeof value === 'string') {
@@ -79,8 +79,8 @@ export function firstViolation(value, path) {
 }
 
 /**
- * @param {unknown} snapshot Objeto, o la cadena JSON sin parsear que Livewire reenvía tal cual.
- * @returns {Record<string, unknown>} Los datos del snapshot, o vacío si no se pueden leer.
+ * @param {unknown} snapshot Object, or the unparsed JSON string Livewire forwards as is.
+ * @returns {Record<string, unknown>} The snapshot data, or empty if it cannot be read.
  */
 function snapshotData(snapshot) {
     let parsed = snapshot;
@@ -99,10 +99,10 @@ function snapshotData(snapshot) {
 }
 
 /**
- * Revisa una carga de mensaje de Livewire.
+ * Inspects a Livewire message payload.
  *
  * @param {{snapshot?: unknown, updates?: unknown, calls?: unknown}} payload
- * @returns {string|null} Ruta del valor ofensor, o `null`.
+ * @returns {string|null} Path of the offending value, or `null`.
  */
 export function inspectPayload(payload) {
     if (payload === null || typeof payload !== 'object') {
@@ -129,16 +129,16 @@ export function inspectPayload(payload) {
     return null;
 }
 
-/** Evento que se emite al abortar. Lleva la ruta, nunca el valor. */
+/** Event emitted on abort. It carries the path, never the value. */
 export const GUARD_VIOLATION_EVENT = 'phr:payload-guard-violation';
 
 /**
- * Aborta un mensaje y lo deja registrado de forma ruidosa.
+ * Aborts a message and logs it loudly.
  *
- * No se lanza una excepción: el cuerpo del interceptor corre dentro del bucle con el que Livewire
- * monta **todas** las peticiones pendientes, así que una excepción aquí se llevaría por delante
- * mensajes de otros componentes que no tienen nada que ver. `cancel()` ya es el aborto; el registro
- * y el evento son lo que impide que el fallo pase por un formulario que «a veces no guarda».
+ * No exception is thrown: the interceptor body runs inside the loop with which Livewire assembles
+ * **all** pending requests, so an exception here would take down messages of other components that
+ * have nothing to do with it. `cancel()` is already the abort; the log and the event are what keep
+ * the failure from passing for a form that "sometimes does not save".
  *
  * @param {() => void} cancel
  * @param {string} violation
@@ -153,19 +153,19 @@ function abort(cancel, violation) {
 }
 
 /**
- * Registra el interceptor sobre Livewire.
+ * Registers the interceptor over Livewire.
  *
- * La revisión va en el cuerpo del interceptor de mensaje, **no** en su `onSend`. Livewire construye
- * `message.payload` antes de crear los interceptores, y solo después lanza el `fetch`; el `onSend`
- * de un mensaje, en cambio, se invoca con la promesa de respuesta ya en marcha, es decir, con la
- * carga ya escrita en el socket. Cancelar ahí anularía la respuesta pero no impediría que los datos
- * en claro salieran del navegador, que es justo lo único que este guardarraíl tiene que impedir.
+ * The inspection goes in the body of the message interceptor, **not** in its `onSend`. Livewire
+ * builds `message.payload` before creating the interceptors, and only afterwards fires the
+ * `fetch`; the `onSend` of a message is invoked with the response promise already running, that
+ * is, with the payload already written to the socket. Cancelling there would void the response
+ * but not stop the data in the clear from leaving the browser, which is all this guard rail does.
  *
- * El `onSend` se conserva como red de seguridad para el caso de que una versión futura de Livewire
- * arme la carga más tarde: entonces el cuerpo no vería nada y esta sería la única revisión posible.
+ * The `onSend` is kept as a safety net in case a future Livewire version assembles the payload
+ * later: the body would then see nothing and this would be the only inspection possible.
  *
- * @param {{interceptMessage?: Function}} [livewire] Por defecto, `window.Livewire`.
- * @returns {boolean} `false` si Livewire no expone el interceptor.
+ * @param {{interceptMessage?: Function}} [livewire] Defaults to `window.Livewire`.
+ * @returns {boolean} `false` if Livewire does not expose the interceptor.
  */
 export function installLivewirePayloadGuard(livewire = window.Livewire) {
     if (typeof livewire?.interceptMessage !== 'function') {

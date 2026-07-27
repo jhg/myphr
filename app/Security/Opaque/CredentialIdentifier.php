@@ -5,33 +5,33 @@ declare(strict_types=1);
 namespace App\Security\Opaque;
 
 /**
- * `credential_identifier` de `docs/OPAQUE.md` §13.1.
+ * `credential_identifier` from `docs/OPAQUE.md` §13.1.
  *
  * ```
  * credential_identifier = HMAC-SHA-256(OPAQUE_ENUMERATION_KEY, normalize(login))   // 32 bytes
  * ```
  *
- * Determinista y **el mismo valor para cuentas reales e inexistentes**: es lo que hace que un
- * atacante que reenvía el mismo `blinded_message` antes y después de un alta reciba el mismo
- * `evaluated_message` (RFC 9807 §10.9). Por eso no puede ser aleatorio por registro ni regenerarse
- * en un cambio de contraseña.
+ * Deterministic and **the same value for real and non-existent accounts**: that is what makes an
+ * attacker who replays the same `blinded_message` before and after a signup get the same
+ * `evaluated_message` (RFC 9807 §10.9). That is why it cannot be random per registration or be
+ * regenerated on a password change.
  *
- * La normalización viene de {@see LoginNormalizer} y de ningún otro sitio (§13.1.1): si la búsqueda
- * en base de datos y este HMAC divergen, aparece un oráculo de enumeración en dos peticiones.
+ * Normalization comes from {@see LoginNormalizer} and from nowhere else (§13.1.1): if the database
+ * lookup and this HMAC diverge, an enumeration oracle appears in two requests.
  */
 final readonly class CredentialIdentifier
 {
-    /** Longitud de la salida, en bytes (§13.1). */
+    /** Output length, in bytes (§13.1). */
     public const int LENGTH = OpaqueProfile::CREDENTIAL_IDENTIFIER_BYTES;
 
-    /** Longitud exigida a `OPAQUE_ENUMERATION_KEY`, en bytes. */
+    /** Length required of `OPAQUE_ENUMERATION_KEY`, in bytes. */
     public const int KEY_LENGTH = 32;
 
     /**
-     * @param  string  $enumerationKey  `OPAQUE_ENUMERATION_KEY` en binario, 32 bytes. Debe ser
-     *                                  distinto de `APP_KEY`, del `oprf_seed` y de la clave estática.
+     * @param  string  $enumerationKey  `OPAQUE_ENUMERATION_KEY` in binary, 32 bytes. It must differ
+     *                                  from `APP_KEY`, from the `oprf_seed` and from the static key.
      *
-     * @throws InvalidConfigurationException Si la clave no mide 32 bytes.
+     * @throws InvalidConfigurationException If the key is not 32 bytes long.
      */
     public function __construct(private string $enumerationKey)
     {
@@ -44,11 +44,11 @@ final readonly class CredentialIdentifier
     }
 
     /**
-     * Construye el derivador desde `config('opaque')`.
+     * Builds the deriver from `config('opaque')`.
      *
      * @param  array<string, mixed>  $config
      *
-     * @throws InvalidConfigurationException Si falta la clave, no es base64url canónico o no mide 32 bytes.
+     * @throws InvalidConfigurationException If the key is missing, is not canonical base64url or is not 32 bytes long.
      */
     public static function fromConfig(array $config): self
     {
@@ -72,10 +72,10 @@ final readonly class CredentialIdentifier
     }
 
     /**
-     * Deriva el identificador de un login cualquiera, exista o no la cuenta (§13.1).
+     * Derives the identifier of any login, whether the account exists or not (§13.1).
      *
-     * @param  string  $login  Identificador tal y como lo tecleó la persona; se normaliza aquí.
-     * @return string 32 bytes crudos. Nunca pasa por funciones `mb_*`.
+     * @param  string  $login  Identifier exactly as the person typed it; it is normalized here.
+     * @return string 32 raw bytes. It never goes through `mb_*` functions.
      */
     public function for(string $login): string
     {

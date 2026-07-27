@@ -10,10 +10,11 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * ADR 0006: el contenido de `payload` es cifrado en el cliente, así que la fábrica no puede producir
- * JSON clínico real. Genera un sobre con forma válida según {@see EnvelopeValidator}: prefijo `v1.`
- * más base64url de bytes aleatorios cuyo tamaño total coincide con uno de los tamaños fijos de
- * relleno, para que el guardarraíl de {@see Event::booted()} lo acepte sin necesitar cifrado real.
+ * ADR 0006: the contents of `payload` are encrypted on the client, so the factory cannot produce
+ * real clinical JSON. It generates an envelope with a valid shape according to {@see
+ * EnvelopeValidator}: the `v1.` prefix plus base64url of random bytes whose total size matches one
+ * of the fixed padding sizes, so the {@see Event::booted()} guardrail accepts it without needing
+ * real encryption.
  *
  * @extends Factory<Event>
  */
@@ -32,7 +33,7 @@ final class EventFactory extends Factory
     }
 
     /**
-     * Sobre de tamaño válido más pequeño por defecto, para no inflar los tests con relleno mayor.
+     * Smallest valid envelope size by default, so tests are not inflated with larger padding.
      */
     private static function fakeEnvelope(int $paddedSize = 256): string
     {

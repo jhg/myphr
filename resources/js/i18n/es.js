@@ -1,15 +1,15 @@
 /**
- * Catálogo castellano.
+ * Spanish catalog.
  *
- * Es el texto que la aplicación mostraba antes de existir esta capa, palabra por palabra, con dos
- * mejoras que el traslado permite: los recuentos dejan de decir «registro(s)» y «día(s)» y pasan a
- * tener su forma singular y plural de verdad, y las frases con datos dentro se escriben con
- * marcador en vez de por concatenación.
+ * It is the text the application showed before this layer existed, word for word, with two
+ * improvements the move allows: counts stop saying "registro(s)" and "día(s)" and get their real
+ * singular and plural forms, and sentences with data inside are written with placeholders instead
+ * of by concatenation.
  *
  * @type {Readonly<Record<string, string|{one: string, other: string}>>}
  */
 export const ES = Object.freeze({
-    // --- Comunes a varias pantallas -------------------------------------------------------------
+    // --- Shared by several screens --------------------------------------------------------------
     'common.listSeparator': ', ',
     'common.locked.history': 'Necesitas iniciar sesión para ver tu historial.',
     'common.locked.summary': 'Necesitas iniciar sesión para ver tu resumen.',
@@ -21,19 +21,21 @@ export const ES = Object.freeze({
     'common.badDatetime': 'No se pudo interpretar la fecha y hora: "{value}".',
     'common.configuration': 'Esta instalación no está configurada correctamente. Avisa a quien la administra.',
     'common.network': 'No hemos podido contactar con el servidor. Inténtalo de nuevo.',
+    'common.staleTab': 'Esta página está desactualizada, casi seguro porque la aplicación se actualizó con ella abierta. Recárgala y vuelve a intentarlo.',
+    'common.reload': 'Recargar la página',
     'common.noLoincCode': 'No hay código LOINC para el método "{method}" con la unidad "{unit}".',
     'common.recordsUndecrypted': {
         one: '{count} registro no se pudo descifrar y no se muestra.',
         other: '{count} registros no se pudieron descifrar y no se muestran.',
     },
 
-    // --- Rango de fechas del historial (`health/dateRange.js`) ----------------------------------
+    // --- History date range (`health/dateRange.js`) ---------------------------------------------
     'range.error.incomplete': 'Elige las dos fechas del rango a medida.',
     'range.error.order': 'La fecha de inicio tiene que ser anterior a la de fin.',
     'range.error.badDate': 'No se han podido leer las fechas del rango.',
     'range.error.badPreset': 'No existe ese periodo: «{preset}».',
 
-    // --- Nombres de campo, para los mensajes de `numericValue.js` -------------------------------
+    // --- Field names, for the `numericValue.js` messages ----------------------------------------
     'field.value': 'El valor',
     'field.dose': 'La dosis',
     'field.quantity': 'La cantidad',
@@ -45,24 +47,24 @@ export const ES = Object.freeze({
     'field.rangeLow': 'El límite inferior',
     'field.rangeHigh': 'El límite superior',
 
-    // --- Validación numérica --------------------------------------------------------------------
+    // --- Numeric validation ---------------------------------------------------------------------
     'numeric.notANumber': '{field} debe ser un número.',
     'numeric.negative': '{field} no puede ser negativo.',
     'numeric.tooManyDecimals': '{field} admite como mucho 2 decimales.',
     'numeric.notANumberHint': '{field} debe ser un número (usa "." o "," para los decimales).',
 
-    // --- Etapas compartidas de la barra de progreso ---------------------------------------------
+    // --- Shared progress bar stages -------------------------------------------------------------
     'stage.preparing': 'Preparando…',
     'stage.saving': 'Guardando…',
     'stage.done': 'Listo.',
     'stage.entering': 'Entrando…',
 
-    // --- Acceso ---------------------------------------------------------------------------------
+    // --- Sign in --------------------------------------------------------------------------------
     'login.stage.contacting': 'Comprobando tus datos…',
     'login.stage.stretching': 'Derivando tu clave en este dispositivo. Tarda unos segundos…',
     'login.error.credentials': 'No hemos podido entrar con esos datos.',
 
-    // --- Alta de contraseña ---------------------------------------------------------------------
+    // --- Password set-up ------------------------------------------------------------------------
     'setPassword.stage.contacting': 'Comprobando el enlace…',
     'setPassword.stage.stretching': 'Derivando tu clave en este dispositivo. Tarda unos segundos…',
     'setPassword.stage.wrapping': 'Creando y protegiendo tu clave…',
@@ -71,7 +73,7 @@ export const ES = Object.freeze({
     'setPassword.error.mismatch': 'Las dos contraseñas no coinciden.',
     'setPassword.error.verification': 'Algo ha ido mal creando tu clave. No la hemos podido verificar.',
 
-    // --- Alta pública (registro) ------------------------------------------------------------------
+    // --- Public sign-up (registration) ------------------------------------------------------------
     'register.stage.contacting': 'Creando tu cuenta…',
     'register.stage.stretching': 'Derivando tu clave en este dispositivo. Tarda unos segundos…',
     'register.stage.wrapping': 'Creando y protegiendo tu clave…',
@@ -80,7 +82,7 @@ export const ES = Object.freeze({
     'register.error.loginTaken': 'Ya existe una cuenta con ese correo electrónico.',
     'register.error.generic': 'Algo ha ido mal creando tu cuenta. No la hemos podido verificar.',
 
-    // --- Cambio de contraseña -------------------------------------------------------------------
+    // --- Password change ------------------------------------------------------------------------
     'changePassword.stage.reauthenticating': 'Comprobando tu contraseña actual…',
     'changePassword.stage.stretchingOld':
         'Comprobando tu contraseña actual en este dispositivo. Tarda unos segundos…',
@@ -99,7 +101,7 @@ export const ES = Object.freeze({
     'changePassword.success':
         'Tu contraseña se ha cambiado. Tus datos siguen siendo los mismos y siguen siendo legibles.',
 
-    // --- Perfil ---------------------------------------------------------------------------------
+    // --- Profile --------------------------------------------------------------------------------
     'profile.stage.reauth': 'Comprobando tu contraseña actual en este dispositivo. Tarda unos segundos…',
     'profile.stage.opening': 'Abriendo tu clave…',
     'profile.stage.stretching': 'Derivando tu clave nueva en este dispositivo. Tarda unos segundos…',
@@ -114,7 +116,7 @@ export const ES = Object.freeze({
     'profile.error.passwordExpired': 'Ha pasado demasiado tiempo. Vuelve a escribir tu contraseña actual.',
     'profile.error.passwordGeneric': 'No se ha podido cambiar la contraseña.',
 
-    // --- Glucemia -------------------------------------------------------------------------------
+    // --- Blood glucose --------------------------------------------------------------------------
     'glucose.empty': 'Todavía no hay registros de glucemia.',
     'glucose.missingValue': 'Introduce un valor.',
     'glucose.caption.includes': 'Incluye: {methods}.',
@@ -126,7 +128,7 @@ export const ES = Object.freeze({
             + '(no se convierte entre mg/dL y mmol/L).',
     },
 
-    // --- Tensión arterial -----------------------------------------------------------------------
+    // --- Blood pressure -------------------------------------------------------------------------
     'bloodPressure.empty': 'Todavía no hay registros de tensión arterial.',
     'bloodPressure.missingSystolic': 'Introduce la sistólica.',
     'bloodPressure.missingDiastolic': 'Introduce la diastólica.',
@@ -144,13 +146,13 @@ export const ES = Object.freeze({
         other: ' {count} registros sin pulso no se muestran en esta gráfica.',
     },
 
-    // --- Comidas --------------------------------------------------------------------------------
+    // --- Meals ----------------------------------------------------------------------------------
     'meals.empty': 'Todavía no hay comidas registradas.',
     'meals.missingMealType': 'Elige un tipo de comida.',
     'meals.incompleteFood': 'Completa el nombre, la cantidad y la unidad de cada alimento, o quita la fila.',
     'meals.noFoods': 'Sin alimentos anotados.',
 
-    // --- Insulina -------------------------------------------------------------------------------
+    // --- Insulin --------------------------------------------------------------------------------
     'insulin.empty': 'Todavía no hay registros de insulina.',
     'insulin.chartLocked': 'La gráfica necesita tu clave para poder mostrarse.',
     'insulin.chartEmpty': 'Aquí aparecerá la dosis total de cada día en cuanto guardes tu primer registro.',
@@ -162,7 +164,7 @@ export const ES = Object.freeze({
         other: '{count} días con registro. Dosis acumulada por tipo — {totals}.',
     },
 
-    // --- Peso corporal --------------------------------------------------------------------------
+    // --- Body weight ----------------------------------------------------------------------------
     'bodyWeight.empty': 'Todavía no hay registros de peso.',
     'bodyWeight.missingValue': 'Introduce un peso.',
     'bodyWeight.missingUnit': 'Elige una unidad.',
@@ -170,7 +172,7 @@ export const ES = Object.freeze({
         + 'entre kilogramos y libras.',
     'bodyWeight.caption.empty': 'No hay datos de peso que mostrar.',
 
-    // --- Temperatura corporal -------------------------------------------------------------------
+    // --- Body temperature -----------------------------------------------------------------------
     'temperature.empty': 'Todavía no hay registros de temperatura.',
     'temperature.missingValue': 'Introduce una temperatura.',
     'temperature.missingUnit': 'Elige una unidad.',
@@ -181,7 +183,7 @@ export const ES = Object.freeze({
         + 'serie aparte: no son comparables entre sí.',
     'temperature.caption.empty': 'No hay datos de temperatura que mostrar.',
 
-    // --- Panel de inicio ------------------------------------------------------------------------
+    // --- Home dashboard -------------------------------------------------------------------------
     'dashboard.truncated': 'El resumen solo incluye los registros más recientes: hay demasiados en este periodo '
         + 'para cargarlos todos.',
     'dashboard.empty': 'Todavía no hay registros en este periodo.',
@@ -242,7 +244,7 @@ export const ES = Object.freeze({
     'dashboard.posture.lying': 'tumbado',
     'dashboard.posture.standing': 'de pie',
 
-    // --- Línea temporal unificada del panel de inicio --------------------------------------------
+    // --- Unified timeline of the home dashboard --------------------------------------------------
     'dashboard.timeline.capped': {
         one: 'Se muestran las {shown} entradas más recientes del periodo; {count} más antigua no aparece.',
         other: 'Se muestran las {shown} entradas más recientes del periodo; {count} más antiguas no aparecen.',
@@ -276,7 +278,7 @@ export const ES = Object.freeze({
     'dashboard.timeline.site.temporal': 'Frente (arteria temporal)',
     'dashboard.timeline.site.rectal': 'Rectal',
 
-    // --- Compartir un recorte con un profesional (`health/sharePage.js`, ADR 0011) --------------
+    // --- Share a clipping with a professional (`health/sharePage.js`, ADR 0011) -----------------
     'share.stage.reading': 'Leyendo tus registros…',
     'share.stage.decrypting': 'Descifrando tus registros…',
     'share.stage.packing': 'Comprimiendo y cifrando el recorte…',
@@ -295,6 +297,7 @@ export const ES = Object.freeze({
     'share.error.limit': 'Ya tienes todos los recortes activos que se permiten. Revoca uno antes de volver a compartir.',
     'share.error.upload': 'No se ha podido subir el recorte. No se ha compartido nada.',
     'share.error.copy': 'No se ha podido copiar el enlace. Selecciónalo y cópialo a mano.',
+    'share.error.read': 'No se han podido leer tus registros, así que no se ha creado ningún recorte ni se ha compartido nada.',
     'share.error.generic': 'No se ha podido crear el recorte.',
     'share.qr.alt': 'Código QR con el enlace completo al recorte.',
     'share.range.all': 'Todo tu historial',
@@ -315,7 +318,7 @@ export const ES = Object.freeze({
     'share.list.confirmRevoke': 'Revocar borra el recorte para siempre. No recupera lo que ya se haya descargado.',
     'share.list.confirmRevokeAction': 'Revocar para siempre',
     'share.list.cancel': 'Cancelar',
-    // --- Estatura e índice de masa corporal (pantalla de peso y perfil) --------------------------
+    // --- Height and body mass index (weight screen and profile) ----------------------------------
     'field.height': 'La estatura',
     'bodyWeight.missingHeightUnit': 'Elige una unidad para la estatura.',
     'bodyWeight.heightInline': 'Estatura {value} {unit}',
@@ -326,7 +329,7 @@ export const ES = Object.freeze({
     'profile.body.fromRecords': 'De tu último peso y tu última estatura',
     'profile.error.measurementsGeneric': 'No se han podido cargar tus últimas medidas.',
 
-    // --- Gráficas del panel de inicio ------------------------------------------------------------
+    // --- Home dashboard charts -------------------------------------------------------------------
     'dashboard.chart.caption': 'Mediana diaria en {unit}, con una banda del valor más bajo al más '
         + 'alto de ese día. Incluye: {series}. Los días sin lecturas se dejan en blanco.',
     'dashboard.chart.empty': 'No hay lecturas en este periodo: la gráfica aparece en cuanto las haya.',
@@ -339,7 +342,7 @@ export const ES = Object.freeze({
     'dashboard.chart.tooltipSingle': '{label}: {value} {unit} (una sola lectura)',
     'dashboard.chart.ariaLabel': 'Mediana diaria y rango diario de {type}',
 
-    // --- Curva de glucemia con marcas de comida e insulina (`glucoseContext.js`) -----------------
+    // --- Glucose curve with meal and insulin markers (`glucoseContext.js`) -----------------------
     'dashboard.chart.context.title': 'Glucemia con comidas e insulina',
     'dashboard.chart.context.ariaLabel': 'Glucemia a lo largo del tiempo, con una marca por cada '
         + 'comida y por cada inyección de insulina',
@@ -368,7 +371,7 @@ export const ES = Object.freeze({
         other: '{count} marcas quedan antes de la primera lectura dibujada y no se enseñan.',
     },
 
-    // --- Superposición de días sobre 24 horas (`dayOverlay.js`) ---------------------------------
+    // --- Day overlay over 24 hours (`dayOverlay.js`) --------------------------------------------
     'dashboard.chart.overlay.title': 'Perfil de 24 horas',
     'dashboard.chart.overlay.ariaLabel': 'Todos los días del periodo superpuestos en un solo eje de '
         + '24 horas, con la mediana de cada hora',
@@ -383,7 +386,7 @@ export const ES = Object.freeze({
     'dashboard.chart.overlay.tooltip': '{label}: {value} {unit}',
     'dashboard.chart.overlay.targetRange': 'La banda de fondo es tu rango objetivo, {low}\u2013{high} {unit}.',
 
-    // --- Recorte compartido: la vista que comparten el lector y la vista previa (ADR 0011) -------
+    // --- Shared clipping: the view the reader and the preview share (ADR 0011) -------------------
     'clip.controls.title': 'Qué estás viendo',
     'clip.range.label': 'Periodo dentro de este extracto',
     'clip.range.all': 'Todo el extracto',
@@ -405,9 +408,9 @@ export const ES = Object.freeze({
     'clip.range.outside': 'El periodo que has elegido queda fuera de este recorte, que va del {from} '
         + 'al {to}. Se enseña el recorte entero.',
     /**
-     * La segunda línea de la cabecera: qué se está mirando **ahora**, después de acotar. Se imprime,
-     * a diferencia de los controles: en papel, un recorte de seis meses con una tabla de siete días
-     * y ninguna huella del filtro es un historial truncado que se lee como completo.
+     * The second line of the header: what is being looked at **now**, after narrowing. It is
+     * printed, unlike the controls: on paper, a six-month clipping with a seven-day table and no
+     * trace of the filter is a truncated history that reads as complete.
      */
     'clip.viewing.label': 'Estás viendo',
     'clip.viewing.rangeAll': 'el recorte entero',
@@ -445,7 +448,7 @@ export const ES = Object.freeze({
             + 'no falten.',
     },
 
-    // --- Página del lector de un recorte compartido (`reader/`, ADR 0011) -----------------------
+    // --- Reader page of a shared clipping (`reader/`, ADR 0011) ---------------------------------
     'reader.title': 'Historial de salud compartido',
     'reader.intro': 'Alguien ha compartido contigo un extracto de solo lectura de su propio historial de salud. Está cifrado: nadie salvo este navegador, con el PIN, puede leerlo.',
     'reader.pin.title': 'Introduce el PIN',

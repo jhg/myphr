@@ -12,15 +12,16 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * `DELETE /phr/shares/{share}` (ADR 0011): revocación.
+ * `DELETE /phr/shares/{share}` (ADR 0011): revocation.
  *
- * Borrado **físico** del recorte y, en cascada, de todos sus enlaces. Sin `SoftDeletes` y sin
- * `deleted_at`, excepción consciente al patrón del ADR 0006: si revocar dejase la fila, el paquete
- * seguiría en la base de datos y la promesa de que revocar cierra la lectura sería falsa.
+ * A **physical** delete of the clipping and, in cascade, of all its links. No `SoftDeletes` and no
+ * `deleted_at`, a deliberate exception to the ADR 0006 pattern: if revoking left the row, the
+ * package would stay in the database and the promise that revoking closes the read would be false.
  *
- * El recorte se busca **siempre** acotado por `user_id`, y no por identificador a secas: los
- * identificadores son UUID y no se enumeran, pero apoyar el aislamiento entre cuentas en que nadie
- * adivine un UUID es apoyarlo en nada. Un recorte ajeno responde igual que uno inexistente.
+ * The clipping is **always** looked up scoped by `user_id`, and not by identifier alone: the
+ * identifiers are UUIDs and are not enumerable, but resting isolation between accounts on nobody
+ * guessing a UUID is resting it on nothing. Somebody else's clipping answers the same as a
+ * non-existent one.
  */
 final readonly class RevokeShareController
 {

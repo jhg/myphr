@@ -9,25 +9,25 @@ use App\Security\Opaque\Oprf;
 use App\Security\Opaque\Ristretto255;
 
 /**
- * Vectores oficiales de RFC 9497, Apéndice A.1.1 «ristretto255-SHA512 /
- * OPRF Mode» (`modeOPRF = 0x00`).
- * Fuente: https://www.rfc-editor.org/rfc/rfc9497.txt
+ * Official RFC 9497 vectors, Appendix A.1.1 "ristretto255-SHA512 /
+ * OPRF Mode" (`modeOPRF = 0x00`).
+ * Source: https://www.rfc-editor.org/rfc/rfc9497.txt
  *
- * Los valores del RFC aparecen partidos en varias líneas por el formato del
- * documento; aquí se reproducen concatenados, sin espacios.
+ * The RFC values appear split across several lines because of the document
+ * format; here they are reproduced concatenated, with no spaces.
  */
 
-/** Seed del Apéndice A.1.1: 32 bytes 0xa3. */
+/** Seed from Appendix A.1.1: 32 bytes of 0xa3. */
 const RFC9497_A11_SEED_HEX = 'a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3';
 
-/** KeyInfo del Apéndice A.1.1: ASCII "test key". */
+/** KeyInfo from Appendix A.1.1: ASCII "test key". */
 const RFC9497_A11_KEY_INFO_HEX = '74657374206b6579';
 
-/** skSm del Apéndice A.1.1 (clave OPRF del servidor, serializada). */
+/** skSm from Appendix A.1.1 (the server OPRF key, serialized). */
 const RFC9497_A11_SKSM_HEX = '5ebcea5ee37023ccb9fc2d2019f9d7737be85591ae8652ffa9ef0f4d37063b0e';
 
 /**
- * Los dos vectores de batch size 1 del Apéndice A.1.1.
+ * The two batch-size-1 vectors from Appendix A.1.1.
  *
  * @var array<string, array{0: array{input: string, blind: string, blindedElement: string, evaluationElement: string, output: string}}>
  */

@@ -8,12 +8,12 @@ use App\Models\Event;
 use App\Models\User;
 
 /**
- * Autorización de eventos clínicos (ADR 0006).
+ * Authorization of clinical events (ADR 0006).
  *
- * El criterio central es la propiedad: un usuario solo ve, crea, edita o borra sus propios
- * eventos. `create` no tiene un `Event` previo con el que comparar dueño, así que usa el mismo
- * criterio de «cuenta usable» que {@see UserPolicy}: el registro OPAQUE completo. Sin él, la
- * cuenta no tiene clave maestra con la que el cliente pueda cifrar el primer sobre.
+ * The central criterion is ownership: a user only sees, creates, edits or deletes their own events.
+ * `create` has no previous `Event` to compare owners against, so it uses the same "usable account"
+ * criterion as {@see UserPolicy}: a completed OPAQUE registration. Without it, the account has no
+ * master key for the client to encrypt the first envelope with.
  */
 final readonly class EventPolicy
 {

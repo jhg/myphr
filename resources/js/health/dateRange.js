@@ -1,40 +1,40 @@
 /**
- * Rango de fechas del historial, común a las cuatro pantallas de eventos (ADR 0002, ADR 0004,
+ * History date range, shared by the four event screens (ADR 0002, ADR 0004,
  * ADR 0006).
  *
- * **Por qué el rango sí puede acotarlo el servidor.** `occurred_at` es una de las tres columnas en
- * claro del ADR 0006 y el servidor ya la usa para ordenar y paginar, así que filtrar por ella no le
- * revela nada nuevo; el tipo del evento, en cambio, va dentro del sobre y se sigue descartando aquí.
- * El rango se calcula en el navegador y viaja como argumento de `fetchEvents`, nunca como propiedad
- * de Livewire: una propiedad pública entraría en el snapshot, que es lo que el ADR 0002 prohíbe.
+ * **Why the server can narrow the range.** `occurred_at` is one of the three ADR 0006 columns in
+ * the clear and the server already uses it to sort and paginate, so filtering by it reveals nothing
+ * new; the event type, on the other hand, travels inside the envelope and is still discarded here.
+ * The range is computed in the browser and travels as an argument of `fetchEvents`, never as a
+ * Livewire property: a public property would enter the snapshot, which is what ADR 0002 forbids.
  *
- * **El rango NO va en la URL, y no es un olvido.** Spec 0001 §9 y `App\Filament\Pages\PhrPage`
- * prohíben las propiedades `#[Url]` en las pantallas del panel, hasta el punto de redeclarar sin el
- * atributo las seis que trae Filament, y `tests/Feature/PanelUrlPropertiesTest.php` falla si alguna
- * vuelve a aparecer. El motivo es exactamente el que aplica aquí: una URL queda escrita en el
- * historial del navegador, en el registro de acceso del proveedor y en el `Referer` de cualquier
- * recurso externo que cargue la página. Y `?from=2026-03-03&to=2026-03-10` en la pantalla de
- * insulina no es un detalle de interfaz: dice que esa persona registra insulina y qué tramo estaba
- * revisando, sin descifrar nada. Además, publicar en la URL exige una propiedad pública de Livewire,
- * que es justo lo que el ADR 0002 quiere fuera del snapshot. El precio de no hacerlo es que el rango
- * no se puede compartir por enlace ni sobrevive a un F5, y ninguna de las dos cosas vale ese riesgo:
- * volver a elegir «última semana» cuesta un clic.
+ * **The range does NOT go in the URL, and that is no oversight.** Spec 0001 §9 and
+ * `App\Filament\Pages\PhrPage` forbid `#[Url]` properties in the panel screens, to the point of
+ * redeclaring without the attribute the six Filament ships, and
+ * `tests/Feature/PanelUrlPropertiesTest.php` fails if any comes back. The reason is exactly the one
+ * that applies here: a URL ends up written in the browser history, in the provider access log and
+ * in the `Referer` of any external resource the page loads. And `?from=2026-03-03&to=2026-03-10`
+ * on the insulin screen is not an interface detail: it says that person records insulin and which
+ * stretch they were reviewing, without decrypting anything. Besides, publishing in the URL requires
+ * a public Livewire property, which is exactly what ADR 0002 wants out of the snapshot. The price
+ * is that the range cannot be shared by link and does not survive an F5, and neither is worth that
+ * risk: picking "last week" again costs one click.
  *
- * **El rango es semiabierto `[from, to)`**, igual que en `HealthEventPage::fetchEvents()`: el
- * inicio entra y el fin no. Por eso «hasta el 20 de marzo» se traduce a la medianoche del 21 en
- * hora local, y no a un `23:59:59.999999` que dejaría fuera cualquier registro de la última
- * fracción de segundo del día.
+ * **The range is half-open `[from, to)`**, as in `HealthEventPage::fetchEvents()`: the start is in
+ * and the end is out. That is why "up to 20 March" translates to midnight on the 21st in local
+ * time, and not to a `23:59:59.999999` that would leave out any record from the last fraction of
+ * a second of the day.
  *
- * **Las dos puntas son medianoches LOCALES**, convertidas al instante UTC que les corresponde. La
- * persona elige un día de calendario en su reloj, no un instante en UTC: acotar por medianoche UTC
- * le movería el corte varias horas y le escondería —o le colaría— los registros del borde.
+ * **Both ends are LOCAL midnights**, converted to the UTC instant that matches them. The person
+ * picks a calendar day on their own clock, not an instant in UTC: clipping by UTC midnight would
+ * move the cut by several hours and would hide —or slip in— the records on the edge.
  *
- * **Los atajos hablan el mismo vocabulario que el panel de inicio**: «último día», «última semana»
- * y «último mes» son las mismas ventanas de `statistics.js` (`WINDOW_DAYS`), importadas de allí y no
- * copiadas, para que un resumen y un historial que dicen lo mismo cuenten los mismos días.
+ * **The shortcuts speak the same vocabulary as the home dashboard**: "last day", "last week" and
+ * "last month" are the same windows of `statistics.js` (`WINDOW_DAYS`), imported from there and not
+ * copied, so that a summary and a history saying the same thing count the same days.
  *
- * Las funciones exportadas antes de `dateRangeControl()` son lógica pura, probable sin Alpine ni
- * DOM (`tests/js/dateRange.test.mjs`).
+ * The functions exported before `dateRangeControl()` are pure logic, testable without Alpine and
+ * without a DOM (`tests/js/dateRange.test.mjs`).
  */
 
 import { canonicalDate } from '../crypto/canonicalDate.js';
@@ -43,47 +43,47 @@ import { WINDOW_DAYS } from './statistics.js';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-/** Valor de un `<input type="date">`: día de calendario, sin hora ni desfase. */
+/** Value of an `<input type="date">`: calendar day, with no time and no offset. */
 const DATE_INPUT_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 /**
- * Atajos del desplegable, en el orden en que se ofrecen. Los tokens son el contrato con el
- * `<option value="...">` que renderiza `resources/views/phr/partials/date-range.blade.php`.
+ * Shortcuts of the dropdown, in the order they are offered. The tokens are the contract with the
+ * `<option value="...">` that `resources/views/phr/partials/date-range.blade.php` renders.
  *
  * @type {Readonly<list<string>>}
  */
 export const RANGE_PRESETS = Object.freeze(['all', 'day', 'week', 'month', 'custom']);
 
 /**
- * Atajo por defecto **del historial**: `day`, las últimas 24 horas.
+ * Default shortcut **of the history**: `day`, the last 24 hours.
  *
- * **Por qué se acota de oficio.** Sin acotar, abrir una pantalla de historial se trae y descifra
- * todo lo que quepa en la página, y aquí el descifrado ocurre en el navegador: con un historial de
- * años eso es descarga, memoria y CPU del dispositivo de quien mira, y el coste crece solo con el
- * tiempo. El periodo por defecto tiene que ser el barato, y el caro se pide.
+ * **Why it clips by default.** Without clipping, opening a history screen brings down and decrypts
+ * everything that fits in the page, and here decryption happens in the browser: with a history of
+ * years that is download, memory and CPU of the device of whoever is looking, and the cost grows
+ * on its own with time. The default period has to be the cheap one, and the expensive one is asked for.
  *
- * **La objeción que llevó al `all` original sigue siendo válida y no se descarta, se mitiga.** Ante
- * un historial clínico, «no aparece» se lee como «se ha perdido», así que un filtro puesto de
- * oficio solo es aceptable si es imposible no verlo. De ahí las dos condiciones que cumple
- * `resources/views/phr/partials/date-range.blade.php` y que fija
- * `tests/Feature/HealthEventRangeTest.php`:
+ * **The objection that led to the original `all` still holds and is not dismissed, it is
+ * mitigated.** In a clinical history, "it does not show" reads as "it has been lost", so a filter
+ * applied by default is only acceptable if it is impossible to miss. Hence the two conditions
+ * `resources/views/phr/partials/date-range.blade.php` meets and
+ * `tests/Feature/HealthEventRangeTest.php` fixes:
  *
- * 1. El periodo en vigor se lee **junto al historial**, en un aviso permanente y en palabras («se
- *    está mostrando: último día»), no solo como opción elegida dentro de un desplegable, que es
- *    justo lo que nadie mira.
- * 2. Llegar a todo el historial es **un botón visible** («ver todos los registros», ver
- *    {@see dateRangeControl}), no una opción escondida en ese desplegable, y el aviso dice
- *    explícitamente que lo que falta está oculto por el periodo, no perdido.
+ * 1. The period in force is read **next to the history**, in a permanent notice and in words
+ *    ("currently showing: last day"), not only as an option chosen inside a dropdown, which is
+ *    exactly what nobody looks at.
+ * 2. Reaching the whole history is **a visible button** ("see every record", see
+ *    {@see dateRangeControl}), not an option buried in that dropdown, and the notice says
+ *    explicitly that what is missing is hidden by the period, not lost.
  *
- * `day` y no `week` ni `month` porque es el mismo periodo con el que arranca el panel de inicio, y
- * dos pantallas que se abren solas no deberían discrepar sobre qué es «lo reciente»; subir el
- * defecto es un clic, y el clic está a la vista.
+ * `day` and not `week` or `month` because it is the same period the home dashboard starts with, and
+ * two screens that open on their own should not disagree about what "recent" is; raising the
+ * default is one click, and the click is in plain sight.
  */
 export const DEFAULT_RANGE_PRESET = 'day';
 
 /**
- * Error de rango, distinguible de un fallo de cripto o de red: lo provoca lo que se ha tecleado en
- * el control, así que la pantalla lo enseña junto al control y no como fallo de carga.
+ * Range error, told apart from a crypto or network failure: it is caused by what was typed into
+ * the control, so the screen shows it next to the control and not as a loading failure.
  */
 export class DateRangeError extends Error {
     /** @param {string} message */
@@ -94,21 +94,21 @@ export class DateRangeError extends Error {
 }
 
 /**
- * Instante UTC de la medianoche local de un día de calendario, con el desfase **de ese día** y no
- * el de hoy, para que el horario de verano no desplace el corte.
+ * UTC instant of the local midnight of a calendar day, with the offset **of that day** and not
+ * today's, so that daylight saving does not move the cut.
  *
- * `dayOffset` se suma al día antes de resolver el desfase (`Date.UTC` normaliza el desbordamiento
- * de mes y de año), que es como se obtiene la punta superior excluida: la medianoche del día
- * siguiente.
+ * `dayOffset` is added to the day before resolving the offset (`Date.UTC` normalizes month and
+ * year overflow), which is how the excluded upper end is obtained: the midnight of the next
+ * day.
  *
- * @param {string} value Valor de un `<input type="date">` (`YYYY-MM-DD`).
+ * @param {string} value Value of an `<input type="date">` (`YYYY-MM-DD`).
  * @param {object} [options]
- * @param {number} [options.dayOffset] Días a sumar al día indicado.
- * @param {number} [options.timezoneOffsetMinutes] Desfase a usar en vez del del dispositivo, con el
- *        convenio de `Date.prototype.getTimezoneOffset()` (UTC menos local). Solo existe para poder
- *        probar esto con un desfase distinto de cero sin depender de la zona de quien ejecuta.
- * @returns {string} Fecha canónica del ADR 0004.
- * @throws {DateRangeError} Si el valor no es un día de calendario válido.
+ * @param {number} [options.dayOffset] Days to add to the given day.
+ * @param {number} [options.timezoneOffsetMinutes] Offset to use instead of the device one, with
+ *        the `Date.prototype.getTimezoneOffset()` convention (UTC minus local). It exists only to
+ *        test this with a non-zero offset without depending on the zone of whoever runs it.
+ * @returns {string} ADR 0004 canonical date.
+ * @throws {DateRangeError} If the value is not a valid calendar day.
  */
 export function localDayStartToCanonical(value, { dayOffset = 0, timezoneOffsetMinutes } = {}) {
     const match = DATE_INPUT_PATTERN.exec(value ?? '');
@@ -120,9 +120,9 @@ export function localDayStartToCanonical(value, { dayOffset = 0, timezoneOffsetM
     const [, year, month, day] = match.map(Number);
 
     /**
-     * `Date.UTC` normaliza en silencio un mes 13 o un día 32, así que un día imposible se rechaza
-     * aquí, antes de convertirlo: aceptar la normalización significaría enseñar el rango de otro
-     * mes sin decirlo.
+     * `Date.UTC` silently normalizes a month 13 or a day 32, so an impossible day is rejected here,
+     * before converting it: accepting the normalization would mean showing the range of another
+     * month without saying so.
      */
     if (month < 1 || month > 12 || day < 1 || day > 31) {
         throw new DateRangeError(t('range.error.badDate'));
@@ -139,17 +139,17 @@ export function localDayStartToCanonical(value, { dayOffset = 0, timezoneOffsetM
 }
 
 /**
- * Rango de un atajo relativo (`day`, `week`, `month`) o de la ausencia de atajo (`all`).
+ * Range of a relative shortcut (`day`, `week`, `month`) or of the absence of one (`all`).
  *
- * Los dos relativos dejan la punta superior abierta (`to === null`) en vez de fijarla en «ahora»:
- * un registro con fecha unos minutos por delante del reloj del servidor —relojes que no coinciden,
- * o una toma que se apunta antes de hacerla— desaparecería del historial justo después de
- * guardarlo, que es la peor forma posible de estrenar un filtro.
+ * Both relative ones leave the upper end open (`to === null`) instead of pinning it to "now": a
+ * record dated a few minutes ahead of the server clock —clocks that disagree, or a dose written
+ * down before taking it— would disappear from the history right after saving it, which is the
+ * worst possible way to introduce a filter.
  *
  * @param {string} preset
- * @param {Date} [referenceInstant] «Ahora», parametrizable para poder probarlo.
+ * @param {Date} [referenceInstant] "Now", parameterized so it can be tested.
  * @returns {{from: string|null, to: string|null}}
- * @throws {DateRangeError} Si el atajo no es uno de los relativos ni `all`.
+ * @throws {DateRangeError} If the shortcut is neither one of the relative ones nor `all`.
  */
 export function presetRange(preset, referenceInstant = new Date()) {
     if (preset === 'all') {
@@ -166,24 +166,24 @@ export function presetRange(preset, referenceInstant = new Date()) {
 }
 
 /**
- * Rango a medida a partir de los dos `<input type="date">`.
+ * Custom range out of the two `<input type="date">`.
  *
- * Las dos fechas son obligatorias: con una sola, «desde el 3» y «hasta el 3» son peticiones
- * distintas y adivinar cuál se quiso decir produce un historial que no es el que se pidió.
+ * Both dates are required: with only one, "from the 3rd" and "up to the 3rd" are different
+ * requests and guessing which one was meant produces a history that is not the one asked for.
  *
- * @param {string} fromDay `YYYY-MM-DD`, incluido.
- * @param {string} toDay `YYYY-MM-DD`, incluido (se traduce a la medianoche del día siguiente).
+ * @param {string} fromDay `YYYY-MM-DD`, included.
+ * @param {string} toDay `YYYY-MM-DD`, included (translated to the midnight of the next day).
  * @param {object} [options]
- * @param {number} [options.timezoneOffsetMinutes] Ver {@see localDayStartToCanonical}.
+ * @param {number} [options.timezoneOffsetMinutes] See {@see localDayStartToCanonical}.
  * @returns {{from: string, to: string}}
- * @throws {DateRangeError} Si falta alguna fecha, no es válida, o el inicio va después del fin.
+ * @throws {DateRangeError} If a date is missing, is invalid, or the start comes after the end.
  */
 export function customRange(fromDay, toDay, { timezoneOffsetMinutes } = {}) {
     if (typeof fromDay !== 'string' || typeof toDay !== 'string' || fromDay === '' || toDay === '') {
         throw new DateRangeError(t('range.error.incomplete'));
     }
 
-    /** Comparación de cadenas: `YYYY-MM-DD` ordena igual como texto que como fecha. */
+    /** String comparison: `YYYY-MM-DD` sorts the same as text as it does as a date. */
     if (fromDay > toDay) {
         throw new DateRangeError(t('range.error.order'));
     }
@@ -195,12 +195,12 @@ export function customRange(fromDay, toDay, { timezoneOffsetMinutes } = {}) {
 }
 
 /**
- * Rango efectivo del control, sea cual sea el atajo elegido.
+ * Effective range of the control, whichever shortcut is chosen.
  *
  * @param {object} params
- * @param {string} params.preset Uno de {@see RANGE_PRESETS}.
- * @param {string} [params.fromDay] Solo se lee con el atajo `custom`.
- * @param {string} [params.toDay] Solo se lee con el atajo `custom`.
+ * @param {string} params.preset One of {@see RANGE_PRESETS}.
+ * @param {string} [params.fromDay] Only read with the `custom` shortcut.
+ * @param {string} [params.toDay] Only read with the `custom` shortcut.
  * @param {Date} [params.referenceInstant]
  * @param {number} [params.timezoneOffsetMinutes]
  * @returns {{from: string|null, to: string|null}}
@@ -215,23 +215,23 @@ export function resolveRange({ preset, fromDay, toDay, referenceInstant, timezon
 }
 
 /**
- * Estado y comportamiento del control de rango, para mezclar en el componente Alpine de cada
- * pantalla de historial (`...dateRangeControl()`).
+ * State and behaviour of the range control, to mix into the Alpine component of each history
+ * screen (`...dateRangeControl()`).
  *
- * **Contrato con la pantalla que lo mezcla**: tiene que exponer un `loadHistory()`, que es lo que
- * `applyRange()` vuelve a llamar, y su `loadHistory()` tiene que pasar `historyRange()` a
- * `fetchEvents`. A cambio, este objeto aporta las tres propiedades que la plantilla común
- * `phr.partials.date-range` enlaza con `x-model` (`rangePreset`, `rangeFromDay`, `rangeToDay`) y el
- * hueco de error `rangeError`.
+ * **Contract with the screen that mixes it in**: it has to expose a `loadHistory()`, which is what
+ * `applyRange()` calls again, and its `loadHistory()` has to pass `historyRange()` to
+ * `fetchEvents`. In exchange, this object provides the three properties the shared template
+ * `phr.partials.date-range` binds with `x-model` (`rangePreset`, `rangeFromDay`, `rangeToDay`) and
+ * the error slot `rangeError`.
  *
- * Las tres van con `x-model` y no con `x-ref`: son estado del cliente, no dato clínico, y hace
- * falta que sean reactivas para que los dos campos de fecha aparezcan solo con el atajo `custom`.
- * `x-model` es de Alpine y no sube nada al servidor; el que el ADR 0002 prohíbe es `wire:model`.
+ * The three go with `x-model` and not with `x-ref`: they are client state, not clinical data, and
+ * they need to be reactive so the two date fields appear only with the `custom` shortcut.
+ * `x-model` is Alpine's and uploads nothing to the server; the one ADR 0002 forbids is `wire:model`.
  *
  * @param {object} [options]
- * @param {string} [options.preset] Atajo con el que arranca la pantalla. Las de historial y el
- *        panel de inicio se quedan con el defecto (ver {@see DEFAULT_RANGE_PRESET}); solo la
- *        pantalla de compartir pide otro, porque allí el rango es lo que se va a compartir.
+ * @param {string} [options.preset] Shortcut the screen starts with. The history ones and the home
+ *        dashboard keep the default (see {@see DEFAULT_RANGE_PRESET}); only the share screen asks
+ *        for another, because there the range is what is going to be shared.
  * @returns {object}
  */
 export function dateRangeControl({ preset = DEFAULT_RANGE_PRESET } = {}) {
@@ -240,13 +240,13 @@ export function dateRangeControl({ preset = DEFAULT_RANGE_PRESET } = {}) {
         rangeFromDay: '',
         rangeToDay: '',
 
-        /** Mensaje del último rango mal formado; se limpia en cuanto uno vale. */
+        /** Message of the last malformed range; it is cleared as soon as one is valid. */
         rangeError: '',
 
         /**
-         * Rango que toca aplicar ahora mismo. Si lo tecleado no vale, devuelve el rango abierto y
-         * deja dicho el porqué en `rangeError`: más vale enseñar el historial entero con un aviso
-         * que dejar la pantalla en blanco.
+         * Range to apply right now. If what was typed is not valid, it returns the open range and
+         * leaves the reason in `rangeError`: better to show the whole history with a warning than
+         * to leave the screen blank.
          *
          * @returns {{from: string|null, to: string|null}}
          */
@@ -269,23 +269,23 @@ export function dateRangeControl({ preset = DEFAULT_RANGE_PRESET } = {}) {
         },
 
         /**
-         * Vuelve a cargar el historial con el rango en vigor. Lo llaman tanto el desplegable (al
-         * cambiar de atajo) como el botón de aplicar del rango a medida.
+         * Loads the history again with the range in force. Both the dropdown (when the shortcut
+         * changes) and the apply button of the custom range call it.
          */
         applyRange() {
             void this.loadHistory();
         },
 
         /**
-         * Salida a «todo el historial» en un solo gesto.
+         * Way out to "the whole history" in a single gesture.
          *
-         * Es la mitad ejecutable de la mitigación que justifica acotar de oficio (ver
-         * {@see DEFAULT_RANGE_PRESET}): como el defecto ya no es `all`, quitar el recorte no puede
-         * costar abrir un desplegable y buscar la opción correcta. La plantilla lo saca como botón
-         * visible en el propio aviso de periodo, junto al historial.
+         * It is the executable half of the mitigation that justifies clipping by default (see
+         * {@see DEFAULT_RANGE_PRESET}): since the default is no longer `all`, removing the clip
+         * cannot cost opening a dropdown and finding the right option. The template puts it as a
+         * visible button in the period notice itself, next to the history.
          *
-         * Limpia también el rango a medida: dejar dos fechas escritas en los campos después de
-         * decir «ver todos los registros» invita a creer que siguen aplicándose.
+         * It also clears the custom range: leaving two dates written in the fields after saying
+         * "see every record" invites believing they still apply.
          */
         showAllRecords() {
             this.rangePreset = 'all';

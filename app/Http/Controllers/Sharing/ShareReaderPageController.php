@@ -12,41 +12,42 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\App;
 
 /**
- * `GET /s/{link}` (ADR 0011): la página del profesional.
+ * `GET /s/{link}` (ADR 0011): the professional's page.
  *
- * Vive fuera del panel a propósito. Todo lo que se monta bajo `phr` pasa por `PhrPanelProvider`, que
- * Filament envuelve con el grupo `web` y por tanto con sesión y CSRF, incluidas sus rutas sin
- * autenticar. Esta página no debe llevar cookie de sesión, ni Livewire, ni Filament, ni gráficas: se
- * abre en un dispositivo ajeno y cuanto menos lleve, menos deja detrás.
+ * It lives outside the panel on purpose. Everything mounted under `phr` goes through
+ * `PhrPanelProvider`, which Filament wraps with the `web` group and therefore with session and CSRF,
+ * including its unauthenticated routes. This page must carry no session cookie, no Livewire, no
+ * Filament and no charts: it is opened on somebody else's device and the less it carries, the less
+ * it leaves behind.
  *
- * El servidor no pinta **nada** del contenido: manda una cáscara y el trabajo lo hace el cliente,
- * que lee `S` de `location.hash` —el fragmento no viaja al servidor— y descifra en el navegador. El
- * identificador del enlace se pasa a la vista porque es lo único que el servidor sí ve, y ya lo ve
- * por estar en la URL.
+ * The server paints **nothing** of the content: it sends a shell and the client does the work,
+ * reading `S` from `location.hash` —the fragment does not travel to the server— and decrypting in
+ * the browser. The link identifier is passed to the view because it is the only thing the server
+ * does see, and it already sees it from the URL.
  *
- * **Esta respuesta es la misma para todos los enlaces.** No se consulta la base de datos: ni para
- * saber si el enlace existe, ni si caducó, ni de quién es. Una página que dijera «este enlace ya no
- * está disponible» antes de pedir el PIN convertiría una lista de identificadores en un mapa de qué
- * recortes siguen vivos, y de paso diría que esa persona compartió algo. La respuesta genérica única
- * empieza aquí, no en el `challenge`.
+ * **This response is the same for every link.** The database is not queried: not to know whether the
+ * link exists, nor whether it expired, nor whose it is. A page saying "this link is no longer
+ * available" before asking for the PIN would turn a list of identifiers into a map of which
+ * clippings are still alive, and along the way say that this person shared something. The single
+ * generic response starts here, not at `challenge`.
  *
- * **Y no lleva nada de la cuenta del paciente**: ni su nombre, ni su correo, ni cuántos recortes
- * tiene. La vista solo recibe el identificador del enlace, el vocabulario público de
- * {@see ReaderCatalog} y dos números que son constantes del código.
+ * **And it carries nothing of the patient's account**: not their name, not their email, not how many
+ * clippings they have. The view only receives the link identifier, the public vocabulary from
+ * {@see ReaderCatalog} and two numbers that are constants in the code.
  *
- * Se pinta en el `Accept-Language` del profesional y nunca en el idioma de la persona propietaria,
- * que es columna en claro por el ADR 0007 y no tiene por qué salir de casa. Por eso esta ruta no
- * lleva el middleware `SetLocale`, que resuelve el idioma de la cuenta, y por eso aquí se negocia a
- * mano contra la cabecera y solo contra la cabecera.
+ * It is painted in the professional's `Accept-Language` and never in the owner's language, which is
+ * a plaintext column under ADR 0007 and has no reason to leave home. That is why this route does not
+ * carry the `SetLocale` middleware, which resolves the account language, and why the header is
+ * negotiated by hand here and against the header alone.
  */
 final readonly class ShareReaderPageController
 {
     public function __invoke(Request $request, string $link): View
     {
         /**
-         * `negotiate()` y no `forRequest()`: el segundo mira primero `users.locale`, y aquí no hay
-         * usuario que mirar ni debe haberlo. Fijar el idioma de la petición además de pasarlo a la
-         * vista es lo que hace que `__()` y el `<html lang>` digan lo mismo.
+         * `negotiate()` and not `forRequest()`: the latter looks at `users.locale` first, and there
+         * is no user to look at here and there must not be one. Setting the request language on top
+         * of passing it to the view is what makes `__()` and the `<html lang>` say the same thing.
          */
         $locale = SupportedLocale::negotiate($request->header('Accept-Language'));
 
@@ -57,11 +58,11 @@ final readonly class ShareReaderPageController
             'locale' => $locale,
             'catalog' => (new ReaderCatalog)->toArray(),
             /**
-             * El tope de intentos se publica para que la pantalla pueda decir cuántos quedan. Es una
-             * constante del código, igual para todos los enlaces, y no una lectura del contador de
-             * este enlace: el contador real no sale nunca del servidor, porque distinguiría un
-             * enlace vivo de uno que nunca existió. Lo que la pantalla cuenta son los intentos
-             * hechos **desde este navegador**, y lo dice con esas palabras.
+             * The attempt cap is published so the screen can say how many are left. It is a constant
+             * in the code, the same for every link, and not a read of this link's counter: the real
+             * counter never leaves the server, because it would tell a live link from one that never
+             * existed. What the screen counts are the attempts made **from this browser**, and it
+             * says so in those words.
              */
             'maxAttempts' => ShareLink::MAX_ATTEMPTS,
         ]);

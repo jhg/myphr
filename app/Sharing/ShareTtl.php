@@ -5,34 +5,34 @@ declare(strict_types=1);
 namespace App\Sharing;
 
 /**
- * Lista cerrada de caducidades de un recorte (ADR 0011): 24 horas por defecto, 7 días como máximo y
- * una hora para el uso presencial.
+ * Closed list of clipping expiries (ADR 0011): 24 hours by default, 7 days at most and one hour for
+ * in-person use.
  *
- * No la elige el servidor. La caducidad exacta entra en la derivación de `wrapKey` y en el dato
- * asociado del envoltorio (`canonicalDate(expiresAt)`), así que el cliente tiene que conocerla
- * **antes** de cifrar y por tanto antes de enviar nada. Lo que el servidor puede hacer, y hace, es
- * comprobar que el instante recibido corresponde a una de estas tres opciones.
+ * The server does not choose it. The exact expiry goes into the `wrapKey` derivation and into the
+ * wrapper's associated data (`canonicalDate(expiresAt)`), so the client has to know it **before**
+ * encrypting and therefore before sending anything. What the server can do, and does, is check that
+ * the instant it received corresponds to one of these three options.
  *
- * Esa comprobación admite una tolerancia porque entre que el cliente fija `expiresAt` y llega la
- * petición pasa el Argon2id del PIN, que en un equipo lento son varios segundos, más la subida del
- * paquete. Exigir igualdad al segundo convertiría un portátil viejo en un error de validación.
+ * That check allows a tolerance because between the client fixing `expiresAt` and the request
+ * arriving there is the Argon2id of the PIN, which on a slow machine is several seconds, plus the
+ * package upload. Requiring equality to the second would turn an old laptop into a validation error.
  */
 enum ShareTtl: string
 {
-    /** Uso presencial: se enseña la pantalla en la consulta y se acabó. */
+    /** In-person use: you show the screen during the consultation and that is it. */
     case Hour = '1h';
 
     /** Por defecto. */
     case Day = '24h';
 
-    /** Máximo. */
+    /** Maximum. */
     case Week = '7d';
 
     /**
-     * Holgura admitida al comprobar `expiresAt` contra la lista, en minutos.
+     * Slack allowed when checking `expiresAt` against the list, in minutes.
      *
-     * Quince minutos cubren con holgura el Argon2id del PIN en un equipo lento más la subida de un
-     * paquete grande, y siguen siendo despreciables frente al menor de los TTL.
+     * Fifteen minutes comfortably cover the Argon2id of the PIN on a slow machine plus the upload of
+     * a large package, and are still negligible next to the shortest TTL.
      */
     public const int TOLERANCE_MINUTES = 15;
 

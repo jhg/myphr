@@ -7,15 +7,15 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * ADR 0006: una sola tabla de eventos clínicos con el tipo cifrado dentro del sobre.
+ * ADR 0006: a single clinical events table with the type encrypted inside the envelope.
  *
- * Ninguna columna en claro salvo las que el servidor necesita para autorizar y paginar: `user_id`
- * para acotar por dueño, `occurred_at` para rango y orden, `id` como asa de fila. El resto del
- * contenido clínico vive en `payload`, un sobre cifrado que el servidor no interpreta.
+ * No column is in the clear except the ones the server needs to authorize and paginate: `user_id` to
+ * scope by owner, `occurred_at` for range and ordering, `id` as a row handle. The rest of the
+ * clinical content lives in `payload`, an encrypted envelope the server does not interpret.
  *
- * `occurred_at` se declara con precisión de microsegundos (ADR 0006, sección Consequences): el
- * sobre se cifra usando esa fecha como dato asociado del AEAD, así que si el servidor la trunca al
- * releerla el sobre queda indescifrable.
+ * `occurred_at` is declared with microsecond precision (ADR 0006, Consequences section): the
+ * envelope is encrypted using that date as AEAD associated data, so if the server truncates it when
+ * reading it back the envelope becomes undecryptable.
  */
 return new class extends Migration
 {
@@ -27,7 +27,7 @@ return new class extends Migration
 
             $table->dateTime('occurred_at', precision: 6);
 
-            /** ADR 0006: sobre cifrado con prefijo `v1.`, contenido opaco para el servidor. */
+            /** ADR 0006: encrypted envelope with the `v1.` prefix, opaque content for the server. */
             $table->text('payload');
 
             $table->timestamps();

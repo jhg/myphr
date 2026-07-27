@@ -8,16 +8,16 @@ use App\Support\SupportedLocale;
 use ValueError;
 
 /**
- * Postura en la que se tomó una lectura de tensión arterial.
+ * Posture a blood pressure reading was taken in.
  *
- * Junto con {@see BloodPressureArm} forma el método de medición que exige el ADR 0008
- * (docs/adr/0008-measurement-method.md): la postura cambia el valor tanto como el brazo —la
- * tensión de alguien tumbado no es la misma que de pie, diferencia clave para detectar
- * hipotensión ortostática— y solo se sabe en el momento de medir. El valor de cada caso es el
- * token estable que entra en el sobre cifrado, así que, igual que {@see BloodPressureArm},
- * **no puede cambiar nunca** una vez publicado.
+ * Together with {@see BloodPressureArm} it forms the measurement method ADR 0008
+ * (docs/adr/0008-measurement-method.md) requires: posture changes the value as much as the arm does
+ * —someone's blood pressure lying down is not the same as standing up, a key difference for
+ * spotting orthostatic hypotension— and it is only known at the moment of measuring. The value of
+ * each case is the stable token that goes into the encrypted envelope, so, like
+ * {@see BloodPressureArm}, it **can never change** once published.
  *
- * Añadir un caso nuevo es seguro; renombrar o eliminar uno existente no lo es.
+ * Adding a new case is safe; renaming or removing an existing one is not.
  */
 enum BloodPressurePosture: string implements PatientLabelled
 {
@@ -27,14 +27,14 @@ enum BloodPressurePosture: string implements PatientLabelled
     /** Tumbado. */
     case Lying = 'lying';
 
-    /** De pie. */
+    /** Standing up. */
     case Standing = 'standing';
 
     /**
-     * Etiqueta en el idioma indicado, para mostrar al paciente (ADR 0005: la etiqueta no sustituye
-     * al token, que es lo único que entra en el sobre cifrado).
+     * Label in the given language, to show to the patient (ADR 0005: the label does not replace the
+     * token, which is the only thing that goes into the encrypted envelope).
      *
-     * @param  string  $locale  Cualquier código; los no soportados caen al idioma por defecto.
+     * @param  string  $locale  Any code; unsupported ones fall back to the default language.
      */
     public function label(string $locale): string
     {
@@ -50,7 +50,7 @@ enum BloodPressurePosture: string implements PatientLabelled
             [self::Sitting, 'zh_CN'] => '坐位',
             [self::Lying, 'zh_CN'] => '卧位',
             [self::Standing, 'zh_CN'] => '立位',
-            default => throw new ValueError(sprintf('Falta la etiqueta de postura para el idioma "%s".', $locale)),
+            default => throw new ValueError(sprintf('Missing posture label for locale "%s".', $locale)),
         };
     }
 }

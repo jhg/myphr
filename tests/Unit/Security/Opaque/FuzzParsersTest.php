@@ -23,40 +23,40 @@ use App\Security\Opaque\SystemRandomSource;
 use Tests\Unit\Security\Opaque\Support\DeterministicByteStream;
 
 /**
- * Fuzzing ligero de `docs/OPAQUE.md` §20.7.
+ * Light fuzzing from `docs/OPAQUE.md` §20.7.
  *
- * Entradas pseudoaleatorias de 0 a 512 bytes contra cada parser de mensajes y
- * contra las primitivas que reciben datos remotos. Exigencias de §20.7:
+ * Pseudorandom inputs of 0 to 512 bytes against every message parser and
+ * against the primitives that take remote data. What §20.7 demands:
  *
- * - ningún warning, notice o deprecation de PHP (se convierten en excepción);
- * - ningún acceso fuera de rango (`substr()` corto, `unpack()` fallido…);
- * - ningún error de tipo no controlado (`TypeError`, `ValueError`,
+ * - no PHP warning, notice or deprecation (they are turned into exceptions);
+ * - no out-of-range access (short `substr()`, failed `unpack()`…);
+ * - no unhandled type error (`TypeError`, `ValueError`,
  *   `SodiumException`, `ErrorException`…);
- * - sólo excepciones de protocolo, es decir, subclases de
+ * - only protocol exceptions, that is, subclasses of
  *   {@see OpaqueException}.
  *
- * El generador es determinista ({@see DeterministicByteStream}): si una
- * entrada rompe algo, la semilla del test la reproduce.
+ * The generator is deterministic ({@see DeterministicByteStream}): if an
+ * input breaks something, the test seed reproduces it.
  */
 
-/** Número de entradas aleatorias por parser. */
+/** Number of random inputs per parser. */
 const FUZZ_ITERATIONS = 400;
 
-/** Longitud máxima de entrada exigida por §20.7. */
+/** Maximum input length required by §20.7. */
 const FUZZ_MAX_LENGTH = 512;
 
 /**
- * Ejecuta `$parser` sobre entradas aleatorias y sobre las longitudes frontera,
- * y falla si algo distinto de una {@see OpaqueException} escapa.
+ * Runs `$parser` over random inputs and over the boundary lengths, and fails
+ * if anything other than an {@see OpaqueException} escapes.
  *
- * Las longitudes frontera (0, 1, `$exactLength - 1`, `$exactLength`,
- * `$exactLength + 1`, 512) se prueban siempre: los fallos de parser viven
- * justo en el borde, y el muestreo uniforme de 0..512 los visita poco.
+ * The boundary lengths (0, 1, `$exactLength - 1`, `$exactLength`,
+ * `$exactLength + 1`, 512) are always tried: parser bugs live right on the
+ * edge, and uniform sampling of 0..512 rarely visits them.
  *
- * @param  callable(string): mixed  $parser  Parser bajo prueba.
- * @param  int|null  $exactLength  Longitud válida del mensaje, si tiene una fija.
- * @param  list<class-string<Throwable>>  $allowed  Excepciones aceptables. Por
- *                                                  defecto sólo las de protocolo.
+ * @param  callable(string): mixed  $parser  Parser under test.
+ * @param  int|null  $exactLength  Valid message length, if it has a fixed one.
+ * @param  list<class-string<Throwable>>  $allowed  Acceptable exceptions. By
+ *                                                  default only the protocol ones.
  */
 function fuzzParser(
     string $label,
@@ -79,7 +79,7 @@ function fuzzParser(
     }
 
     $previous = set_error_handler(
-        /** Convierte cualquier diagnóstico de PHP en excepción para que el test falle. */
+        /** Turns any PHP diagnostic into an exception so the test fails. */
         static function (int $severity, string $message, string $file, int $line): bool {
             throw new ErrorException($message, 0, $severity, $file, $line);
         }
@@ -94,7 +94,7 @@ function fuzzParser(
             } catch (Throwable $unexpected) {
                 foreach ($allowed as $allowedClass) {
                     if ($unexpected instanceof $allowedClass) {
-                        // Excepción controlada: es lo que §20.7 permite.
+                        // Handled exception: this is what §20.7 allows.
                         continue 2;
                     }
                 }
@@ -118,7 +118,7 @@ function fuzzParser(
 
         if ($previous !== null) {
             // `restore_error_handler()` ya devuelve el handler anterior; esta
-            // comprobación sólo documenta que no se ha perdido.
+            // check only documents that it has not been lost.
             set_error_handler($previous);
             restore_error_handler();
         }
@@ -127,7 +127,7 @@ function fuzzParser(
     expect(true)->toBeTrue();
 }
 
-/** Setup válido y determinista para fuzzear las capas que lo necesitan. */
+/** A valid, deterministic setup to fuzz the layers that need one. */
 function fuzzServerSetup(): ServerSetup
 {
     [$privateKey] = Oprf::deriveDiffieHellmanKeyPair(str_repeat("\x11", 32));
@@ -161,7 +161,7 @@ it('survives random input on every wire-message parser', function (string $label
 ]);
 
 it('survives random input on the base64url decoders', function (): void {
-    // Bytes binarios crudos: casi todos caen fuera del alfabeto.
+    // Raw binary bytes: nearly all of them fall outside the alphabet.
     fuzzParser('Base64Url::decode(binary)', static fn (string $input): string => Base64Url::decode($input), null);
 
     fuzzParser(
@@ -170,8 +170,8 @@ it('survives random input on the base64url decoders', function (): void {
         null
     );
 
-    // Cadenas dentro del alfabeto base64url: ejercitan las ramas de longitud
-    // imposible (% 4 === 1) y de codificación no canónica, que las entradas
+    // Strings inside the base64url alphabet: they exercise the impossible-length
+    // (% 4 === 1) and non-canonical encoding branches, which binary inputs
     // binarias casi nunca alcanzan.
     $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 
@@ -189,8 +189,8 @@ it('survives random input on the base64url decoders', function (): void {
         null
     );
 
-    // Entradas que sí son base64url válido: comprueba que el round-trip no
-    // rompe y que `decodeExactly` sólo se queja de la longitud.
+    // Inputs that really are valid base64url: it checks that the round trip does
+    // not break and that `decodeExactly` only complains about the length.
     fuzzParser(
         'Base64Url::decodeExactly(valid)',
         static fn (string $input): string => Base64Url::decodeExactly(Base64Url::encode($input), 32),
@@ -201,11 +201,11 @@ it('survives random input on the base64url decoders', function (): void {
 it('survives random input on the base64url wire entry points', function (string $label, callable $parser): void {
     $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 
-    // Bytes crudos: la mayoría se rechazan por alfabeto.
+    // Raw bytes: most are rejected by the alphabet.
     fuzzParser($label.'(binary)', $parser);
 
-    // Cadenas del alfabeto base64url: llegan hasta la comprobación de longitud
-    // y canonicidad, y algunas hasta el parser binario de detrás.
+    // Strings from the base64url alphabet: they reach the length and canonicity
+    // checks, and some of them even the binary parser behind.
     fuzzParser(
         $label.'(alphabet)',
         static function (string $input) use ($alphabet, $parser): mixed {
@@ -219,8 +219,8 @@ it('survives random input on the base64url wire entry points', function (string 
         }
     );
 
-    // Base64url canónico de una entrada aleatoria: siempre decodifica, así que
-    // el rechazo tiene que venir de la longitud o de la validación de puntos.
+    // Canonical base64url of a random input: it always decodes, so the rejection
+    // has to come from the length or from point validation.
     fuzzParser(
         $label.'(canonical)',
         static fn (string $input): mixed => $parser(Base64Url::encode($input))
@@ -274,10 +274,10 @@ it('survives random input on the OPRF server functions', function (): void {
         32
     );
 
-    // `oprf_seed` no viene del cable: lo valida `ServerSetup` al arrancar, así
-    // que ningún byte remoto puede llegar aquí con longitud inesperada. Con un
+    // `oprf_seed` does not come from the wire: `ServerSetup` validates it at boot,
+    // so no remote byte can reach here with an unexpected length. With a short
     // PRK corto, `HkdfSha512::expand()` lanza `InvalidConfigurationException`
-    // (precondición de RFC 5869 §2.3), que ya está dentro de la jerarquía de
+    // PRK, `HkdfSha512::expand()` throws `InvalidConfigurationException` (an
     // `OpaqueException` (`docs/OPAQUE.md` §18).
     fuzzParser(
         'Oprf::deriveOprfKey(seed)',
@@ -303,7 +303,7 @@ it('survives random input on the full server registration and login entry points
     $setup = fuzzServerSetup();
     $registrationServer = new RegistrationServer($setup);
 
-    // registration/start: bytes crudos del cliente hasta el OPRF del servidor.
+    // registration/start: raw client bytes all the way to the server OPRF.
     fuzzParser(
         'RegistrationServer::createRegistrationResponse',
         static fn (string $input): RegistrationResponse => $registrationServer->createRegistrationResponse(

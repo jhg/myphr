@@ -7,50 +7,50 @@ namespace App\Security\Opaque;
 use SodiumException;
 
 /**
- * Envoltorio estricto sobre las primitivas ristretto255 de `ext-sodium`
+ * Strict wrapper over the ristretto255 primitives in `ext-sodium`
  * (`docs/OPAQUE.md` §7.1).
  *
- * Añade a libsodium las comprobaciones que RFC 9807 §10.7 exige para toda
- * entrada remota y que la extensión no hace por sí sola:
+ * It adds to libsodium the checks RFC 9807 §10.7 requires for any remote
+ * input and that the extension does not do on its own:
  *
- * - canonicidad de la codificación del elemento: `is_valid_point()` la
- *   comprueba en unas versiones de libsodium y no en otras, de modo que
- *   delegarla haría que la misma aplicación aceptara o rechazara codificaciones
- *   alternativas según con qué biblioteca se compilase PHP;
- * - rechazo explícito del elemento neutro (`is_valid_point()` devuelve `true`
- *   para 32 bytes cero);
- * - rechazo del escalar cero;
- * - canonicidad del escalar (`sodium_crypto_scalarmult_ristretto255_base()`
- *   no reduce su entrada y aceptaría en silencio un escalar mayor o igual que
- *   el orden del grupo).
+ * - canonicity of the element encoding: `is_valid_point()` checks it in some
+ *   libsodium versions and not in others, so delegating it would make the same
+ *   application accept or reject alternative encodings depending on which
+ *   library PHP was built against;
+ * - explicit rejection of the neutral element (`is_valid_point()` returns
+ *   `true` for 32 zero bytes);
+ * - rejection of the zero scalar;
+ * - canonicity of the scalar (`sodium_crypto_scalarmult_ristretto255_base()`
+ *   does not reduce its input and would silently accept a scalar greater than
+ *   or equal to the group order).
  *
- * Cualquier `SodiumException` se traduce a {@see InvalidPointException}, que
- * es subtipo de `InvalidMessageException` según `docs/OPAQUE.md` §18.
+ * Any `SodiumException` is translated into {@see InvalidPointException}, which
+ * is a subtype of `InvalidMessageException` per `docs/OPAQUE.md` §18.
  */
 final class Ristretto255
 {
-    /** Longitud de un elemento serializado del grupo, en bytes (RFC 9496 §4). */
+    /** Length of a serialized group element, in bytes (RFC 9496 §4). */
     public const int ELEMENT_BYTES = 32;
 
-    /** Longitud de un escalar serializado, en bytes (RFC 9496 §4). */
+    /** Length of a serialized scalar, in bytes (RFC 9496 §4). */
     public const int SCALAR_BYTES = 32;
 
-    /** Longitud de la entrada uniforme de `from_hash` y `scalar_reduce`, en bytes. */
+    /** Length of the uniform input to `from_hash` and `scalar_reduce`, in bytes. */
     public const int HASH_BYTES = 64;
 
     /**
-     * Valida un elemento del grupo recibido de una fuente remota
+     * Validates a group element received from a remote source
      * (RFC 9807 §10.7; `docs/OPAQUE.md` §7.1).
      *
-     * Comprueba, en este orden: longitud exacta de 32 bytes, codificación
-     * canónica y pertenencia al grupo mediante
-     * `sodium_crypto_core_ristretto255_is_valid_point()`, y por último que no
-     * sea el elemento neutro (32 bytes cero), que esa función acepta.
+     * It checks, in this order: exact length of 32 bytes, canonical encoding
+     * and group membership via
+     * `sodium_crypto_core_ristretto255_is_valid_point()`, and finally that it
+     * is not the neutral element (32 zero bytes), which that function accepts.
      *
-     * @param  string  $point  Elemento serializado, 32 bytes binarios.
+     * @param  string  $point  Serialized element, 32 binary bytes.
      *
-     * @throws InvalidPointException Si la longitud no es 32, si la codificación
-     *                               no es válida o canónica, o si es la identidad.
+     * @throws InvalidPointException If the length is not 32, if the encoding is
+     *                               invalid or non-canonical, or if it is the identity.
      */
     public static function validatePoint(string $point): void
     {
@@ -59,17 +59,17 @@ final class Ristretto255
         }
 
         /**
-         * La canonicidad se comprueba aquí y **no** se delega en libsodium.
+         * Canonicity is checked here and **not** delegated to libsodium.
          *
-         * `sodium_crypto_core_ristretto255_is_valid_point()` no la verifica en todas las versiones
-         * de la biblioteca: con libsodium 1.0.20 rechaza una codificación no canónica, y en el
-         * runner de integración continua la acepta. Un mismo despliegue, según con qué libsodium se
-         * haya compilado PHP, admitiría codificaciones alternativas del mismo elemento, que es
-         * justo la propiedad que ristretto255 existe para dar: una y solo una representación por
-         * elemento del grupo.
+         * `sodium_crypto_core_ristretto255_is_valid_point()` does not verify it in every version of
+         * the library: with libsodium 1.0.20 it rejects a non-canonical encoding, and on the
+         * continuous integration runner it accepts one. The same deployment, depending on which
+         * libsodium PHP was built against, would allow alternative encodings of the same element,
+         * which is exactly the property ristretto255 exists to provide: one and only one
+         * representation per group element.
          *
-         * Es el mismo criterio que ya se aplicaba al elemento neutro unas líneas más abajo: lo que
-         * RFC 9807 §10.7 exige de toda entrada remota se comprueba aquí, no se supone.
+         * It is the same criterion already applied to the neutral element a few lines below: what
+         * RFC 9807 §10.7 requires of any remote input is checked here, not assumed.
          */
         if (! self::isCanonicalEncoding($point)) {
             throw new InvalidPointException('Ristretto255 element is not a canonical encoding.');
@@ -91,19 +91,19 @@ final class Ristretto255
     }
 
     /**
-     * ¿Son estos 32 bytes la codificación canónica de un elemento del cuerpo (RFC 9496 §4.1)?
+     * Are these 32 bytes the canonical encoding of a field element (RFC 9496 §4.1)?
      *
-     * Es decir: interpretados en little-endian, ¿valen menos que `p = 2^255 - 19`? Eso descarta de
-     * una vez el bit alto puesto (todo lo que llega a `2^255`) y el hueco de diecinueve valores
-     * entre `p` y `2^255`, que es el caso que se cuela cuando solo se mira el bit alto.
+     * That is: read little-endian, are they smaller than `p = 2^255 - 19`? That rules out in one go
+     * both the high bit being set (everything from `2^255` up) and the nineteen-value gap between
+     * `p` and `2^255`, which is the case that slips through when you only look at the high bit.
      *
-     * La comparación es en tiempo constante, sin salidas anticipadas. El elemento es público, así
-     * que el tiempo no filtra ningún secreto, pero un bucle que corta en el primer byte distinto
-     * invita a copiarse a un sitio donde sí importe.
+     * The comparison is constant time, with no early exit. The element is public, so timing leaks
+     * no secret, but a loop that breaks on the first differing byte invites being copied somewhere
+     * it does matter.
      */
     private static function isCanonicalEncoding(string $point): bool
     {
-        /** `p = 2^255 - 19` en little-endian: 0xED, treinta 0xFF y 0x7F. */
+        /** `p = 2^255 - 19` little-endian: 0xED, thirty 0xFF and 0x7F. */
         $prime = "\xed".str_repeat("\xff", 30)."\x7f";
 
         $borrow = 0;
@@ -112,7 +112,7 @@ final class Ristretto255
         for ($i = self::ELEMENT_BYTES - 1; $i >= 0; $i--) {
             $difference = ord($point[$i]) - ord($prime[$i]);
 
-            /** `>> 8` deja todo unos si la resta fue negativa, es decir si este byte es menor. */
+            /** `>> 8` leaves all ones if the subtraction went negative, that is, if this byte is smaller. */
             $borrow |= ($difference >> 8) & $stillEqual;
             $stillEqual &= (((ord($point[$i]) ^ ord($prime[$i])) - 1) >> 8) & 1;
         }
@@ -121,16 +121,16 @@ final class Ristretto255
     }
 
     /**
-     * Valida un escalar (`docs/OPAQUE.md` §7.1).
+     * Validates a scalar (`docs/OPAQUE.md` §7.1).
      *
-     * Comprueba longitud exacta de 32 bytes, que no sea cero y que sea
-     * canónico, es decir, menor que el orden `L` del grupo primo. La
-     * canonicidad se verifica exigiendo que reducir el escalar módulo `L`
-     * devuelva el mismo valor.
+     * It checks the exact length of 32 bytes, that it is not zero and that it
+     * is canonical, that is, smaller than the prime group order `L`.
+     * Canonicity is verified by requiring that reducing the scalar modulo `L`
+     * gives back the same value.
      *
-     * @param  string  $scalar  Escalar serializado en little-endian, 32 bytes binarios.
+     * @param  string  $scalar  Little-endian serialized scalar, 32 binary bytes.
      *
-     * @throws InvalidPointException Si la longitud no es 32, si es cero o si no es canónico.
+     * @throws InvalidPointException If the length is not 32, if it is zero or if it is not canonical.
      */
     public static function validateScalar(string $scalar): void
     {
@@ -150,19 +150,19 @@ final class Ristretto255
     }
 
     /**
-     * Multiplicación escalar sobre un elemento arbitrario del grupo
+     * Scalar multiplication over an arbitrary group element
      * (`sodium_crypto_scalarmult_ristretto255`).
      *
-     * Valida escalar y elemento antes de operar. libsodium lanza excepción si
-     * el resultado es el elemento neutro, lo que cubre el requisito de
-     * RFC 9807 §10.7 de que el secreto DH compartido no sea la identidad; ese
-     * caso se traduce también a {@see InvalidPointException}.
+     * It validates the scalar and the element before operating. libsodium
+     * throws if the result is the neutral element, which covers the RFC 9807
+     * §10.7 requirement that the shared DH secret must not be the identity;
+     * that case is also translated into {@see InvalidPointException}.
      *
-     * @param  string  $scalar  Escalar canónico distinto de cero, 32 bytes.
-     * @param  string  $point  Elemento válido distinto de la identidad, 32 bytes.
-     * @return string Elemento resultante, 32 bytes.
+     * @param  string  $scalar  Canonical non-zero scalar, 32 bytes.
+     * @param  string  $point  Valid element other than the identity, 32 bytes.
+     * @return string Resulting element, 32 bytes.
      *
-     * @throws InvalidPointException Si alguna entrada no valida o si el resultado es la identidad.
+     * @throws InvalidPointException If an input does not validate or if the result is the identity.
      */
     public static function scalarMultiply(string $scalar, string $point): string
     {
@@ -183,17 +183,17 @@ final class Ristretto255
     }
 
     /**
-     * Multiplicación del escalar por el generador
+     * Multiplication of the scalar by the generator
      * (`sodium_crypto_scalarmult_ristretto255_base`).
      *
-     * La función de libsodium **no reduce** su entrada, por lo que la
-     * validación de canonicidad previa es obligatoria: un escalar no canónico
-     * produciría una clave pública que `curve25519-dalek` rechaza.
+     * The libsodium function **does not reduce** its input, so validating
+     * canonicity beforehand is mandatory: a non-canonical scalar would produce
+     * a public key `curve25519-dalek` rejects.
      *
-     * @param  string  $scalar  Escalar canónico distinto de cero, 32 bytes.
-     * @return string Elemento resultante, 32 bytes.
+     * @param  string  $scalar  Canonical non-zero scalar, 32 bytes.
+     * @return string Resulting element, 32 bytes.
      *
-     * @throws InvalidPointException Si el escalar no valida o si el resultado es la identidad.
+     * @throws InvalidPointException If the scalar does not validate or if the result is the identity.
      */
     public static function scalarMultiplyBase(string $scalar): string
     {
@@ -213,18 +213,18 @@ final class Ristretto255
     }
 
     /**
-     * Reduce 64 bytes uniformes módulo el orden `L` del grupo
+     * Reduces 64 uniform bytes modulo the group order `L`
      * (`sodium_crypto_core_ristretto255_scalar_reduce`).
      *
-     * Es la operación usada por `HashToScalar` (RFC 9497 §4.1) y por
-     * `DeriveKeyPair`; el resultado puede ser cero, cosa que esta función no
-     * comprueba porque también se usa para verificar canonicidad en
+     * This is the operation used by `HashToScalar` (RFC 9497 §4.1) and by
+     * `DeriveKeyPair`; the result may be zero, which this function does not
+     * check because it is also used to verify canonicity in
      * {@see validateScalar()}.
      *
-     * @param  string  $wideScalar  Entrada uniforme, exactamente 64 bytes binarios.
-     * @return string Escalar canónico, 32 bytes.
+     * @param  string  $wideScalar  Uniform input, exactly 64 binary bytes.
+     * @return string Canonical scalar, 32 bytes.
      *
-     * @throws InvalidPointException Si la longitud no es 64 o si libsodium falla.
+     * @throws InvalidPointException If the length is not 64 or if libsodium fails.
      */
     public static function scalarReduce(string $wideScalar): string
     {
@@ -240,16 +240,16 @@ final class Ristretto255
     }
 
     /**
-     * Inverso multiplicativo del escalar módulo `L`
+     * Multiplicative inverse of the scalar modulo `L`
      * (`sodium_crypto_core_ristretto255_scalar_invert`).
      *
-     * Usado por el cliente OPRF para desenmascarar (RFC 9497 §3.3.1). El
-     * escalar debe validar previamente: el cero no tiene inverso.
+     * Used by the OPRF client to unblind (RFC 9497 §3.3.1). The scalar must
+     * validate first: zero has no inverse.
      *
-     * @param  string  $scalar  Escalar canónico distinto de cero, 32 bytes.
-     * @return string Escalar inverso, 32 bytes.
+     * @param  string  $scalar  Canonical non-zero scalar, 32 bytes.
+     * @return string Inverse scalar, 32 bytes.
      *
-     * @throws InvalidPointException Si el escalar no valida o si libsodium falla.
+     * @throws InvalidPointException If the scalar does not validate or if libsodium fails.
      */
     public static function scalarInvert(string $scalar): string
     {
@@ -263,16 +263,16 @@ final class Ristretto255
     }
 
     /**
-     * Mapea 64 bytes uniformes a un elemento del grupo
-     * (`sodium_crypto_core_ristretto255_from_hash`), es decir, el
-     * `hash_to_ristretto255` de RFC 9380 §B / RFC 9496 §4.3.4 empleado por
-     * `HashToGroup` de RFC 9497 §4.1.
+     * Maps 64 uniform bytes to a group element
+     * (`sodium_crypto_core_ristretto255_from_hash`), that is, the
+     * `hash_to_ristretto255` of RFC 9380 §B / RFC 9496 §4.3.4 used by
+     * `HashToGroup` in RFC 9497 §4.1.
      *
-     * @param  string  $uniformBytes  Entrada uniforme, exactamente 64 bytes binarios.
-     * @return string Elemento del grupo, 32 bytes; nunca la identidad.
+     * @param  string  $uniformBytes  Uniform input, exactly 64 binary bytes.
+     * @return string Group element, 32 bytes; never the identity.
      *
-     * @throws InvalidPointException Si la longitud no es 64, si libsodium falla
-     *                               o si el resultado es la identidad.
+     * @throws InvalidPointException If the length is not 64, if libsodium fails
+     *                               or if the result is the identity.
      */
     public static function pointFromHash(string $uniformBytes): string
     {
@@ -294,10 +294,10 @@ final class Ristretto255
     }
 
     /**
-     * Compara en tiempo constante contra 32 bytes cero, la codificación del
-     * elemento neutro, que `is_valid_point()` acepta como válido.
+     * Compares in constant time against 32 zero bytes, the encoding of the
+     * neutral element, which `is_valid_point()` accepts as valid.
      *
-     * @param  string  $point  Elemento serializado de 32 bytes.
+     * @param  string  $point  Serialized element of 32 bytes.
      */
     private static function isIdentityElement(string $point): bool
     {
@@ -306,9 +306,9 @@ final class Ristretto255
     }
 
     /**
-     * Compara en tiempo constante contra el escalar cero.
+     * Compares in constant time against the zero scalar.
      *
-     * @param  string  $scalar  Escalar serializado de 32 bytes.
+     * @param  string  $scalar  Serialized scalar of 32 bytes.
      */
     private static function isZeroScalar(string $scalar): bool
     {

@@ -12,22 +12,23 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 
 /**
- * Purga de recortes compartidos caducados (ADR 0011), hermana de `opaque:prune-handshakes`.
+ * Pruning of expired shared clippings (ADR 0011), sibling of `opaque:prune-handshakes`.
  *
- * Es **solo higiene de almacenamiento**, y conviene que quede escrito: la caducidad ya se aplica en
- * la consulta que sirve el blob (`where('expires_at','>',now())`, como
- * `RegistrationLinks::validate()`), así que si el planificador se cae no se alarga la vida de nada.
- * Lo que esta purga evita es que un paquete de hasta 4 MiB siga ocupando disco meses después de
- * haber dejado de servir para nada.
+ * It is **storage hygiene only**, and it is worth writing down: expiry is already enforced in the
+ * query that serves the blob (`where('expires_at','>',now())`, like
+ * `RegistrationLinks::validate()`), so if the scheduler goes down nothing lives any longer. What
+ * this pruning avoids is a package of up to 4 MiB sitting on disk months after it stopped being
+ * useful for anything.
  *
- * Aquí no hay margen de retención como el de `user_registration_links`. Aquel guarda `consumed_at` y
- * `created_by`, que son señal de auditoría; estas dos tablas no tienen ninguna señal que conservar:
- * el rastro de que hubo una compartición vive en `AuditEvent` y no en la fila. Retenerlas sin motivo
- * sería mantener vivo un blob cifrado que ya nadie puede abrir.
+ * There is no retention window here like the one in `user_registration_links`. That table keeps
+ * `consumed_at` and `created_by`, which are an audit signal; these two tables have no signal to
+ * keep: the trail that a share happened lives in `AuditEvent` and not in the row. Retaining them
+ * for no reason would mean keeping alive an encrypted blob nobody can open any more.
  *
- * Borrar el recorte se lleva sus enlaces por la clave foránea en cascada. Los enlaces se purgan
- * además por su cuenta porque pueden caducar antes que su recorte si alguna vez dejan de heredar su
- * fecha, y una purga que dependa de que eso nunca pase es una purga que se rompe en silencio.
+ * Deleting the clipping takes its links with it through the cascading foreign key. The links are
+ * also pruned on their own because they may expire before their clipping if they ever stop
+ * inheriting its date, and a pruning that relies on that never happening is a pruning that breaks
+ * silently.
  */
 #[Signature('shares:prune')]
 #[Description('Purga los recortes compartidos y los enlaces cuya caducidad ya pasó.')]

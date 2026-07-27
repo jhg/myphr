@@ -1,57 +1,57 @@
 /**
- * Estadísticas del panel de salud (ADR 0006, ADR 0007, ADR 0008).
+ * Statistics of the health panel (ADR 0006, ADR 0007, ADR 0008).
  *
- * Lógica pura: nada de DOM, Chart.js ni Livewire, para poder probarla sin montar nada
- * (`tests/js/statistics.test.mjs`). Todo el cálculo ocurre en el navegador sobre eventos ya
- * descifrados, porque el servidor no puede leerlos (ADR 0002, ADR 0006).
+ * Pure logic: no DOM, no Chart.js, no Livewire, so it can be tested without mounting anything
+ * (`tests/js/statistics.test.mjs`). All the computing happens in the browser over already
+ * decrypted events, because the server cannot read them (ADR 0002, ADR 0006).
  *
- * **Forma de entrada.** Cada evento es el contenido ya descifrado del sobre (ADR 0006:
- * `{v, type, tz, data: {...}}`) más el instante en que ocurrió, aplanado en el mismo objeto:
- * `{v, type, tz, data: {...}, occurredAt: '2026-07-25T09:08:07.000000Z'}`. `occurredAt` es la
- * fecha canónica del ADR 0004, la misma que trae `openEvent` (`resources/js/health/eventEnvelope.js`).
+ * **Input shape.** Each event is the already decrypted content of the envelope (ADR 0006:
+ * `{v, type, tz, data: {...}}`) plus the instant it happened, flattened into the same object:
+ * `{v, type, tz, data: {...}, occurredAt: '2026-07-25T09:08:07.000000Z'}`. `occurredAt` is the ADR
+ * 0004 canonical date, the same `openEvent` brings (`resources/js/health/eventEnvelope.js`).
  *
- * **El método de medición no se mezcla en silencio** (ADR 0008): toda función de resumen agrupa
- * antes de calcular nada por el campo que dice cómo se midió —`data.method` en glucemia y tensión,
- * `data.site` en temperatura, `data.insulinType` en insulina— y devuelve las claves que agrupó para
- * que la vista pueda decir siempre qué incluye un número.
+ * **The measurement method is never mixed in silence** (ADR 0008): every summary function groups
+ * before computing anything by the field that says how it was measured —`data.method` in glucose
+ * and blood pressure, `data.site` in temperature, `data.insulinType` in insulin— and returns the
+ * keys it grouped by so the view can always say what a number includes.
  *
- * **Ya no se resumen ventanas fijas.** Estas funciones reciben los eventos del periodo que la
- * persona ha elegido, acotado por el servidor con `[from, to)` (`occurred_at` es columna en claro,
- * ADR 0006); aquí no se vuelve a recortar por fecha.
+ * **Fixed windows are no longer summarized.** These functions receive the events of the period the
+ * person chose, clipped by the server with `[from, to)` (`occurred_at` is a column in the clear,
+ * ADR 0006); nothing is clipped by date again here.
  *
- * **No se convierte entre unidades.** La glucemia se resume para una única unidad de
- * presentación, y los eventos en otra unidad se cuentan aparte en vez de mezclarse (ADR 0007:
- * "promediar mg/dL con mmol/L sin convertir da un número sin sentido"; convertir exige fijar
- * precisión y redondeo, decisión clínica que ningún ADR ha tomado todavía).
+ * **Nothing is converted between units.** Glucose is summarized for one single display unit, and
+ * the events in another unit are counted apart instead of being mixed in (ADR 0007: "averaging
+ * mg/dL with mmol/L without converting gives a meaningless number"; converting requires fixing
+ * precision and rounding, a clinical decision no ADR has taken yet).
  *
- * **Precisión de los cálculos.** Los valores llegan como cadena (ADR 0004: decimales como
- * cadena) y se convierten a número solo para calcular. La media, la mediana y el porcentaje en
- * rango que devuelven estas funciones son números JavaScript, no cadenas: no son el dato en
- * reposo del ADR 0004, sino un resultado derivado y efímero que la vista formatea. Para que ese
- * resultado sea reproducible se fija aquí una precisión, no se deja al azar de cómo sume cada
- * navegador: media y mediana con dos decimales (`STAT_DECIMALS`), redondeo "half away from
- * zero"; el porcentaje en rango, con un decimal. No es una decisión clínica (no interpreta si el
- * número es bueno o malo), es solo la precisión de la presentación.
+ * **Precision of the computations.** The values arrive as strings (ADR 0004: decimals as a string)
+ * and are converted to numbers only to compute. The mean, the median and the in-range percentage
+ * these functions return are JavaScript numbers, not strings: they are not the ADR 0004 datum at
+ * rest, but a derived and ephemeral result the view formats. So that result is reproducible, a
+ * precision is fixed here and not left to how each browser adds up: mean and median with two
+ * decimals (`STAT_DECIMALS`), rounding "half away from zero"; the in-range percentage, with one
+ * decimal. It is not a clinical decision (it does not interpret whether the number is good or
+ * bad), it is only display precision.
  */
 
 /**
- * Duración en días de los atajos de periodo relativos, comunes al panel de inicio y a las pantallas
- * de historial (`health/dateRange.js`, que los importa de aquí y no los copia).
+ * Length in days of the relative period shortcuts, shared by the home dashboard and the history
+ * screens (`health/dateRange.js`, which imports them from here instead of copying them).
  *
- * `day` es el periodo por defecto del panel de inicio: son las últimas 24 horas, no «el día de hoy»
- * desde medianoche, porque el resto de atajos también cuentan hacia atrás desde ahora y mezclar los
- * dos criterios haría que «último día» y «última semana» no midieran lo mismo.
+ * `day` is the default period of the home dashboard: it is the last 24 hours, not "today" from
+ * midnight, because the other shortcuts also count backwards from now and mixing the two criteria
+ * would make "last day" and "last week" measure different things.
  */
 export const WINDOW_DAYS = Object.freeze({ day: 1, week: 7, month: 30 });
 
-/** Decimales fijos para media y mediana (ver JSDoc del módulo). */
+/** Fixed decimals for mean and median (see the module JSDoc). */
 const STAT_DECIMALS = 2;
 
-/** Decimales fijos para el porcentaje en rango. */
+/** Fixed decimals for the in-range percentage. */
 const PERCENT_DECIMALS = 1;
 
 /**
- * Redondea a un número fijo de decimales.
+ * Rounds to a fixed number of decimals.
  *
  * @param {number} value
  * @param {number} decimals
@@ -64,16 +64,16 @@ function round(value, decimals) {
 }
 
 /**
- * Convierte una cadena de valor a número finito, o `null` si no representa uno.
+ * Converts a value string into a finite number, or `null` if it does not represent one.
  *
- * Cubre a la vez dos motivos de descarte: un resultado cualitativo (ADR 0008, tira de orina),
- * que no trae `data.value` sino `data.result`, y un valor mal formado que no debe tumbar el
- * resumen (robustez pedida explícitamente).
+ * It covers two reasons to discard at once: a qualitative result (ADR 0008, urine strip), which
+ * carries no `data.value` but a `data.result`, and a malformed value that must not take the
+ * summary down (robustness asked for explicitly).
  *
- * Se exporta porque la regla que aplica —el valor clínico viaja como cadena, con el punto como
- * separador decimal (ADR 0004)— es la misma para quien calcula estadísticas y para quien construye
- * las series de una gráfica (`health/dailyBands.js`). Duplicarla allí sería duplicar el criterio de
- * qué se descarta, que es justo lo que no puede divergir entre la tarjeta y la gráfica de al lado.
+ * It is exported because the rule it applies —the clinical value travels as a string, with the
+ * dot as decimal separator (ADR 0004)— is the same for whoever computes statistics and for
+ * whoever builds the series of a chart (`health/dailyBands.js`). Duplicating it there would
+ * duplicate the criterion of what is discarded, exactly what cannot diverge between the card and the chart next to it.
  *
  * @param {unknown} raw
  * @returns {number|null}
@@ -89,20 +89,20 @@ export function toFiniteNumber(raw) {
 }
 
 /**
- * @param {string} occurredAt Fecha canónica ISO (ADR 0004).
- * @returns {number} Milisegundos desde epoch, o `NaN` si `occurredAt` no se pudo interpretar.
+ * @param {string} occurredAt ISO canonical date (ADR 0004).
+ * @returns {number} Milliseconds since epoch, or `NaN` if `occurredAt` could not be read.
  */
 function toEpochMs(occurredAt) {
     return Date.parse(occurredAt);
 }
 
 /**
- * Media y mediana de una lista de números, con la precisión fija del módulo.
+ * Mean and median of a list of numbers, with the fixed precision of the module.
  *
- * La mediana de un número par de muestras es el promedio de las dos centrales (con la lista ya
- * ordenada), como cualquier definición estándar; con un número impar es la muestra central.
+ * The median of an even number of samples is the average of the two central ones (with the list
+ * already sorted), as in any standard definition; with an odd number it is the central sample.
  *
- * @param {list<number>} numbers No vacía.
+ * @param {list<number>} numbers Non-empty.
  * @returns {{mean: number, median: number}}
  */
 function meanAndMedian(numbers) {
@@ -112,14 +112,14 @@ function meanAndMedian(numbers) {
 }
 
 /**
- * Mediana de una lista de números, con la misma precisión fija que el resto del módulo.
+ * Median of a list of numbers, with the same fixed precision as the rest of the module.
  *
- * Vive aquí y no en quien la necesita para que la mediana de una tarjeta de estadísticas y la de la
- * gráfica de al lado sean **el mismo número**: dos implementaciones con redondeos distintos darían
- * dos cifras para el mismo dato en la misma pantalla, y no hay forma de que quien lo lea sepa cuál
- * creer.
+ * It lives here and not in whoever needs it so that the median of a statistics card and the one of
+ * the chart next to it are **the same number**: two implementations with different rounding would
+ * give two figures for the same datum on the same screen, and there is no way for the reader to
+ * know which to believe.
  *
- * @param {list<number>} numbers No vacía.
+ * @param {list<number>} numbers Non-empty.
  * @returns {number}
  */
 export function medianOf(numbers) {
@@ -133,20 +133,20 @@ export function medianOf(numbers) {
 }
 
 /**
- * Unidad con la que se resume un tipo de evento cuando la persona no la ha elegido en ninguna
- * parte: la del registro **más reciente** con valor numérico.
+ * Unit a type of event is summarized in when the person has not chosen one anywhere: the one of
+ * the **most recent** record with a numeric value.
  *
- * La glucemia no pasa por aquí porque su unidad de presentación es un ajuste explícito del perfil
- * (ADR 0007). El peso, la temperatura y la insulina no tienen ese ajuste, y aun así no se pueden
- * promediar kilos con libras ni grados Celsius con Fahrenheit. Se toma la del último registro y no
- * la más frecuente porque es la que la persona está usando ahora: si acaba de cambiar de báscula,
- * el resumen habla de la báscula nueva y las lecturas en la unidad vieja se cuentan aparte
- * (`excludedByUnit`) en vez de desaparecer.
+ * Glucose does not go through here because its display unit is an explicit profile setting (ADR
+ * 0007). Weight, temperature and insulin have no such setting, and even so kilos cannot be
+ * averaged with pounds, nor Celsius with Fahrenheit. The one of the last record is taken and not
+ * the most frequent because it is the one the person is using now: if they have just changed
+ * scales, the summary speaks of the new scale and the readings in the old unit are counted apart
+ * (`excludedByUnit`) instead of disappearing.
  *
  * @param {list<{type: string, occurredAt: string, data: object}>} events
  * @param {string} type
- * @param {string} [valueKey] Campo numérico del sobre (`value`, `dose`, ...).
- * @returns {string|null} `null` si no hay ningún registro utilizable de ese tipo.
+ * @param {string} [valueKey] Numeric field of the envelope (`value`, `dose`, ...).
+ * @returns {string|null} `null` if there is no usable record of that type.
  */
 export function dominantUnit(events, type, valueKey = 'value') {
     let latest = null;
@@ -169,23 +169,23 @@ export function dominantUnit(events, type, valueKey = 'value') {
 }
 
 /**
- * Unidad con la que se resume un tipo cuando lo que se mira es un **conjunto cerrado y ajeno**: la
- * de la **mayoría** de las lecturas, no la de la más reciente.
+ * Unit a type is summarized in when what is being looked at is a **closed set belonging to
+ * somebody else**: the one of the **majority** of the readings, not of the most recent one.
  *
- * {@see dominantUnit} elige por recencia y tiene razón en el panel del paciente: quien acaba de
- * cambiar de báscula quiere el resumen en la unidad que está usando ahora, y sabe que ha cambiado.
- * En un recorte compartido nadie sabe eso. Un paciente que estrena medidor, con dos lecturas en
- * mmol/L y doscientas anteriores en mg/dL, produciría una tarjeta «Recuento 2 · Media 7,4» y
- * mandaría las doscientas restantes a una nota al pie: el profesional leería un resumen de dos
- * lecturas creyendo que es el del recorte. Por mayoría, el resumen habla de las doscientas y las dos
- * quedan declaradas aparte, que es el error que sí se ve.
+ * {@see dominantUnit} picks by recency and is right in the patient panel: whoever has just changed
+ * scales wants the summary in the unit they are using now, and knows they have changed. In a
+ * shared clipping nobody knows that. A patient with a brand-new meter, with two readings in mmol/L
+ * and two hundred earlier ones in mg/dL, would produce a card "Count 2 · Mean 7.4" and send the
+ * remaining two hundred to a footnote: the professional would read a summary of two readings
+ * believing it was the clipping's. By majority, the summary speaks of the two hundred and the two
+ * are declared apart, which is the error you can actually see.
  *
- * Los empates se resuelven por la unidad más reciente, para no depender del orden del array.
+ * Ties are resolved by the most recent unit, so as not to depend on the array order.
  *
  * @param {list<{type: string, occurredAt: string, data: object}>} events
  * @param {string} type
- * @param {string} [valueKey] Campo numérico del sobre (`value`, `dose`, ...).
- * @returns {string|null} `null` si no hay ningún registro utilizable de ese tipo.
+ * @param {string} [valueKey] Numeric field of the envelope (`value`, `dose`, ...).
+ * @returns {string|null} `null` if there is no usable record of that type.
  */
 export function majorityUnit(events, type, valueKey = 'value') {
     /** @type {Map<string, number>} */
@@ -220,11 +220,11 @@ export function majorityUnit(events, type, valueKey = 'value') {
 }
 
 /**
- * ¿Cuántas unidades distintas hay en las lecturas de un tipo?
+ * How many different units are there in the readings of a type?
  *
- * Sirve para decidir si la exclusión por unidad merece un aviso de verdad o una nota al pie: con una
- * sola unidad no hay nada que advertir, y con dos el número que se enseña describe a una parte del
- * recorte, no al recorte.
+ * It decides whether the exclusion by unit deserves a real warning or a footnote: with a single
+ * unit there is nothing to warn about, and with two the number shown describes a part of the
+ * clipping, not the clipping.
  *
  * @param {list<{type: string, data: object}>} events
  * @param {string} type
@@ -248,27 +248,27 @@ export function unitCount(events, type, valueKey = 'value') {
 }
 
 /**
- * Resumen de un tipo de evento de **una sola magnitud numérica** (glucemia, peso, temperatura,
- * dosis de insulina) en un periodo, agrupado por el campo que distingue cómo se midió.
+ * Summary of an event type with **one single numeric quantity** (glucose, weight, temperature,
+ * insulin dose) over a period, grouped by the field that tells how it was measured.
  *
- * Es el mismo cálculo para los cuatro, así que vive una sola vez: lo que cambia entre ellos es el
- * nombre del campo con el valor (`value`, `dose`) y el del campo que agrupa (`method`, `site`,
- * `insulinType`, o ninguno en el peso, que se mide de una única forma). Un tipo sin campo de
- * agrupación cae entero en el grupo `''`, y quien pinte decide no escribir ninguna cabecera.
+ * It is the same computation for all four, so it lives once: what changes between them is the name
+ * of the field with the value (`value`, `dose`) and of the grouping field (`method`, `site`,
+ * `insulinType`, or none in weight, which is measured one single way). A type with no grouping
+ * field falls whole into the `''` group, and whoever paints decides to write no heading.
  *
- * Las dos exclusiones son las mismas que ya documentaba la glucemia y por los mismos motivos: lo
- * que no trae número (`discarded`, incluidos los resultados cualitativos del ADR 0008) y lo que
- * está en otra unidad (`excludedByUnit`, ADR 0007: no se convierte).
+ * The two exclusions are the same glucose already documented and for the same reasons: what brings
+ * no number (`discarded`, including the ADR 0008 qualitative results) and what is in another unit
+ * (`excludedByUnit`, ADR 0007: nothing is converted).
  *
- * @param {list<{type: string, occurredAt: string, data: object}>} events Eventos del periodo, ya
- *        acotados por fecha (hoy lo hace el servidor con `[from, to)`, no el cliente).
+ * @param {list<{type: string, occurredAt: string, data: object}>} events Events of the period,
+ *        already clipped by date (today the server does it with `[from, to)`, not the client).
  * @param {object} params
- * @param {string} params.type Token del tipo de evento (`glucose`, `bodyWeight`, ...).
- * @param {string} [params.valueKey] Campo numérico del sobre. Por defecto `value`.
- * @param {string} [params.groupBy] Campo de agrupación. Sin él, un único grupo `''`.
- * @param {string} params.unit Unidad con la que se resume; el resto se cuenta en `excludedByUnit`.
- * @param {{low: string|number, high: string|number}} [params.targetRange] Ver
- *        {@see summarizeGlucosePeriod}: **sin rango no hay clave `inRangePercent`**.
+ * @param {string} params.type Event type token (`glucose`, `bodyWeight`, ...).
+ * @param {string} [params.valueKey] Numeric field of the envelope. `value` by default.
+ * @param {string} [params.groupBy] Grouping field. Without it, a single `''` group.
+ * @param {string} params.unit Unit it is summarized in; the rest is counted in `excludedByUnit`.
+ * @param {{low: string|number, high: string|number}} [params.targetRange] See
+ *        {@see summarizeGlucosePeriod}: **with no range there is no `inRangePercent` key**.
  * @returns {{
  *   byGroup: Record<string, {
  *     count: number, mean: number, median: number, min: number, max: number,
@@ -334,19 +334,19 @@ export function summarizeMeasurementPeriod(events, { type, valueKey = 'value', g
 
         if (hasTargetRange) {
             /**
-             * Los tres tramos, no solo el de dentro.
+             * The three bands, not only the one inside.
              *
-             * «68 % en rango» no dice si el 32 % restante son hipoglucemias o hiperglucemias, y son
-             * dos situaciones clínicas opuestas. Con los tres porcentajes la vista puede pintar la
-             * barra segmentada que es la forma estándar de leer esto, y quien mira sabe hacia qué
-             * lado se va.
+             * "68% in range" does not say whether the remaining 32% are hypoglycaemias or
+             * hyperglycaemias, and those are two opposite clinical situations. With the three
+             * percentages the view can paint the segmented bar that is the standard way of reading
+             * this, and whoever looks knows which way it is going.
              *
-             * El reparto es exhaustivo y sin solapes —los límites del rango cuentan como dentro—,
-             * así que cada lectura cae en uno y solo uno de los tres tramos.
+             * The split is exhaustive and without overlap —the range limits count as inside—, so
+             * each reading falls into one and only one of the three bands.
              *
-             * Los tres se redondean por separado con la precisión del módulo, de modo que la suma
-             * puede quedarse en 99,9 o llegar a 100,1. Es deliberado: cuadrar la suma a 100 exigiría
-             * inflar uno de los tres, y ese tramo dejaría de ser el porcentaje que se calculó.
+             * The three are rounded separately with the module precision, so the sum may stay at
+             * 99.9 or reach 100.1. That is deliberate: forcing the sum to 100 would mean inflating
+             * one of the three, and that band would stop being the percentage that was computed.
              */
             const belowCount = values.filter((value) => value < low).length;
             const aboveCount = values.filter((value) => value > high).length;
@@ -364,26 +364,26 @@ export function summarizeMeasurementPeriod(events, { type, valueKey = 'value', g
 }
 
 /**
- * Resumen de glucemia de un periodo, agrupado por método de medición (ADR 0008) dentro de una
- * única unidad de presentación (ADR 0007: no se convierte entre unidades).
+ * Glucose summary of a period, grouped by measurement method (ADR 0008) within one single display
+ * unit (ADR 0007: nothing is converted between units).
  *
- * Se descartan, sin tumbar el resumen: los eventos que no son de tipo `glucose`; los resultados
- * cualitativos (tira de orina, ADR 0008: "no entran en estadísticas de rango ni tienen
- * promedio"), que no traen `data.value` numérico; y cualquier valor no numérico. Todos suman al
- * mismo contador `discarded`, porque de cara al resumen son el mismo caso: no hay número que
- * calcular.
+ * Discarded, without taking the summary down: events that are not of type `glucose`; qualitative
+ * results (urine strip, ADR 0008: "they do not enter range statistics and have no average"), which
+ * carry no numeric `data.value`; and any non-numeric value. All of them add to the same `discarded`
+ * counter, because as far as the summary is concerned they are the same case: there is no number
+ * to compute.
  *
- * Los eventos en otra unidad que `unit` se cuentan aparte en `excludedByUnit` y no entran en
- * ningún grupo, para que la vista pueda decirlo (ADR 0007).
+ * Events in a unit other than `unit` are counted apart in `excludedByUnit` and enter no group, so
+ * the view can say so (ADR 0007).
  *
- * @param {list<{type: string, occurredAt: string, data: object}>} events Eventos de un periodo
- *        del periodo elegido, ya acotados por fecha por el servidor (`[from, to)`).
+ * @param {list<{type: string, occurredAt: string, data: object}>} events Events of the chosen
+ *        period, already clipped by date by the server (`[from, to)`).
  * @param {object} params
- * @param {string} params.unit Unidad de presentación (código UCUM, p. ej. `"mg/dL"`).
- * @param {{low: string|number, high: string|number}} [params.targetRange] Rango objetivo
- *        configurado por el usuario (ADR 0007). **Si no se pasa, ningún grupo lleva
- *        `inRangePercent`**: ni `null` ni `0`, la clave simplemente no está, porque la aplicación
- *        no trae rangos por defecto ni disfraza su ausencia de dato.
+ * @param {string} params.unit Display unit (UCUM code, e.g. `"mg/dL"`).
+ * @param {{low: string|number, high: string|number}} [params.targetRange] Target range configured
+ *        by the user (ADR 0007). **If it is not passed, no group carries `inRangePercent`**:
+ *        neither `null` nor `0`, the key is simply not there, because the application ships no
+ *        default ranges and does not disguise their absence as data.
  * @returns {{
  *   byMethod: Record<string, {
  *     count: number, mean: number, median: number, min: number, max: number,
@@ -396,9 +396,9 @@ export function summarizeMeasurementPeriod(events, { type, valueKey = 'value', g
  */
 export function summarizeGlucosePeriod(events, { unit, targetRange } = {}) {
     /**
-     * El cálculo es el genérico; lo único propio de la glucemia es cómo se llaman sus campos y que
-     * la clave del resultado se siga llamando `byMethod`, que es lo que el ADR 0008 nombra y lo que
-     * lee la vista.
+     * The computation is the generic one; the only glucose-specific things are what its fields are
+     * called and that the result key keeps being called `byMethod`, which is what ADR 0008 names
+     * and what the view reads.
      */
     const { byGroup, excludedByUnit, discarded } = summarizeMeasurementPeriod(events, {
         type: 'glucose',
@@ -411,7 +411,7 @@ export function summarizeGlucosePeriod(events, { unit, targetRange } = {}) {
 }
 
 /**
- * Estadísticas de una sola magnitud (sistólica, diastólica o pulso) dentro de un grupo.
+ * Statistics of a single quantity (systolic, diastolic or pulse) inside a group.
  *
  * @param {list<{value: number, occurredAt: string}>} readings
  * @returns {{mean: number, median: number, min: number, max: number, last: number}}
@@ -427,15 +427,15 @@ function magnitudeSummary(readings) {
 }
 
 /**
- * Resumen de tensión arterial de un periodo, agrupado por método (brazo y postura, ADR 0008: un
- * único token por evento, p. ej. `left_sitting`).
+ * Blood pressure summary of a period, grouped by method (arm and posture, ADR 0008: one single
+ * token per event, e.g. `left_sitting`).
  *
- * Un evento de tensión es uno solo con sistólica, diastólica y pulso juntos (ADR 0006): si a
- * cualquiera de las tres le falta un valor numérico, se descarta el evento entero en vez de
- * calcular con datos parciales, y cuenta como descartado sin tumbar el resumen.
+ * A blood pressure event is a single one with systolic, diastolic and pulse together (ADR 0006):
+ * if any of the three lacks a numeric value, the whole event is discarded instead of computing
+ * with partial data, and it counts as discarded without taking the summary down.
  *
- * @param {list<{type: string, occurredAt: string, data: object}>} events Eventos de un periodo,
- *        ya acotados por fecha por el servidor (`[from, to)`).
+ * @param {list<{type: string, occurredAt: string, data: object}>} events Events of a period,
+ *        already clipped by date by the server (`[from, to)`).
  * @returns {{
  *   byMethod: Record<string, {
  *     systolic: {mean: number, median: number, min: number, max: number, last: number},

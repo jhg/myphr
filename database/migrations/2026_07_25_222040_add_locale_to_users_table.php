@@ -7,16 +7,17 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * ADR 0007: el idioma de la interfaz es la excepción consciente al sobre cifrado y vive en claro.
+ * ADR 0007: the interface language is the deliberate exception to the encrypted envelope and lives
+ * in the clear.
  *
- * Filament resuelve en servidor el menú, las migas, el título y la pantalla de acceso, que se pinta
- * antes de que exista ninguna clave, así que una preferencia guardada dentro del sobre no se podría
- * leer nunca en el momento en que hace falta.
+ * Filament resolves the menu, the breadcrumbs, the title and the login screen on the server, and the
+ * login screen is painted before any key exists, so a preference stored inside the envelope could
+ * never be read at the moment it is needed.
  *
- * `NULL` significa «no lo he elegido»: entonces se negocia con `Accept-Language`, que el navegador
- * ya manda en todas las peticiones. Solo se guarda un valor cuando la persona lo elige en su perfil.
- * La lista cerrada (`config('app.supported_locales')`) se valida en la aplicación y no con un CHECK,
- * porque añadir un idioma es un cambio de código, no una migración.
+ * `NULL` means "I have not chosen": in that case we negotiate with `Accept-Language`, which the
+ * browser already sends on every request. A value is only stored when the person picks one in their
+ * profile. The closed list (`config('app.supported_locales')`) is validated in the application and
+ * not with a CHECK, because adding a language is a code change, not a migration.
  */
 return new class extends Migration
 {

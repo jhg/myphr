@@ -29,16 +29,16 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
- * Gestión de usuarios desde el panel (Spec 0001 §10; ADR 0009).
+ * User management from the panel (Spec 0001 §10; ADR 0009).
  *
- * El listado solo muestra lo que el servidor puede ver: el nombre, que se guarda en claro como
- * excepción consciente y acotada (ADR 0009 y Spec 0001 §3.1), el login, si el registro OPAQUE está
- * completo y las fechas. No hay ninguna columna cifrada, ni la puede haber: el servidor no tiene la
- * clave que la abriría.
+ * The listing only shows what the server can see: the name, stored in the clear as a deliberate and
+ * bounded exception (ADR 0009 and Spec 0001 §3.1), the login, whether the OPAQUE registration is
+ * complete, and the dates. There is no encrypted column, and there cannot be one: the server does
+ * not have the key that would open it.
  *
- * En ningún punto de este recurso hay un campo de contraseña. La clave maestra nace en el navegador
- * de la persona al abrir su enlace de registro (Spec 0001 §5), así que lo único que el alta puede
- * pedir es nombre y login.
+ * Nowhere in this resource is there a password field. The master key is born in the person's browser
+ * when they open their registration link (Spec 0001 §5), so all signup can ask for is a name and a
+ * login.
  */
 final class UserResource extends Resource
 {
@@ -49,12 +49,12 @@ final class UserResource extends Resource
     protected static ?string $recordTitleAttribute = 'name';
 
     /**
-     * Recurso desactivado (ADR 0009): ni en la navegación ni accesible por URL.
+     * Resource disabled (ADR 0009): not in the navigation and not reachable by URL.
      *
-     * La puerta de verdad es {@see UserPolicy}, cuyos permisos devuelven `false`; esto
-     * es la segunda vuelta de llave, para que reabrir la política por descuido no vuelva a colgar el
-     * apartado del menú sin que nadie lo decida. El código del recurso se conserva entero porque la
-     * decisión es de alcance, no de calidad: reabrirlo es tocar estas dos piezas y nada más.
+     * The real gate is {@see UserPolicy}, whose permissions return `false`; this is the second turn
+     * of the key, so that carelessly reopening the policy does not hang the section back on the menu
+     * without anyone deciding it. The resource code is kept whole because the decision is about
+     * scope, not quality: reopening it means touching these two pieces and nothing else.
      */
     protected static bool $shouldRegisterNavigation = false;
 
@@ -64,9 +64,9 @@ final class UserResource extends Resource
     }
 
     /**
-     * Las etiquetas se resuelven por método y no como propiedad estática porque un inicializador de
-     * propiedad en PHP solo admite expresiones constantes, y `__()` no puede llamarse ahí. Fijadas
-     * como cadena, el recurso seguía en castellano aunque el panel estuviera en otro idioma.
+     * The labels are resolved by method and not as a static property because a property initializer
+     * in PHP only accepts constant expressions, and `__()` cannot be called there. Fixed as strings,
+     * the resource stayed in Spanish even when the panel was in another language.
      */
     public static function getModelLabel(): string
     {
@@ -79,11 +79,11 @@ final class UserResource extends Resource
     }
 
     /**
-     * Formulario del alta: nombre y login, nada más (ADR 0009).
+     * Signup form: name and login, nothing else (ADR 0009).
      *
-     * El login se normaliza con {@see LoginNormalizer}, la única fuente de `normalize(login)`
-     * (`docs/OPAQUE.md` §13.1.1): la cadena que se persiste aquí es la misma de la que se derivará
-     * el identificador de credencial cuando esa persona complete su registro.
+     * The login is normalized with {@see LoginNormalizer}, the single source of `normalize(login)`
+     * (`docs/OPAQUE.md` §13.1.1): the string persisted here is the same one the credential
+     * identifier will be derived from when that person completes their registration.
      */
     public static function form(Schema $schema): Schema
     {
@@ -158,16 +158,17 @@ final class UserResource extends Resource
     }
 
     /**
-     * Reemisión de enlace de registro (Spec 0001 §3.4; ADR 0009).
+     * Reissuing a registration link (Spec 0001 §3.4; ADR 0009).
      *
-     * Es la acción más destructiva de la interfaz y por eso el aviso es lo primero del modal:
-     * completar un registro nuevo retira el sobre vigente de la clave maestra, y quien recordase la
-     * contraseña anterior deja de poder abrir sus datos. No hay recuperación en esta fase.
+     * It is the most destructive action in the interface and that is why the warning is the first
+     * thing in the modal: completing a new registration retires the current master key envelope, and
+     * anyone who remembered the previous password loses the ability to open their data. There is no
+     * recovery at this stage.
      *
-     * La guardia que decide si hace falta confirmación **no se replica aquí**: el campo de
-     * confirmación se envía siempre a {@see RegistrationLinks::issueFor()}, que es quien determina si
-     * la cuenta tiene acceso y si lo tecleado vale. Duplicarla aquí sería la segunda copia que la
-     * Spec 0001 §3.4 prohíbe expresamente.
+     * The guard that decides whether confirmation is needed is **not duplicated here**: the
+     * confirmation field is always sent to {@see RegistrationLinks::issueFor()}, which is what
+     * determines whether the account has access and whether what was typed is valid. Duplicating it
+     * here would be the second copy Spec 0001 §3.4 explicitly forbids.
      */
     public static function issueRegistrationLinkAction(): Action
     {

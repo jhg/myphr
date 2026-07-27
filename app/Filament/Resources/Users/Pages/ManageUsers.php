@@ -20,12 +20,12 @@ use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
 
 /**
- * Única página del recurso de usuarios (Spec 0001 §10; ADR 0009).
+ * The only page of the users resource (Spec 0001 §10; ADR 0009).
  *
- * El alta ocurre en dos pasos deliberadamente: el primero pide nombre y login, y el segundo muestra
- * la URL del enlace **una sola vez**. El token en claro solo existe en esa respuesta; en base de
- * datos vive únicamente su `sha256` (Spec 0001 §3.3), así que no hay forma de volver a mostrarlo.
- * La aplicación no lo envía por correo: el administrador lo entrega por el canal que elija
+ * Signup happens in two steps deliberately: the first asks for the name and the login, and the
+ * second shows the link URL **once**. The plaintext token only exists in that response; in the
+ * database only its `sha256` lives (Spec 0001 §3.3), so there is no way to show it again. The
+ * application does not email it: the administrator delivers it through whatever channel they choose
  * (ADR 0009).
  */
 final class ManageUsers extends ManageRecords
@@ -33,14 +33,14 @@ final class ManageUsers extends ManageRecords
     protected static string $resource = UserResource::class;
 
     /**
-     * Las seis propiedades `#[Url]` de `InteractsWithActions`, redeclaradas sin el atributo
-     * (Spec 0001 §9). Aquí importa especialmente: el argumento de la acción de esta página es la
-     * URL del enlace de registro en claro, y publicarla en la barra de direcciones la escribiría en
-     * el historial del navegador y en el registro de acceso del proveedor.
+     * The six `#[Url]` properties of `InteractsWithActions`, redeclared without the attribute
+     * (Spec 0001 §9). It matters especially here: the argument of this page's action is the
+     * registration link URL in the clear, and publishing it in the address bar would write it into
+     * the browser history and into the provider's access log.
      *
-     * No puede heredarlo de {@see PhrPage} porque esta clase viene de
-     * `ManageRecords`, y PHP exige que la redeclaración esté en el cuerpo de la clase: un trait no
-     * sobrescribe una propiedad ya heredada.
+     * It cannot be inherited from {@see PhrPage} because this class comes from `ManageRecords`, and
+     * PHP requires the redeclaration to be in the class body: a trait does not override an already
+     * inherited property.
      *
      * @var mixed
      */
@@ -89,11 +89,11 @@ final class ManageUsers extends ManageRecords
     }
 
     /**
-     * Segundo paso del alta y de la reemisión: la URL, una sola vez (ADR 0009).
+     * Second step of signup and of reissue: the URL, once (ADR 0009).
      *
-     * Se monta con {@see InteractsWithActions::replaceMountedAction()},
-     * que sustituye el modal anterior sin cerrarlo. La URL viaja como argumento de la acción, nunca
-     * como propiedad `#[Url]`: no aparece en la barra de direcciones (Spec 0001 §9).
+     * It is mounted with {@see InteractsWithActions::replaceMountedAction()}, which replaces the
+     * previous modal without closing it. The URL travels as an argument of the action, never as a
+     * `#[Url]` property: it does not appear in the address bar (Spec 0001 §9).
      */
     public function showRegistrationLinkAction(): Action
     {

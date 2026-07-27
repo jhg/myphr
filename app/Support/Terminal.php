@@ -5,17 +5,17 @@ declare(strict_types=1);
 namespace App\Support;
 
 /**
- * Detección de terminal interactiva, inyectable para poder probarla.
+ * Interactive terminal detection, injectable so it can be tested.
  *
- * La usa `phr:issue-registration-link` (Spec 0001 §10): si la salida no es un
- * terminal, la URL del enlace acabaría en un fichero de log, en la salida de un
- * cron o en el registro de un sistema de despliegue, que son justo los sitios
- * donde el ADR 0009 no quiere que aparezca.
+ * `phr:issue-registration-link` uses it (Spec 0001 §10): if the output is not a
+ * terminal, the link URL would end up in a log file, in the output of a cron job
+ * or in a deployment system's record, which are exactly the places ADR 0009 does
+ * not want it to appear.
  */
 interface Terminal
 {
     /**
-     * @return bool `true` si la salida estándar es un terminal interactivo.
+     * @return bool `true` if standard output is an interactive terminal.
      */
     public function isInteractive(): bool;
 }

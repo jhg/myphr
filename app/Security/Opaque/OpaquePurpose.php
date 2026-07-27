@@ -5,23 +5,23 @@ declare(strict_types=1);
 namespace App\Security\Opaque;
 
 /**
- * Para qué nació una fila de estado efímero de OPAQUE.
+ * What an ephemeral OPAQUE state row was born for.
  *
- * Existe porque el cambio de contraseña reutiliza las mismas dos tablas que el alta y el login, y
- * sin esta discriminación un handshake de login se podría canjear por un ticket de cambio de
- * contraseña, y un pendiente nacido en el cambio se podría colar por `registration/finish`, que
- * consumiría un enlace de registro y reescribiría la configuración cifrada.
+ * It exists because password change reuses the same two tables as signup and login, and without
+ * this discrimination a login handshake could be traded for a password change ticket, and a pending
+ * row born in a password change could slip through `registration/finish`, which would consume a
+ * registration link and rewrite the encrypted settings.
  *
- * Los valores son los que ya viajan en la base de datos: cambiarlos exige migrar las filas vivas.
+ * The values are the ones already stored in the database: changing them means migrating live rows.
  */
 enum OpaquePurpose: string
 {
-    /** Registro pendiente nacido de un enlace de alta (Spec 0001 §4.1). */
+    /** Pending registration born from a signup link (Spec 0001 §4.1). */
     case Registration = 'registration';
 
-    /** Handshake de login normal (Spec 0001 §4.3). */
+    /** Ordinary login handshake (Spec 0001 §4.3). */
     case Login = 'login';
 
-    /** Reautenticación o re-registro dentro del cambio de contraseña. */
+    /** Reauthentication or re-registration inside a password change. */
     case PasswordChange = 'password-change';
 }

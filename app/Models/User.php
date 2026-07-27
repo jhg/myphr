@@ -19,16 +19,16 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
 /**
- * Spec 0001 §3.1: usuario con clave primaria UUIDv7 y credenciales OPAQUE.
+ * Spec 0001 §3.1: user with a UUIDv7 primary key and OPAQUE credentials.
  *
- * No existe columna `password`: con OPAQUE la contraseña nunca llega al servidor, así que guardar un
- * sitio para un hash sería superficie de ataque sin ningún uso. `name` se guarda en claro (ADR 0009).
+ * There is no `password` column: with OPAQUE the password never reaches the server, so keeping a
+ * place for a hash would be attack surface with no use. `name` is stored in the clear (ADR 0009).
  *
- * `locale` también va en claro, y es la otra excepción consciente a la regla de cifrar (ADR 0007):
- * el servidor tiene que saber en qué idioma pintar el panel antes de que exista ninguna clave. Fuera
- * de `$fillable` a propósito, igual que `encrypted_settings`: solo lo escribe
- * {@see UpdateSettingsController}, tras validar contra la lista
- * cerrada de `config('app.supported_locales')`.
+ * `locale` is also in the clear, and it is the other deliberate exception to the encrypt-everything
+ * rule (ADR 0007): the server has to know which language to paint the panel in before any key
+ * exists. It is deliberately outside `$fillable`, like `encrypted_settings`: only
+ * {@see UpdateSettingsController} writes it, after validating against the closed list in
+ * `config('app.supported_locales')`.
  */
 #[Fillable(['name', 'email'])]
 #[Hidden(['remember_token', 'opaque_credential_identifier', 'opaque_registration_record'])]
@@ -49,18 +49,18 @@ final class User extends Authenticatable implements FilamentUser
     }
 
     /**
-     * Spec 0001 §3.1: no hay columna `password`; el contrato de `Authenticatable` exige el método
-     * igualmente, así que se responde con la cadena vacía sin tocar el modelo.
+     * Spec 0001 §3.1: there is no `password` column; the `Authenticatable` contract requires the
+     * method anyway, so we answer with the empty string without touching the model.
      *
-     * Esto también es lo que mantiene inofensivo a `Illuminate\Session\Middleware\AuthenticateSession`
-     * (montado en el panel como `Filament\Http\Middleware\AuthenticateSession`, que no sobrescribe
-     * `handle()`): su primera línea es
+     * This is also what keeps `Illuminate\Session\Middleware\AuthenticateSession` harmless (mounted
+     * on the panel as `Filament\Http\Middleware\AuthenticateSession`, which does not override
+     * `handle()`): its first line is
      * `if (! $request->hasSession() || ! $request->user() || ! $request->user()->getAuthPassword())`,
-     * y una cadena vacía es «falsy» en PHP, así que el middleware devuelve `$next($request)` de
-     * inmediato y nunca llega a comparar `password_hash_web` contra la sesión. Si este método
-     * devolviera algo distinto de `''`/`null`, esa comparación se activaría y, como nada la mantiene
-     * sincronizada (el login no pasa por `Auth::attempt()`), cerraría la sesión del usuario en la
-     * siguiente petición.
+     * and an empty string is falsy in PHP, so the middleware returns `$next($request)` right away
+     * and never gets to compare `password_hash_web` against the session. If this method returned
+     * anything other than `''`/`null`, that comparison would kick in and, since nothing keeps it in
+     * sync (login does not go through `Auth::attempt()`), it would log the user out on the next
+     * request.
      */
     public function getAuthPassword(): string
     {
@@ -68,10 +68,10 @@ final class User extends Authenticatable implements FilamentUser
     }
 
     /**
-     * ADR 0009: entrar al panel exige únicamente tener el registro OPAQUE completo.
+     * ADR 0009: entering the panel requires only a completed OPAQUE registration.
      *
-     * Es un criterio autosuficiente a propósito: cualquier criterio que dependa de la aprobación de
-     * otro usuario deja al primero sin quien lo apruebe.
+     * It is a self-sufficient criterion on purpose: any criterion that depends on another user's
+     * approval leaves the first one with nobody to approve them.
      */
     public function canAccessPanel(Panel $panel): bool
     {
@@ -79,10 +79,10 @@ final class User extends Authenticatable implements FilamentUser
     }
 
     /**
-     * Spec 0001 §3.1: la cuenta terminó `registration/finish` y tiene las tres columnas OPAQUE.
+     * Spec 0001 §3.1: the account finished `registration/finish` and has the three OPAQUE columns.
      *
-     * Es el único criterio de acceso al panel y de autorización sobre la gestión de usuarios
-     * ({@see UserPolicy}), para que no existan dos definiciones de «cuenta usable».
+     * It is the only criterion for panel access and for authorization over user management
+     * ({@see UserPolicy}), so there are not two definitions of "usable account".
      */
     public function hasCompletedOpaqueRegistration(): bool
     {
@@ -108,7 +108,7 @@ final class User extends Authenticatable implements FilamentUser
     }
 
     /**
-     * Spec 0001 §3.4: como mucho hay un sobre vigente (`retired_at IS NULL`) por usuario.
+     * Spec 0001 §3.4: there is at most one current envelope (`retired_at IS NULL`) per user.
      *
      * @return HasOne<UserMasterKeyEnvelope, $this>
      */

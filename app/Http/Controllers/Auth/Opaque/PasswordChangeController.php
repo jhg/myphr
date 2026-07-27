@@ -19,39 +19,40 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 /**
- * `POST /phr/auth/password/change`: fase C del cambio de contraseña, paso 20.
+ * `POST /phr/auth/password/change`: phase C of the password change, step 20.
  *
- * **Una petición y una transacción**, y esto no es una preferencia de estilo. Si el registro OPAQUE
- * nuevo y el sobre nuevo se escribieran por separado, un fallo entre ambos dejaría la cuenta viva y
- * su historial ilegible para siempre: con el registro escrito primero, la cuenta autentica con la
- * contraseña nueva mientras el sobre vigente sigue bajo la KEK de la vieja, que ya no autentica; con
- * el sobre primero, la simetría exacta del mismo bloqueo. O cambian las dos cosas o no cambia
- * ninguna.
+ * **One request and one transaction**, and this is not a style preference. If the new OPAQUE
+ * registration and the new envelope were written separately, a failure in between would leave the
+ * account alive and its history unreadable forever: with the registration written first, the account
+ * authenticates with the new password while the current envelope is still under the old KEK, which
+ * no longer authenticates; with the envelope first, the exact mirror of the same lockout. Either
+ * both change or neither does.
  *
- * Lo que **no** hace, y cada omisión es deliberada:
+ * What it does **not** do, and every omission is deliberate:
  *
- * * No genera una clave maestra nueva. La clave maestra no cambia nunca: el navegador la abrió con
- *   la KEK vieja y la reenvolvió con la nueva. Generar una nueva dejaría ilegible todo el histórico,
- *   porque cada registro va bajo una clave derivada de la anterior y el servidor no puede re-cifrar
- *   nada.
- * * No sobrescribe el sobre anterior. Lo **retira** con su fecha e inserta uno nuevo: si el registro
- *   OPAQUE nuevo resultara inservible, sobrescribirlo habría destruido el único criptograma que la
- *   contraseña vieja sabía abrir.
- * * No toca `opaque_credential_identifier` (`docs/OPAQUE.md` §13.1) ni `encrypted_settings` (la
- *   configuración va bajo una clave derivada de la clave maestra, que no cambia).
- * * No abre el sobre ni ve la contraseña, la clave maestra o ninguna clave derivada. Del
- *   `wrappedUserMasterKey` solo comprueba la **forma**, con el mismo {@see EnvelopeValidator} que el
- *   alta: un segundo criterio de validez sería un segundo sitio donde equivocarse.
+ * * It does not generate a new master key. The master key never changes: the browser opened it with
+ *   the old KEK and rewrapped it with the new one. Generating a new one would make the whole
+ *   history unreadable, because each record goes under a key derived from the previous one and the
+ *   server cannot re-encrypt anything.
+ * * It does not overwrite the previous envelope. It **retires** it with its date and inserts a new
+ *   one: if the new OPAQUE registration turned out to be useless, overwriting it would have
+ *   destroyed the only ciphertext the old password could open.
+ * * It does not touch `opaque_credential_identifier` (`docs/OPAQUE.md` §13.1) or
+ *   `encrypted_settings` (the settings go under a key derived from the master key, which does not
+ *   change).
+ * * It does not open the envelope and never sees the password, the master key or any derived key. Of
+ *   the `wrappedUserMasterKey` it only checks the **shape**, with the same {@see EnvelopeValidator}
+ *   as signup: a second validity criterion would be a second place to get it wrong.
  *
- * Ya comprometida la transacción, regenera la sesión —el identificador emitido bajo la contraseña
- * vieja no debe sobrevivir al cambio— y solo **entonces** acuña el secreto de sesión nuevo:
- * acuñarlo antes lo ataría al identificador anterior y se perdería en la regeneración, sin ningún
- * síntoma hasta el primer F5 de esa persona.
+ * Once the transaction is committed, it regenerates the session —the identifier issued under the old
+ * password must not survive the change— and only **then** mints the new session secret: minting it
+ * earlier would tie it to the previous identifier and it would be lost on regeneration, with no
+ * symptom until that person's first page refresh.
  *
- * **Idempotente** por el par (`registrationRecord`, sobre vigente): si la respuesta se pierde en la
- * red y el cliente reintenta, el pendiente ya no existe, así que se comprueban las dos escrituras. Si
- * cuadran ambas, se responde éxito otra vez. Si cuadra **solo una**, es corrupción —el único síntoma
- * posible de una escritura partida— y se responde 500, nunca éxito.
+ * **Idempotent** on the pair (`registrationRecord`, current envelope): if the response is lost on
+ * the network and the client retries, the pending row is gone, so both writes are checked. If both
+ * match, success is returned again. If **only one** matches, that is corruption —the only possible
+ * symptom of a split write— and it answers 500, never success.
  */
 final readonly class PasswordChangeController
 {
@@ -95,13 +96,13 @@ final readonly class PasswordChangeController
         }
 
         /**
-         * Fuera de la transacción y en este orden: la sesión primero, el secreto después.
+         * Outside the transaction and in this order: the session first, the secret afterwards.
          */
         $request->session()->regenerate();
 
         $sessionSecret = $this->sessionSecrets->mint($request->session());
 
-        /** Se anota que la cuenta cambió de contraseña, jamás nada del contenido. */
+        /** We record that the account changed its password, never anything about the content. */
         activity(AuditEvent::LOG_NAME)
             ->causedBy($user)
             ->performedOn($user)
@@ -129,8 +130,8 @@ final readonly class PasswordChangeController
         $pending = OpaqueRegistration::query()->whereKey($data['registrationId'])->first();
 
         /**
-         * Consumo atómico por número de filas afectadas: dos pestañas que terminen el mismo cambio
-         * a la vez producen una única transacción ganadora, y la otra cae en la rama idempotente.
+         * Atomic consumption by number of affected rows: two tabs finishing the same change at once
+         * produce a single winning transaction, and the other falls into the idempotent branch.
          */
         $consumed = OpaqueRegistration::query()
             ->whereKey($data['registrationId'])
@@ -143,7 +144,7 @@ final readonly class PasswordChangeController
             return $this->alreadyChanged($user, $data['wrappedUserMasterKey'], $serialized);
         }
 
-        /** El ticket se consume aquí, dentro de la transacción, y no antes en el flujo. */
+        /** The ticket is consumed here, inside the transaction, and not earlier in the flow. */
         if (! $this->tickets->consume($request->session(), $data['ticket'])) {
             return 'expired';
         }
@@ -165,8 +166,8 @@ final readonly class PasswordChangeController
     }
 
     /**
-     * Rama idempotente: el pendiente ya no existe. La comparación es contra las **dos** escrituras,
-     * porque comprobar solo una no distinguiría el reintento legítimo de una escritura partida.
+     * Idempotent branch: the pending row is gone. The comparison is against **both** writes, because
+     * checking only one would not tell a legitimate retry from a split write.
      */
     private function alreadyChanged(User $user, string $wrappedUserMasterKey, string $serialized): string
     {
@@ -185,13 +186,13 @@ final readonly class PasswordChangeController
         return $recordMatches || $envelopeMatches ? 'inconsistent' : 'expired';
     }
 
-    /** Ticket inválido o caducado, o pendiente inexistente, caducado, ajeno o de otro propósito. */
+    /** Invalid or expired ticket, or a pending row that is missing, expired, someone else's or of another purpose. */
     private function expired(): JsonResponse
     {
         return response()->json(['error' => 'password_change_expired'], 409);
     }
 
-    /** `registrationRecord` que no parsea a 192 bytes, o sobre que no pasa la validación de forma. */
+    /** A `registrationRecord` that does not parse to 192 bytes, or an envelope that fails the shape check. */
     private function invalidRegistration(): JsonResponse
     {
         return response()->json(['error' => 'invalid_registration'], 422);

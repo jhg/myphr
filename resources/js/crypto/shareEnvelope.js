@@ -1,59 +1,59 @@
 /**
- * Sobre del paquete de compartición: el formato hermano `s1.` del ADR 0011.
+ * Share package envelope: the `s1.` sibling format of ADR 0011.
  *
- * Transporte: `s1.` seguido de base64url sin padding del sobre binario. La
- * cabecera es **la misma de 64 bytes del ADR 0004** (`crypto/envelope.js`), con
- * los mismos identificadores de algoritmo y de KDF, y solo cambian tres cosas:
- * el prefijo de transporte, la escalera de relleno y una bandera nueva.
+ * Transport: `s1.` followed by the binary envelope in base64url, no padding.
+ * The header is **the same 64 bytes as ADR 0004** (`crypto/envelope.js`),
+ * with the same algorithm and KDF identifiers, and only three things change:
+ * the transport prefix, the padding ladder and one new flag.
  *
  * ```
- * offset  bytes  campo
- *      0      1  versión del formato            (0x01)
- *      1      1  identificador de algoritmo     (0x01 = XChaCha20-Poly1305-IETF)
- *      2      1  identificador de KDF           (0x01 = HKDF-SHA-512)
- *      3      1  banderas                       (bit 0 = rellenado, bit 1 = comprimido)
- *      4      4  identificador de clave         (reservado, hoy siempre cero)
- *      8     32  sal de la derivación
+ * offset  bytes  field
+ *      0      1  format version                 (0x01)
+ *      1      1  algorithm identifier           (0x01 = XChaCha20-Poly1305-IETF)
+ *      2      1  KDF identifier                 (0x01 = HKDF-SHA-512)
+ *      3      1  flags                          (bit 0 = padded, bit 1 = compressed)
+ *      4      4  key identifier                 (reserved, always zero today)
+ *      8     32  derivation salt
  *     40     24  nonce
  *     64      n  ciphertext || tag (16 bytes)
  * ```
  *
- * **Por qué un prefijo distinto.** `EnvelopeValidator` (y su hermano de
- * cliente) exige `v1.`, así que el prefijo `s1.` impide colar un paquete de
- * compartición en la columna `payload` de un evento o al revés. El precio, que
- * el ADR 0011 dice sin adornos: los dos guardarraíles del ADR 0002 abortan
- * cualquier cadena larga que no empiece por `v1.`, y por eso el paquete **no
- * viaja por Livewire** sino por su endpoint HTTP propio.
+ * **Why a different prefix.** `EnvelopeValidator` (and its client sibling)
+ * demands `v1.`, so the `s1.` prefix stops a share package from being
+ * slipped into the `payload` column of an event, or the other way round. The
+ * price, which ADR 0011 states plainly: both ADR 0002 guard rails abort any
+ * long string that does not start with `v1.`, and that is why the package
+ * **does not travel over Livewire** but over its own HTTP endpoint.
  *
- * **Escalera propia y multiplicativa**: 64 KiB, 256 KiB, 1 MiB y 4 MiB. La del
- * ADR 0004 corta en 4.092 bytes y tres meses de glucemias son unos 110 KB. El
- * suelo alto es lo que hace el trabajo: casi todos los recortes reales caen
- * comprimidos dentro de los 64 KiB y son indistinguibles entre sí, así que el
- * servidor no puede restar dos envíos del mismo rango para aislar el peso de un
- * tipo clínico. Que cada escalón sea el cuádruple del anterior mantiene el
- * número de escalones en cuatro: cuantos menos escalones, menos información
- * hay en saber en cuál cayó un envío.
+ * **Its own multiplicative ladder**: 64 KiB, 256 KiB, 1 MiB and 4 MiB. The
+ * ADR 0004 one stops at 4,092 bytes and three months of glucose readings are
+ * about 110 KB. The high floor is what does the work: almost every real
+ * clipping fits compressed inside 64 KiB and they are indistinguishable from
+ * each other, so the server cannot subtract two exports of the same range to
+ * isolate the weight of one clinical type. Each step being four times the
+ * previous one keeps the number of steps at four: the fewer the steps, the
+ * less information there is in knowing which one an export fell into.
  *
- * **Comprimir ANTES de rellenar, nunca después.** El orden no es una
- * preferencia de rendimiento: comprimir el búfer ya rellenado colapsaría los
- * ceros del relleno y el ciphertext volvería a tener el tamaño del contenido
- * real, que es exactamente lo que el relleno existe para esconder. El orden es
- * comprimir, rellenar, cifrar; y al abrir, descifrar, quitar relleno,
+ * **Compress BEFORE padding, never after.** The order is not a performance
+ * preference: compressing the already padded buffer would collapse the
+ * padding zeros and the ciphertext would go back to the size of the real
+ * content, which is exactly what the padding exists to hide. The order is
+ * compress, pad, encrypt; and on opening, decrypt, unpad, decompress.
  * descomprimir.
  *
- * **Un solo sobre, sin trocear** (ADR 0011). Con trozos, un servidor hostil que
- * entregue todos menos el último produce un historial coherente al que le falta
- * la semana de las hipoglucemias, sin que falle ningún tag. Lo que aquí hace de
- * compromiso sobre el contenido completo es el propio texto en claro: lleva el
- * número de eventos, y `openSharePackage` rechaza el paquete si ese número no
- * cuadra con los eventos que trae. Por eso no hay manifiesto de trozos: no hay
- * trozos que manifestar.
+ * **One single envelope, no chunking** (ADR 0011). With chunks, a hostile
+ * server that delivers all but the last one produces a coherent history
+ * missing the week of the hypoglycaemias, without any tag failing. What acts
+ * here as a commitment to the whole content is the plaintext itself: it
+ * carries the event count, and `openSharePackage` rejects the package if
+ * that number does not match the events it brings. That is why there is no
+ * chunk manifest: there are no chunks to manifest.
  *
- * **Dato asociado**: `"myphr/share/v1" || 0x00 || shareId || 0x00 ||
- * canonicalDate(generatedAt)`, más la cabecera completa, igual que en el ADR
- * 0004. No lleva `user_id`, excepción consciente del ADR 0011: lo construye el
- * lector, o sea el profesional, y meterlo ahí le regalaría un identificador
- * estable del paciente, correlacionable entre dos envíos distintos.
+ * **Associated data**: `"myphr/share/v1" || 0x00 || shareId || 0x00 ||
+ * canonicalDate(generatedAt)`, plus the whole header, just like in ADR 0004.
+ * It carries no `user_id`, a deliberate exception in ADR 0011: the reader,
+ * that is the professional, builds it, and putting it there would hand them
+ * a stable patient identifier, correlatable across two different exports.
  */
 
 import { xchacha20poly1305 } from '@noble/ciphers/chacha.js';
@@ -74,40 +74,40 @@ import {
     ENVELOPE_VERSION,
 } from './envelope.js';
 
-/** Prefijo de transporte del paquete. Distinto a propósito del `v1.` del ADR 0004. */
+/** Package transport prefix. Deliberately different from the `v1.` of ADR 0004. */
 export const SHARE_PREFIX = 's1.';
 
-/** Bandera: el contenido va comprimido con gzip por debajo del relleno. */
+/** Flag: the content is gzip compressed underneath the padding. */
 export const FLAG_COMPRESSED = 0x02;
 
-/** Bytes que consume el prefijo de longitud del relleno. */
+/** Bytes taken by the length prefix of the padding. */
 const LENGTH_PREFIX = 4;
 
-/** Escalera de relleno propia del ADR 0011: 64 KiB, 256 KiB, 1 MiB y 4 MiB. */
+/** Padding ladder specific to ADR 0011: 64 KiB, 256 KiB, 1 MiB and 4 MiB. */
 export const SHARE_PADDED_SIZES = Object.freeze([65536, 262144, 1048576, 4194304]);
 
-/** Contenido comprimido máximo que cabe en el mayor escalón. */
+/** Largest compressed content that fits in the biggest step. */
 export const MAX_SHARE_PADDED_CONTENT = SHARE_PADDED_SIZES[SHARE_PADDED_SIZES.length - 1] - LENGTH_PREFIX;
 
 /**
- * Tope de expansión al descomprimir. El AEAD ya autentica el búfer antes de
- * llegar aquí, así que una bomba de descompresión solo puede fabricarla quien
- * tenga la clave de contenido, es decir la propia persona propietaria. Aun así
- * el límite es gratis y evita que un fallo del formato tumbe la pestaña del
- * profesional en mitad de una consulta.
+ * Expansion cap when decompressing. The AEAD already authenticates the
+ * buffer before we get here, so a decompression bomb can only be built by
+ * whoever holds the content key, that is the owner themselves. Even so the
+ * limit is free and it keeps a format bug from taking down the
+ * professional's tab in the middle of an appointment.
  */
 export const MAX_DECOMPRESSED_LENGTH = 64 * 1024 * 1024;
 
-/** Etiqueta del dato asociado del paquete (ADR 0011). */
+/** Label of the package associated data (ADR 0011). */
 export const SHARE_CONTEXT_LABEL = KDF_LABELS.SHARE;
 
 const TEXT_ENCODER = new TextEncoder();
 const TEXT_DECODER = new TextDecoder('utf-8', { fatal: true });
 
 /**
- * Error del sobre de compartición. Igual que en el ADR 0004, no distingue
- * manipulación de corrupción, porque el cliente tampoco puede: en ambos casos
- * es un error visible y nunca un paquete que se muestra a medias.
+ * Share envelope error. As in ADR 0004, it does not tell tampering from
+ * corruption, because the client cannot either: in both cases it is a
+ * visible error and never a package shown half-way.
  */
 export class ShareEnvelopeError extends Error {
     /** @param {string} message */
@@ -118,16 +118,16 @@ export class ShareEnvelopeError extends Error {
 }
 
 /**
- * Dato asociado del paquete, en bytes.
+ * Associated data of the package, in bytes.
  *
- * `shareId` entra en minúsculas y `generatedAt` en la forma canónica del ADR
- * 0004 (`YYYY-MM-DDTHH:MM:SS.ffffffZ`), nunca formateado a mano: estos bytes
- * tienen que salir idénticos en quien cifra y en quien descifra, y un byte de
- * diferencia es un descifrado fallido.
+ * `shareId` goes in lowercase and `generatedAt` in the canonical form of ADR
+ * 0004 (`YYYY-MM-DDTHH:MM:SS.ffffffZ`), never formatted by hand: these bytes
+ * must come out identical for whoever encrypts and whoever decrypts, and one
+ * byte of difference is a failed decryption.
  *
  * @param {object} params
- * @param {string} params.shareId UUIDv4 del paquete (columna `shares.id`).
- * @param {Date|number|string} params.generatedAt Instante de generación del recorte.
+ * @param {string} params.shareId Package UUIDv4 (column `shares.id`).
+ * @param {Date|number|string} params.generatedAt Generation instant of the clipping.
  * @returns {Uint8Array} `"myphr/share/v1" || 0x00 || shareId || 0x00 || canonicalDate(generatedAt)`.
  */
 export function sharePackageContext({ shareId, generatedAt }) {
@@ -139,9 +139,9 @@ export function sharePackageContext({ shareId, generatedAt }) {
 }
 
 /**
- * Une trozos con el separador `0x00`, que es el mismo que usa `deriveKey`.
- * Sin separador, dos pares de valores distintos producirían la misma
- * concatenación y por tanto el mismo dato asociado.
+ * Joins parts with the `0x00` separator, the same one `deriveKey` uses.
+ * Without a separator, two different pairs of values would produce the same
+ * concatenation and therefore the same associated data.
  *
  * @param {Uint8Array[]} parts
  * @returns {Uint8Array}
@@ -165,12 +165,12 @@ export function joinWithSeparator(parts) {
 }
 
 /**
- * Rellena al primer escalón de la escalera en que quepa, con la longitud real
- * en cuatro bytes big-endian por delante.
+ * Pads to the first ladder step it fits in, with the real length in four
+ * big-endian bytes in front.
  *
- * @param {Uint8Array} content Contenido **ya comprimido**.
- * @returns {Uint8Array} Longitud exactamente uno de `SHARE_PADDED_SIZES`.
- * @throws {ShareEnvelopeError} Si no cabe en el mayor escalón.
+ * @param {Uint8Array} content Content **already compressed**.
+ * @returns {Uint8Array} Length exactly one of `SHARE_PADDED_SIZES`.
+ * @throws {ShareEnvelopeError} If it does not fit in the biggest step.
  */
 export function padToShareLadder(content) {
     const needed = content.length + LENGTH_PREFIX;
@@ -191,11 +191,11 @@ export function padToShareLadder(content) {
 }
 
 /**
- * Quita el relleno de la escalera.
+ * Removes the ladder padding.
  *
  * @param {Uint8Array} padded
  * @returns {Uint8Array}
- * @throws {ShareEnvelopeError} Si el tamaño no es un escalón o la longitud declarada no cabe.
+ * @throws {ShareEnvelopeError} If the size is not a step or the declared length does not fit.
  */
 export function unpadFromShareLadder(padded) {
     if (!SHARE_PADDED_SIZES.includes(padded.length)) {
@@ -212,8 +212,8 @@ export function unpadFromShareLadder(padded) {
 }
 
 /**
- * Comprime con `CompressionStream('gzip')`, nativo en Safari 16.4 y Chromium
- * (ADR 0011), sin añadir ninguna dependencia al bundle.
+ * Compresses with `CompressionStream('gzip')`, native in Safari 16.4 and
+ * Chromium (ADR 0011), adding no dependency to the bundle.
  *
  * @param {Uint8Array} bytes
  * @returns {Promise<Uint8Array>}
@@ -225,7 +225,7 @@ export async function gzip(bytes) {
 /**
  * @param {Uint8Array} bytes
  * @returns {Promise<Uint8Array>}
- * @throws {ShareEnvelopeError} Si los bytes no son gzip válido o se pasan del tope de expansión.
+ * @throws {ShareEnvelopeError} If the bytes are not valid gzip or they go past the expansion cap.
  */
 export async function gunzip(bytes) {
     let decompressed;
@@ -259,14 +259,14 @@ async function streamThrough(bytes, transform) {
 }
 
 /**
- * Cierra el paquete a partir de bytes ya en claro.
+ * Seals the package from bytes already in the clear.
  *
  * @param {object} params
- * @param {Uint8Array} params.contentKey `CK`: 32 bytes de `getRandomValues`.
- * @param {Uint8Array|string} params.plaintext Contenido del paquete.
- * @param {string} params.shareId UUIDv4 del paquete.
- * @param {Date|number|string} params.generatedAt Instante de generación.
- * @param {Uint8Array} [params.keyId] 4 bytes reservados; ceros por defecto.
+ * @param {Uint8Array} params.contentKey `CK`: 32 bytes from `getRandomValues`.
+ * @param {Uint8Array|string} params.plaintext Package content.
+ * @param {string} params.shareId Package UUIDv4.
+ * @param {Date|number|string} params.generatedAt Generation instant.
+ * @param {Uint8Array} [params.keyId] 4 reserved bytes; zeros by default.
  * @returns {Promise<string>} `s1.` + base64url.
  */
 export async function sealSharePackageBytes({ contentKey, plaintext, shareId, generatedAt, keyId }) {
@@ -317,16 +317,16 @@ export async function sealSharePackageBytes({ contentKey, plaintext, shareId, ge
 }
 
 /**
- * Abre el paquete y devuelve sus bytes en claro.
+ * Opens the package and returns its bytes in the clear.
  *
  * @param {object} params
- * @param {Uint8Array} params.contentKey `CK`, tal cual salió del envoltorio.
+ * @param {Uint8Array} params.contentKey `CK`, exactly as it came out of the wrapper.
  * @param {string} params.envelope `s1.` + base64url.
- * @param {string} params.shareId Mismo identificador que al cerrarlo.
- * @param {Date|number|string} params.generatedAt Mismo instante que al cerrarlo.
+ * @param {string} params.shareId Same identifier used to seal it.
+ * @param {Date|number|string} params.generatedAt Same instant used to seal it.
  * @returns {Promise<Uint8Array>}
- * @throws {ShareEnvelopeError} Prefijo, base64url, cabecera, escalón o tag inválidos.
- *         Nunca se silencia (ADR 0004).
+ * @throws {ShareEnvelopeError} Invalid prefix, base64url, header, step or tag.
+ *         It is never silenced (ADR 0004).
  */
 export async function openSharePackageBytes({ contentKey, envelope, shareId, generatedAt }) {
     assertKey(contentKey);
@@ -397,9 +397,9 @@ export async function openSharePackageBytes({ contentKey, envelope, shareId, gen
     }
 
     /*
-     * La bandera manda: hoy siempre se comprime, pero un lector tiene que saber
-     * leer lo que dice la cabecera y no lo que supone, porque la cabecera va
-     * autenticada y una versión futura podría no comprimir.
+     * The flag rules: today it always compresses, but a reader has to read
+     * what the header says and not what it assumes, because the header is
+     * authenticated and a future version might not compress.
      */
     if ((bytes[3] & FLAG_COMPRESSED) !== FLAG_COMPRESSED) {
         return compressed;
@@ -413,20 +413,20 @@ export async function openSharePackageBytes({ contentKey, envelope, shareId, gen
 }
 
 /**
- * Cierra el paquete a partir del cuerpo en claro del recorte.
+ * Seals the package from the clipping body in the clear.
  *
- * El cuerpo lleva el rango exacto, el instante de generación, el número de
- * eventos y las listas de tipos incluidos y excluidos (ADR 0011). `generatedAt`
- * sale del propio cuerpo y no de un parámetro aparte, para que el instante que
- * entra en el dato asociado y el que ve el profesional en pantalla sean por
- * construcción el mismo.
+ * The body carries the exact range, the generation instant, the event count
+ * and the lists of included and excluded types (ADR 0011). `generatedAt`
+ * comes from the body itself and not from a separate parameter, so that the
+ * instant entering the associated data and the one the professional sees on
+ * screen are the same by construction.
  *
  * @param {object} params
  * @param {Uint8Array} params.contentKey `CK`.
- * @param {string} params.shareId UUIDv4 del paquete.
+ * @param {string} params.shareId Package UUIDv4.
  * @param {{generatedAt: (Date|number|string), eventCount: number, events: unknown[]}} params.body
  * @returns {Promise<string>} `s1.` + base64url.
- * @throws {ShareEnvelopeError} Si el cuerpo no cumple su propio compromiso.
+ * @throws {ShareEnvelopeError} If the body does not meet its own commitment.
  */
 export async function sealSharePackage({ contentKey, shareId, body }) {
     assertShareBody(body);
@@ -440,24 +440,24 @@ export async function sealSharePackage({ contentKey, shareId, body }) {
 }
 
 /**
- * Abre el paquete y devuelve su cuerpo ya parseado.
+ * Opens the package and returns its body already parsed.
  *
- * Comprueba dos cosas que el AEAD por sí solo no dice en voz alta:
+ * It checks two things the AEAD alone does not say out loud:
  *
- * 1. Que `eventCount` cuadra con los eventos que trae. Es el compromiso que
- *    sustituye al manifiesto de trozos: sin él, una entrega incompleta se
- *    leería como un historial coherente al que le falta la semana mala.
- * 2. Que el `generatedAt` que el servidor puso fuera del sobre es el mismo que
- *    va dentro. El de fuera lo necesita el lector para construir el dato
- *    asociado, así que llega por un canal que el servidor controla; si mintiera
- *    ya no descifraría, y esta comprobación deja además el error explícito.
+ * 1. That `eventCount` matches the events it brings. This is the commitment
+ *    that replaces the chunk manifest: without it, an incomplete delivery
+ *    would read as a coherent history missing the bad week.
+ * 2. That the `generatedAt` the server put outside the envelope is the same
+ *    one inside. The reader needs the outside one to build the associated
+ *    data, so it arrives over a channel the server controls; if it lied it
+ *    would no longer decrypt, and this check also makes the error explicit.
  *
  * @param {object} params
  * @param {Uint8Array} params.contentKey `CK`.
  * @param {string} params.envelope `s1.` + base64url.
- * @param {string} params.shareId Identificador del paquete.
- * @param {Date|number|string} params.generatedAt Instante de generación anunciado.
- * @returns {Promise<object>} Cuerpo en claro.
+ * @param {string} params.shareId Package identifier.
+ * @param {Date|number|string} params.generatedAt Announced generation instant.
+ * @returns {Promise<object>} Body in the clear.
  * @throws {ShareEnvelopeError}
  */
 export async function openSharePackage({ contentKey, envelope, shareId, generatedAt }) {
@@ -546,9 +546,9 @@ function toBytes(value, name) {
 }
 
 /**
- * Los identificadores entran en minúsculas, como el identificador de usuario
- * del ADR 0004: dos formas de escribir el mismo UUID producirían dos datos
- * asociados distintos y un descifrado fallido según quién teclease.
+ * Identifiers go in lowercase, like the user identifier of ADR 0004: two
+ * ways of writing the same UUID would produce two different associated data
+ * and a failed decryption depending on who typed it.
  *
  * @param {string} value
  * @param {string} name

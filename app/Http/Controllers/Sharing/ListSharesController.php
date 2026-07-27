@@ -13,22 +13,22 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * `GET /phr/shares` (ADR 0011): los recortes activos de quien pregunta.
+ * `GET /phr/shares` (ADR 0011): the active clippings of whoever asks.
  *
- * La lista es deliberadamente pobre en claro: identificadores, fechas y el `descriptor` cifrado. El
- * rango, los tipos y el número de eventos viven dentro de ese sobre y la pantalla se pinta
- * descifrándolo en el navegador, que es el único sitio donde existe la clave maestra. Un endpoint
- * que devolviese «glucemias, del 1 al 30 de junio» tendría que haberlo sabido el servidor, y saberlo
- * es justo lo que este diseño evita.
+ * The list is deliberately poor in plaintext: identifiers, dates and the encrypted `descriptor`. The
+ * range, the types and the number of events live inside that envelope and the screen is painted by
+ * decrypting it in the browser, which is the only place the master key exists. An endpoint that
+ * returned "blood glucose, 1 to 30 June" would mean the server had to know it, and knowing it is
+ * exactly what this design avoids.
  *
- * Lo que **no** sale de aquí: `pin_salt`, `pin_tag` y `wrapper`. Los dos primeros son el material del
- * ataque fuera de línea contra el PIN y el tercero es el envoltorio de `CK`; entregarlos en un
- * listado autenticado no rompe nada hoy —es la propia dueña quien pregunta— pero convertiría
- * cualquier fuga futura de esta respuesta en el fallo crítico que el ADR corrigió. Los modelos ya los
- * marcan `#[Hidden]`; aquí se construye la forma a mano de todas formas, para no depender de eso.
+ * What does **not** come out of here: `pin_salt`, `pin_tag` and `wrapper`. The first two are the
+ * material for the offline attack on the PIN and the third is the wrapper of `CK`; handing them out
+ * in an authenticated listing breaks nothing today —the owner herself is asking— but it would turn
+ * any future leak of this response into the critical flaw the ADR fixed. The models already mark
+ * them `#[Hidden]`; the shape is still built by hand here, so we do not depend on that.
  *
- * `opened_at` sale redondeado a la hora, tal como se guardó: es la marca del primer acceso y no un
- * historial.
+ * `opened_at` comes out rounded to the hour, exactly as it was stored: it is the mark of the first
+ * access and not a history.
  */
 final readonly class ListSharesController
 {

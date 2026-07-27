@@ -12,19 +12,19 @@ use Illuminate\Http\Request;
 /**
  * `POST /phr/auth/session-secret` (Spec 0001 §4.5).
  *
- * Devuelve el secreto con el que el navegador vuelve a abrir el paquete de `sessionStorage` tras una
- * recarga, un 419 o un despliegue, sin volver a pedir la contraseña.
+ * It returns the secret the browser reopens the `sessionStorage` bundle with after a reload, a 419
+ * or a deployment, without asking for the password again.
  *
- * Es `POST` y no `GET` a propósito: un `GET` es cacheable por diseño, y un intermediario que cacheara
- * esta respuesta escribiría el secreto en el disco de un tercero.
+ * It is `POST` and not `GET` on purpose: a `GET` is cacheable by design, and an intermediary that
+ * cached this response would write the secret onto a third party's disk.
  *
- * Incluye `encryptedSettings` porque la configuración no viaja dentro del paquete de
- * `sessionStorage`, solo la clave maestra envuelta: sin este campo, una pantalla que arranque por
- * recuperación no tendría unidad de medida ni rango objetivo hasta el próximo login completo.
+ * It includes `encryptedSettings` because the settings do not travel inside the `sessionStorage`
+ * bundle, only the wrapped master key: without this field, a screen that starts up through recovery
+ * would have no unit of measurement and no target range until the next full login.
  *
- * Códigos de error (§4.5): la ruta vive en `authenticatedRoutes()`, así que una sesión inexistente o
- * caducada la corta el middleware de autenticación antes de llegar aquí; `410` cubre la sesión que
- * sigue viva pero cuyo secreto ya no está. Ambos llevan al cliente a la pantalla de login.
+ * Error codes (§4.5): the route lives in `authenticatedRoutes()`, so a missing or expired session is
+ * cut off by the authentication middleware before it gets here; `410` covers a session that is still
+ * alive but whose secret is gone. Both take the client to the login screen.
  */
 final readonly class SessionSecretController
 {

@@ -1,38 +1,38 @@
 /**
- * Barra de progreso de las pantallas de autenticación.
+ * Progress bar of the authentication screens.
  *
- * No es adorno. `finishRegistration` y `finishLogin` corren Argon2id (t=3, m=64 MiB, p=4) en el
- * WebAssembly del paquete, de forma **síncrona y en el hilo principal**: la pestaña se queda
- * bloqueada varios segundos. Sin nada en pantalla que diga que algo está pasando, la persona vuelve
- * a pulsar el botón, y con el enlace de registro de por medio ese segundo intento es un enlace
- * consumido (`docs/specs/0001-account-provisioning-and-session-bootstrap.md` §7).
+ * Not decoration. `finishRegistration` and `finishLogin` run Argon2id (t=3, m=64 MiB, p=4) in the
+ * package WebAssembly, **synchronously and on the main thread**: the tab stays blocked for
+ * several seconds. With nothing on screen saying something is happening, the person presses the
+ * button again, and with a registration link involved that second attempt is a consumed link
+ * (`docs/specs/0001-account-provisioning-and-session-bootstrap.md` §7).
  *
- * Dos consecuencias de que el hilo principal esté bloqueado, y las dos condicionan este módulo:
+ * Two consequences of the main thread being blocked, and both shape this module:
  *
- * 1. **Hay que pintar antes de bloquear.** Cambiar el estado de Alpine no pinta nada por sí solo:
- *    el navegador pinta en el siguiente fotograma, que no llega si la llamada síncrona empieza
- *    antes. Por eso `advance()` espera dos `requestAnimationFrame` antes de devolver el control.
- * 2. **La animación tiene que poder correr fuera del hilo principal.** Solo `transform` y `opacity`
- *    se animan en el compositor; animar `width` exige el hilo principal, que es justo el que está
- *    ocupado, y la barra se quedaría congelada. De ahí `transform: scaleX(...)` con una transición
- *    larga y lineal: se lanza antes del bloqueo y el compositor la sigue moviendo durante él.
+ * 1. **We must paint before blocking.** Changing Alpine state paints nothing on its own: the
+ *    browser paints on the next frame, which never arrives if the synchronous call starts
+ *    first. That is why `advance()` waits for two `requestAnimationFrame` before returning.
+ * 2. **The animation must be able to run off the main thread.** Only `transform` and `opacity`
+ *    animate on the compositor; animating `width` needs the main thread, which is exactly the
+ *    busy one, and the bar would freeze. Hence `transform: scaleX(...)` with a long, linear
+ *    transition: it starts before the block and the compositor keeps moving it during it.
  *
- * El avance es honesto en el orden pero no en el tiempo: nadie puede saber cuánto tarda Argon2id en
- * un dispositivo concreto (riesgo 1 de §12). La transición larga se ajusta a una estimación
- * generosa y la etapa siguiente la corta en cuanto llega de verdad.
+ * Progress is honest about the order but not about the time: nobody can know how long Argon2id
+ * takes on a given device (risk 1 of §12). The long transition is set to a generous estimate and
+ * the next stage cuts it short as soon as it really arrives.
  */
 
-/** Duración estimada, en segundos, de un Argon2id con los parámetros del ADR 0004. */
+/** Estimated duration, in seconds, of one Argon2id with the ADR 0004 parameters. */
 export const KEY_STRETCHING_SECONDS = 12;
 
-/** Duración por defecto de los tramos que no bloquean el hilo. */
+/** Default duration of the steps that do not block the thread. */
 const QUICK_SECONDS = 0.3;
 
 /**
- * Espera a que el navegador pinte.
+ * Waits for the browser to paint.
  *
- * Dos fotogramas, no uno: el primero se agenda antes de que Alpine haya aplicado el cambio de
- * estado al DOM, así que solo el segundo garantiza que lo pintado incluye la etapa nueva.
+ * Two frames, not one: the first one is scheduled before Alpine has applied the state change to
+ * the DOM, so only the second one guarantees that what was painted includes the new stage.
  *
  * @returns {Promise<void>}
  */
@@ -43,7 +43,7 @@ export function nextPaint() {
 }
 
 /**
- * Estado y comportamiento de la barra, para mezclar en un componente Alpine.
+ * State and behaviour of the bar, to mix into an Alpine component.
  *
  * @returns {{progress: number, progressSeconds: number, stage: string,
  *            advance: (stage: string, target: number, seconds?: number) => Promise<void>,
@@ -51,21 +51,21 @@ export function nextPaint() {
  */
 export function progressMixin() {
     return {
-        /** Fracción de la barra, entre 0 y 1. */
+        /** Fraction of the bar, between 0 and 1. */
         progress: 0,
 
-        /** Duración de la transición hacia `progress`, en segundos. */
+        /** Duration of the transition towards `progress`, in seconds. */
         progressSeconds: 0,
 
-        /** Texto que ve la persona. Nunca lleva detalle técnico. */
+        /** Text the person sees. It never carries technical detail. */
         stage: '',
 
         /**
-         * Anuncia una etapa y devuelve el control **después** de que el navegador la haya pintado.
+         * Announces a stage and returns control **after** the browser has painted it.
          *
-         * @param {string} stage Texto de la etapa.
-         * @param {number} target Fracción destino, entre 0 y 1.
-         * @param {number} [seconds] Duración de la transición.
+         * @param {string} stage Stage text.
+         * @param {number} target Target fraction, between 0 and 1.
+         * @param {number} [seconds] Transition duration.
          * @returns {Promise<void>}
          */
         async advance(stage, target, seconds = QUICK_SECONDS) {
@@ -76,7 +76,7 @@ export function progressMixin() {
             await nextPaint();
         },
 
-        /** Deja la barra a cero, sin transición: al reintentar no debe retroceder animándose. */
+        /** Leaves the bar at zero, without transition: a retry must not animate backwards. */
         resetProgress() {
             this.stage = '';
             this.progress = 0;
@@ -84,10 +84,10 @@ export function progressMixin() {
         },
 
         /**
-         * Estilo de la barra interior, como objeto y no como cadena: Alpine mezcla un objeto con
-         * el `style` que ya trae el elemento, mientras que una cadena lo sustituiría entero y se
-         * llevaría por delante el `scaleX(0)` inicial de la plantilla, que es el punto de partida
-         * de la transición.
+         * Style of the inner bar, as an object and not as a string: Alpine merges an object with
+         * the `style` the element already carries, while a string would replace it whole and take
+         * away the initial `scaleX(0)` from the template, which is the starting point of the
+         * transition.
          *
          * @returns {{transform: string, transition: string}}
          */

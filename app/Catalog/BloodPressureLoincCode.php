@@ -5,35 +5,34 @@ declare(strict_types=1);
 namespace App\Catalog;
 
 /**
- * Códigos LOINC de los tres componentes de una lectura de tensión arterial.
+ * LOINC codes for the three components of a blood pressure reading.
  *
- * A diferencia de la glucemia ({@see GlucoseLoincCode}), aquí el código no depende del método: el
- * ADR 0008 (docs/adr/0008-measurement-method.md) es explícito en que «los códigos LOINC que usamos
- * para esta magnitud... nombran la magnitud y nada más», así que el brazo y la postura viajan en
- * campos propios ({@see BloodPressureArm}, {@see BloodPressurePosture}) y el código LOINC es
- * siempre el mismo para cada componente. Por eso este catálogo no necesita un resolutor como
- * {@see GlucoseLoincCode::resolve()}: cada caso ya es el código final.
+ * Unlike blood glucose ({@see GlucoseLoincCode}), here the code does not depend on the method: ADR
+ * 0008 (docs/adr/0008-measurement-method.md) is explicit that "the LOINC codes we use for this
+ * quantity... name the quantity and nothing else", so the arm and the posture travel in their own
+ * fields ({@see BloodPressureArm}, {@see BloodPressurePosture}) and the LOINC code is always the
+ * same for each component. That is why this catalog needs no resolver like
+ * {@see GlucoseLoincCode::resolve()}: every case is already the final code.
  *
- * Los tres valores están verificados contra LOINC (herramienta de terminologías médicas,
- * 2026-07-25) y no deben modificarse: es el mismo aviso de inmutabilidad que
- * {@see GlucoseMeasurementMethod}, porque el código entra también en el contenido que se cifra en
- * el navegador (ADR 0002, ADR 0004).
+ * The three values are verified against LOINC (medical terminology tool, 2026-07-25) and must not be
+ * modified: it is the same immutability warning as {@see GlucoseMeasurementMethod}, because the code
+ * also goes into the content encrypted in the browser (ADR 0002, ADR 0004).
  *
- * Una lectura no trae siempre los tres: el pulso es opcional porque no todos los aparatos de
- * tensión lo dan, así que `Pulse` puede no aparecer en `data.loinc` de un evento concreto.
+ * A reading does not always carry all three: the pulse is optional because not every blood pressure
+ * monitor reports it, so `Pulse` may be absent from `data.loinc` on a given event.
  */
 enum BloodPressureLoincCode: string
 {
-    /** Presión arterial sistólica. */
+    /** Systolic blood pressure. */
     case Systolic = '8480-6';
 
-    /** Presión arterial diastólica. */
+    /** Diastolic blood pressure. */
     case Diastolic = '8462-4';
 
     /** Frecuencia cardiaca (pulso). */
     case Pulse = '8867-4';
 
-    /** Término oficial LOINC, en inglés, tal y como lo publica Regenstrief Institute. */
+    /** Official LOINC term, in English, exactly as published by the Regenstrief Institute. */
     public function officialName(): string
     {
         return match ($this) {

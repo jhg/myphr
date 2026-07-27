@@ -1,23 +1,23 @@
 /**
- * Etiqueta legible de una unidad de medida a partir del catálogo que emite el servidor.
+ * Readable label of a unit of measure, out of the catalog the server emits.
  *
- * UCUM reserva los corchetes a las unidades no métricas: la libra es `[lb_av]` y el Fahrenheit es
- * `[degF]`. En el sobre se guarda ese código, porque es lo que exige el ADR 0005, pero enseñarlo
- * tal cual en el historial sería pedirle a la persona que lea notación de intercambio. Ante un
- * código desconocido devuelve el propio código, que es feo pero cierto: preferible a esconder un
- * registro.
+ * UCUM reserves brackets for non-metric units: the pound is `[lb_av]` and Fahrenheit is
+ * `[degF]`. The envelope stores that code, because ADR 0005 demands it, but showing it as is in
+ * the history would be asking the person to read interchange notation. For an unknown code it
+ * returns the code itself, which is ugly but true: it is better than hiding a
+ * record.
  *
- * Estaba duplicada en `bodyWeightPage.js` y `temperaturePage.js`, y el precio de que divergieran
- * era que la misma unidad se enseñara distinta según la pantalla; se lee del mismo catálogo y con
- * la misma clave, así que no hay nada que la pantalla tenga que decidir.
+ * It used to be duplicated in `bodyWeightPage.js` and `temperaturePage.js`, and the price of them
+ * diverging was the same unit being shown differently depending on the screen; it is read from the
+ * same catalog and with the same key, so there is nothing for the screen to decide.
  *
- * Vive aparte de `datetimeLocal.js` a propósito: aquello produce dato asociado del AEAD y esto es
- * texto de pantalla. Juntarlas en un módulo «de utilidades» mezclaría dos cosas sin riesgo ni
- * motivo de cambio comunes, que es lo que `eventCommonFields.js` evita al ser de un solo concepto.
+ * It lives apart from `datetimeLocal.js` on purpose: that one produces AEAD associated data and
+ * this one is screen text. Merging them into a "utilities" module would mix two things with no
+ * shared risk and no shared reason to change, which is what `eventCommonFields.js` avoids by being one concept.
  *
- * `heightUnitLabel` (peso) y `siteLabel` (temperatura) tienen esta forma pero leen otra lista del
- * catálogo y no están duplicadas: se quedan en su pantalla en lugar de forzar aquí un buscador
- * genérico por clave.
+ * `heightUnitLabel` (weight) and `siteLabel` (temperature) have this shape but read another list
+ * of the catalog and are not duplicated: they stay in their screen instead of forcing a generic
+ * lookup by key in here.
  *
  * @param {{units: list<{code: string, label: string}>}} catalog
  * @param {string} code

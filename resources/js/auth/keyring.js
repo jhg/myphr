@@ -1,16 +1,16 @@
 /**
- * Dueño de la clave maestra en memoria (Spec 0001 §10; ADR 0003).
+ * Owner of the master key in memory (Spec 0001 §10; ADR 0003).
  *
- * La clave vive en el scope de este módulo ES y **no sale de aquí**: no hay getter que la
- * devuelva. Quien necesita cifrar o descifrar pasa una función a `withMasterKey`, que la recibe
- * prestada durante la llamada. Así no queda una referencia colgada en el estado de un componente
- * Alpine ni en una propiedad de Livewire.
+ * The key lives in the scope of this ES module and **never leaves it**: there is no getter that
+ * returns it. Whoever needs to encrypt or decrypt passes a function to `withMasterKey`, which
+ * borrows it for the duration of the call. That way no reference is left dangling in the state of
+ * an Alpine component or in a Livewire property.
  *
- * Como el scope es por pestaña, dos pestañas no comparten nada: cada una hace su login o su
- * recuperación. Perder la clave es un estado normal y frecuente, no un error (§7).
+ * Since the scope is per tab, two tabs share nothing: each one does its own login or recovery.
+ * Losing the key is a normal and frequent state, not an error (§7).
  *
- * El paquete de `sessionStorage` se cierra y se abre también desde aquí, por el mismo motivo: si
- * lo hiciera otro módulo, la clave tendría que salir para llegar hasta él.
+ * The `sessionStorage` package is sealed and opened from here too, for the same reason: if
+ * another module did it, the key would have to leave to reach it.
  */
 
 import { deriveKey, KDF_LABELS } from '../crypto/kdf.js';
@@ -18,10 +18,10 @@ import { open, seal } from '../crypto/envelope.js';
 import { decodeBase64Url } from '../crypto/base64url.js';
 import { zeroize } from '../crypto/zeroize.js';
 
-/** Clave de `sessionStorage` donde vive la clave maestra envuelta bajo el secreto de sesión. */
+/** `sessionStorage` key where the master key lives wrapped under the session secret. */
 export const RECOVERY_STORAGE_KEY = 'phr.rk';
 
-/** Longitud de la clave maestra, en bytes. */
+/** Master key length, in bytes. */
 export const MASTER_KEY_LENGTH = 32;
 
 /** @type {Uint8Array|null} */
@@ -30,18 +30,18 @@ let masterKey = null;
 /** @type {string|null} */
 let masterKeyOwnerId = null;
 
-/** ¿Hay clave maestra en memoria en esta pestaña? */
+/** Is there a master key in memory in this tab? */
 export function isUnlocked() {
     return masterKey !== null;
 }
 
-/** UUID del usuario dueño de la clave en memoria, o `null`. Metadato, no material de clave. */
+/** UUID of the user owning the key in memory, or `null`. Metadata, not key material. */
 export function ownerId() {
     return masterKeyOwnerId;
 }
 
 /**
- * Genera la clave maestra (§5, paso 8): 32 bytes del CSPRNG, **nunca** derivados de la contraseña.
+ * Generates the master key (§5, step 8): 32 bytes from the CSPRNG, **never** derived from the password.
  *
  * @param {string} userId
  */
@@ -53,7 +53,7 @@ export function createMasterKey(userId) {
 }
 
 /**
- * Adopta una clave maestra ya existente, recién abierta de un sobre.
+ * Adopts an existing master key, just opened from an envelope.
  *
  * @param {Uint8Array} key
  * @param {string} userId
@@ -70,14 +70,14 @@ export function adoptMasterKey(key, userId) {
 }
 
 /**
- * Presta la clave maestra durante una llamada.
+ * Lends the master key for the duration of a call.
  *
- * El búfer que recibe la función es el de este módulo: no debe guardarse ni borrarse desde fuera.
+ * The buffer the function receives is this module's own: it must not be stored or wiped from outside.
  *
  * @template T
  * @param {(key: Uint8Array) => T} work
  * @returns {T}
- * @throws {Error} Si no hay clave en memoria. Quien llama degrada a pedir autenticación (§6.2).
+ * @throws {Error} If there is no key in memory. The caller degrades to asking for authentication (§6.2).
  */
 export function withMasterKey(work) {
     if (masterKey === null) {
@@ -88,14 +88,14 @@ export function withMasterKey(work) {
 }
 
 /**
- * Borra la clave de memoria. Es a lo sumo un intento (ADR 0004).
+ * Wipes the key from memory. It is at most an attempt (ADR 0004).
  *
- * No borra aquí los ajustes descifrados de `settings.js`: ese módulo importa `withMasterKey` de
- * este archivo, así que importarlo desde aquí para llamar a `forgetSettings()` cerraría un ciclo de
- * módulos ES. En su lugar, `forgetSettings()` se llama por separado en los dos sitios que cierran
- * sesión de verdad (`lock.js` y el `catch` de `setPasswordPage.js`); los dos usos internos de
- * `forget()` de este archivo (`createMasterKey`, `adoptMasterKey`) son sustituciones de clave
- * dentro de un mismo flujo de alta, no cierres de sesión.
+ * It does not wipe the decrypted settings of `settings.js` here: that module imports
+ * `withMasterKey` from this file, so importing it back to call `forgetSettings()` would close an
+ * ES module cycle. Instead, `forgetSettings()` is called separately in the two places that really
+ * close a session (`lock.js` and the `catch` of `setPasswordPage.js`); the two internal uses of
+ * `forget()` in this file (`createMasterKey`, `adoptMasterKey`) are key replacements inside one
+ * sign-up flow, not sign-outs.
  */
 export function forget() {
     if (masterKey !== null) {
@@ -107,16 +107,16 @@ export function forget() {
 }
 
 /**
- * Cierra la clave maestra bajo el secreto de sesión y la escribe en `sessionStorage`
- * (§5, paso 18 y §6.1, paso 9).
+ * Seals the master key under the session secret and writes it to `sessionStorage`
+ * (§5, step 18 and §6.1, step 9).
  *
- * Se llama **después** de que el servidor haya acuñado el secreto y después de verificar la clave,
- * nunca antes: en el primer caso quedaría material cifrado bajo un secreto que no existe, y en el
- * segundo se persistiría una clave que todavía no se sabe si el servidor devuelve bien.
+ * It is called **after** the server has minted the secret and after verifying the key, never
+ * before: in the first case material would be left encrypted under a secret that does not exist,
+ * and in the second a key would be persisted before we know the server returns it correctly.
  *
- * El secreto de sesión se borra aquí mismo; el `Uint8Array` que llega es propiedad de quien llama.
+ * The session secret is wiped right here; the incoming `Uint8Array` belongs to the caller.
  *
- * @param {Uint8Array} sessionSecret 32 bytes ya decodificados.
+ * @param {Uint8Array} sessionSecret 32 bytes, already decoded.
  */
 export function persistUnderSessionSecret(sessionSecret) {
     const sessionKey = deriveKey({ ikm: sessionSecret, label: KDF_LABELS.SESSION });
@@ -135,13 +135,13 @@ export function persistUnderSessionSecret(sessionSecret) {
 }
 
 /**
- * Abre el paquete de `sessionStorage` con el secreto de sesión y adopta la clave (§6.2, paso 3).
+ * Opens the `sessionStorage` package with the session secret and adopts the key (§6.2, step 3).
  *
  * @param {Uint8Array} sessionSecret
  * @param {string} userId
- * @returns {boolean} `false` si no había paquete guardado; en ese caso hay que ir al login.
- * @throws {import('../crypto/envelope.js').EnvelopeError} Si el paquete no abre. No se silencia:
- *         un fallo de descifrado es siempre un error visible (ADR 0004).
+ * @returns {boolean} `false` if there was no stored package; in that case go to the login.
+ * @throws {import('../crypto/envelope.js').EnvelopeError} If the package does not open. It is not
+ *         silenced: a decryption failure is always a visible error (ADR 0004).
  */
 export function restoreFromSessionSecret(sessionSecret, userId) {
     const packed = sessionStorage.getItem(RECOVERY_STORAGE_KEY);
@@ -169,7 +169,7 @@ export function restoreFromSessionSecret(sessionSecret, userId) {
 }
 
 /**
- * Decodifica el secreto de sesión que llega en base64url.
+ * Decodes the session secret that arrives in base64url.
  *
  * @param {string} sessionSecret
  * @returns {Uint8Array}

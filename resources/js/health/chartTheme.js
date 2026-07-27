@@ -1,29 +1,29 @@
 /**
- * Paleta de las gráficas, leída del tema en el momento de dibujar.
+ * Chart palette, read from the theme at draw time.
  *
- * **Por qué no son literales.** Una gráfica se pinta en un `<canvas>`: no hereda ninguna clase y no
- * resuelve `var(--color-…)`, así que cada color hay que dárselo a mano. Eso llevó durante un tiempo
- * a copiar los hexadecimales del tema claro dentro del módulo, y un literal no puede conmutar de
- * tema: en oscuro los rótulos de eje (#475569 sobre la superficie #152238) quedaban en 2.10:1, dos
- * de las tres series en 1.91:1 y 2.46:1 —por debajo del 3:1 de WCAG 1.4.11 para objetos gráficos, o
- * sea una línea clínica invisible, justo lo que DESIGN.md Don'ts #10 prohíbe—, la rejilla salía casi
- * blanca a todo volumen y el borde de punto en #FFFFFF ponía un halo a cada marcador, que
- * § Charts — Dark descarta con esas palabras.
+ * **Why they are not literals.** A chart is painted on a `<canvas>`: it inherits no class and does
+ * not resolve `var(--color-…)`, so every colour has to be handed to it. For a while that led to
+ * copying the light theme hex values into the module, and a literal cannot switch theme: in dark,
+ * the axis labels (#475569 over the #152238 surface) came out at 2.10:1, two of the three series
+ * at 1.91:1 and 2.46:1 —below the 3:1 of WCAG 1.4.11 for graphical objects, that is an invisible
+ * clinical line, exactly what DESIGN.md Don'ts #10 forbids—, the grid came out almost white at
+ * full strength and the #FFFFFF point border put a halo around every marker, which
+ * § Charts — Dark rules out in those words.
  *
- * DESIGN.md § Charts — Dark lo exige literalmente: «the values must be read at draw time from the
+ * DESIGN.md § Charts — Dark demands it literally: "the values must be read at draw time from the
  * CSS variables the theme publishes (`getComputedStyle(document.documentElement)`), never copied
  * into the module as literals», y «a chart must also re-read them and redraw when the `.dark` class
- * on `<html>` changes». Este módulo es esas dos cosas: `chartColors()` y `observeThemeChange()`.
+ * on `<html>` changes". This module is those two things: `chartColors()` and `observeThemeChange()`.
  *
- * Las variables ya las publica `resources/css/filament/phr/theme.css` con sus dos valores
- * (`:root` y `:root.dark`); aquí no se inventa ni se deriva ningún color.
+ * The variables are already published by `resources/css/filament/phr/theme.css` with their two
+ * values (`:root` and `:root.dark`); no colour is invented or derived here.
  */
 
 /**
- * Valores de respaldo, y **solo** de respaldo: son los del tema claro, los mismos que declara
- * `theme.css`. Se usan cuando no hay hoja de estilo de la que leer —los tests de `tests/js` corren
- * en Node sin CSS— para que el módulo se pueda importar y probar sin navegador. En el navegador
- * nunca se alcanzan: la variable siempre está definida.
+ * Fallback values, and **only** fallback: they are the light theme ones, the same `theme.css`
+ * declares. They are used when there is no stylesheet to read from —the `tests/js` tests run in
+ * Node without CSS— so the module can be imported and tested without a browser. In the browser
+ * they are never reached: the variable is always defined.
  */
 const FALLBACK = Object.freeze({
     surface: '#ffffff',
@@ -35,11 +35,11 @@ const FALLBACK = Object.freeze({
 });
 
 /**
- * Familias de DESIGN.md § Typography.
+ * Families of DESIGN.md § Typography.
  *
- * Viven aquí, junto a los colores, por el mismo motivo que ellos: en un `<canvas>` la fuente se
- * declara por nombre y no la hereda de ninguna clase, así que si cada gráfica escribe la suya acaban
- * divergiendo. Las tres gráficas del panel comparten esta.
+ * They live here, next to the colours, for the same reason as them: in a `<canvas>` the font is
+ * declared by name and is inherited from no class, so if each chart writes its own they end up
+ * diverging. The three panel charts share this one.
  */
 export const CHART_FONTS = Object.freeze({
     body: "'Open Sans', ui-sans-serif, system-ui, sans-serif",
@@ -48,7 +48,7 @@ export const CHART_FONTS = Object.freeze({
 
 /**
  * @param {CSSStyleDeclaration|null} styles
- * @param {string} name Nombre de la propiedad personalizada, con los dos guiones.
+ * @param {string} name Name of the custom property, with the two dashes.
  * @param {string} fallback
  * @returns {string}
  */
@@ -63,11 +63,11 @@ function readVariable(styles, name, fallback) {
 }
 
 /**
- * Colores de la gráfica **en este instante**, resueltos contra el tema activo.
+ * Chart colours **at this instant**, resolved against the active theme.
  *
- * Hay que llamarla dentro de cada dibujado, no una vez al cargar el módulo: Chart.js congela los
- * colores cuando se construye el lienzo, así que un valor leído al arrancar la página se quedaría
- * con el tema que hubiera entonces.
+ * It has to be called inside every draw, not once when the module loads: Chart.js freezes the
+ * colours when the canvas is built, so a value read at page start would keep whatever theme was
+ * in place then.
  *
  * @returns {{surface: string, grid: string, tick: string, tooltipSurface: string, tooltipInk: string, series: list<string>}}
  */
@@ -83,9 +83,9 @@ export function chartColors() {
         tooltipSurface: readVariable(styles, '--chart-tooltip-surface', FALLBACK.tooltipSurface),
         tooltipInk: readVariable(styles, '--chart-tooltip-ink', FALLBACK.tooltipInk),
         /**
-         * Las cuatro series de § Components · Charts, en ese orden y con su equivalente oscuro.
-         * A partir de la tercera la leyenda es obligatoria (Do's #3), porque la 3 y la 4
-         * reutilizan los matices de Success y Warning; las tres pantallas ya la pintan.
+         * The four series of § Components · Charts, in that order and with their dark equivalent.
+         * From the third on the legend is mandatory (Do's #3), because 3 and 4 reuse the shades of
+         * Success and Warning; the three screens already paint it.
          */
         series: Object.freeze([1, 2, 3, 4].map(
             (position) => readVariable(styles, `--chart-series-${position}`, FALLBACK.series[position - 1]),
@@ -94,18 +94,18 @@ export function chartColors() {
 }
 
 /**
- * Avisa cuando `<html>` entra o sale del modo oscuro, para volver a dibujar.
+ * Reports when `<html>` enters or leaves dark mode, so it can be redrawn.
  *
- * Filament conmuta el tema añadiendo y quitando la clase `dark` en `<html>`, sin recargar: sin este
- * observador el panel entero cambiaría de tema menos las gráficas, que es exactamente lo que
- * § Charts — Dark advierte.
+ * Filament switches the theme by adding and removing the `dark` class on `<html>`, without
+ * reloading: without this observer the whole panel would change theme except the charts, which is
+ * exactly what § Charts — Dark warns about.
  *
- * Solo notifica cuando el modo **cambia**, no en cualquier retoque de `class`: Alpine y Livewire
- * escriben clases en la raíz por otros motivos, y repintar en cada uno destruiría y reconstruiría
- * el lienzo sin necesidad.
+ * It only notifies when the mode **changes**, not on any `class` tweak: Alpine and Livewire write
+ * classes on the root for other reasons, and repainting on each one would destroy and rebuild the
+ * canvas for nothing.
  *
  * @param {() => void} redraw
- * @returns {() => void} Función para dejar de observar.
+ * @returns {() => void} Function to stop observing.
  */
 export function observeThemeChange(redraw) {
     if (typeof document === 'undefined' || typeof MutationObserver !== 'function') {
@@ -132,17 +132,17 @@ export function observeThemeChange(redraw) {
 }
 
 /**
- * Lo mismo que {@see observeThemeChange}, pero para las pantallas donde el tema **no lo elige
- * nadie**: la del lector de un recorte compartido (ADR 0011).
+ * The same as {@see observeThemeChange}, but for the screens where **nobody chooses** the theme:
+ * the reader of a shared clipping (ADR 0011).
  *
- * Allí no hay cuenta y no puede haber preferencia guardada —guardar una sería escribir en el
- * dispositivo del profesional, que es justo lo que esa ruta evita: ni cookie, ni preferencia, ni
- * nada—, así que manda el sistema operativo y el tema se lee con `prefers-color-scheme`, igual que
- * hace `resources/css/reader.css`. Sin esto, la página conmutaría de tema entera menos las gráficas,
- * que es exactamente lo que DESIGN.md § Charts — Dark advierte.
+ * There is no account there and there can be no stored preference —storing one would be writing on
+ * the professional's device, which is exactly what that route avoids: no cookie, no preference,
+ * nothing—, so the operating system decides and the theme is read with `prefers-color-scheme`,
+ * just as `resources/css/reader.css` does. Without this, the whole page would switch theme except
+ * the charts, which is exactly what DESIGN.md § Charts — Dark warns about.
  *
  * @param {() => void} redraw
- * @returns {() => void} Función para dejar de escuchar.
+ * @returns {() => void} Function to stop listening.
  */
 export function observeColorSchemeChange(redraw) {
     if (typeof globalThis.matchMedia !== 'function') {

@@ -7,13 +7,13 @@ use App\Security\Opaque\InvalidConfigurationException;
 use App\Security\Opaque\OpaqueException;
 
 /**
- * RFC 5869 sólo publica vectores de HKDF-SHA-256 y HKDF-SHA-1, así que los
- * vectores oficiales de HKDF-SHA-512 salen del proyecto Wycheproof (C2SP),
- * fichero `testvectors_v1/hkdf_sha512_test.json`:
+ * RFC 5869 only publishes HKDF-SHA-256 and HKDF-SHA-1 vectors, so the official
+ * HKDF-SHA-512 vectors come from the Wycheproof project (C2SP), file
+ * `testvectors_v1/hkdf_sha512_test.json`:
  * https://github.com/C2SP/wycheproof/blob/main/testvectors_v1/hkdf_sha512_test.json
  *
- * Se complementan con una verificación cruzada contra `hash_hkdf()` de PHP,
- * que implementa RFC 5869 en la extensión `hash`.
+ * They are complemented with a cross-check against PHP's `hash_hkdf()`, which
+ * implements RFC 5869 in the `hash` extension.
  */
 
 /**
@@ -54,7 +54,7 @@ it('carga los 83 vectores de Wycheproof', function (): void {
     expect(wycheproofHkdfSha512Vectors())->toHaveCount(83);
 });
 
-it('reproduce los vectores válidos de Wycheproof', function (array $vector): void {
+it('reproduces the valid Wycheproof vectors', function (array $vector): void {
     $prk = HkdfSha512::extract(
         hex2bin($vector['salt']),
         hex2bin($vector['ikm']),
@@ -68,7 +68,7 @@ it('reproduce los vectores válidos de Wycheproof', function (array $vector): vo
     expect(bin2hex($okm))->toBe($vector['okm']);
 })->with('wycheproof hkdf-sha512 valid');
 
-it('rechaza los vectores de Wycheproof con tamaño de salida excesivo', function (array $vector): void {
+it('rejects the Wycheproof vectors with an excessive output size', function (array $vector): void {
     expect($vector['size'])->toBeGreaterThan(HkdfSha512::MAX_OUTPUT_LENGTH);
 
     $prk = HkdfSha512::extract(hex2bin($vector['salt']), hex2bin($vector['ikm']));
@@ -77,14 +77,14 @@ it('rechaza los vectores de Wycheproof con tamaño de salida excesivo', function
         ->toThrow(InvalidArgumentException::class);
 })->with('wycheproof hkdf-sha512 invalid');
 
-it('trata el salt vacío como 64 bytes cero, según RFC 5869 §2.2', function (): void {
+it('treats an empty salt as 64 zero bytes, per RFC 5869 §2.2', function (): void {
     $ikm = random_bytes(32);
 
     expect(HkdfSha512::extract('', $ikm))
         ->toBe(HkdfSha512::extract(str_repeat("\x00", 64), $ikm));
 });
 
-it('define Extract como HMAC-SHA-512 con el salt de clave, según RFC 5869 §2.2', function (): void {
+it('defines Extract as HMAC-SHA-512 with the salt as key, per RFC 5869 §2.2', function (): void {
     $salt = random_bytes(37);
     $ikm = random_bytes(91);
 
@@ -93,7 +93,7 @@ it('define Extract como HMAC-SHA-512 con el salt de clave, según RFC 5869 §2.2
 });
 
 it('coincide con hash_hkdf() de PHP en longitudes y contextos variados', function (): void {
-    // Verificación cruzada, no vector oficial: `hash_hkdf()` implementa RFC 5869.
+    // Cross-check, not an official vector: `hash_hkdf()` implements RFC 5869.
     foreach ([1, 31, 64, 65, 128, 200, 1024, 4096] as $length) {
         $ikm = random_bytes(32);
         $salt = $length % 2 === 0 ? random_bytes(64) : '';
@@ -106,7 +106,7 @@ it('coincide con hash_hkdf() de PHP en longitudes y contextos variados', functio
     }
 });
 
-it('produce salidas que son prefijo unas de otras al crecer la longitud', function (): void {
+it('produces outputs that are prefixes of one another as the length grows', function (): void {
     $prk = HkdfSha512::extract(random_bytes(64), random_bytes(32));
     $info = random_bytes(11);
 
@@ -117,7 +117,7 @@ it('produce salidas que son prefijo unas de otras al crecer la longitud', functi
     }
 });
 
-it('emite exactamente la longitud máxima permitida', function (): void {
+it('emits exactly the maximum allowed length', function (): void {
     $prk = HkdfSha512::extract('', random_bytes(32));
 
     expect(strlen(HkdfSha512::expand($prk, '', HkdfSha512::MAX_OUTPUT_LENGTH)))
@@ -132,12 +132,11 @@ it('rechaza longitudes fuera de rango', function (int $length): void {
 })->with([0, -1, 255 * 64 + 1, PHP_INT_MAX]);
 
 /**
- * `docs/OPAQUE.md` §18: el subsistema tiene una jerarquía única de errores. Un PRK corto solo
- * puede venir de material estático mal configurado, así que se señala con
- * {@see InvalidConfigurationException} y no con una excepción SPL suelta que la capa HTTP no
- * sabría colapsar.
+ * `docs/OPAQUE.md` §18: the subsystem has a single error hierarchy. A short PRK can only come from
+ * misconfigured static material, so it is signalled with {@see InvalidConfigurationException} and
+ * not with a loose SPL exception the HTTP layer would not know how to collapse.
  */
-it('rechaza un PRK más corto que HashLen con una excepción de la jerarquía OPAQUE', function (): void {
+it('rejects a PRK shorter than HashLen with an exception from the OPAQUE hierarchy', function (): void {
     expect(fn (): string => HkdfSha512::expand(str_repeat("\x01", 63), '', 32))
         ->toThrow(InvalidConfigurationException::class);
 
@@ -145,7 +144,7 @@ it('rechaza un PRK más corto que HashLen con una excepción de la jerarquía OP
         ->toThrow(OpaqueException::class);
 });
 
-it('encadena bloques con un contador de un byte, según RFC 5869 §2.3', function (): void {
+it('chains blocks with a one-byte counter, per RFC 5869 §2.3', function (): void {
     $prk = HkdfSha512::extract(random_bytes(64), random_bytes(32));
     $info = random_bytes(9);
 

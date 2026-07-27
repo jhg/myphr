@@ -5,29 +5,29 @@ declare(strict_types=1);
 namespace App\Catalog;
 
 /**
- * Código LOINC del peso corporal.
+ * LOINC code for body weight.
  *
- * A diferencia de la glucemia ({@see GlucoseLoincCode}), aquí no hay tabla de resolución: LOINC
- * nombra el peso corporal medido con un único código, sin distinguir la unidad. El kilogramo y la
- * libra son dos formas de expresar la misma magnitud —la unidad viaja aparte, como código UCUM
- * ({@see UcumUnit}), tal y como exige el ADR 0005— y no cambian el concepto observado, así que
- * ninguna de las dos necesita un código propio.
+ * Unlike blood glucose ({@see GlucoseLoincCode}), there is no resolution table here: LOINC names
+ * measured body weight with a single code, without distinguishing the unit. The kilogram and the
+ * pound are two ways of expressing the same quantity —the unit travels separately, as a UCUM code
+ * ({@see UcumUnit}), exactly as ADR 0005 requires— and they do not change the observed concept, so
+ * neither needs a code of its own.
  *
- * Tampoco hay método de medición que registrar (ADR 0008): una báscula da el mismo peso sin que
- * quien pesa tenga que declarar nada que altere el valor de forma conocida, al contrario de lo que
- * pasa con el brazo y la postura en la tensión o con el sitio de medida en la temperatura
+ * There is also no measurement method to record (ADR 0008): a scale gives the same weight without
+ * the person weighing having to declare anything that changes the value in a known way, unlike the
+ * arm and posture in blood pressure or the measurement site in temperature
  * ({@see TemperatureLoincCode}).
  *
- * El valor está verificado contra LOINC y **no debe modificarse**: entra en el contenido que se
- * cifra en el navegador (ADR 0002, ADR 0004), así que cambiarlo dejaría los sobres ya guardados
- * diciendo una cosa y el catálogo otra, sin forma de reconciliarlos sin la clave de cada usuario.
+ * The value is verified against LOINC and **must not be modified**: it goes into the content
+ * encrypted in the browser (ADR 0002, ADR 0004), so changing it would leave the stored envelopes
+ * saying one thing and the catalog another, with no way to reconcile them without each user's key.
  */
 enum BodyWeightLoincCode: string
 {
-    /** Peso corporal medido (no declarado ni estimado). */
+    /** Measured body weight (not stated, not estimated). */
     case Measured = '3141-9';
 
-    /** Término oficial LOINC, en inglés, tal y como lo publica Regenstrief Institute (ADR 0005). */
+    /** Official LOINC term, in English, exactly as published by the Regenstrief Institute (ADR 0005). */
     public function officialName(): string
     {
         return match ($this) {

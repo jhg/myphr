@@ -12,49 +12,48 @@ use App\Security\Opaque\RandomSource;
 use App\Support\AuditEvent;
 
 /**
- * Emisión, validación y consumo de enlaces de registro de un solo uso
+ * Issuing, validating and consuming single-use registration links
  * (Spec 0001 §3.3, §3.4, §4.1, §4.2; ADR 0009).
  *
- * Reglas que esta clase concentra a propósito:
+ * Rules this class deliberately gathers in one place:
  *
- * * El token en claro solo existe en memoria y en la URL devuelta. En base de
- *   datos vive únicamente su `sha256` de 32 bytes.
- * * Inexistente, caducado y consumido producen el mismo error genérico
+ * * The plaintext token only exists in memory and in the returned URL. In the database only its
+ *   32-byte `sha256` lives.
+ * * Non-existent, expired and consumed produce the same generic error
  *   ({@see InvalidRegistrationLinkException}, `docs/OPAQUE.md` §13.3).
- * * La guardia de «esta cuenta ya tiene acceso» vive aquí y no en el comando ni
- *   en la interfaz de Filament (Spec 0001 §3.4): si viviera en dos sitios, uno
- *   de los dos acabaría sin ella, y `--no-interaction` se saltaría cualquier
- *   confirmación puesta solo en la interfaz.
+ * * The "this account already has access" guard lives here and not in the command or in the
+ *   Filament interface (Spec 0001 §3.4): if it lived in two places, one of them would end up
+ *   without it, and `--no-interaction` would skip any confirmation placed only in the interface.
  */
 final readonly class RegistrationLinks
 {
-    /** Tamaño del token en claro, antes de codificar en base64url. */
+    /** Size of the plaintext token, before base64url encoding. */
     public const TOKEN_BYTES = 32;
 
-    /** Spec 0001 §3.3 / ADR 0009: TTL de 24 horas, explícita y no oculta en un valor por defecto. */
+    /** Spec 0001 §3.3 / ADR 0009: a 24-hour TTL, explicit and not hidden in a default value. */
     public const TTL_HOURS = 24;
 
     /**
-     * Ruta de la página genérica de establecimiento de contraseña (Spec 0001 §4.1).
+     * Path of the generic set-password page (Spec 0001 §4.1).
      *
-     * El token viaja en el fragmento (`#<token>`), que el navegador no envía al
-     * servidor: solo llega dentro del cuerpo de `registration/start`.
+     * The token travels in the fragment (`#<token>`), which the browser does not send to the
+     * server: it only arrives inside the body of `registration/start`.
      */
     public const SET_PASSWORD_PATH = 'phr/set-password';
 
     public function __construct(private RandomSource $random) {}
 
     /**
-     * Emite un enlace nuevo para `$user` y devuelve su URL completa.
+     * Issues a new link for `$user` and returns its full URL.
      *
-     * @param  User  $user  Cuenta destinataria del enlace.
-     * @param  User|null  $issuedBy  Quién lo emite, para auditoría (`created_by`).
-     * @param  string|null  $confirmation  Email tecleado como confirmación explícita de
-     *                                     una reemisión sobre una cuenta con acceso.
-     * @return string URL con el token en el fragmento. Es la única copia del token en claro.
+     * @param  User  $user  Account the link is for.
+     * @param  User|null  $issuedBy  Who issues it, for auditing (`created_by`).
+     * @param  string|null  $confirmation  Email typed as explicit confirmation of a reissue on an
+     *                                     account that already has access.
+     * @return string URL with the token in the fragment. It is the only copy of the plaintext token.
      *
-     * @throws RegistrationLinkReissueRequiresConfirmationException Si la cuenta ya tiene
-     *                                                              acceso y falta la confirmación.
+     * @throws RegistrationLinkReissueRequiresConfirmationException If the account already has
+     *                                                              access and the confirmation is missing.
      */
     public function issueFor(User $user, ?User $issuedBy = null, ?string $confirmation = null): string
     {
@@ -70,13 +69,14 @@ final readonly class RegistrationLinks
         ]);
 
         /**
-         * El rastro va aquí y no en quien llama, porque emitir un enlace se puede hacer desde el
-         * panel y desde `phr:issue-registration-link`, y esta es la única pieza por la que pasan
-         * ambas. Es la acción más destructiva del sistema (Spec 0001 §3.4): completar el registro
-         * nuevo retira el sobre vigente de la clave maestra y deja inaccesible lo ya guardado.
+         * The trail goes here and not in the caller, because issuing a link can be done from the
+         * panel and from `phr:issue-registration-link`, and this is the only piece both go through.
+         * It is the most destructive action in the system (Spec 0001 §3.4): completing the new
+         * registration retires the current master key envelope and leaves what was stored
+         * inaccessible.
          *
-         * El token **no** se anota. Es la credencial que abre el alta, y guardarla en claro aquí
-         * anularía el sentido de que en su propia tabla solo viva su hash.
+         * The token is **not** recorded. It is the credential that opens the signup, and storing it
+         * in the clear here would defeat the point of its own table only holding its hash.
          */
         activity(AuditEvent::LOG_NAME)
             ->causedBy($issuedBy)
@@ -88,12 +88,12 @@ final readonly class RegistrationLinks
     }
 
     /**
-     * Comprueba que un token es utilizable. **No lo consume** (Spec 0001 §5, paso 4).
+     * Checks that a token is usable. **It does not consume it** (Spec 0001 §5, step 4).
      *
-     * Consumirlo aquí dejaría sin enlace y sin cuenta usable a quien sufra un corte
-     * de red durante el Argon2id del navegador.
+     * Consuming it here would leave anyone who loses their network during the browser's Argon2id
+     * without a link and without a usable account.
      *
-     * @throws InvalidRegistrationLinkException Si no existe, caducó o ya se consumió.
+     * @throws InvalidRegistrationLinkException If it does not exist, expired or was already consumed.
      */
     public function validate(string $token): UserRegistrationLink
     {
@@ -111,16 +111,16 @@ final readonly class RegistrationLinks
     }
 
     /**
-     * Consume un token de forma atómica (Spec 0001 §4.2).
+     * Consumes a token atomically (Spec 0001 §4.2).
      *
-     * El consumo es una escritura condicional cuyo resultado se decide por el número
-     * de filas afectadas: dos peticiones simultáneas con el mismo token producen una
-     * única fila actualizada y la segunda recibe el error genérico.
+     * Consumption is a conditional write whose result is decided by the number of affected rows:
+     * two simultaneous requests with the same token produce a single updated row and the second one
+     * gets the generic error.
      *
-     * No se usa `lockForUpdate()`: en SQLite es un no-op, así que un consumo apoyado
-     * en él pasaría los tests y no protegería nada (Spec 0001 §11).
+     * `lockForUpdate()` is not used: on SQLite it is a no-op, so a consumption relying on it would
+     * pass the tests and protect nothing (Spec 0001 §11).
      *
-     * @throws InvalidRegistrationLinkException Si no existe, caducó o ya se consumió.
+     * @throws InvalidRegistrationLinkException If it does not exist, expired or was already consumed.
      */
     public function consume(string $token): UserRegistrationLink
     {
@@ -147,16 +147,16 @@ final readonly class RegistrationLinks
     }
 
     /**
-     * Consume un enlace por su identificador, con la misma escritura condicional que
+     * Consumes a link by its identifier, with the same conditional write as
      * {@see self::consume()} (Spec 0001 §4.2).
      *
-     * `registration/finish` no recibe el token en claro: solo conoce el enlace a través del
-     * `invitation_ref` que guardó el registro pendiente. El consumo sigue viviendo aquí y no en el
-     * controlador para que exista una única implementación de lo que significa consumir un enlace.
+     * `registration/finish` does not receive the plaintext token: it only knows the link through the
+     * `invitation_ref` the pending registration stored. Consumption still lives here and not in the
+     * controller so there is a single implementation of what consuming a link means.
      *
-     * @param  string  $id  Identificador del enlace (`user_registration_links.id`).
+     * @param  string  $id  Link identifier (`user_registration_links.id`).
      *
-     * @throws InvalidRegistrationLinkException Si no existe, caducó o ya se consumió.
+     * @throws InvalidRegistrationLinkException If it does not exist, expired or was already consumed.
      */
     public function consumeById(string $id): UserRegistrationLink
     {
@@ -182,11 +182,10 @@ final readonly class RegistrationLinks
     }
 
     /**
-     * Guardia de la Spec 0001 §3.4.
+     * Guard from Spec 0001 §3.4.
      *
-     * La confirmación es el email de la cuenta, normalizado con la misma función que
-     * la columna (`docs/OPAQUE.md` §13.1.1) para que una mayúscula tecleada de más no
-     * bloquee una reemisión legítima.
+     * The confirmation is the account email, normalized with the same function as the column
+     * (`docs/OPAQUE.md` §13.1.1) so one extra capital letter does not block a legitimate reissue.
      *
      * @throws RegistrationLinkReissueRequiresConfirmationException
      */
@@ -206,8 +205,8 @@ final readonly class RegistrationLinks
     }
 
     /**
-     * Una cuenta tiene acceso si completó su registro OPAQUE o si conserva un sobre
-     * vigente de clave maestra: en ambos casos, un registro nuevo se lo destruye.
+     * An account has access if it completed its OPAQUE registration or if it still holds a current
+     * master key envelope: in both cases, a new registration destroys it.
      */
     private function hasUsableAccess(User $user): bool
     {

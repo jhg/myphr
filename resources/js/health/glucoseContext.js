@@ -1,29 +1,29 @@
 /**
- * La curva de glucemia con las marcas de comida y de insulina encima (ADR 0004, ADR 0006, ADR 0007,
+ * The glucose curve with the meal and insulin markers on top (ADR 0004, ADR 0006, ADR 0007,
  * ADR 0008).
  *
- * **Por qué es la gráfica que más importa.** Ninguna pantalla por tipo puede enseñar la relación
- * entre comer, pincharse y lo que hace la glucosa después, y es exactamente lo que se mira en una
- * consulta: no «cómo fue la media de ayer», sino «qué pasó a las dos horas de aquella comida». Sale
- * además casi gratis en peticiones: el servidor no puede filtrar por tipo (ADR 0006), así que la
- * petición que ya se hace para el resumen baja los tres tipos del periodo.
+ * **Why it is the chart that matters most.** No per-type screen can show the relation between
+ * eating, injecting and what the glucose does afterwards, and that is exactly what is looked at in
+ * an appointment: not "how was yesterday's mean", but "what happened two hours after that meal".
+ * It also comes almost free in requests: the server cannot filter by type (ADR 0006), so the
+ * request already made for the summary brings down the three types of the period.
  *
- * Lógica pura: ni DOM ni Chart.js, para poder probarla sin montar nada
- * (`tests/js/glucoseContext.test.mjs`). Quien la pinta es `health/glucoseContextChart.js`.
+ * Pure logic: no DOM and no Chart.js, so it can be tested without mounting anything
+ * (`tests/js/glucoseContext.test.mjs`). `health/glucoseContextChart.js` paints it.
  *
- * Decisiones que este módulo implementa y que no le corresponde revisar:
+ * Decisions this module implements and is not the place to revisit:
  *
- * - **Una serie por método de medición** (ADR 0008): una glucemia capilar y una intersticial no son
- *   el mismo dato y no comparten línea.
- * - **Las horas sin lecturas van como hueco**, jamás como cero ({@see MAX_READING_GAP_MS}): un cero
- *   es una lectura, y una falsa. Y una línea recta de doce horas entre dos puntos afirma un
- *   recorrido que nadie midió.
- * - **No se convierte entre unidades** (ADR 0007): se dibuja una sola unidad y lo demás se cuenta en
- *   `excludedByUnit` para que el pie lo declare.
- * - **La hora es la del reloj de quien registró** ({@see eventWallClockMs}), no la del navegador que
- *   mira.
- * - **Nada se recorta en silencio**: lo que no cabe se cuenta en `omittedReadings`,
- *   `omittedMarkers` y `groupedMarkers`.
+ * - **One series per measurement method** (ADR 0008): a capillary glucose reading and an
+ *   interstitial one are not the same datum and do not share a line.
+ * - **Hours with no readings go as a gap**, never as a zero ({@see MAX_READING_GAP_MS}): a zero is
+ *   a reading, and a false one. And a straight twelve-hour line between two points asserts a path
+ *   nobody measured.
+ * - **Nothing is converted between units** (ADR 0007): one single unit is drawn and the rest is
+ *   counted in `excludedByUnit` so the caption can state it.
+ * - **The time is the one on the clock of whoever recorded it** ({@see eventWallClockMs}), not the
+ *   browser's.
+ * - **Nothing is clipped in silence**: what does not fit is counted in `omittedReadings`,
+ *   `omittedMarkers` and `groupedMarkers`.
  */
 
 import { eventWallClockMs } from './dailyBands.js';
@@ -32,45 +32,45 @@ import { t } from '../i18n/index.js';
 import { toFiniteNumber } from './statistics.js';
 
 /**
- * Tope de lecturas dibujadas.
+ * Cap on drawn readings.
  *
- * Un sensor intersticial deja una lectura cada cinco minutos: un mes son más de ocho mil puntos, que
- * es una mancha antes que una curva. Cuando se pasa se conservan las **más recientes** y se dice
- * cuántas quedaron fuera, porque un recorte callado se lee como «antes no había nada».
+ * An interstitial sensor leaves one reading every five minutes: a month is more than eight
+ * thousand points, which is a smudge before it is a curve. When it goes over, the **most recent**
+ * ones are kept and how many were left out is stated, because a silent clip reads as "there was nothing before".
  */
 export const MAX_CONTEXT_READINGS = 1500;
 
 /**
- * Hueco a partir del cual la línea se interrumpe.
+ * Gap from which the line breaks.
  *
- * No es un umbral clínico, es de honestidad gráfica: entre dos lecturas separadas ocho horas no hay
- * ninguna medición, así que unirlas con un segmento dibujaría una glucemia nocturna que nadie tomó.
- * Seis horas deja unidas las lecturas de un día normal (antes y después de cada comida) y parte la
- * noche, que es justo el tramo del que no se sabe nada.
+ * It is not a clinical threshold, it is graphical honesty: between two readings eight hours apart
+ * there is no measurement, so joining them with a segment would draw a night-time glucose value
+ * nobody took. Six hours keeps the readings of a normal day joined (before and after each meal)
+ * and breaks the night, which is exactly the stretch nothing is known about.
  */
 export const MAX_READING_GAP_MS = 6 * 3_600_000;
 
 /**
- * Ventana inicial para agrupar marcas vecinas, y tope de marcas dibujadas.
+ * Initial window to group neighbouring markers, and cap on drawn markers.
  *
- * Con muchos eventos las marcas se convierten en una valla ilegible pegada al eje. La salida no es
- * esconderlas: es agrupar las que caen juntas en una sola marca que dice cuántas lleva dentro
- * ({@see clusterMarkers}), y declarar el total agrupado en el pie.
+ * With many events the markers turn into an unreadable fence stuck to the axis. The way out is not
+ * hiding them: it is grouping the ones that fall together into a single marker that says how many
+ * it carries inside ({@see clusterMarkers}), and stating the grouped total in the caption.
  */
 export const MARKER_CLUSTER_MS = 20 * 60_000;
 export const MAX_MARKERS = 90;
 
-/** Tope de la ventana de agrupación: más de tres horas ya no es «lo que pasó a la vez». */
+/** Cap on the grouping window: more than three hours is no longer "what happened at the same time". */
 const MAX_CLUSTER_MS = 3 * 3_600_000;
 
-/** Cuántas etiquetas concretas guarda una marca agrupada; el resto se cuenta, no se enumera. */
+/** How many concrete labels a grouped marker keeps; the rest is counted, not listed. */
 const MAX_CLUSTER_ITEMS = 4;
 
 /**
- * Etiqueta de una comida: el tipo de comida, que es lo que se lee de un vistazo. Qué se comió está
- * en la línea temporal, que es donde cabe.
+ * Label of a meal: the meal type, which is what is read at a glance. What was eaten is in the
+ * timeline, which is where it fits.
  *
- * @param {object} data Sobre descifrado del evento.
+ * @param {object} data Decrypted envelope of the event.
  * @returns {string}
  */
 function mealLabel(data) {
@@ -78,11 +78,11 @@ function mealLabel(data) {
 }
 
 /**
- * Etiqueta de una inyección: **la dosis con su unidad**, que es el dato que la marca tiene que
- * llevar, y el tipo de insulina detrás cuando el sobre lo trae.
+ * Label of an injection: **the dose with its unit**, which is the datum the marker has to carry,
+ * and the insulin type behind it when the envelope brings it.
  *
- * Una inyección sin dosis legible sigue siendo una inyección y se dibuja igual: lo que ocurrió
- * ocurrió, y esconder la marca por un campo que falta borraría el pinchazo de la gráfica.
+ * An injection with no readable dose is still an injection and is drawn all the same: what
+ * happened happened, and hiding the marker over a missing field would erase it from the chart.
  *
  * @param {object} data
  * @returns {string}
@@ -98,21 +98,21 @@ function insulinLabel(data) {
     const measured = t('dashboard.timeline.measurement', { value: dose, unit: data?.unit ?? '' });
 
     /**
-     * `short` es lo que se escribe **junto a la marca** cuando caben pocas: la dosis, que es el dato
-     * que la marca de insulina tiene que llevar encima sin obligar a pasar el ratón por ella.
+     * `short` is what is written **next to the marker** when few fit: the dose, which is the datum
+     * the insulin marker has to carry on top without forcing anybody to hover over it.
      */
     return { label: type === '' ? measured : `${measured} · ${type}`, short: measured };
 }
 
 /**
- * Agrupa marcas del mismo tipo que caen dentro de una misma ventana.
+ * Groups markers of the same kind that fall inside one window.
  *
- * La marca resultante se coloca en el instante de la **primera** del grupo y no en el promedio: un
- * promedio inventaría un instante en el que no ocurrió nada. Lo que lleva dentro se dice en el
- * detalle y en el recuento.
+ * The resulting marker is placed at the instant of the **first** of the group and not at the
+ * average: an average would invent an instant when nothing happened. What it carries inside is
+ * stated in the detail and in the count.
  *
- * @param {list<{x: number, label: string, short: string}>} marks Ya ordenadas por instante.
- * @param {number} window Milisegundos.
+ * @param {list<{x: number, label: string, short: string}>} marks Already sorted by instant.
+ * @param {number} window Milliseconds.
  * @returns {list<{x: number, count: number, items: list<string>, short: string}>}
  */
 function clusterMarkers(marks, window) {
@@ -139,7 +139,7 @@ function clusterMarkers(marks, window) {
 }
 
 /**
- * Agrupa hasta que caben, ensanchando la ventana. Devuelve las marcas agrupadas de los dos tipos.
+ * Groups until they fit, widening the window. Returns the grouped markers of both kinds.
  *
  * @param {Record<string, list<{x: number, label: string}>>} byKind
  * @returns {{markers: list<object>, grouped: number}}
@@ -159,10 +159,10 @@ function foldMarkers(byKind) {
 }
 
 /**
- * Parte una serie ordenada allí donde el hueco entre dos lecturas se pasa de {@see MAX_READING_GAP_MS}.
+ * Splits a sorted series wherever the gap between two readings goes over {@see MAX_READING_GAP_MS}.
  *
- * El corte se hace con un punto de valor `null` en medio, que es lo que Chart.js dibuja como
- * interrupción con `spanGaps` en falso.
+ * The cut is made with a point of value `null` in the middle, which is what Chart.js draws as a
+ * break with `spanGaps` false.
  *
  * @param {list<{x: number, y: number}>} points
  * @returns {list<{x: number, y: number|null}>}
@@ -184,13 +184,13 @@ function splitOnGaps(points) {
 }
 
 /**
- * Construye la curva de glucemia del periodo y las marcas de comida e insulina que la acompañan.
+ * Builds the glucose curve of the period and the meal and insulin markers that go with it.
  *
- * @param {list<{type: string, tz?: string, occurredAt: string, data: object}>} events Eventos ya
- *        descifrados del periodo, de **todos** los tipos: de ahí salen las marcas.
+ * @param {list<{type: string, tz?: string, occurredAt: string, data: object}>} events Already
+ *        decrypted events of the period, of **every** type: the markers come from there.
  * @param {object} params
- * @param {string} [params.unit] Unidad de presentación de glucemia (ADR 0007). Lo que esté en otra
- *        se cuenta en `excludedByUnit` y no se dibuja.
+ * @param {string} [params.unit] Glucose display unit (ADR 0007). Whatever is in another one is
+ *        counted in `excludedByUnit` and not drawn.
  * @param {number} [params.maxReadings]
  * @returns {{
  *   series: list<{group: string, points: list<{x: number, y: number|null}>}>,
@@ -244,7 +244,7 @@ export function buildGlucoseContext(events, { unit, maxReadings = MAX_CONTEXT_RE
 
     readings.sort((left, right) => left.x - right.x);
 
-    /** Se conservan las lecturas más recientes: el tramo que se está mirando es el del final. */
+    /** The most recent readings are kept: the stretch being looked at is the one at the end. */
     const kept = readings.slice(-maxReadings);
     const omittedReadings = readings.length - kept.length;
 
@@ -261,9 +261,9 @@ export function buildGlucoseContext(events, { unit, maxReadings = MAX_CONTEXT_RE
     }
 
     /**
-     * Las marcas anteriores a la primera lectura dibujada caerían fuera del eje. No se tiran en
-     * silencio: se cuentan, porque una comida que no se ve es una comida que el ojo da por no
-     * ocurrida.
+     * The markers earlier than the first drawn reading would fall off the axis. They are not thrown
+     * away in silence: they are counted, because a meal that is not seen is a meal the eye takes as
+     * not having happened.
      */
     const from = kept[0].x;
     let omittedMarkers = 0;
@@ -286,7 +286,7 @@ export function buildGlucoseContext(events, { unit, maxReadings = MAX_CONTEXT_RE
         byGroup.get(reading.group).push({ x: reading.x, y: reading.y });
     }
 
-    /** Orden estable por token, igual que en `dailyBands.js`: el color de un método no puede bailar. */
+    /** Stable order by token, as in `dailyBands.js`: the colour of a method cannot dance around. */
     const series = [...byGroup.keys()].sort((a, b) => a.localeCompare(b))
         .map((group) => ({ group, points: splitOnGaps(byGroup.get(group)) }));
 

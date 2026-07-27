@@ -20,22 +20,22 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * `POST /phr/auth/opaque/registration/public/start`: alta pública, sin invitación.
+ * `POST /phr/auth/opaque/registration/public/start`: public signup, no invitation.
  *
- * El registro por invitación (ADR 0009, Spec 0001 §3.3) sigue siendo el único camino cuando lo abre
- * un administrador o el comando de consola. Este endpoint añade un segundo camino: quien llega sin
- * enlace crea su propia cuenta. No hay código de invitación que validar, así que el equivalente al
- * «token válido» de {@see InvitedRegistrationStartController} es, simplemente, que el login esté libre.
+ * Invited registration (ADR 0009, Spec 0001 §3.3) is still the only path when an administrator or
+ * the console command opens it. This endpoint adds a second path: whoever arrives without a link
+ * creates their own account. There is no invitation code to validate, so the equivalent of the
+ * "valid token" in {@see InvitedRegistrationStartController} is, simply, that the login is free.
  *
- * Crea el usuario y el registro OPAQUE pendiente en la misma petición, pero **no** en una única
- * transacción atómica con `registration/finish`: si la persona abandona a mitad, la cuenta queda sin
- * `opaque_registered_at`, exactamente el mismo estado que hoy tiene una cuenta invitada que no ha
- * abierto su enlace (`hasCompletedOpaqueRegistration()` es falso en ambos casos). No se inventa un
- * estado nuevo.
+ * It creates the user and the pending OPAQUE registration in the same request, but **not** in a
+ * single atomic transaction with `registration/finish`: if the person gives up halfway, the account
+ * is left without `opaque_registered_at`, exactly the same state an invited account that has not
+ * opened its link is in today (`hasCompletedOpaqueRegistration()` is false in both cases). No new
+ * state is invented.
  *
- * El login ya existente se anuncia con 409 `login_taken` a propósito (decisión consciente, mitigada
- * con el limitador `opaque-registration-public`): quien lo lea sabe que tiene que ir a iniciar sesión
- * en vez de creer que su alta se perdió.
+ * An already existing login is announced with a 409 `login_taken` on purpose (a deliberate decision,
+ * mitigated by the `opaque-registration-public` limiter): whoever reads it knows they have to go and
+ * log in instead of believing their signup was lost.
  */
 final readonly class RegistrationPublicStartController
 {
@@ -60,10 +60,10 @@ final readonly class RegistrationPublicStartController
         }
 
         /**
-         * Se normaliza **antes** de comprobar la forma de email, igual que
-         * `IssueRegistrationLinkCommand`: espacios exteriores y mayúsculas son variaciones válidas de
-         * un mismo login, no errores de formato. Validar el crudo con la regla `email` de Laravel
-         * rechazaría un correo perfectamente normalizable solo por llevar espacios alrededor.
+         * It is normalized **before** checking the email shape, like
+         * `IssueRegistrationLinkCommand`: outer whitespace and capitals are valid variations of the
+         * same login, not format errors. Validating the raw value with Laravel's `email` rule would
+         * reject a perfectly normalizable address just for having spaces around it.
          */
         $login = LoginNormalizer::normalize($data['login']);
 
@@ -72,9 +72,9 @@ final readonly class RegistrationPublicStartController
         }
 
         /**
-         * La comprobación de unicidad vive en el propio `INSERT`, no en un `SELECT` previo: dos
-         * altas simultáneas con el mismo correo pasarían igual una comprobación anterior, y solo la
-         * restricción `unique` de la columna decide de verdad cuál gana. La que pierde no deja fila.
+         * The uniqueness check lives in the `INSERT` itself, not in a prior `SELECT`: two
+         * simultaneous signups with the same email would both pass an earlier check, and only the
+         * column's `unique` constraint really decides which one wins. The loser leaves no row.
          */
         try {
             $user = User::create([
@@ -90,9 +90,9 @@ final readonly class RegistrationPublicStartController
         }
 
         /**
-         * Igual que en {@see InvitedRegistrationStartController::__invoke()}: la cuenta es nueva, así que
-         * nunca tiene `opaque_credential_identifier` todavía, pero se deriva con la misma fórmula
-         * para que el valor coincida con el que calculará `login/start` (§13.1).
+         * Same as in {@see InvitedRegistrationStartController::__invoke()}: the account is new, so
+         * it never has an `opaque_credential_identifier` yet, but it is derived with the same
+         * formula so the value matches the one `login/start` will compute (§13.1).
          */
         $credentialIdentifier = $this->credentialIdentifier->for($login);
 
@@ -112,9 +112,9 @@ final readonly class RegistrationPublicStartController
         ]);
 
         /**
-         * El alta pública crea la fila de usuario por sí misma, así que aquí ya existe una cuenta
-         * aunque el registro OPAQUE no esté completo todavía. Sin causer: no hay nadie autenticado,
-         * y atribuírselo a la propia cuenta recién creada diría menos de lo que parece.
+         * Public signup creates the user row itself, so an account already exists here even though
+         * the OPAQUE registration is not complete yet. No causer: nobody is authenticated, and
+         * attributing it to the just-created account would say less than it seems.
          */
         activity(AuditEvent::LOG_NAME)
             ->performedOn($user)
@@ -131,8 +131,8 @@ final readonly class RegistrationPublicStartController
     }
 
     /**
-     * SQLite y MySQL redactan el mensaje de forma distinta, así que se busca la subcadena común en
-     * vez de comparar códigos de error concretos.
+     * SQLite and MySQL word the message differently, so we look for the common substring instead of
+     * comparing specific error codes.
      */
     private function isDuplicateEmail(QueryException $exception): bool
     {
@@ -141,8 +141,9 @@ final readonly class RegistrationPublicStartController
     }
 
     /**
-     * Mensaje OPAQUE mal formado: mismo error genérico que el resto del subsistema (§7). El correo
-     * duplicado no entra aquí porque tiene su propio código, a propósito (ver la clase).
+     * Malformed OPAQUE message: the same generic error as the rest of the subsystem (§7). A
+     * duplicate email does not come through here because it has its own code, on purpose (see the
+     * class).
      */
     private function genericError(): JsonResponse
     {

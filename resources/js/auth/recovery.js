@@ -1,13 +1,13 @@
 /**
- * Recuperación de la clave maestra tras una recarga (Spec 0001 §6.2; ADR 0003).
+ * Master key recovery after a reload (Spec 0001 §6.2; ADR 0003).
  *
- * Un F5, un 419 o un despliegue a mitad de sesión pierden la clave de memoria. No es un error: es
- * un estado normal y frecuente. La interfaz degrada a pedir autenticación, nunca a una pantalla
- * rota.
+ * An F5, a 419 or a deploy mid-session lose the key from memory. That is not an error: it is a
+ * normal and frequent state. The interface degrades to asking for authentication, never to a
+ * broken screen.
  *
- * Los dos códigos de error tienen el mismo destino, la pantalla de login, pero significan cosas
- * distintas: `401` es la sesión de Laravel muerta, `410` es el secreto destruido por un bloqueo o
- * un cierre de sesión (§4.5).
+ * The two error codes lead to the same place, the login screen, but they mean different things:
+ * `401` is the Laravel session dead, `410` is the secret destroyed by a lock or a sign-out
+ * (§4.5).
  */
 
 import { zeroize } from '../crypto/zeroize.js';
@@ -15,11 +15,11 @@ import { AuthRequestError, postJson } from './http.js';
 import { isUnlocked, restoreFromSessionSecret, decodeSessionSecret } from './keyring.js';
 import { loadSettings } from './settings.js';
 
-/** Resultados posibles de un intento de recuperación. */
+/** Possible outcomes of a recovery attempt. */
 export const RecoveryOutcome = Object.freeze({
-    /** Ya había clave en memoria, o se recuperó. */
+    /** There already was a key in memory, or it was recovered. */
     Unlocked: 'unlocked',
-    /** No hay forma de recuperarla sin contraseña: hay que ir al login. */
+    /** There is no way to recover it without the password: go to the login. */
     NeedsLogin: 'needs-login',
 });
 
@@ -29,10 +29,10 @@ function metaContent(name) {
 }
 
 /**
- * Intenta dejar la clave maestra en memoria sin pedir la contraseña (§6.2).
+ * Tries to leave the master key in memory without asking for the password (§6.2).
  *
- * @param {string} userId UUID del usuario de la sesión, que es el dato asociado del paquete.
- * @returns {Promise<string>} Uno de `RecoveryOutcome`.
+ * @param {string} userId Session user UUID, which is the associated data of the package.
+ * @returns {Promise<string>} One of `RecoveryOutcome`.
  */
 export async function recoverMasterKey(userId) {
     if (isUnlocked()) {
@@ -50,7 +50,7 @@ export async function recoverMasterKey(userId) {
     try {
         payload = await postJson(url);
     } catch (failure) {
-        /** 401 y 410 llevan al mismo sitio; cualquier otro fallo también, sin adivinar nada. */
+        /** 401 and 410 lead to the same place; so does any other failure, guessing nothing. */
         if (failure instanceof AuthRequestError) {
             return RecoveryOutcome.NeedsLogin;
         }
@@ -71,18 +71,18 @@ export async function recoverMasterKey(userId) {
         return RecoveryOutcome.NeedsLogin;
     }
 
-    /** §6.2, paso 4: los ajustes descifrados, ya con la clave maestra en memoria. */
+    /** §6.2, step 4: the decrypted settings, now with the master key in memory. */
     loadSettings({ envelope: payload.encryptedSettings, userId });
 
     return RecoveryOutcome.Unlocked;
 }
 
 /**
- * Envía a la pantalla de login con una recarga dura (§8).
+ * Sends to the login screen with a hard reload (§8).
  *
- * Aterrizar en el login con la clave todavía en memoria es uno de los tres cierres que exigen
- * destruir el contexto de JavaScript, porque solo así mueren las instantáneas de DOM que Livewire
- * retiene con datos descifrados.
+ * Landing on the login with the key still in memory is one of the three exits that require
+ * destroying the JavaScript context, because only that kills the DOM snapshots Livewire keeps
+ * with decrypted data.
  */
 export function goToLogin() {
     const url = metaContent('phr-login-url');

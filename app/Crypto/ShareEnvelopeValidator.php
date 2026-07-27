@@ -8,36 +8,39 @@ use App\Security\Opaque\Base64Url;
 use App\Security\Opaque\InvalidMessageException;
 
 /**
- * Validación del envoltorio del **paquete de compartición** del ADR 0011.
+ * Validation of the wrapper of the ADR 0011 **sharing package**.
  *
- * Es el hermano de {@see EnvelopeValidator} y vive aparte a propósito. Ampliar aquel con estos
- * tamaños dejaría de acotar los eventos sueltos: sus tres escalones (256, 1024, 4096 bytes) son lo
- * que impide clasificar un evento por su longitud, y admitir además 4 MiB los volvería decorativos.
- * Por eso el ADR 0004 recoge esta excepción y el ADR 0011 pide un validador separado.
+ * It is the sibling of {@see EnvelopeValidator} and lives apart on purpose. Extending that one with
+ * these sizes would stop it from bounding individual events: its three steps (256, 1024, 4096 bytes)
+ * are what stops anyone classifying an event by its length, and allowing 4 MiB as well would make
+ * them decorative. That is why ADR 0004 records this exception and ADR 0011 asks for a separate
+ * validator.
  *
- * Tres diferencias con el de los eventos, y ninguna más:
+ * Three differences from the events one, and no more:
  *
- * 1. **Prefijo de transporte `s1.`** en lugar de `v1.`. No es cosmética: impide colar un paquete en
- *    la columna `payload` de un evento, o al revés, porque cada validador exige el suyo. Como efecto
- *    colateral buscado, los dos guardarraíles del ADR 0002 (`livewirePayloadGuard.js` y
- *    `EncryptedPayloadGuardHook`) abortan cualquier cadena larga que no empiece por `v1.`, así que
- *    un paquete que intentase viajar por Livewire moriría en los dos extremos. El paquete sube por
- *    un endpoint HTTP propio, que es la vía que el propio ADR 0002 reserva para los blobs grandes.
- * 2. **Escalera de relleno propia**: 64 KiB, 256 KiB, 1 MiB y 4 MiB. El suelo alto es lo que hace el
- *    trabajo: casi todos los recortes reales caen comprimidos dentro de 64 KiB y son indistinguibles
- *    entre sí, así que el servidor no puede restar dos envíos del mismo rango para aislar el peso de
- *    un tipo.
- * 3. Todo lo demás es idéntico: misma cabecera de 64 bytes, mismo tag de 16, base64url canónico.
+ * 1. **The `s1.` transport prefix** instead of `v1.`. It is not cosmetic: it stops a package being
+ *    slipped into the `payload` column of an event, or the other way round, because each validator
+ *    demands its own. As an intended side effect, the two ADR 0002 guardrails
+ *    (`livewirePayloadGuard.js` and `EncryptedPayloadGuardHook`) abort on any long string that does
+ *    not start with `v1.`, so a package trying to travel over Livewire would die at both ends. The
+ *    package is uploaded through its own HTTP endpoint, which is the route ADR 0002 itself reserves
+ *    for large blobs.
+ * 2. **Its own padding ladder**: 64 KiB, 256 KiB, 1 MiB and 4 MiB. The high floor does the work:
+ *    almost every real clipping compresses to under 64 KiB and they are indistinguishable from one
+ *    another, so the server cannot subtract two deliveries of the same range to isolate the weight
+ *    of one type.
+ * 3. Everything else is identical: the same 64-byte header, the same 16-byte tag, canonical
+ *    base64url.
  *
- * Y como allí, **nunca** valida el contenido: el servidor no tiene `CK`, así que cualquier
- * comprobación adicional sería una afirmación que no puede sostener.
+ * And like there, it **never** validates the content: the server has no `CK`, so any further check
+ * would be a claim it cannot back.
  */
 final class ShareEnvelopeValidator
 {
-    /** Prefijo de transporte del paquete. Distinto del `v1.` de los eventos por diseño. */
+    /** Transport prefix of the package. Different from the `v1.` of events by design. */
     public const string PREFIX = 's1.';
 
-    /** Misma cabecera que el sobre del ADR 0004: versión, algoritmo, KDF, banderas, id de clave, sal y nonce. */
+    /** Same header as the ADR 0004 envelope: version, algorithm, KDF, flags, key id, salt and nonce. */
     public const int HEADER_BYTES = EnvelopeValidator::HEADER_BYTES;
 
     /** Tag del AEAD. */
@@ -58,7 +61,7 @@ final class ShareEnvelopeValidator
     private function __construct() {}
 
     /**
-     * Tamaños binarios completos admitidos: cabecera + tag + escalón de relleno.
+     * Accepted full binary sizes: header + tag + padding step.
      *
      * @return list<int>
      */
@@ -71,12 +74,12 @@ final class ShareEnvelopeValidator
     }
 
     /**
-     * Longitud máxima de la cadena de transporte, para acotar el cuerpo de la petición **antes** de
-     * decodificar nada.
+     * Maximum length of the transport string, to bound the request body **before** decoding
+     * anything.
      *
-     * Es el tope de tamaño por paquete que exige el ADR 0011: sin él, el endpoint es alojamiento
-     * anónimo gratuito. Sale del mayor escalón de la escalera, así que subir el tope obliga a añadir
-     * antes un escalón, y no al revés.
+     * It is the per-package size cap ADR 0011 requires: without it, the endpoint is free anonymous
+     * hosting. It comes from the largest step of the ladder, so raising the cap means adding a step
+     * first, and not the other way round.
      */
     public static function maxTransportLength(): int
     {
@@ -86,7 +89,7 @@ final class ShareEnvelopeValidator
     }
 
     /**
-     * @param  mixed  $envelope  Valor recibido del cliente, sin ninguna suposición sobre su tipo.
+     * @param  mixed  $envelope  Value received from the client, with no assumption about its type.
      */
     public static function isValid(mixed $envelope): bool
     {

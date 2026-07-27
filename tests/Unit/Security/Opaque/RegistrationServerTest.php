@@ -16,7 +16,7 @@ use App\Security\Opaque\ServerSetup;
  * `CreateRegistrationResponse` de RFC 9807 §5.2.2 (`docs/OPAQUE.md` §10.2).
  */
 
-/** Setup determinista para las pruebas. */
+/** Deterministic setup for the tests. */
 function registrationSetup(): ServerSetup
 {
     [$serverPrivateKey] = Oprf::deriveDiffieHellmanKeyPair(str_repeat("\x07", 32));
@@ -41,7 +41,7 @@ function registrationCredentialIdentifier(string $login = 'alice@example.test'):
     return hash_hmac('sha256', $login, str_repeat("\x2b", 32), true);
 }
 
-/** `blinded_message` producido por el cliente con un `blind` fijo. */
+/** `blinded_message` produced by the client with a fixed `blind`. */
 function registrationBlindedMessage(string $password = 'correct horse battery staple'): string
 {
     return Oprf::blind($password, Ristretto255::scalarReduce(str_repeat("\x03", 64)));

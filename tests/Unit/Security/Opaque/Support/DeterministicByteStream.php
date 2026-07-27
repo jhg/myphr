@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace Tests\Unit\Security\Opaque\Support;
 
 /**
- * Generador de bytes pseudoaleatorio determinista para el fuzzing ligero de
+ * Deterministic pseudorandom byte generator for the light fuzzing in
  * `docs/OPAQUE.md` §20.7.
  *
- * No es un CSPRNG ni pretende serlo: su única propiedad relevante es que la
- * misma semilla produce siempre la misma secuencia, de modo que un fallo de
- * fuzzing se puede reproducir exactamente. Se construye encadenando
- * SHA-512 sobre `semilla || contador`.
+ * It is not a CSPRNG and does not pretend to be: its only relevant property is
+ * that the same seed always produces the same sequence, so a fuzzing failure
+ * can be reproduced exactly. It is built by chaining SHA-512 over
+ * `seed || counter`.
  */
 final class DeterministicByteStream
 {
@@ -20,9 +20,9 @@ final class DeterministicByteStream
     public function __construct(private readonly string $seed) {}
 
     /**
-     * Devuelve exactamente `$length` bytes binarios (0 <= length).
+     * Returns exactly `$length` binary bytes (0 <= length).
      *
-     * @param  int<0, max>  $length  Número de bytes solicitados.
+     * @param  int<0, max>  $length  Number of bytes requested.
      */
     public function bytes(int $length): string
     {

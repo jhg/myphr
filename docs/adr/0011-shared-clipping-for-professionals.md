@@ -1,307 +1,329 @@
-# ADR 0011: Compartir un recorte del historial con un profesional
+# ADR 0011: Sharing a clipping of the history with a professional
 
-* **Status**: Proposed
+* **Status**: Accepted
 * **Date**: 2026-07-27
 * **Decider**: Development Team
 
 ## Context
 
-`docs/README.md` promete que compartir será una decisión criptográfica y no un permiso en una tabla, porque el
-servidor no puede conceder acceso a algo que no sabe leer. El caso real es la consulta: que el médico vea
-las glucemias de los últimos tres meses, sin cuenta en esta aplicación y en cinco minutos. Se comparte una
-foto fija de un rango y unos tipos elegidos, no una vista en vivo.
+`docs/README.md` promises that sharing will be a cryptographic decision and not a permission row in a table,
+because the server cannot grant access to something it cannot read. The real case is the consultation: the
+doctor sees the blood glucose readings of the last three months, without an account in this application and
+within five minutes. What is shared is a still photograph of a range and a set of chosen types, not a live
+view.
 
-Ya estaba decidido que habría un enlace con un bloque cifrado en el servidor, que el enlace solo no
-bastaría porque lleva además un PIN corto dado por otro canal, y que se mostraría un QR generado en el
-cliente. Faltaba el diseño criptográfico, y el flujo inicial tenía ahí un fallo que lo invalidaba:
-entregaba el bloque a cualquiera que conociese el identificador y pedía el PIN después, con lo que un PIN
-de seis dígitos se adivina fuera de línea en minutos y no protege de nada.
+It was already decided that there would be a link with an encrypted block on the server, that the link alone
+would not be enough because it also carries a short PIN delivered through another channel, and that a QR code
+generated on the client would be shown. The cryptographic design was missing, and the initial flow had a flaw
+there that invalidated it: it handed the block to anyone who knew the identifier and asked for the PIN
+afterwards, so a six-digit PIN can be guessed offline in minutes and protects nothing.
 
 ## Decision
 
-Dos capas y dos tablas. `shares` guarda el paquete grande, que es inmutable y nunca se actualiza en su
-sitio: `id` (UUIDv4 generado en el cliente), `user_id`, `expires_at`, `payload` con el sobre del paquete,
-`descriptor` con un sobre bajo la clave maestra del usuario, `opened_at` y `created_at`. `share_links`
-guarda un envoltorio pequeño por enlace: `id` (UUIDv4 del cliente, el que viaja en la URL), `share_id`,
-`pin_salt` de 16 bytes, `pin_tag` de 32, `attempts_remaining`, `wrapper`, `expires_at` y `created_at`.
-Ninguna de las dos tablas lleva `updated_at`: nada se actualiza en su sitio salvo el decremento del
-contador y la marca de primer acceso.
+Two layers and two tables. `shares` holds the large package, which is immutable and never updated in place:
+`id` (UUIDv4 generated on the client), `user_id`, `expires_at`, `payload` with the package envelope,
+`descriptor` with an envelope under the user's master key, `opened_at` and `created_at`. `share_links` holds a
+small wrapper per link: `id` (client-side UUIDv4, the one that travels in the URL), `share_id`, a 16-byte
+`pin_salt`, a 32-byte `pin_tag`, `attempts_remaining`, `wrapper`, `expires_at` and `created_at`. Neither
+table carries `updated_at`: nothing is updated in place except the counter decrement and the first-access
+mark.
 
-Ninguna columna nueva describe el contenido del recorte. El rango, los tipos incluidos y excluidos y la
-clave de contenido viven en `descriptor`, que es un sobre normal del ADR 0004 bajo la clave maestra, con dato
-asociado `user_id` más el `id` del share. La pantalla de comparticiones activas se pinta descifrando en el
-navegador. Guardar `types` o `range_from` en claro devolvería al servidor justo el metadato que el ADR 0006
-cifró: leer `["glucose","insulin"]` es saber que esa persona es diabética sin descifrar un byte.
+No new column describes the content of the clipping. The range, the included and excluded types and the
+content key live in `descriptor`, which is an ordinary ADR 0004 envelope under the master key, with
+associated data of `user_id` plus the share's `id`. The active-shares screen is painted by decrypting in the
+browser. Storing `types` or `range_from` in the clear would hand the server back exactly the metadata ADR
+0006 encrypted: reading `["glucose","insulin"]` is knowing that this person is diabetic without decrypting a
+single byte.
 
-La construcción de claves, cerrada. La clave de contenido `CK` son 32 bytes de `getRandomValues` y cifra el
-paquete. La clave de envío `S` son otros 32 bytes de `getRandomValues`, jamás derivados de la clave maestra,
-y viajan en el fragmento de la URL. El PIN lo genera la aplicación, seis dígitos de CSPRNG sin sesgo de
-módulo, nunca elegido por la persona. Por enlace hay una `pin_salt` de 16 bytes aleatorios. Entonces:
+Key construction, settled. The content key `CK` is 32 bytes from `getRandomValues` and encrypts the package.
+The share key `S` is another 32 bytes from `getRandomValues`, never derived from the master key, and travels
+in the URL fragment. The PIN is generated by the application, six digits from a CSPRNG without modulo bias,
+never chosen by the person. Each link has its own 16 random bytes of `pin_salt`. Then:
 
 ```
-stretched = Argon2id(v0x13, PIN en NFKC UTF-8, pin_salt, m=65536 KiB, t=3, p=4, dkLen=32)
+stretched = Argon2id(v0x13, PIN in NFKC UTF-8, pin_salt, m=65536 KiB, t=3, p=4, dkLen=32)
 pinTag    = HKDF-SHA-512(ikm=stretched, salt=pin_salt, info="myphr/share-pin-tag/v1" || 0x00 || linkId, L=32)
 wrapKey   = HKDF-SHA-512(ikm=S || stretched, salt=pin_salt,
                          info="myphr/share-link/v1" || 0x00 || linkId || 0x00 || canonicalDate(expiresAt), L=32)
 ```
 
-Los parámetros de Argon2id son los del KSF de OPAQUE, para no mantener dos perfiles. Medido con
-`@noble/hashes` 2.2.0 en un portátil reciente: 1,47 s, y en un equipo lento de consulta serán varios
-segundos, así que corre con `argon2idAsync` y barra de progreso, o en un Web Worker que recibe el PIN y la
-sal y nunca la clave maestra. El PIN no puede entrar por HKDF, que no tiene coste ajustable.
+The Argon2id parameters are the ones from the OPAQUE KSF, so as not to maintain two profiles. Measured with
+`@noble/hashes` 2.2.0 on a recent laptop: 1.47 s, and on a slow machine at the clinic it will be several
+seconds, so it runs with `argon2idAsync` and a progress bar, or in a Web Worker that receives the PIN and the
+salt and never the master key. The PIN cannot enter through HKDF, which has no tunable cost.
 
-El envoltorio es un sobre corriente del ADR 0004 (`v1.`) cifrado con `wrapKey`, que contiene `CK`, con dato
-asociado `"myphr/share-link/v1" || 0x00 || linkId || 0x00 || canonicalDate(expiresAt) || 0x00 ||
-sha512(paquete)`. Ese hash impide que el servidor empareje el envoltorio de un enlace con el paquete de
-otro y le enseñe al profesional el historial de otra persona con un tag válido.
+The wrapper is an ordinary ADR 0004 envelope (`v1.`) encrypted with `wrapKey`, containing `CK`, with
+associated data `"myphr/share-link/v1" || 0x00 || linkId || 0x00 || canonicalDate(expiresAt) || 0x00 ||
+sha512(package)`. That hash stops the server from pairing one link's wrapper with another's package and
+showing the professional somebody else's history under a valid tag.
 
-El paquete usa un formato hermano: prefijo de transporte `s1.` en lugar de `v1.`, misma cabecera de 64
-bytes, cifrado con `CK` y dato asociado `"myphr/share/v1" || 0x00 || shareId || 0x00 ||
-canonicalDate(generatedAt)`. El prefijo distinto impide colar un paquete en la columna `payload` de un
-evento o al revés, porque `EnvelopeValidator` exige `v1.`. Ese dato asociado no lleva `user_id`, excepción
-consciente al patrón del ADR 0004: lo construye el lector, y le regalaría un identificador estable del
-paciente, correlacionable entre dos envíos.
+The package uses a sibling format: transport prefix `s1.` instead of `v1.`, the same 64-byte header,
+encrypted with `CK` and associated data `"myphr/share/v1" || 0x00 || shareId || 0x00 ||
+canonicalDate(generatedAt)`. The different prefix stops a package from being slipped into an event's
+`payload` column or the other way around, because `EnvelopeValidator` demands `v1.`. That associated data
+does not carry `user_id`, a deliberate exception to the ADR 0004 pattern: it is the reader that builds it,
+and it would be handing the reader a stable patient identifier, correlatable across two shares.
 
-El prefijo distinto tiene un precio que hay que decir. Los dos guardarraíles del ADR 0002
-(`docs/adr/0002-encrypted-data-flow-livewire-alpine-filament.md`), `livewirePayloadGuard.js` y
-`EncryptedPayloadGuardHook`, abortan cualquier cadena de más de 256 caracteres que no empiece por `v1.`,
-así que un paquete `s1.` que viajase por Livewire lo abortarían los dos. No se tocan: el paquete sube por
-un endpoint HTTP propio fuera de Livewire, que es la vía que el propio ADR 0002 reserva para los blobs
-grandes, y ahí lo valida `ShareEnvelopeValidator`. El `descriptor` es un sobre `v1.` corriente y viaja
-como cualquier otro.
+The different prefix has a price that has to be stated. The two guardrails from ADR 0002
+(`docs/adr/0002-encrypted-data-flow-livewire-alpine-filament.md`), `livewirePayloadGuard.js` and
+`EncryptedPayloadGuardHook`, abort any string longer than 256 characters that does not start with `v1.`, so
+an `s1.` package travelling through Livewire would be aborted by both. They are not touched: the package is
+uploaded through its own HTTP endpoint outside Livewire, which is the route ADR 0002 itself reserves for
+large blobs, and there it is validated by `ShareEnvelopeValidator`. The `descriptor` is an ordinary `v1.`
+envelope and travels like any other.
 
-Antes de rellenar, el paquete se comprime con `CompressionStream('gzip')`, nativo en Safari 16.4 y
-Chromium, con una bandera de comprimido en la cabecera. El relleno va a una escalera propia de 64 KiB,
-256 KiB, 1 MiB y 4 MiB, validada por un `ShareEnvelopeValidator` separado: la de los eventos corta en 4.092
-bytes y tres meses de glucemias son unos 110 KB. El suelo alto es lo que hace el trabajo, porque casi todos
-los recortes reales caen comprimidos en 64 KiB y son indistinguibles entre sí, así que el servidor no puede
-restar dos envíos del mismo rango para aislar el peso de un tipo. Un solo sobre, sin trocear: con trozos,
-entregar todos menos el último produce un historial coherente al que le falta la semana de las
-hipoglucemias, sin que falle ningún tag.
+Before padding, the package is compressed with `CompressionStream('gzip')`, native in Safari 16.4 and
+Chromium, with a compression flag in the header. Padding goes to its own ladder of 64 KiB, 256 KiB, 1 MiB and
+4 MiB, validated by a separate `ShareEnvelopeValidator`: the event ladder tops out at 4,092 bytes and three
+months of blood glucose readings are around 110 KB. The high floor is what does the work, because almost every
+real clipping lands compressed inside 64 KiB and they are indistinguishable from one another, so the server
+cannot subtract two shares of the same range to isolate the weight of one type. A single envelope, not split
+into chunks: with chunks, delivering all but the last one produces a coherent history that happens to be
+missing the week of the hypoglycaemias, without any tag failing.
 
-El PIN se verifica en línea antes de servir un solo byte. Un `challenge` devuelve la `pin_salt`; si el
-enlace no existe, caducó o se revocó, devuelve una sal señuelo determinista derivada de HMAC con una clave
-del servidor sobre el `linkId`, para que la respuesta sea indistinguible. Un `open` recibe el `pinTag`, y
-solo si cuadra devuelve el envoltorio y el paquete en la misma respuesta. Lo compara en tiempo constante y
-decrementa `attempts_remaining` con la misma escritura condicional atómica de
-`RegistrationLinks::consume()`, sin `lockForUpdate()`, que en SQLite es un no-op. Cinco intentos. Con PIN
-de seis dígitos, la probabilidad de acierto es 5 entre un millón. El contador va en columna y nunca en el
-`RateLimiter`, que vive en caché y un `cache:clear` operativo reiniciaría. Además hay un limitador por IP
-en la ruta, hermano de los de `OpaqueServiceProvider`. En `challenge` no hay PIN que valorar todavía, así
-que inexistente, caducado y revocado son indistinguibles de un enlace vivo: todos devuelven una sal con la
-misma forma. En `open`, el PIN incorrecto sí devuelve los intentos restantes, porque el caso mayoritario es
-un dedo y no un ataque, y a esas alturas quien pregunta ya demostró conocer un enlace vivo.
+The PIN is verified online before a single byte is served. A `challenge` returns the `pin_salt`; if the link
+does not exist, has expired or was revoked, it returns a deterministic decoy salt derived by HMAC with a
+server key over the `linkId`, so that the response is indistinguishable. An `open` receives the `pinTag`, and
+only if it matches does it return the wrapper and the package in the same response. It compares in constant
+time and decrements `attempts_remaining` with the same atomic conditional write as
+`RegistrationLinks::consume()`, without `lockForUpdate()`, which in SQLite is a no-op. Five attempts. With a
+six-digit PIN, the probability of a hit is 5 in a million. The counter lives in a column and never in the
+`RateLimiter`, which lives in the cache and would be reset by an operational `cache:clear`. There is also a
+per-IP limiter on the route, a sibling of the ones in `OpaqueServiceProvider`. In `challenge` there is no PIN
+to judge yet, so non-existent, expired and revoked are indistinguishable from a live link: all of them return
+a salt of the same shape.
 
-Quedan **pendientes de decisión** dos detalles de esas dos rutas, y hay que cerrarlos antes de
-implementarlas. Uno, de qué clave del servidor cuelga el HMAC de la sal señuelo: `APP_KEY` la rota
-cualquiera al reinstalar y con ella cambia la sal señuelo de un `linkId` dado, lo que vuelve a distinguir
-enlaces muertos de vivos entre dos despliegues, así que probablemente pida entrada propia en
-`config/`, como el material de OPAQUE. Dos, qué contesta `open` cuando el enlace no existe, caducó o se
-revocó: la sal señuelo del `challenge` no sirve de nada si el `open` siguiente delata la diferencia, y
-devolver «PIN incorrecto, te quedan 4» sobre un enlace inexistente exige inventarse un contador estable.
+The HMAC of the decoy salt hangs from its own entry in `config/share.php`, `share.decoy_salt_key`, and not
+from `APP_KEY`: anyone rotates `APP_KEY` on a reinstall, and with it the decoy salt of a given `linkId`
+changes, which would make dead links distinguishable from live ones again by comparing two deployments. If
+the entry is missing it falls back to `opaque.enumeration_key`, which plays the same role in OPAQUE — making
+what does not exist indistinguishable — and is mandatory in any installation capable of logging in; if that
+one is missing too, `challenge` fails out loud instead of degrading in silence.
 
-Agotar los intentos borra solo la fila de `share_links`, no el paquete. La persona re-arma un enlace nuevo,
-con `S` y PIN nuevos, desde su sesión y sin rehacer el recorte, que es para lo que existen las dos capas.
-También sirve para dar un enlace por destinatario, cada uno con su PIN y su contador.
+`open` answers the same way in all four failure cases — the link does not exist, it expired, it was revoked,
+the PIN is wrong — with the same HTTP status and the same body, and it does not return the remaining
+attempts. Returning them would be an oracle that tells a live link from one that never existed, and it would
+force inventing a stable counter for non-existent identifiers. The price is real and worth stating: whoever
+mistypes a digit does not learn how many attempts are left, and that is the majority case. The reader screen
+can explain that the number of attempts is limited without the server counting them out loud.
 
-La caducidad se aplica en la consulta que sirve el blob, con `where('expires_at','>',now())` como
-`RegistrationLinks::validate()`, y la purga programada es solo higiene de almacenamiento: si el planificador
-se cae, no se alarga la vida de nada. Revocar y purgar son borrado físico, sin `SoftDeletes` y sin
-`deleted_at`, excepción consciente al patrón del ADR 0006. La respuesta lleva `Cache-Control: no-store`,
-que ya pone el middleware `App\Http\Middleware\NoStore` de las rutas de OPAQUE, y
-`Content-Type: application/octet-stream`, sin `ETag`, sin `Last-Modified` y sin `Content-Disposition`
-descriptivo, y la ruta se excluye de cualquier CDN. El TTL sale de una lista cerrada, 24 horas por defecto,
-7 días como máximo y una opción de una hora para el uso presencial. Hay tope de tamaño por paquete y de
-enlaces activos por usuario, o el endpoint es alojamiento anónimo gratis; **pendientes de decisión** las
-dos cifras, que no son cosmética: el tope de tamaño decide si el escalón de 4 MiB llega a existir, y el de
-enlaces activos es lo que acota el coste de almacenamiento de una cuenta.
+Exhausting the attempts deletes only the `share_links` row, not the package. The person re-arms a new link,
+with a new `S` and a new PIN, from their session and without rebuilding the clipping, which is what the two
+layers exist for. It also serves to give one link per recipient, each with its own PIN and its own counter.
 
-La página del lector es una vista Blade fuera del panel, con entrada propia de Vite, sin Livewire, sin
-Filament, sin cookie de sesión, sin CSRF y con CSP estricta sin recursos de terceros. Eso
-la deja fuera del prefijo `phr`, que es el del panel de Filament (`PhrPanelProvider::path('phr')`): todo lo
-que se monta ahí pasa por `routes()`, que Filament envuelve con el grupo `web` y por tanto con sesión y
-CSRF, incluidas las rutas sin autenticar de OPAQUE. Las tres rutas del lector —la página, `challenge` y
-`open`— viven en `routes/web.php` bajo el prefijo `/s`, corto porque acaba en un QR y mudo porque la URL se
-enseña en una consulta, con su propia pila de middleware.
+Expiry is applied in the query that serves the blob, with `where('expires_at','>',now())` like
+`RegistrationLinks::validate()`, and the scheduled prune is only storage hygiene: if the scheduler goes down,
+nothing's life is extended. Revoking and pruning are physical deletion, without `SoftDeletes` and without
+`deleted_at`, a deliberate exception to the ADR 0006 pattern. The response carries `Cache-Control: no-store`,
+which the `App\Http\Middleware\NoStore` middleware on the OPAQUE routes already sets, and
+`Content-Type: application/octet-stream`, with no `ETag`, no `Last-Modified` and no descriptive
+`Content-Disposition`, and the route is excluded from any CDN. The TTL comes from a closed list, 24 hours by
+default, 7 days at most and a one-hour option for in-person use. There are caps on package size and on active
+links per user, or else the endpoint is free anonymous hosting. The size cap is the largest rung of the
+ladder, 4 MiB, derived from it rather than set alongside it, so raising the cap requires adding a rung first
+and not the other way around. Per user, 20 active shares (`Shares::MAX_ACTIVE_SHARES`), and per share, 5 live
+links (`Shares::MAX_LINKS_PER_SHARE`): the first bounds the storage cost of an account, the second bounds how
+many recipients one still photograph can reach.
 
-Retirarle `StartSession` a esas rutas gobierna lo que Laravel lee y escribe, y no lo que el navegador manda.
-Por eso la cookie de sesión se acota al prefijo del panel (`SESSION_PATH=/phr`) y el endpoint de Livewire,
-que de serie vive en `/livewire-<hash>/update`, se registra dentro de `/phr` con `Livewire::setUpdateRoute`.
-Con `path=/`, la navegación de nivel superior a `/s/{link}` y sus subrecursos llevaban la cookie igual si
-quien abre el enlace tiene sesión en el panel, y el identificador del recorte y la cuenta quedaban en la
-misma línea de cualquier registro de acceso, proxy, WAF o CDN por delante: exactamente la correlación que
-esta ruta existe para evitar. `tests/Feature/SessionCookieScopeTest.php` recorre las rutas y falla si alguna
-propia con sesión queda fuera del alcance de la cookie, para que cambiar el prefijo del panel no lo reabra
-en silencio. Se pinta en el `Accept-Language` del
-profesional y nunca en el idioma de la persona propietaria, que es columna en claro por el ADR 0007
-(`docs/adr/0007-encrypted-user-configuration.md`) y no tiene por qué salir de casa. El cliente lee
-`location.hash` una vez y llama a
-`history.replaceState` de inmediato; si no hay fragmento, avisa antes de tocar el servidor de que el enlace
-llegó incompleto y que pida el QR, porque los reescritores de URL del correo sanitario y los portales
-cautivos se comen el fragmento.
+The reader page is a Blade view outside the panel, with its own Vite entry point, without Livewire, without
+Filament, without a session cookie, without CSRF and with a strict CSP with no third-party resources. That
+leaves it outside the `phr` prefix, which is the Filament panel's (`PhrPanelProvider::path('phr')`):
+everything mounted there goes through `routes()`, which Filament wraps with the `web` group and therefore
+with session and CSRF, including the unauthenticated OPAQUE routes. The three reader routes — the page,
+`challenge` and `open` — live in `routes/web.php` under the `/s` prefix, short because it ends up in a QR code
+and mute because the URL is shown during a consultation, with their own middleware stack.
 
-El texto en claro del paquete lleva el rango exacto, el instante de generación, el número de eventos y la
-lista de tipos incluidos y excluidos. La pantalla los muestra siempre, sin plegar, porque una ausencia se
-lee como un cero clínico: si faltan las comidas, el médico concluye que no las hay. Los eventos que no
-descifren se pintan como fila de error y nunca se omiten (ADR 0004), y lo mismo vale para los de un tipo que
-el recorte no declara —un séptimo tipo llegado de una versión más nueva del panel—: se cuentan, se avisan y
-salen en la tabla, en vez de desaparecer de todo por no tener casilla que marcar. El QR se genera bajo pulsación
-explícita, con corrección de errores M, lado mínimo de 400 px y fondo blanco incluso en tema oscuro, y el
-PIN nunca aparece en la misma pantalla, para que una sola foto no contenga las dos mitades.
+Taking `StartSession` away from those routes governs what Laravel reads and writes, not what the browser
+sends. That is why the session cookie is scoped to the panel prefix (`SESSION_PATH=/phr`) and the Livewire
+endpoint, which by default lives at `/livewire-<hash>/update`, is registered inside `/phr` with
+`Livewire::setUpdateRoute`, and that call lives in `AppServiceProvider` and **not** in `routes/web.php`: with
+cached routes (`php artisan optimize`, which is what the deployment runs) the route files are not executed,
+Livewire keeps announcing its default route in `data-update-uri`, and that route is rejected by Livewire
+itself with a 404 that never reaches application code, so it does not even leave a trace in the log.
+`tests/Feature/LivewireUpdateRouteTest.php` watches it. With `path=/`, top-level navigation to `/s/{link}`
+and its subresources carried the cookie all the same if whoever opens the link has a panel session, and the
+clipping identifier and the account ended up on the same line of any access log, proxy, WAF or CDN sitting in
+front: exactly the correlation this route exists to avoid. `tests/Feature/SessionCookieScopeTest.php` walks
+the routes and fails if any of ours that uses a session falls outside the cookie's scope, so that changing the
+panel prefix cannot silently reopen it. The page is painted in the professional's `Accept-Language` and never
+in the owner's language, which is a plaintext column by ADR 0007
+(`docs/adr/0007-encrypted-user-configuration.md`) and has no business leaving home. The client reads
+`location.hash` once and calls `history.replaceState` immediately; if there is no fragment, it warns before
+touching the server that the link arrived incomplete and that they should ask for the QR code, because the URL
+rewriters of healthcare email and captive portals eat the fragment.
 
-El lector **no es un informe estático, es la misma interfaz que ve el paciente**: gráficas, tarjetas de
-estadísticas, línea temporal, búsqueda de texto libre y selección de subperiodos, sobre los eventos del
-recorte. Trescientas glucemias en una tabla no se leen en consulta, y mantener dos pintados distintos del
-mismo dato haría que el paciente y el médico vieran medias distintas del mismo periodo. Para eso, la
-visualización no pertenece a ninguna pantalla: vive en módulos que reciben un array de eventos **ya
-descifrados** y devuelven nodos (`health/timelineView.js`, `health/statsView.js`, `health/chartsView.js`), y
-de dónde salen esos eventos lo decide una abstracción de una sola función asíncrona,
-`(range) => {events, failedToOpen, truncated}`, con dos implementaciones: `livewireEventSource`, que pide al
-servidor desde el panel, y `memoryEventSource`, que sirve desde el paquete descifrado en memoria. Las
-pantallas no notan la diferencia. Nada de esto pasa por un componente Livewire, y no es negociable: lo que
-toca una propiedad pública acaba en el snapshot, que viaja al servidor y se queda ahí (ADR 0002).
+The plaintext of the package carries the exact range, the moment of generation, the number of events and the
+list of included and excluded types. The screen always shows them, never collapsed, because an absence reads
+as a clinical zero: if meals are missing, the doctor concludes there are none. Events that fail to decrypt are
+painted as an error row and never omitted (ADR 0004), and the same goes for events of a type the clipping does
+not declare — a seventh type arriving from a newer version of the panel: they are counted, flagged and shown
+in the table, rather than disappearing entirely for lack of a checkbox to tick. The QR code is generated on an
+explicit press, with error correction level M, a minimum side of 400 px and a white background even in dark
+theme, and the PIN never appears on the same screen, so that a single photograph cannot contain both halves.
 
-Cuatro invariantes de esa pantalla, que no son detalles de implementación sino la razón de que pueda existir
-sin cuenta y sin sesión:
+The reader **is not a static report, it is the same interface the patient sees**: charts, statistics cards,
+timeline, free-text search and subperiod selection, over the events in the clipping. Three hundred blood
+glucose readings in a table cannot be read during a consultation, and maintaining two different renderings of
+the same data would mean the patient and the doctor seeing different averages for the same period. For that,
+visualization does not belong to any screen: it lives in modules that receive an array of **already
+decrypted** events and return nodes (`health/timelineView.js`, `health/statsView.js`, `health/chartsView.js`),
+and where those events come from is decided by an abstraction consisting of a single asynchronous function,
+`(range) => {events, failedToOpen, truncated}`, with two implementations: `livewireEventSource`, which asks
+the server from the panel, and `memoryEventSource`, which serves from the package decrypted in memory. The
+screens cannot tell the difference. None of this goes through a Livewire component, and that is not
+negotiable: whatever touches a public property ends up in the snapshot, which travels to the server and stays
+there (ADR 0002).
 
-* **El médico solo puede acotar, jamás ampliar.** El subperiodo se corta contra los extremos del recorte y
-  los atajos («último día», «últimos 7 días») cuentan desde el **final del recorte**, nunca desde el reloj
-  de hoy: un recorte de hace una semana saldría vacío, y una pantalla vacía se lee como «este paciente no
-  tiene registros». Además de esa mitad declarativa hay una estructural y más fuerte: el único origen es
-  `memoryEventSource`, que solo puede devolver objetos de la lista que ya tiene delante. En
-  `reader/clippingExplorer.js` no hay un `fetch`, ni un `$wire`, ni una URL.
-* **El paquete descifrado no se persiste.** Ni `localStorage`, ni `sessionStorage`, ni IndexedDB, ni cookie,
-  ni Service Worker que lo cachee. Cerrar la pestaña lo borra. Tampoco se guarda la preferencia de idioma,
-  ni el subperiodo, ni lo buscado: en un ordenador de consulta que usan varias personas, cualquiera de esas
-  tres cosas es un rastro clínico que sobrevive a quien lo dejó. El bundle del lector tampoco puede alcanzar
-  el llavero de la clave maestra del panel, y eso lo vigila un test que recorre el grafo de importaciones
-  **transitivo** desde la entrada de Vite: un test de importaciones directas no cubre un perímetro que
-  Rollup decide por alcanzabilidad.
-* **La búsqueda es local y no es un filtro de cálculo.** Corre entera sobre lo descifrado y lo tecleado no
-  viaja a ninguna parte —en el lector no hay ninguna parte a la que pudiera viajar—. Y estrecha la línea
-  temporal y la tabla, no las gráficas ni las estadísticas: una media sobre los registros cuyo *texto*
-  contiene «noche» o «140» no es una población clínica, es un número inventado con aspecto de dato. El
-  periodo y los tipos definen la población; la búsqueda solo localiza dentro de ella. El panel del paciente
-  aplica el mismo criterio, por la misma razón y para que las dos pantallas no diverjan.
-* **La cabecera dice el recorte, y una segunda línea dice lo que hay debajo.** «N eventos, del X al Y,
-  generado el Z» describe el paquete entero y es la única defensa contra un recorte que llegase truncado.
-  Debajo, repintada en cada cambio y **también en papel**, va la línea de estado efectivo: el rango
-  realmente aplicado, los tipos marcados y el texto buscado. Los controles interactivos no se imprimen, así
-  que sin esa línea el papel que acaba en una historia clínica declararía seis meses y todos los tipos sobre
-  una tabla de siete días filtrada.
+Four invariants of that screen, which are not implementation details but the reason it can exist without an
+account and without a session:
 
-La unidad de glucemia del recorte sale de las propias lecturas y por **mayoría**, no por recencia: la unidad
-de presentación del paciente es configuración cifrada suya (ADR 0007) y no viaja en el paquete, y elegir la
-de la última lectura dejaría que dos lecturas nuevas en mmol/L mandaran doscientas en mg/dL a una nota al
-pie, con la tarjeta resumiendo dos registros. Nada se convierte (ADR 0007), y con más de una unidad presente
-se avisa por encima de la tarjeta.
+* **The doctor can only narrow, never widen.** The subperiod is clamped against the ends of the clipping and
+  the shortcuts ("last day", "last 7 days") count from the **end of the clipping**, never from today's clock:
+  a clipping from a week ago would come out empty, and an empty screen reads as "this patient has no records".
+  Beyond that declarative half there is a structural and stronger one: the only source is `memoryEventSource`,
+  which can only return objects from the list it already has in front of it. In `reader/clippingExplorer.js`
+  there is no `fetch`, no `$wire`, and no URL.
+* **The decrypted package is not persisted.** No `localStorage`, no `sessionStorage`, no IndexedDB, no cookie,
+  no Service Worker caching it. Closing the tab erases it. Neither is the language preference stored, nor the
+  subperiod, nor what was searched: on a shared clinic computer, any of those three is a clinical trace that
+  outlives whoever left it. The reader bundle also cannot reach the panel's master-key keyring, and that is
+  watched by a test that walks the **transitive** import graph from the Vite entry point: a direct-imports test
+  does not cover a perimeter that Rollup decides by reachability.
+* **Search is local and is not a computation filter.** It runs entirely over what has been decrypted and what
+  is typed does not travel anywhere — in the reader there is nowhere it could travel to. And it narrows the
+  timeline and the table, not the charts or the statistics: an average over the records whose *text* contains
+  "night" or "140" is not a clinical population, it is a made-up number that looks like data. The period and
+  the types define the population; search only locates within it. The patient's panel applies the same
+  criterion, for the same reason and so that the two screens do not diverge.
+* **The header states the clipping, and a second line states what is underneath.** "N events, from X to Y,
+  generated on Z" describes the whole package and is the only defence against a clipping that arrived
+  truncated. Below it, repainted on every change and **on paper too**, goes the effective-state line: the range
+  actually applied, the types ticked and the text searched. The interactive controls are not printed, so
+  without that line the sheet that ends up in a medical record would declare six months and all types over a
+  table of seven filtered days.
 
-La pantalla de compartir del paciente monta **ese mismo módulo** como vista previa, con el mismo cuerpo del
-paquete que se cifraría al generar: antes de enviar nada se ve exactamente lo que verá el profesional. Sale
-casi gratis porque esa pantalla ya tiene los eventos descifrados delante. La vista previa **se cae en cuanto
-la selección cambia** —tipos, periodo—: es la única superficie de consentimiento informado del flujo y va
-bajo un texto que dice, con esas palabras, «esto es exactamente lo que verá el profesional», sobre una
-acción que no se puede deshacer, porque revocar no borra lo que la otra persona ya descargó. Lo que sí hace
-la vista previa, y conviene decirlo, es leer eventos del servidor igual que generar, con el `from`/`to` en
-claro: no sube ningún paquete ni consume ninguno de los enlaces del tope, pero el servidor sabe qué
-componente llama, así que una previsualización abandonada le dice que hubo un envío en preparación.
+The clipping's blood glucose unit comes from the readings themselves and by **majority**, not by recency: the
+patient's display unit is their own encrypted configuration (ADR 0007) and does not travel in the package, and
+picking the last reading's unit would let two new mmol/L readings send two hundred mg/dL ones to a footnote,
+with the card summarizing two records. Nothing is converted (ADR 0007), and when more than one unit is present
+a warning is shown above the card.
 
-Queda **pendiente de aprobación** una dependencia de JavaScript para el QR: `uqr`, licencia MIT, cero
-dependencias transitivas, ESM puro, unos 4,5 KB comprimidos, salida SVG. Se descartan `qrcode` de npm por
-sus transitivas y `qrious` por ser GPL-3.0, incompatible con The Unlicense del repositorio. Incorporarla
-exige el procedimiento del ADR 0004: versión exacta, `save-exact`, `ignore-scripts`, `npm ci`, `npm audit
-signatures` bloqueante y cuarentena de catorce días. Si se rechaza, hay que escribir el codificador a mano,
-unas 300 líneas, con pruebas contra un decodificador independiente en integración continua.
+The patient's sharing screen mounts **that same module** as a preview, with the same package body that would
+be encrypted on generation: before sending anything, you see exactly what the professional will see. It comes
+almost for free because that screen already has the decrypted events in front of it. The preview **collapses
+as soon as the selection changes** — types, period: it is the only informed-consent surface in the flow and it
+sits under a text that says, in those words, "this is exactly what the professional will see", above an action
+that cannot be undone, because revoking does not erase what the other person already downloaded. What the
+preview does do, and it is worth saying, is read events from the server just like generating does, with `from`
+and `to` in the clear: it uploads no package and consumes none of the links against the cap, but the server
+knows which component is calling, so an abandoned preview tells it that a share was being prepared.
+
+The QR code uses `uqr`, MIT licensed, no transitive dependencies, pure ESM, around 4.5 KB compressed, SVG
+output, pinned at an exact version. `qrcode` from npm was rejected for its transitive dependencies and
+`qrious` for being GPL-3.0, incompatible with the repository's The Unlicense. Bringing it in went through the
+ADR 0004 procedure: exact version, `save-exact`, `ignore-scripts`, `npm ci`, blocking `npm audit signatures`
+and a fourteen-day quarantine. The alternative had been to write the encoder by hand, around 300 lines, with
+tests against an independent decoder in continuous integration.
 
 ## Rationale
 
-Descartamos verificar el PIN solo en el cliente, que era el flujo inicial: con el blob descargado son un
-millón de pruebas fuera de línea, y ningún KDF lento lo arregla, porque aguantar solo con coste exigiría 40
-bits, que ya no es un PIN.
+We rejected verifying the PIN only on the client, which was the initial flow: with the blob downloaded it is a
+million offline guesses, and no slow KDF fixes that, because holding up on cost alone would require 40 bits,
+which is no longer a PIN.
 
-Descartamos que el servidor guarde una tercera parte de la clave y la entregue tras el PIN correcto. Es más
-simple, pero un volcado de la base de datos más el enlace daría el historial sin PIN. Con el PIN dentro de
-la derivación, ese atacante todavía tiene que romperlo, y guardar `pinTag` no lo empeora: crackear el tag
-cuesta lo mismo que crackear el blob. Descartamos también el OPRF ristretto255, que evitaría ese ataque del
-servidor sobre el tag: el servidor no gana nada, porque le faltan los 256 bits de `S`, y exigiría un cegado
-en cliente que hoy no existe.
+We rejected having the server keep a third part of the key and hand it over after a correct PIN. It is
+simpler, but a database dump plus the link would give up the history without the PIN. With the PIN inside the
+derivation, that attacker still has to break it, and storing `pinTag` does not make things worse: cracking the
+tag costs the same as cracking the blob. We also rejected the ristretto255 OPRF, which would avoid that server
+attack on the tag: the server gains nothing, because it is missing the 256 bits of `S`, and it would require
+client-side blinding that does not exist today.
 
-Descartamos UUIDv7 para los identificadores: llevan el instante de creación en claro dentro del propio
-enlace y de la foto que el profesional guarde. Es la excepción que el ADR 0006 ya prevé.
+We rejected UUIDv7 for the identifiers: they carry the creation instant in the clear inside the link itself
+and inside whatever photograph the professional keeps. It is the exception ADR 0006 already anticipates.
 
-* **Pros**: el servidor ve un blob, un identificador y dos fechas, y nunca el rango ni los tipos; el enlace
-  solo no basta y la fuerza bruta pasa a estar contada; revocar y caducar son borrado real; rotar el enlace
-  no obliga a re-cifrar el paquete; y el profesional no necesita cuenta ni instalar nada.
-* **Cons**: dos tablas, dos formatos de sobre y dos validadores que mantener; el Argon2id del PIN son varios
-  segundos en un equipo lento, justo cuando hay alguien esperando; el suelo de relleno de 64 KiB hace que
-  compartir tres eventos cueste lo mismo que compartir trescientos; y quien fotografíe el QR puede quemar los
-  cinco intentos y obligar a re-armar el enlace.
+* **Pros**: the server sees a blob, an identifier and two dates, and never the range or the types; the link
+  alone is not enough and brute force becomes counted; revoking and expiring are real deletion; rotating the
+  link does not force re-encrypting the package; and the professional needs no account and installs nothing.
+* **Cons**: two tables, two envelope formats and two validators to maintain; the PIN's Argon2id takes several
+  seconds on a slow machine, exactly when someone is waiting; the 64 KiB padding floor makes sharing three
+  events cost the same as sharing three hundred; and whoever photographs the QR code can burn the five
+  attempts and force re-arming the link.
 
 ## Consequences
 
-Las renuncias, sin adornos. Revocar impide lecturas futuras y no borra lo que la otra persona ya descargó:
-una foto fija entregada es suya para siempre. Las copias de seguridad conservan el blob más allá de la
-caducidad, y lo que de verdad lo cierra es que `S` viva fuera del servidor. El servidor sabe quién comparte,
-cuándo, qué escalón de relleno ocupa, cuándo caduca y que se abrió, y esa frecuencia dibuja el itinerario
-asistencial; no sabe qué contiene ni qué rango cubre. Seguimos siendo zero-knowledge frente al
-almacenamiento y no frente a la entrega (ADR 0003, `docs/adr/0003-master-key-survival-in-browser.md`), y
-aquí es peor que en el panel, porque la página se abre en dispositivos ajenos con material de clave en la
-propia URL. El fragmento no llega al servidor, pero sí al
-historial del navegador del profesional, a su sincronización en la nube, al autocompletado, a las extensiones
-con permiso de pestañas y a las capturas que la galería del móvil indexa por OCR; el QR evita los chats y a
-cambio añade la cámara de la sala y el carrete del profesional. Y el dominio de la instalación, ya público
-por Certificate Transparency, dice que quien enseña ese enlace usa una aplicación de salud.
+The trade-offs, unvarnished. Revoking prevents future reads and does not erase what the other person already
+downloaded: a still photograph, once delivered, is theirs forever. Backups keep the blob beyond its expiry,
+and what really closes that is `S` living outside the server. The server knows who shares, when, which padding
+rung it occupies, when it expires and that it was opened, and that frequency sketches the care pathway; it
+does not know what it contains or what range it covers. We remain zero-knowledge with respect to storage and
+not with respect to delivery (ADR 0003, `docs/adr/0003-master-key-survival-in-browser.md`), and here it is
+worse than in the panel, because the page is opened on other people's devices with key material in the URL
+itself. The fragment does not reach the server, but it does reach the professional's browser history, its
+cloud sync, autocomplete, extensions with tab permissions, and the screenshots the phone's gallery indexes by
+OCR; the QR code avoids the chat apps and in exchange adds the camera in the room and the professional's
+camera roll. And the installation's domain, already public through Certificate Transparency, says that
+whoever shows that link uses a health application.
 
-La IP de quien descarga revela el centro sanitario y de ahí el diagnóstico, con una precisión que el modelo
-de eventos cifrados nunca habría permitido. Decisión explícita: ninguna capa que operemos registra IP ni
-agente de usuario en esta ruta, ni siquiera el log de acceso del servidor web, coherente con la exclusión
-deliberada de ambos en `AuditEvent`. El proveedor de infraestructura y cualquier CDN interpuesto lo siguen
-viendo, y eso este diseño no puede cerrarlo.
+The IP of whoever downloads reveals the healthcare centre and from there the diagnosis, with a precision the
+encrypted event model would never have allowed. Explicit decision: no layer we operate logs IP or user agent
+on this route, not even the web server's access log, consistent with the deliberate exclusion of both in
+`AuditEvent`. The infrastructure provider and any interposed CDN still see it, and that is something this
+design cannot close.
 
-No hay contador de descargas ni historial de accesos: `shares.opened_at` es la marca del primer acceso
-redondeada a la hora y se escribe una sola vez. Un histórico con marcas al segundo diría cuántas veces y
-cuándo se consultó cada envío, que es lo que el ADR 0006 descarta al hablar del rastro de actividad.
-`AuditEvent` gana dos casos, creación y revocación, que el servidor ya ve; ninguno para las descargas.
+There is no download counter and no access history: `shares.opened_at` is the first-access mark rounded to
+the hour and it is written once. A log with second-level timestamps would say how many times and when each
+share was consulted, which is what ADR 0006 rejects when it talks about the activity trail. `AuditEvent` gains
+two cases, creation and revocation, which the server already sees; none for downloads.
 
-`KDF_LABELS` incorpora `SHARE`, `SHARE_LINK` y `SHARE_PIN_TAG`. El paquete necesita su propio módulo de
-sobre y su propio validador en PHP, con vectores cruzados entre ambos en integración continua, igual que el
-formato de eventos.
+`KDF_LABELS` gains `SHARE`, `SHARE_LINK` and `SHARE_PIN_TAG`. The package needs its own envelope module and
+its own validator in PHP, with cross vectors between the two in continuous integration, just like the event
+format.
 
-Re-armar un enlace exige la clave maestra, porque `CK` vive en el descriptor cifrado, así que tras el
-bloqueo por inactividad del ADR 0009 (`docs/adr/0009-user-provisioning-and-session-lifecycle.md`) hay que
-volver a autenticarse. Lo que de verdad acaba dentro de una historia clínica es texto, así que la hoja de
-impresión del lector esconde los controles y las gráficas —un `<canvas>` dibujado en tema oscuro sale en
-papel como líneas claras sobre blanco, es decir invisible— y deja el encabezado, la línea de estado
-efectivo, las tarjetas de estadísticas y la tabla clínica, que es donde vive el término oficial LOINC y que
-no se traduce (ADR 0005).
+Re-arming a link requires the master key, because `CK` lives in the encrypted descriptor, so after the
+inactivity lock from ADR 0009 (`docs/adr/0009-user-provisioning-and-session-lifecycle.md`) you have to
+authenticate again. What actually ends up inside a medical record is text, so the reader's print sheet hides
+the controls and the charts — a `<canvas>` drawn in dark theme comes out on paper as light lines on white,
+that is, invisible — and keeps the header, the effective-state line, the statistics cards and the clinical
+table, which is where the official LOINC term lives and which is not translated (ADR 0005).
 
-Compartir las vistas entre el panel y el lector tiene un precio que hay que vigilar y que ya se cobró una
-vez: Rollup mete en el trozo común todo lo alcanzable desde dos entradas de Vite, con su cadena de
-importaciones entera. Cualquier módulo nuevo que el lector alcance arrastra consigo lo que él importe, así
-que el perímetro se comprueba sobre el grafo transitivo y, cuando hay build, sobre el propio artefacto.
+Sharing the views between the panel and the reader has a price that must be watched and that has already been
+paid once: Rollup puts into the common chunk everything reachable from two Vite entry points, with its entire
+import chain. Any new module the reader reaches drags along whatever it imports, so the perimeter is checked
+against the transitive graph and, when there is a build, against the artifact itself.
 
-El ADR 0004 (`docs/adr/0004-client-crypto-and-data-format.md`) recoge las excepciones que este ADR
-introduce sobre sus reglas del dato en reposo, el ADR 0006 (`docs/adr/0006-encrypted-event-model.md`)
-apunta aquí para la compartición, el ADR 0002 anota que el paquete `s1.` no viaja por Livewire y el
-ADR 0003 que la mitad de la entrega empeora con esta página.
+ADR 0004 (`docs/adr/0004-client-crypto-and-data-format.md`) records the exceptions this ADR introduces to its
+data-at-rest rules, ADR 0006 (`docs/adr/0006-encrypted-event-model.md`) points here for sharing, ADR 0002
+notes that the `s1.` package does not travel through Livewire, and ADR 0003 that the delivery half gets worse
+with this page.
 
 ## Decision History
 
-### 2026-07-27 — El lector deja de ser un informe estático
-Previamente decidido: el profesional veía una cabecera y una tabla clínica, sin `chart.js` ni ningún
-control, y la pantalla de compartir no enseñaba nada antes de enviar.
-Cambió porque: trescientas glucemias en una tabla no se leen en una consulta, y el paciente firmaba a ciegas
-un envío que no se puede deshacer. Ahora el lector monta la misma interfaz del panel —gráficas,
-estadísticas, línea temporal, búsqueda y subperiodos— sobre el paquete descifrado en memoria, y esa misma
-pantalla es la vista previa del paciente. Lo que no cambia es el perímetro: solo se puede acotar, nada se
-persiste, la búsqueda no sale del navegador y no hay una segunda vía para pedir datos. `chart.js` entra en
-el bundle del lector; a cambio, el llavero de la clave maestra sale de él, y hay un test sobre el grafo
-transitivo de importaciones que lo mantiene fuera.
+### 2026-07-27 — The four open decisions are closed, and the ADR is accepted
+Previously decided: the ADR left four items **pending decision** and was in `Proposed` status — which server
+key the decoy salt's HMAC hangs from, what `open` answers for a link that does not exist, expired or was
+revoked, the caps on package size and on links per user, and whether the `uqr` dependency was approved.
+Changed because: all four were settled while implementing, and a document that still calls them open sends the
+next reader looking for a decision that is already in the code. The decoy salt gets its own `config/share.php`
+entry with a fallback to `opaque.enumeration_key`; `open` answers with a single generic response for its four
+failure causes, without the remaining attempts, which the ADR previously said it would return; the size cap is
+derived from the largest padding rung, 4 MiB, with 20 active shares per user and 5 live links per share; and
+`uqr` was accepted through the ADR 0004 procedure and pinned at an exact version.
 
-### 2026-07-27 — La cookie de sesión se acota al prefijo del panel
-Previamente decidido: bastaba con retirarle `StartSession`, `EncryptCookies` y
-`AddQueuedCookiesToResponse` a las rutas `/s` para que la lectura de un recorte no llevara cookie.
-Cambió porque: eso gobierna lo que Laravel lee y escribe, no lo que el navegador manda. Con `path=/`, la
-navegación a `/s/{link}` llevaba la cookie igual, y el identificador del recorte y una cuenta concreta
-quedaban en la misma línea de cualquier registro de acceso. La cookie pasa a `path=/phr` y el endpoint de
-Livewire baja dentro de ese prefijo, que era lo único que obligaba a la raíz.
+### 2026-07-27 — The reader stops being a static report
+Previously decided: the professional saw a header and a clinical table, without `chart.js` and without any
+controls, and the sharing screen showed nothing before sending.
+Changed because: three hundred blood glucose readings in a table cannot be read during a consultation, and the
+patient was blindly signing off on a share that cannot be undone. The reader now mounts the same interface as
+the panel — charts, statistics, timeline, search and subperiods — over the package decrypted in memory, and
+that same screen is the patient's preview. What does not change is the perimeter: you can only narrow, nothing
+is persisted, search does not leave the browser, and there is no second way to ask for data. `chart.js` enters
+the reader bundle; in exchange, the master-key keyring leaves it, and there is a test over the transitive
+import graph that keeps it out.
+
+### 2026-07-27 — The session cookie is scoped to the panel prefix
+Previously decided: it was enough to take `StartSession`, `EncryptCookies` and `AddQueuedCookiesToResponse`
+away from the `/s` routes for reading a clipping not to carry a cookie.
+Changed because: that governs what Laravel reads and writes, not what the browser sends. With `path=/`,
+navigating to `/s/{link}` carried the cookie all the same, and the clipping identifier and a specific account
+ended up on the same line of any access log. The cookie moves to `path=/phr` and the Livewire endpoint moves
+down inside that prefix, which was the only thing that required the root.

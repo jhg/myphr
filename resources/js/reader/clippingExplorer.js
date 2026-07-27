@@ -1,40 +1,40 @@
 /**
- * La interfaz de un recorte ya descifrado (ADR 0011, ADR 0002, ADR 0004, ADR 0006).
+ * The interface of an already decrypted clipping (ADR 0011, ADR 0002, ADR 0004, ADR 0006).
  *
- * **Qué es.** El profesional que abre un enlace compartido ve lo mismo que ve el paciente en su
- * panel —gráficas, estadísticas, línea temporal, búsqueda y selección de subperiodos— sobre los
- * eventos del recorte. Este módulo es esa pantalla: recibe el cuerpo en claro del paquete y un
- * contenedor, y lo pinta entero. No sabe de dónde salió el paquete, y por eso vale igual para el
- * lector del profesional (donde el paquete viene del PIN) y para la vista previa de la pantalla de
- * compartir (donde el paciente ve, antes de enviar nada, exactamente lo que verá el médico).
+ * **What it is.** The professional who opens a shared link sees the same thing the patient sees in
+ * their panel —charts, statistics, timeline, search and sub-period selection— over the events of
+ * the clipping. This module is that screen: it takes the package body in the clear and a
+ * container, and paints the whole thing. It does not know where the package came from, and that is
+ * why it serves both the professional's reader (where the package comes from the PIN) and the
+ * preview of the share screen (where the patient sees, before sending anything, exactly what the doctor will see).
  *
- * **Los tres invariantes de seguridad que este módulo tiene que cumplir**, y que
- * `tests/js/clippingExplorer.test.mjs` comprueba:
+ * **The three security invariants this module has to keep**, and which
+ * `tests/js/clippingExplorer.test.mjs` checks:
  *
- * 1. **Acotar, jamás ampliar.** El subperiodo y la búsqueda trabajan contra
- *    {@see memoryEventSource}, que solo puede devolver eventos de la lista que ya tiene delante.
- *    No hay aquí ni un `fetch`, ni un `$wire`, ni una URL: no existe la vía para pedir un evento
- *    más, y el rango elegido se corta además contra los extremos del recorte
- *    ({@see narrowToClipping}) para que ni siquiera se pueda *decir* un periodo mayor.
- * 2. **El paquete vive solo en memoria.** No se escribe en `localStorage`, ni en `sessionStorage`,
- *    ni en IndexedDB, ni en una cookie. Cerrar la pestaña lo borra, igual que la clave maestra del
- *    paciente (ADR 0003). Tampoco se guarda la preferencia de idioma, ni el subperiodo, ni el texto
- *    buscado: en un ordenador de consulta, cualquiera de esas tres cosas es un rastro clínico que
- *    sobrevive a quien lo dejó.
- * 3. **La búsqueda no sale del navegador.** Corre entera sobre lo descifrado
- *    ({@see searchEvents}); lo tecleado no viaja a ninguna parte, y en el lector no hay ninguna
- *    parte a la que pudiera viajar.
+ * 1. **Narrow, never widen.** The sub-period and the search work against
+ *    {@see memoryEventSource}, which can only return events from the list it already has in front
+ *    of it. There is no `fetch` here, no `$wire`, no URL: there is no way to ask for one more
+ *    event, and the chosen range is also clipped against the ends of the clipping
+ *    ({@see narrowToClipping}) so that a wider period cannot even be *stated*.
+ * 2. **The package lives only in memory.** It is not written to `localStorage`, nor to
+ *    `sessionStorage`, nor to IndexedDB, nor to a cookie. Closing the tab wipes it, just like the
+ *    patient's master key (ADR 0003). The language preference is not stored either, nor the
+ *    sub-period, nor the searched text: on a clinic computer, any of those three is a clinical
+ *    trace that outlives whoever left it.
+ * 3. **The search never leaves the browser.** It runs entirely over what is decrypted
+ *    ({@see searchEvents}); what is typed travels nowhere, and in the reader there is nowhere it
+ *    could travel to.
  *
- * **Sin Livewire y sin Alpine**, y no por gusto: todo lo que toca una propiedad pública de Livewire
- * acaba en su snapshot, que viaja al servidor y se queda ahí (ADR 0002, con
- * `App\Livewire\Hooks\EncryptedPayloadGuardHook` y los tests de arquitectura vigilándolo). Además el
- * lector no tiene sesión. Los controles son DOM corriente con `addEventListener`, que es lo que
- * hace que este módulo se pueda montar en las dos pantallas sin arrastrar nada del panel.
+ * **No Livewire and no Alpine**, and not out of taste: everything that touches a public Livewire
+ * property ends up in its snapshot, which travels to the server and stays there (ADR 0002, with
+ * `App\Livewire\Hooks\EncryptedPayloadGuardHook` and the architecture tests watching it). Besides,
+ * the reader has no session. The controls are plain DOM with `addEventListener`, which is what
+ * lets this module be mounted on both screens without dragging anything of the panel along.
  *
- * **Lo que se conserva del informe estático anterior**, porque era lo mejor que tenía: la cabecera
- * con «N eventos, del X al Y, generado el Z» —que es lo único que permite ver que un recorte llegó
- * truncado— y la tabla clínica con el término oficial LOINC, que no se traduce (ADR 0005) y que es
- * lo que acaba copiado en una historia clínica de papel.
+ * **What is kept from the earlier static report**, because it was the best it had: the header with
+ * "N events, from X to Y, generated on Z" —the only thing that makes a truncated clipping visible—
+ * and the clinical table with the official LOINC term, which is not translated (ADR 0005) and is
+ * what ends up copied into a paper health record.
  */
 
 import { formatDateTime, joinList, t } from '../i18n/index.js';
@@ -59,26 +59,26 @@ import { renderTimelineSection } from '../health/timelineView.js';
 import { describeEvent, reportHeadline, typeSummary } from './clinicalReport.js';
 
 /**
- * Unidad con la que se enseñan las glucemias cuando el recorte no trae ninguna.
+ * Unit glucose readings are shown in when the clipping brings none.
  *
- * **La unidad de presentación del paciente no viaja en el recorte, y es deliberado**: es
- * configuración cifrada suya (ADR 0007) y no dice nada clínico que el médico necesite. Así que la
- * unidad sale de las propias lecturas ({@see clippingGlucoseUnit}), que es el dato de verdad: si midió en
- * mmol/L, en mmol/L se lee.
+ * **The patient's display unit does not travel in the clipping, and that is deliberate**: it is
+ * their encrypted configuration (ADR 0007) and it says nothing clinical the doctor needs. So the
+ * unit comes from the readings themselves ({@see clippingGlucoseUnit}), which is the real datum:
+ * if they measured in mmol/L, it reads in mmol/L.
  */
 const DEFAULT_GLUCOSE_UNIT = 'mg/dL';
 
-/** Atajos de subperiodo, todos relativos al **final del recorte**, nunca al reloj de hoy. */
+/** Sub-period shortcuts, all relative to the **end of the clipping**, never to today's clock. */
 export const CLIP_RANGE_PRESETS = Object.freeze(['all', 'day', 'week', 'month', 'custom']);
 
 /**
- * Los dos extremos del recorte, tal como los declara su propio cuerpo.
+ * The two ends of the clipping, as its own body declares them.
  *
- * Es el techo de todo lo que esta pantalla puede enseñar. Un extremo `null` es un extremo abierto
- * («desde siempre», «hasta el final»), y no hay que rellenarlo: el origen de datos es la lista que
- * ya está en memoria, así que un rango abierto no amplía nada, solo deja de recortar.
+ * It is the ceiling of everything this screen can show. A `null` end is an open end ("from the
+ * beginning", "to the end"), and it does not need filling in: the data source is the list already
+ * in memory, so an open range widens nothing, it only stops clipping.
  *
- * @param {object} body Cuerpo en claro del paquete.
+ * @param {object} body Package body in the clear.
  * @returns {{from: string|null, to: string|null}}
  */
 export function clippingBounds(body) {
@@ -90,23 +90,23 @@ export function clippingBounds(body) {
 
 /**
  * @param {string|null} value
- * @returns {number} `NaN` si no se puede leer, que aquí siempre significa «no acota».
+ * @returns {number} `NaN` if it cannot be read, which here always means "does not clip".
  */
 function instantOf(value) {
     return typeof value === 'string' ? Date.parse(value) : NaN;
 }
 
 /**
- * Intersección de lo pedido con lo que el recorte contiene: **el resultado nunca es más ancho que
- * los extremos del recorte**.
+ * Intersection of what was asked with what the clipping contains: **the result is never wider than
+ * the ends of the clipping**.
  *
- * Esta función es la mitad declarativa del invariante «acotar, jamás ampliar». La otra mitad es
- * estructural y más fuerte: aunque esto devolviera un rango de diez años, {@see memoryEventSource}
- * seguiría sin tener de dónde sacar un evento que no esté en el paquete. Las dos existen porque la
- * primera es la que hace que la pantalla no *afirme* cubrir un periodo que no cubre.
+ * This function is the declarative half of the "narrow, never widen" invariant. The other half is
+ * structural and stronger: even if this returned a ten-year range, {@see memoryEventSource} would
+ * still have nowhere to take an event that is not in the package from. Both exist because the
+ * first one is what keeps the screen from *claiming* to cover a period it does not cover.
  *
- * @param {{from: string|null, to: string|null}} range Lo que se ha pedido.
- * @param {{from: string|null, to: string|null}} bounds Salida de {@see clippingBounds}.
+ * @param {{from: string|null, to: string|null}} range What was asked for.
+ * @param {{from: string|null, to: string|null}} bounds Output of {@see clippingBounds}.
  * @returns {{from: string|null, to: string|null}}
  */
 export function narrowToClipping(range, bounds) {
@@ -126,12 +126,12 @@ export function narrowToClipping(range, bounds) {
 }
 
 /**
- * Instante desde el que cuentan los atajos relativos: el final del recorte.
+ * Instant the relative shortcuts count from: the end of the clipping.
  *
- * **No es «ahora», y esa es toda la gracia.** Un recorte generado hace una semana con «último día»
- * contado desde hoy saldría vacío, y una pantalla vacía se lee como «este paciente no tiene
- * registros». Contando desde el final del recorte, «último día» es el último día *del recorte*, que
- * es lo que quiere decir quien lo pulsa.
+ * **It is not "now", and that is the whole point.** A clipping generated a week ago with "last
+ * day" counted from today would come out empty, and an empty screen reads as "this patient has no
+ * records". Counting from the end of the clipping, "last day" is the last day *of the clipping*,
+ * which is what whoever presses it means.
  *
  * @param {{from: string|null, to: string|null}} bounds
  * @param {list<{occurredAt?: string}>} events
@@ -144,7 +144,7 @@ export function clippingEnd(bounds, events) {
         return new Date(declaredEnd);
     }
 
-    /** Sin extremo declarado, el registro más reciente; el `+1` deja el propio evento dentro. */
+    /** With no declared end, the most recent record; the `+1` keeps that event itself inside. */
     let newest = -Infinity;
 
     for (const event of events) {
@@ -159,16 +159,16 @@ export function clippingEnd(bounds, events) {
 }
 
 /**
- * El subperiodo que toca aplicar, ya acotado al recorte.
+ * The sub-period to apply, already clipped to the clipping.
  *
- * Un rango mal tecleado **no deja la pantalla en blanco**: devuelve el recorte entero y el porqué
- * en `error`, que quien llama pinta como aviso. En una consulta, una pantalla vacía sin explicación
- * es peor que un periodo más ancho del que se pidió.
+ * A badly typed range **does not leave the screen blank**: it returns the whole clipping and the
+ * reason in `error`, which the caller paints as a warning. In an appointment, an empty screen with
+ * no explanation is worse than a period wider than the one asked for.
  *
  * @param {object} params
- * @param {string} params.preset Uno de {@see CLIP_RANGE_PRESETS}.
- * @param {string} [params.fromDay] `YYYY-MM-DD`, solo con `custom`.
- * @param {string} [params.toDay] `YYYY-MM-DD`, solo con `custom`.
+ * @param {string} params.preset One of {@see CLIP_RANGE_PRESETS}.
+ * @param {string} [params.fromDay] `YYYY-MM-DD`, only with `custom`.
+ * @param {string} [params.toDay] `YYYY-MM-DD`, only with `custom`.
  * @param {{from: string|null, to: string|null}} params.bounds
  * @param {list<object>} params.events
  * @returns {{range: {from: string|null, to: string|null}, error: string}}
@@ -182,10 +182,10 @@ export function clippingSubrange({ preset, fromDay, toDay, bounds, events }) {
         const range = narrowToClipping(requested, bounds);
 
         /**
-         * Un periodo que no solapa con el recorte —«del 1 al 5 de julio» sobre un recorte de junio—
-         * sale de la intersección como un intervalo vacío o invertido. Sin esta comprobación la
-         * pantalla se queda con seis tarjetas vacías y ni un aviso: el recuento diría «0 registros»
-         * y la causa, que se arregla en dos clics, no estaría escrita en ninguna parte.
+         * A period that does not overlap the clipping —"1 to 5 July" over a clipping of June—
+         * comes out of the intersection as an empty or inverted interval. Without this check the
+         * screen is left with six empty cards and not one warning: the count would say "0 records"
+         * and the cause, fixable in two clicks, would be written nowhere.
          */
         if (instantOf(range.from) >= instantOf(range.to)) {
             return {
@@ -207,23 +207,23 @@ export function clippingSubrange({ preset, fromDay, toDay, bounds, events }) {
 }
 
 /**
- * Aplana los eventos del paquete a la forma que esperan las vistas (`{...content, occurredAt}`), y
- * cuenta los que no tienen esa forma.
+ * Flattens the package events into the shape the views expect (`{...content, occurredAt}`), and
+ * counts the ones that do not have that shape.
  *
- * **Un evento ilegible no desaparece**: sale del recuento aquí y quien llama lo dice en voz alta y
- * lo sigue enseñando en la tabla clínica, con su fecha (ADR 0004). En un recorte que va a leer otra
- * persona, un registro que falta es indistinguible de un registro que no existió, y esa diferencia
- * es clínica.
+ * **An unreadable event does not disappear**: it comes out of the count here and the caller says
+ * it out loud and still shows it in the clinical table, with its date (ADR 0004). In a clipping
+ * somebody else is going to read, a missing record is indistinguishable from a record that never
+ * existed, and that difference is clinical.
  *
- * **Y tampoco desaparece un evento de un tipo que este recorte no declara.** Un recorte generado por
- * una versión más nueva del panel puede traer un séptimo tipo: su contenido se lee, así que no es
- * ilegible, pero no está entre los tipos ofrecidos y por tanto no pasa ningún filtro. Sin este tercer
- * cubo se caía de las gráficas, de las estadísticas, de la línea temporal **y de la tabla clínica**,
- * sin aparecer en ningún recuento, que es una regresión respecto al informe estático que sí lo
- * pintaba como fila «no se entiende».
+ * **Nor does an event of a type this clipping does not declare disappear.** A clipping generated by
+ * a newer version of the panel may bring a seventh type: its content is readable, so it is not
+ * unreadable, but it is not among the offered types and therefore passes no filter. Without this
+ * third bucket it fell out of the charts, the statistics, the timeline **and the clinical table**,
+ * appearing in no count, which is a regression from the static report, which did paint it as a
+ * "not understood" row.
  *
- * @param {object} body Cuerpo en claro del paquete.
- * @param {list<string>} types Tipos que la pantalla ofrece ({@see clippingTypes}).
+ * @param {object} body Package body in the clear.
+ * @param {list<string>} types Types the screen offers ({@see clippingTypes}).
  * @returns {{events: list<object>, raws: list<object>, unreadable: list<object>,
  *           undeclared: list<object>}}
  */
@@ -257,16 +257,16 @@ export function flattenClippingEvents(body, types = EVENT_TYPES) {
 }
 
 /**
- * Tipos que este recorte declara incluir, en el orden de {@see EVENT_TYPES}.
+ * Types this clipping declares it includes, in the order of {@see EVENT_TYPES}.
  *
- * Las casillas se pintan **solo** para esos tipos: ofrecer «Comidas» en un recorte donde el paciente
- * decidió no compartirlas invitaría a marcarla y a concluir, del silencio, que no come. Lo que se
- * dejó fuera se dice aparte, en la cabecera, con esas palabras.
+ * The checkboxes are painted **only** for those types: offering "Meals" in a clipping where the
+ * patient chose not to share them would invite ticking it and concluding, from the silence, that
+ * they do not eat. What was left out is said separately, in the header, in those words.
  *
- * **Si el recorte no declara ningún tipo pero trae eventos**, se ofrecen los tipos que de verdad hay
- * dentro y se dice que el recorte no los declara ({@see renderClippingExplorer}). Lo otro era dejar
- * la pantalla diciendo «marca al menos un tipo» sobre un panel sin ninguna casilla que marcar: un
- * callejón sin salida sobre datos que sí están.
+ * **If the clipping declares no type but brings events**, the types actually inside are offered and
+ * it is stated that the clipping does not declare them ({@see renderClippingExplorer}). The
+ * alternative was leaving the screen saying "tick at least one type" over a panel with no checkbox
+ * to tick: a dead end over data that is right there.
  *
  * @param {object} body
  * @returns {list<string>}
@@ -289,12 +289,12 @@ export function clippingTypes(body) {
 }
 
 /**
- * Unidad con la que se enseñan las glucemias del recorte: la de la **mayoría** de las lecturas.
+ * Unit the glucose readings of the clipping are shown in: that of the **majority** of the readings.
  *
- * Se eligió por mayoría y no por recencia ({@see majorityUnit} frente a `dominantUnit`) porque aquí
- * quien lee no sabe si el paciente acaba de cambiar de medidor. Con la unidad de la última lectura,
- * dos lecturas nuevas en mmol/L mandan doscientas en mg/dL a una nota al pie y el resumen de la
- * tarjeta describe a dos registros, no al recorte.
+ * It was chosen by majority and not by recency ({@see majorityUnit} rather than `dominantUnit`)
+ * because here the reader does not know whether the patient has just changed meters. With the unit
+ * of the last reading, two new readings in mmol/L send two hundred in mg/dL to a footnote and the
+ * card summary describes two records, not the clipping.
  *
  * @param {list<object>} events
  * @returns {string}
@@ -304,11 +304,11 @@ export function clippingGlucoseUnit(events) {
 }
 
 /**
- * ¿Hay glucemias en más de una unidad?
+ * Are there glucose readings in more than one unit?
  *
- * Cuando las hay, el número de la tarjeta describe a una parte del recorte y hace falta decirlo
- * arriba, con peso de aviso: la nota de excluidos que ya pinta `statsView.js` va en `text-caption`,
- * es decir con menos peso visual que el número al que desmiente.
+ * When there are, the card number describes a part of the clipping and that has to be said up top,
+ * with the weight of a warning: the excluded-readings note `statsView.js` already paints goes in
+ * `text-caption`, that is with less visual weight than the number it contradicts.
  *
  * @param {list<object>} events
  * @returns {boolean}
@@ -317,7 +317,7 @@ export function clippingHasMixedGlucoseUnits(events) {
     return unitCount(events, 'glucose', 'value') > 1;
 }
 
-// --- Pintado -------------------------------------------------------------------------------------
+// --- Painting ------------------------------------------------------------------------------------
 
 /** @param {string} tagName @param {string} className @param {string} [text] */
 function element(tagName, className, text) {
@@ -333,7 +333,7 @@ function element(tagName, className, text) {
 }
 
 /**
- * Tarjeta con título, del mismo juego que las del panel (DESIGN.md § Cards).
+ * Card with a title, of the same set as the panel ones (DESIGN.md § Cards).
  *
  * @param {string} title
  * @returns {{card: HTMLElement, body: HTMLElement}}
@@ -350,14 +350,14 @@ function card(title) {
 }
 
 /**
- * Cabecera obligatoria del recorte: cuántos eventos, de cuándo a cuándo y cuándo se generó, más las
- * dos listas de tipos.
+ * Mandatory header of the clipping: how many events, from when to when and when it was generated,
+ * plus the two type lists.
  *
- * **Se enseña siempre y no se pliega.** Es la referencia contra la que se lee todo lo de abajo: sin
- * ella, un recorte al que le falte la peor semana se lee como un historial completo. Y los tipos
- * excluidos se dicen en voz alta porque una ausencia se lee como un cero clínico.
+ * **It is always shown and never folded away.** It is the reference everything below is read
+ * against: without it, a clipping missing the worst week reads as a complete history. And the
+ * excluded types are said out loud because an absence reads as a clinical zero.
  *
- * @param {object} resolved Vocabulario ya resuelto ({@see resolveCatalog}).
+ * @param {object} resolved Vocabulary already resolved ({@see resolveCatalog}).
  * @param {object} body
  * @returns {HTMLElement}
  */
@@ -382,30 +382,30 @@ export function renderClippingHeader(resolved, body) {
 }
 
 /**
- * La segunda línea de la cabecera: **qué se está mirando ahora mismo**, después de acotar.
+ * The second line of the header: **what is being looked at right now**, after narrowing.
  *
- * La cabecera del recorte se pinta una vez y describe el paquete entero, que es su función: es la
- * referencia contra la que se ve que un recorte llegó truncado. Pero mientras fue lo único, acotar a
- * siete días y desmarcar la tensión dejaba en pantalla —y sobre todo **en papel**, porque los
- * controles llevan `data-phr-reader-screen-only` y no se imprimen— un encabezado que declaraba seis
- * meses y todos los tipos encima de una tabla de siete días filtrada. La defensa contra un historial
- * truncado se convertía en la causa del error.
+ * The clipping header is painted once and describes the whole package, which is its job: it is the
+ * reference that shows a clipping arrived truncated. But while it was the only one, narrowing to
+ * seven days and unticking blood pressure left on screen —and above all **on paper**, because the
+ * controls carry `data-phr-reader-screen-only` and are not printed— a heading declaring six months
+ * and every type on top of a filtered seven-day table. The defence against a truncated history
+ * became the cause of the error.
  *
- * Por eso esta línea se repinta en cada `repaint()` y **sí se imprime**: dice el rango realmente
- * aplicado, los tipos marcados y el texto buscado. La de arriba dice qué hay en el recorte; esta
- * dice qué hay debajo.
+ * That is why this line is repainted on every `repaint()` and **is printed**: it states the range
+ * actually applied, the ticked types and the searched text. The one above says what is in the
+ * clipping; this one says what is below.
  *
- * @param {{from: string|null, to: string|null}} range Rango ya acotado ({@see clippingSubrange}).
- * @param {list<string>} types Todos los tipos que ofrece el recorte.
+ * @param {{from: string|null, to: string|null}} range Range already clipped ({@see clippingSubrange}).
+ * @param {list<string>} types Every type the clipping offers.
  * @param {Record<string, boolean>} selected
- * @param {string} query Texto buscado.
+ * @param {string} query Searched text.
  * @returns {string}
  */
 export function viewingText(range, types, selected, query) {
     /**
-     * El rango se compone aquí y no con `rangeText`: aquella frase está escrita para la cabecera
-     * («Cubriendo del X al Y») y esta habla en presente («del X al Y»). Lo que sí se copia de ella
-     * es el criterio de los extremos abiertos ({@see describeRange}).
+     * The range is composed here and not with `rangeText`: that sentence is written for the header
+     * ("Covering from X to Y") and this one speaks in the present ("from X to Y"). What is copied
+     * from it is the criterion for open ends ({@see describeRange}).
      */
     const parts = [describeRange(range)];
 
@@ -427,8 +427,8 @@ export function viewingText(range, types, selected, query) {
 }
 
 /**
- * Un rango abierto se dice con palabras, nunca con un hueco: es el criterio de `rangeText`, el
- * mismo criterio en `clinicalReport.js`.
+ * An open range is said with words, never with a gap: it is the criterion of `rangeText`, the same
+ * criterion as in `clinicalReport.js`.
  *
  * @param {{from: string|null, to: string|null}} range
  * @returns {string}
@@ -453,16 +453,16 @@ function describeRange(range) {
 }
 
 /**
- * Tabla clínica: una fila por registro, con el valor, el método, la nota y el código LOINC.
+ * Clinical table: one row per record, with the value, the method, the note and the LOINC code.
  *
- * **No la sustituyen ni la línea temporal ni las gráficas.** Es una `<table>` de verdad porque se
- * lee en columnas, se compara de un vistazo y sale en papel como sale una tabla, que es donde acaba
- * esto cuando alguien lo mete en una historia clínica; y es el único sitio donde aparece el término
- * oficial LOINC, que no se traduce (ADR 0005) y que es lo que permite copiar una magnitud a un
- * sistema ajeno sin reinterpretarla.
+ * **Neither the timeline nor the charts replace it.** It is a real `<table>` because it is read in
+ * columns, compared at a glance and comes out on paper the way a table does, which is where this
+ * ends up when somebody files it into a health record; and it is the only place the official LOINC
+ * term appears, which is not translated (ADR 0005) and is what allows copying a quantity into
+ * another system without reinterpreting it.
  *
  * @param {object} resolved
- * @param {list<{occurredAt: string, content: object}>} events Eventos **del paquete**, sin aplanar.
+ * @param {list<{occurredAt: string, content: object}>} events Events **of the package**, unflattened.
  * @returns {HTMLElement}
  */
 export function renderClinicalTable(resolved, events) {
@@ -512,7 +512,7 @@ export function renderClinicalTable(resolved, events) {
 }
 
 /**
- * @param {object} row Salida de {@see describeEvent}.
+ * @param {object} row Output of {@see describeEvent}.
  * @returns {HTMLTableRowElement}
  */
 function renderClinicalRow(row) {
@@ -556,8 +556,8 @@ function renderClinicalRow(row) {
         const item = element('p', '');
 
         /**
-         * El código va en monoespaciada (Do's #7) y el término oficial **no se traduce** (ADR 0005):
-         * es el nombre con el que esta magnitud se identifica fuera de aquí.
+         * The code goes in monospace (Do's #7) and the official term is **not translated** (ADR
+         * 0005): it is the name this quantity is identified by outside here.
          */
         item.appendChild(element('span', 'font-mono text-ink', entry.code));
 
@@ -576,15 +576,15 @@ function renderClinicalRow(row) {
 }
 
 /**
- * Los bloques de gráfica: los dos que cruzan tipos —la curva de glucemia con marcas de comida e
- * insulina, y la superposición de días sobre 24 horas— y después uno por tipo con magnitud que
- * promediar. La lista y los títulos salen de `chartsView.js`, para que el profesional vea
- * exactamente las mismas gráficas que el paciente en su panel.
+ * The chart blocks: the two that cross types —the glucose curve with meal and insulin markers, and
+ * the day overlay over 24 hours— and then one per type with a quantity worth averaging. The list
+ * and the titles come from `chartsView.js`, so the professional sees exactly the same charts the
+ * patient sees in their panel.
  *
- * Los pinta este módulo y no una plantilla, al revés que en el panel del paciente: allí el marcado
- * lo emite Blade porque el morph de Livewire borraría cualquier lienzo escrito por JavaScript
- * (ADR 0002), y aquí no hay Livewire que morfe nada. `chartsView.js` los encuentra por `id`, con el
- * prefijo que recibe, para que dos pantallas montadas a la vez nunca se peleen por el mismo
+ * This module paints them and not a template, unlike in the patient panel: there the markup is
+ * emitted by Blade because the Livewire morph would wipe any canvas written by JavaScript (ADR
+ * 0002), and here there is no Livewire morphing anything. `chartsView.js` finds them by `id`,
+ * with the prefix it receives, so that two screens mounted at once never fight over the same
  * `<canvas>`.
  *
  * @param {string} prefix
@@ -596,7 +596,7 @@ function renderChartBlocks(prefix) {
     for (const type of CHART_BLOCKS) {
         const ids = chartElementIds(type, prefix);
 
-        /** Oculto de salida: lo descubre `renderCharts()` si hay algo que dibujar. */
+        /** Hidden by default: `renderCharts()` reveals it if there is anything to draw. */
         const block = element('div', 'hidden');
         block.id = ids.block;
 
@@ -626,20 +626,20 @@ function renderChartBlocks(prefix) {
 }
 
 /**
- * Los controles: subperiodo, tipos y búsqueda.
+ * The controls: sub-period, types and search.
  *
- * Van marcados con `data-phr-reader-screen-only`, que la hoja del lector esconde al imprimir: un
- * desplegable y un campo de búsqueda en papel son tinta que no se puede pulsar.
+ * They are marked with `data-phr-reader-screen-only`, which the reader stylesheet hides when
+ * printing: a dropdown and a search field on paper are ink nobody can press.
  *
  * @param {object} params
- * @param {list<string>} params.types Tipos que el recorte incluye.
+ * @param {list<string>} params.types Types the clipping includes.
  * @param {Record<string, boolean>} params.selected
  * @param {string} params.idPrefix
  * @param {() => void} params.onChange
- * `cancelPendingSearch` sale hacia fuera porque el rebote tiene que morir con la pantalla: un
- * `repaint()` pendiente que corre después de `destroy()` recalcula estadísticas y **mantiene vivos en
- * memoria los eventos en claro** un rato después de que la pantalla se haya dado por cerrada, que es
- * justo lo contrario del invariante «solo memoria, y se va cuando se va».
+ * `cancelPendingSearch` is exposed because the debounce has to die with the screen: a pending
+ * `repaint()` running after `destroy()` recomputes statistics and **keeps the events in the clear
+ * alive in memory** a while after the screen was considered closed, which is exactly the opposite
+ * of the "memory only, and gone when it is gone" invariant.
  *
  * @returns {{section: HTMLElement, presetSelect: HTMLElement, fromInput: HTMLElement,
  *           toInput: HTMLElement, customRow: HTMLElement, searchInput: HTMLElement,
@@ -649,7 +649,7 @@ function renderControls({ types, selected, idPrefix, onChange }) {
     const { card: section, body } = card(t('clip.controls.title'));
     section.setAttribute('data-phr-reader-screen-only', '');
 
-    // --- Subperiodo ------------------------------------------------------------------------------
+    // --- Sub-period ------------------------------------------------------------------------------
 
     const rangeLabel = element('label', 'mb-1.5 block text-body-sm font-semibold text-ink', t('clip.range.label'));
     rangeLabel.htmlFor = `${idPrefix}-clip-range`;
@@ -677,7 +677,7 @@ function renderControls({ types, selected, idPrefix, onChange }) {
     const toInput = renderDayInput(`${idPrefix}-clip-to`, t('clip.range.to'), customRow);
     body.appendChild(customRow);
 
-    /** El error del rango no se auto-descarta (Don'ts #6) y lleva texto además de color (Do's #3). */
+    /** The range error does not auto-dismiss (Don'ts #6) and carries text as well as colour (Do's #3). */
     const rangeError = element('p', 'mt-2 text-body-sm text-error-ink');
     rangeError.hidden = true;
     rangeError.setAttribute('role', 'alert');
@@ -700,7 +700,7 @@ function renderControls({ types, selected, idPrefix, onChange }) {
         input.addEventListener('change', onChange);
     }
 
-    // --- Tipos -----------------------------------------------------------------------------------
+    // --- Types -----------------------------------------------------------------------------------
 
     const fieldset = element('fieldset', 'mt-4');
     fieldset.appendChild(element('legend', 'mb-1.5 block text-body-sm font-semibold text-ink', t('clip.types.label')));
@@ -734,7 +734,7 @@ function renderControls({ types, selected, idPrefix, onChange }) {
     fieldset.appendChild(chips);
     body.appendChild(fieldset);
 
-    // --- Búsqueda --------------------------------------------------------------------------------
+    // --- Search ----------------------------------------------------------------------------------
 
     const searchWrapper = element('div', 'mt-4');
     const searchLabel = element('label', 'mb-1.5 block text-body-sm font-semibold text-ink', t('clip.search.label'));
@@ -742,10 +742,10 @@ function renderControls({ types, selected, idPrefix, onChange }) {
     searchWrapper.appendChild(searchLabel);
 
     /**
-     * `type="search"` y no `type="text"`: el navegador añade el botón de borrar y lo anuncia como
-     * campo de búsqueda. `autocomplete="off"` porque esto se teclea en un ordenador de consulta que
-     * usan varias personas, y lo que alguien busca en un historial ajeno —«hipoglucemia», el nombre
-     * de un fármaco— no tiene por qué quedarse en el autocompletado del siguiente.
+     * `type="search"` and not `type="text"`: the browser adds the clear button and announces it as a
+     * search field. `autocomplete="off"` because this is typed on a clinic computer several people
+     * use, and what somebody searches in somebody else's history —"hypoglycaemia", a drug name—
+     * has no business staying in the next person's autocomplete.
      */
     const searchInput = document.createElement('input');
     searchInput.id = `${idPrefix}-clip-search`;
@@ -757,9 +757,9 @@ function renderControls({ types, selected, idPrefix, onChange }) {
         + 'px-3.5 py-2.5 text-body text-ink focus:border-accent focus:shadow-focus-blue focus:outline-none';
 
     /**
-     * Rebote de 200 ms a mano, que es lo que hace `@input.debounce.200ms` en el panel: repintar
-     * cinco gráficas y seis tarjetas en cada pulsación se nota, y 200 ms es lo que tarda en
-     * percibirse una pausa al teclear. Aquí no hay Alpine que lo ponga.
+     * A hand-written 200 ms debounce, which is what `@input.debounce.200ms` does in the panel:
+     * repainting five charts and six cards on every keystroke is noticeable, and 200 ms is how long
+     * a pause takes to be felt while typing. There is no Alpine here to set it up.
      */
     let debounce = null;
     const cancelPendingSearch = () => {
@@ -810,13 +810,13 @@ function renderDayInput(id, labelText, row) {
 }
 
 /**
- * Monta la pantalla entera del recorte dentro de `container`.
+ * Mounts the whole clipping screen inside `container`.
  *
- * @param {HTMLElement} container Se vacía y se rellena.
+ * @param {HTMLElement} container It is emptied and filled.
  * @param {object} params
- * @param {object} params.body Cuerpo en claro del paquete.
- * @param {object} params.resolved Vocabulario resuelto ({@see resolveCatalog}).
- * @param {string} params.chartPrefix Prefijo de los `id` de los bloques de gráfica.
+ * @param {object} params.body Package body in the clear.
+ * @param {object} params.resolved Resolved vocabulary ({@see resolveCatalog}).
+ * @param {string} params.chartPrefix Prefix of the `id`s of the chart blocks.
  * @returns {{repaint: () => Promise<void>, destroy: () => void}}
  */
 export function renderClippingExplorer(container, { body, resolved, chartPrefix }) {
@@ -826,15 +826,15 @@ export function renderClippingExplorer(container, { body, resolved, chartPrefix 
     const glucoseUnit = clippingGlucoseUnit(allEvents);
     const mixedGlucoseUnits = clippingHasMixedGlucoseUnits(allEvents);
 
-    /** El recorte trae eventos pero no dice de qué tipos son: se ofrecen los que hay y se declara. */
+    /** The clipping brings events but does not say of which types: the ones present are offered and declared. */
     const declaredTypes = Array.isArray(body?.includedTypes) ? body.includedTypes : [];
     const undeclaredTypes = types.length > 0 && !EVENT_TYPES.some((type) => declaredTypes.includes(type));
 
     /**
-     * Emparejamiento entre el evento aplanado que ven las vistas y el evento del paquete que lee la
-     * tabla clínica. Es un `WeakMap` y no un campo dentro del evento porque los filtros
-     * (`filterBySelectedTypes`, `searchEvents`, el origen en memoria) devuelven **los mismos
-     * objetos**, así que la identidad basta y no hay que ensuciar el contenido descifrado.
+     * Pairing between the flattened event the views see and the package event the clinical table
+     * reads. It is a `WeakMap` and not a field inside the event because the filters
+     * (`filterBySelectedTypes`, `searchEvents`, the memory source) return **the same objects**, so
+     * identity is enough and the decrypted content does not have to be dirtied.
      */
     const rawOf = new WeakMap();
 
@@ -842,11 +842,11 @@ export function renderClippingExplorer(container, { body, resolved, chartPrefix 
         rawOf.set(event, raws[index]);
     }
 
-    /** Todos marcados de salida: estrenar la pantalla con un tipo fuera escondería registros. */
+    /** All ticked by default: opening the screen with a type left out would hide records. */
     const selected = Object.fromEntries(types.map((type) => [type, true]));
     const source = memoryEventSource(allEvents);
 
-    /** @type {Record<string, object>} Instancias vivas de Chart.js, para poder destruirlas. */
+    /** @type {Record<string, object>} Live Chart.js instances, so they can be destroyed. */
     const charts = {};
 
     const controls = renderControls({
@@ -859,8 +859,8 @@ export function renderClippingExplorer(container, { body, resolved, chartPrefix 
     const notice = element('div', '');
 
     /**
-     * La línea de estado efectivo. Va fuera de la tarjeta de controles a propósito: aquella lleva
-     * `data-phr-reader-screen-only` y desaparece al imprimir, y esta tiene que salir en papel.
+     * The effective-state line. It goes outside the controls card on purpose: that one carries
+     * `data-phr-reader-screen-only` and disappears when printing, and this one has to come out on paper.
      */
     const viewing = element('p', 'text-body text-ink-secondary');
     const chartsCard = card(t('clip.charts.title'));
@@ -871,10 +871,10 @@ export function renderClippingExplorer(container, { body, resolved, chartPrefix 
     chartsCard.body.appendChild(renderChartBlocks(chartPrefix));
 
     /**
-     * Las gráficas no se imprimen. Un `<canvas>` sale en papel tal como se dibujó, y dibujado en
-     * tema oscuro son líneas claras sobre fondo transparente: en blanco, invisibles. Lo que de
-     * verdad acaba dentro de una historia clínica es texto (ADR 0011), y ese texto —las tarjetas de
-     * estadísticas y la tabla— sí se imprime entero.
+     * The charts are not printed. A `<canvas>` comes out on paper exactly as it was drawn, and drawn
+     * in dark theme it is light lines on a transparent background: on white, invisible. What really
+     * ends up inside a health record is text (ADR 0011), and that text —the statistics cards and
+     * the table— is printed whole.
      */
     chartsCard.card.setAttribute('data-phr-reader-screen-only', '');
 
@@ -890,10 +890,10 @@ export function renderClippingExplorer(container, { body, resolved, chartPrefix 
     );
 
     /**
-     * DESIGN.md § Charts — Dark: la gráfica tiene que releer los colores y redibujarse al cambiar el
-     * tema. En el panel el tema es una clase en `<html>` que pone Filament; aquí no hay panel ni
-     * conmutador —guardar una preferencia sería escribir en el dispositivo del profesional, que es
-     * justo lo que esta ruta evita—, así que manda el sistema operativo.
+     * DESIGN.md § Charts — Dark: the chart has to re-read the colours and redraw when the theme
+     * changes. In the panel the theme is a class on `<html>` set by Filament; here there is no
+     * panel and no toggle —storing a preference would be writing on the professional's device,
+     * which is exactly what this route avoids—, so the operating system decides.
      */
     const stopObserving = observeColorSchemeChange(() => void repaint());
 
@@ -916,15 +916,15 @@ export function renderClippingExplorer(container, { body, resolved, chartPrefix 
         const { events: inRange } = await source(range);
 
         /**
-         * **El periodo y los tipos son la población; la búsqueda no.** Las gráficas y las
-         * estadísticas se calculan sobre `selectedEvents`, y la búsqueda solo estrecha la línea
-         * temporal y la tabla, que es donde buscar significa «localiza esto».
+         * **The period and the types are the population; the search is not.** The charts and the
+         * statistics are computed over `selectedEvents`, and the search only narrows the timeline
+         * and the table, which is where searching means "find this".
          *
-         * Mientras la búsqueda fue el último filtro de todo, teclear «noche» —o «140»— reescribía la
-         * media, la mediana y el tiempo en rango sobre el subconjunto de registros cuyo **texto**
-         * contenía esa cadena, con el rótulo «Media» intacto. Una media sobre una coincidencia de
-         * cadena no es una población clínica: es un número inventado con aspecto de dato, y aquí lo
-         * lee alguien que no tiene forma de saber cómo salió.
+         * While the search was the last filter of everything, typing "night" —or "140"— rewrote the
+         * mean, the median and the time in range over the subset of records whose **text**
+         * contained that string, with the "Mean" label untouched. A mean over a string match is not
+         * a clinical population: it is a made-up number that looks like data, and here it is read
+         * by somebody with no way of knowing how it came out.
          */
         const selectedEvents = filterBySelectedTypes(inRange, selected);
         const shown = searchEvents(selectedEvents, query);
@@ -944,34 +944,34 @@ export function renderClippingExplorer(container, { body, resolved, chartPrefix 
             targetRange: undefined,
             unitMismatch: false,
             /**
-             * Ni botones a pantallas del panel ni invitación a configurar un rango objetivo: quien
-             * mira esto no tiene cuenta aquí y no puede configurar nada. Un botón que no lleva a
-             * ninguna parte es peor que ningún botón.
+             * No buttons to panel screens and no invitation to configure a target range: whoever
+             * looks at this has no account here and can configure nothing. A button that leads
+             * nowhere is worse than no button.
              */
             urlForType: () => null,
             inviteTargetRange: false,
             /**
-             * «Todavía no hay registros en este periodo» habla en voz de paciente y afirma una
-             * ausencia clínica sobre un historial que no es el de quien lee. Aquí lo que hay es un
-             * recorte cerrado, y eso es lo que se dice.
+             * "No records in this period yet" speaks in the patient's voice and asserts a clinical
+             * absence about a history that is not the reader's. What there is here is a closed
+             * clipping, and that is what is said.
              */
             emptyText: t('clip.empty.type'),
         }));
 
         timelineCard.body.replaceChildren(renderTimelineSection(shown, {
             /**
-             * Si lo que vacía la línea temporal es el buscador, se dice que es el buscador. Decir
-             * «no hay registros» sobre registros que están en el recorte y solo están filtrados es
-             * exactamente la lectura que este proyecto no puede permitirse.
+             * If what empties the timeline is the search box, it is said that it is the search box.
+             * Saying "there are no records" about records that are in the clipping and merely
+             * filtered is exactly the reading this project cannot afford.
              */
             emptyText: query.trim() === '' ? t('clip.empty.type') : t('dashboard.empty.search'),
         }));
 
         /**
-         * La tabla enseña lo mismo que las vistas **más los ilegibles y los de tipo no declarado**,
-         * que no pasan por ningún filtro: de los primeros no se puede leer ni el tipo ni la fecha con
-         * garantías, y los segundos no tienen casilla que marcar. Esconder cualquiera de los dos
-         * sería omitir un registro que existe (ADR 0004), y `describeEvent` ya sabe pintarlos.
+         * The table shows the same as the views **plus the unreadable ones and those of an
+         * undeclared type**, which pass no filter: of the first ones neither the type nor the date
+         * can be read with any guarantee, and the second ones have no checkbox to tick. Hiding
+         * either would be omitting a record that exists (ADR 0004), and `describeEvent` can paint them.
          */
         tableCard.body.replaceChildren(renderClinicalTable(resolved, [
             ...shown.map((event) => rawOf.get(event)),
@@ -981,8 +981,8 @@ export function renderClippingExplorer(container, { body, resolved, chartPrefix 
     }
 
     /**
-     * @param {number} shownCount Registros del periodo que pasan el filtro de tipos.
-     * @param {number} hiddenBySearch Cuántos de esos deja fuera el texto buscado.
+     * @param {number} shownCount Records of the period that pass the type filter.
+     * @param {number} hiddenBySearch How many of those the searched text leaves out.
      */
     function renderNotice(shownCount, hiddenBySearch) {
         const callouts = [];
@@ -1000,8 +1000,8 @@ export function renderClippingExplorer(container, { body, resolved, chartPrefix 
         }
 
         /**
-         * Las glucemias en dos unidades merecen un aviso, no una nota al pie: la nota que ya pinta
-         * `statsView.js` va en `text-caption`, con menos peso visual que el número al que desmiente.
+         * Glucose readings in two units deserve a warning, not a footnote: the note `statsView.js`
+         * already paints goes in `text-caption`, with less visual weight than the number it contradicts.
          */
         if (mixedGlucoseUnits) {
             callouts.push(createCallout('warning', t('clip.notice.mixedUnits', { unit: glucoseUnit })));
@@ -1028,8 +1028,8 @@ export function renderClippingExplorer(container, { body, resolved, chartPrefix 
     return {
         repaint,
         /**
-         * Desmonta: destruye las gráficas y deja de observar el tema. Sin esto, volver a montar la
-         * vista previa dejaría la instancia anterior de Chart.js atada a un lienzo que ya no está.
+         * Unmounts: destroys the charts and stops observing the theme. Without this, mounting the
+         * preview again would leave the previous Chart.js instance tied to a canvas that is gone.
          */
         destroy() {
             controls.cancelPendingSearch();

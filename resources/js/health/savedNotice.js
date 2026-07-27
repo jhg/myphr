@@ -1,55 +1,55 @@
 /**
- * Confirmación efímera de guardado, compartida por las cuatro pantallas de eventos (glucemia,
- * tensión, insulina, comidas).
+ * Ephemeral save confirmation, shared by the four event screens (glucose, blood pressure,
+ * insulin, meals).
  *
- * El botón ya se deshabilita y cambia a «Guardando…» mientras se cifra y se sube, así que la espera
- * se ve; lo que no se veía era el final. Al terminar, el botón simplemente vuelve a decir «Guardar»
- * y el campo del valor se queda en blanco: exactamente el mismo aspecto que si no hubiera pasado
- * nada. El registro nuevo sí aparece en el historial, pero el historial es otra tarjeta más abajo,
- * fuera de la pantalla en un móvil, y quien está mirando el botón no lo ve. Con el cifrado
- * ocurriendo en el navegador la operación tarda lo suficiente como para dudar, y la reacción
- * natural ante la duda es volver a pulsar: eso guardaría dos veces la misma lectura, y dos lecturas
- * idénticas separadas por segundos no se distinguen después de un valor real repetido.
+ * The button already disables itself and changes to "Saving…" while it encrypts and uploads, so
+ * the wait is visible; what was not visible was the end. When it finishes, the button simply says
+ * "Save" again and the value field is left blank: exactly the same look as if nothing had
+ * happened. The new record does appear in the history, but the history is another card further
+ * down, off screen on a phone, and whoever is looking at the button does not see it. With the
+ * encryption happening in the browser the operation takes long enough to raise a doubt, and the
+ * natural reaction to doubt is to press again: that would save the same reading twice, and two
+ * identical readings seconds apart are indistinguishable from a real repeated value afterwards.
  *
- * Por eso la confirmación es efímera y no permanente: informa del final de ESTA operación. Si se
- * quedara en pantalla, al abrir la página al día siguiente —o al fallar el guardado siguiente— se
- * seguiría leyendo «Registro guardado», que entonces sería mentira. Se va sola a los pocos
- * segundos, sin pedir que nadie la cierre.
+ * That is why the confirmation is ephemeral and not permanent: it reports the end of THIS
+ * operation. If it stayed on screen, opening the page the next day —or after the next save
+ * failed— would still read "Record saved", which would then be a lie. It goes away on its own
+ * after a few seconds, without asking anybody to close it.
  *
- * El aviso lo pinta cada plantilla junto al botón con `x-show="saved"` y `role="status"`, con el
- * texto en Blade (`__('Record saved.')`), igual que la confirmación de ajustes de
- * `profile.blade.php`: el texto es constante, así que no necesita pasar por el catálogo de
- * JavaScript.
+ * Each template paints the notice next to the button with `x-show="saved"` and `role="status"`,
+ * with the text in Blade (`__('Record saved.')`), like the settings confirmation of
+ * `profile.blade.php`: the text is constant, so it does not need to go through the JavaScript
+ * catalog.
  */
 
 /**
- * Cuánto se queda el aviso en pantalla. Cuatro segundos son suficientes para leer tres palabras sin
- * mirar fijamente, y bastante menos que el tiempo de teclear la lectura siguiente, que es cuando el
- * aviso pasaría a estorbar.
+ * How long the notice stays on screen. Four seconds are enough to read three words without staring,
+ * and quite a bit less than the time to type the next reading, which is when the notice would start
+ * getting in the way.
  */
 export const SAVED_NOTICE_MS = 4000;
 
 /**
- * Estado y comportamiento del aviso, para mezclar en un componente Alpine con `...savedNotice()`,
- * igual que `progressMixin()` en las pantallas de acceso.
+ * State and behaviour of the notice, to mix into an Alpine component with `...savedNotice()`, like
+ * `progressMixin()` in the sign-in screens.
  *
  * @returns {{saved: boolean, savedTimer: ReturnType<typeof setTimeout>|null,
  *            confirmSaved: () => void, clearSaved: () => void}}
  */
 export function savedNotice() {
     return {
-        /** Si el aviso de «guardado» está visible ahora mismo. */
+        /** Whether the "saved" notice is visible right now. */
         saved: false,
 
-        /** Temporizador vivo del aviso, para poder reiniciarlo al guardar otra vez. */
+        /** Live timer of the notice, so it can be restarted when saving again. */
         savedTimer: null,
 
         /**
-         * Muestra el aviso y programa su retirada.
+         * Shows the notice and schedules its removal.
          *
-         * Al guardar dos veces seguidas el temporizador anterior se cancela y se cuenta de nuevo: si
-         * no, el de la primera vez apagaría el aviso de la segunda a mitad de camino, y quedaría un
-         * guardado bueno sin confirmar.
+         * When saving twice in a row the previous timer is cancelled and the count restarts: if not,
+         * the first one would switch off the second notice half-way, and a good save would be left
+         * unconfirmed.
          */
         confirmSaved() {
             clearTimeout(this.savedTimer);
@@ -62,9 +62,9 @@ export function savedNotice() {
         },
 
         /**
-         * Retira el aviso ya, sin esperar al temporizador. Se llama al empezar un guardado nuevo:
-         * dejar el «guardado» de la vez anterior visible mientras se cifra la siguiente lectura la
-         * daría por buena antes de tiempo.
+         * Removes the notice right away, without waiting for the timer. It is called when a new
+         * save starts: leaving the "saved" of the previous one visible while the next reading is
+         * encrypted would call it good too early.
          */
         clearSaved() {
             clearTimeout(this.savedTimer);

@@ -10,27 +10,26 @@ use Illuminate\Support\Facades\Log;
 use Livewire\ComponentHook;
 
 /**
- * Guardarraíl de servidor de la Spec 0001 §9 (ADR 0002).
+ * Server-side guardrail from Spec 0001 §9 (ADR 0002).
  *
- * Es la mitad de servidor del par de guardarraíles: la de cliente es
- * `resources/js/guards/livewirePayloadGuard.js`, un interceptor de peticiones que revisa lo mismo
- * antes de que salgan del navegador. Ese interceptor no protege del descuido de poner un
- * `wire:model` sin pensarlo en un componente que maneja datos cifrados, porque el propio cliente es
- * quien genera la carga: este hook cubre justo ese caso, en el servidor, sobre cada actualización de
- * propiedad.
+ * It is the server half of a pair of guardrails: the client half is
+ * `resources/js/guards/livewirePayloadGuard.js`, a request interceptor that checks the same thing
+ * before anything leaves the browser. That interceptor does not protect against carelessly adding a
+ * `wire:model` to a component that handles encrypted data, because the client is the one building
+ * the payload: this hook covers exactly that case, on the server, on every property update.
  *
- * Solo vigila componentes que implementan {@see HandlesEncryptedPayloads}: aplicarlo a todos los
- * componentes del panel dispararía falsos positivos sobre texto en claro legítimo (nombres de
- * pacientes en `UserResource`, por ejemplo, que no es dato cifrado en este proyecto).
+ * It only watches components that implement {@see HandlesEncryptedPayloads}: applying it to every
+ * component in the panel would fire false positives on legitimate plaintext (patient names in
+ * `UserResource`, for instance, which is not encrypted data in this project).
  *
- * El umbral espeja el del guardarraíl de cliente ({@see self::MAX_PLAINTEXT_LENGTH}, igual al
- * `MAX_PLAINTEXT_LENGTH` de `resources/js/guards/livewirePayloadGuard.js`): un sobre cifrado real,
- * con el menor relleno del ADR 0004, no baja de unos 450 caracteres, así que cualquier cadena por
- * encima del umbral sin el prefijo `v1.` es, o un dato en claro que no debería viajar, o un valor mal
- * formado.
+ * The threshold mirrors the client guardrail's ({@see self::MAX_PLAINTEXT_LENGTH}, the same as
+ * `MAX_PLAINTEXT_LENGTH` in `resources/js/guards/livewirePayloadGuard.js`): a real encrypted
+ * envelope, with the smallest ADR 0004 padding, never goes below about 450 characters, so any string
+ * above the threshold without the `v1.` prefix is either plaintext that should not travel or a
+ * malformed value.
  *
- * El incidente se registra sin el valor ofendido: la ruta de la propiedad basta para depurar, y
- * escribir el valor en el log sería filtrar el propio dato clínico que el guardarraíl protege.
+ * The incident is logged without the offending value: the property path is enough to debug, and
+ * writing the value to the log would leak the very clinical data the guardrail protects.
  */
 final class EncryptedPayloadGuardHook extends ComponentHook
 {

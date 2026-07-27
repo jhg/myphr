@@ -14,25 +14,25 @@ use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 
 /**
- * Genera el material estático del servidor OPAQUE (`docs/OPAQUE.md` §12.1).
+ * Generates the static material of the OPAQUE server (`docs/OPAQUE.md` §12.1).
  *
- * Produce `oprf_seed`, la clave estática (escalar y pública derivada), el
- * registro ficticio de §13.2 y la clave de enumeración de §13.1, y los
- * **imprime** en base64url para copiarlos al entorno. Nunca escribe `.env` ni
- * ningún fichero del repositorio.
+ * It produces `oprf_seed`, the static key (scalar and derived public key), the
+ * fake record from §13.2 and the enumeration key from §13.1, and **prints** them
+ * as base64url so they can be copied into the environment. It never writes
+ * `.env` or any file in the repository.
  *
- * Ejecutarlo por segunda vez sobre un despliegue con usuarios registrados deja
- * todos los registros existentes inservibles sin ningún error visible: los
- * envelopes están ligados a `server_public_key` y las claves OPRF al
- * `oprf_seed`. Por eso pide confirmación explícita.
+ * Running it a second time on a deployment with registered users leaves every
+ * existing registration useless with no visible error: the envelopes are tied to
+ * `server_public_key` and the OPRF keys to the `oprf_seed`. That is why it asks
+ * for explicit confirmation.
  */
 #[Signature('opaque:setup')]
 #[Description('Genera el material estático del servidor OPAQUE y lo imprime para copiarlo al entorno (no escribe .env).')]
 final class OpaqueSetupCommand extends Command
 {
     /**
-     * @param  RandomSource  $random  Fuente de aleatoriedad del subsistema (§20.3).
-     * @return int Código de salida: 0 si se generó, 1 si se abortó.
+     * @param  RandomSource  $random  Source of randomness for the subsystem (§20.3).
+     * @return int Exit code: 0 if it generated, 1 if it aborted.
      */
     public function handle(RandomSource $random): int
     {
@@ -76,7 +76,7 @@ final class OpaqueSetupCommand extends Command
     }
 
     /**
-     * Registro ficticio materializado de §13.2 / RFC 9807 §6.3.2.2.
+     * Materialized fake record from §13.2 / RFC 9807 §6.3.2.2.
      *
      * ```
      * (fake_sk, fake_client_public_key) = DeriveDiffieHellmanKeyPair(random(Nseed))
@@ -84,9 +84,9 @@ final class OpaqueSetupCommand extends Command
      * fake_envelope                     = zeroes(Nn + Nm)
      * ```
      *
-     * El envelope son **ceros**, no bytes aleatorios: el RFC lo define como
-     * *"the byte string consisting only of zeros of length Nn + Nm"*. El
-     * escalar falso se descarta en cuanto se deriva el par.
+     * The envelope is **zeros**, not random bytes: the RFC defines it as
+     * *"the byte string consisting only of zeros of length Nn + Nm"*. The fake
+     * scalar is discarded as soon as the pair is derived.
      */
     private function generateFakeRegistrationRecord(RandomSource $random): RegistrationRecord
     {

@@ -5,44 +5,43 @@ declare(strict_types=1);
 namespace App\Security\Opaque;
 
 /**
- * Estado persistente del servidor OPAQUE (`docs/OPAQUE.md` §12).
+ * Persistent state of the OPAQUE server (`docs/OPAQUE.md` §12).
  *
  * ```
- * oprf_seed[Nh=64]               PRK de la que se deriva la clave OPRF de cada usuario (§8.3)
- * server_private_key[Nsk=32]     el ESCALAR ya derivado, no la semilla de la que salió
- * server_public_key[Npk=32]      derivada de la privada en el arranque
- * fake_registration_record[192]  registro ficticio materializado (§13.2)
- * server_identity                cadena UTF-8 estable y versionada (§6.4)
- * context                        cadena del preamble; vacía en este perfil (§2, §11.5)
+ * oprf_seed[Nh=64]               PRK each user's OPRF key is derived from (§8.3)
+ * server_private_key[Nsk=32]     the already derived SCALAR, not the seed it came from
+ * server_public_key[Npk=32]      derived from the private key at boot
+ * fake_registration_record[192]  materialized fake record (§13.2)
+ * server_identity                stable, versioned UTF-8 string (§6.4)
+ * context                        preamble string; empty in this profile (§2, §11.5)
  * ```
  *
- * `OPAQUE_SERVER_PRIVATE_KEY` guarda el **escalar**, no la semilla de 32
- * bytes de `DeriveDiffieHellmanKeyPair`: ambos son «32 bytes en base64url» y
- * confundirlos produce una clave pública distinta de la que los clientes ya
- * tienen autenticada en sus envelopes, sin ningún error visible hasta que
- * fallan todos los logins.
+ * `OPAQUE_SERVER_PRIVATE_KEY` stores the **scalar**, not the 32-byte seed of
+ * `DeriveDiffieHellmanKeyPair`: both are "32 bytes as base64url" and mixing
+ * them up produces a public key different from the one clients already have
+ * authenticated in their envelopes, with no visible error until every login
+ * fails.
  *
- * La carga desde configuración es estricta y ocurre en el arranque (§12.2):
- * base64url canónico, longitudes exactas, canonicidad del escalar privado y
- * perfil coincidente. Cualquier desviación lanza
- * {@see InvalidConfigurationException}. Esta clase **no genera secretos**: si
- * falta configuración, falla; generarlos es tarea explícita de
- * `php artisan opaque:setup`.
+ * Loading from configuration is strict and happens at boot (§12.2): canonical
+ * base64url, exact lengths, canonicity of the private scalar and a matching
+ * profile. Any deviation throws {@see InvalidConfigurationException}. This
+ * class **does not generate secrets**: if configuration is missing, it fails;
+ * generating them is the explicit job of `php artisan opaque:setup`.
  */
 final class ServerSetup
 {
     /**
-     * @param  string  $oprfSeed  `oprf_seed`, exactamente 64 bytes (`Nh`).
-     * @param  string  $serverPrivateKey  Escalar estático del servidor, 32 bytes canónicos y no cero.
-     * @param  string  $serverPublicKey  Clave pública derivada del escalar, 32 bytes.
-     * @param  RegistrationRecord  $fakeRegistrationRecord  Registro ficticio de §13.2.
-     * @param  string  $serverIdentity  `server_identity` de `CleartextCredentials`, 1..65535 bytes.
-     * @param  string  $context  `context` del preamble; vacío en este perfil.
-     * @param  string  $profile  Nombre del perfil criptográfico (§2).
+     * @param  string  $oprfSeed  `oprf_seed`, exactly 64 bytes (`Nh`).
+     * @param  string  $serverPrivateKey  Server static scalar, 32 canonical non-zero bytes.
+     * @param  string  $serverPublicKey  Public key derived from the scalar, 32 bytes.
+     * @param  RegistrationRecord  $fakeRegistrationRecord  Fake record from §13.2.
+     * @param  string  $serverIdentity  `server_identity` of `CleartextCredentials`, 1..65535 bytes.
+     * @param  string  $context  Preamble `context`; empty in this profile.
+     * @param  string  $profile  Name of the cryptographic profile (§2).
      *
-     * @throws InvalidConfigurationException Si alguna longitud, el perfil, la
-     *                                       identidad o el contexto no son válidos,
-     *                                       o si el escalar privado no es canónico.
+     * @throws InvalidConfigurationException If a length, the profile, the identity
+     *                                       or the context are invalid, or if the
+     *                                       private scalar is not canonical.
      */
     public function __construct(
         public readonly string $oprfSeed,
@@ -114,29 +113,29 @@ final class ServerSetup
     }
 
     /**
-     * Construye el setup a partir de la configuración de la aplicación
-     * (§12.2), con validación estricta pensada para ejecutarse en el arranque.
+     * Builds the setup from the application configuration (§12.2), with strict
+     * validation meant to run at boot.
      *
-     * Claves esperadas, todas obligatorias salvo `server_public_key` y
-     * `context`:
+     * Expected keys, all mandatory except `server_public_key` and `context`:
      *
      * ```
-     * profile                   nombre del perfil (§2)
-     * oprf_seed                 base64url de 64 bytes
-     * server_private_key        base64url de 32 bytes, el escalar
-     * server_public_key         base64url de 32 bytes, opcional; si está, debe
-     *                           coincidir con la derivada del escalar
-     * fake_registration_record  base64url de 192 bytes (§13.2)
-     * server_identity           cadena UTF-8 no vacía
-     * context                   cadena, vacía en este perfil
+     * profile                   profile name (§2)
+     * oprf_seed                 64 bytes as base64url
+     * server_private_key        32 bytes as base64url, the scalar
+     * server_public_key         32 bytes as base64url, optional; if present, it must
+     *                           match the one derived from the scalar
+     * fake_registration_record  192 bytes as base64url (§13.2)
+     * server_identity           non-empty UTF-8 string
+     * context                   string, empty in this profile
      * ```
      *
-     * @param  array<string, mixed>  $config  Normalmente `config('opaque')`.
+     * @param  array<string, mixed>  $config  Normally `config('opaque')`.
      *
-     * @throws InvalidConfigurationException Si falta una clave, no es cadena,
-     *                                       no es base64url canónico, no tiene la
-     *                                       longitud exacta, el escalar no es
-     *                                       canónico o el registro ficticio no valida.
+     * @throws InvalidConfigurationException If a key is missing, is not a string,
+     *                                       is not canonical base64url, does not
+     *                                       have the exact length, the scalar is
+     *                                       not canonical or the fake record does
+     *                                       not validate.
      */
     public static function fromConfig(array $config): self
     {
@@ -194,11 +193,11 @@ final class ServerSetup
     }
 
     /**
-     * Lee una clave obligatoria de tipo cadena.
+     * Reads a mandatory string key.
      *
      * @param  array<string, mixed>  $config
      *
-     * @throws InvalidConfigurationException Si falta o no es una cadena.
+     * @throws InvalidConfigurationException If it is missing or is not a string.
      */
     private static function requireString(array $config, string $key): string
     {
@@ -212,11 +211,11 @@ final class ServerSetup
     }
 
     /**
-     * Lee una clave opcional de tipo cadena; ausente equivale a cadena vacía.
+     * Reads an optional string key; absent means the empty string.
      *
      * @param  array<string, mixed>  $config
      *
-     * @throws InvalidConfigurationException Si está presente y no es una cadena.
+     * @throws InvalidConfigurationException If it is present and is not a string.
      */
     private static function optionalString(array $config, string $key): string
     {
@@ -230,14 +229,14 @@ final class ServerSetup
     }
 
     /**
-     * Decodifica una clave de configuración en base64url canónico y exige la
-     * longitud binaria exacta (§5, §12.2).
+     * Decodes a configuration key as canonical base64url and requires the exact
+     * binary length (§5, §12.2).
      *
      * @param  array<string, mixed>  $config
      * @param  int<1, max>  $expectedLength
      *
-     * @throws InvalidConfigurationException Si falta, no es cadena, no es
-     *                                       base64url canónico o la longitud no coincide.
+     * @throws InvalidConfigurationException If it is missing, is not a string, is
+     *                                       not canonical base64url or the length does not match.
      */
     private static function decodeExactly(array $config, string $key, int $expectedLength): string
     {
@@ -255,13 +254,13 @@ final class ServerSetup
     }
 
     /**
-     * Comprueba una longitud de configuración, traduciendo el error a
-     * {@see InvalidConfigurationException}: un tamaño incorrecto aquí es un
-     * fallo de despliegue, no un mensaje remoto malformado (§18).
+     * Checks a configuration length, translating the error into
+     * {@see InvalidConfigurationException}: a wrong size here is a deployment
+     * fault, not a malformed remote message (§18).
      *
      * @param  int<1, max>  $expectedLength
      *
-     * @throws InvalidConfigurationException Si la longitud no coincide.
+     * @throws InvalidConfigurationException If the length does not match.
      */
     private static function ensureConfiguredLength(string $value, int $expectedLength, string $name): void
     {

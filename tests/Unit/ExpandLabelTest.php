@@ -6,10 +6,10 @@ use App\Security\Opaque\ExpandLabel;
 use App\Security\Opaque\HkdfSha512;
 
 /**
- * RFC 9807 no publica vectores de Expand-Label en aislado (sus vectores son del
- * protocolo completo), así que aquí se fija la codificación byte a byte de
- * `CustomLabel` contra literales escritos a mano a partir de
- * RFC 9807 §6.4.2.1 y del struct `HkdfLabel` de RFC 8446 §7.1.
+ * RFC 9807 publishes no Expand-Label vectors in isolation (its vectors are for
+ * the full protocol), so the byte-by-byte encoding of `CustomLabel` is pinned
+ * here against literals written by hand from RFC 9807 §6.4.2.1 and from the
+ * `HkdfLabel` struct in RFC 8446 §7.1.
  */
 it('construye CustomLabel exactamente como RFC 9807 §6.4.2.1', function (): void {
     $secret = str_repeat("\x2a", 64);
@@ -34,7 +34,7 @@ it('construye CustomLabel exactamente como RFC 9807 §6.4.2.1', function (): voi
         ->toBe(HkdfSha512::expand($secret, $customLabel, 64));
 });
 
-it('codifica el contexto vacío como uint8(0) sin bytes adicionales', function (): void {
+it('encodes an empty context as uint8(0) with no extra bytes', function (): void {
     $secret = str_repeat("\x2a", 64);
 
     // uint16_be(64) || uint8(16) || "OPAQUE-ServerMAC" || uint8(0)
@@ -51,12 +51,12 @@ it('antepone el prefijo OPAQUE- sin terminador nulo', function (): void {
 
     $secret = str_repeat("\x07", 64);
 
-    // Una etiqueta con NUL final debe dar un resultado distinto: no hay terminador.
+    // A label with a trailing NUL must give a different result: there is no terminator.
     expect(ExpandLabel::expandLabel($secret, 'ClientMAC', '', 64))
         ->not->toBe(ExpandLabel::expandLabel($secret, "ClientMAC\x00", '', 64));
 });
 
-it('deriveSecret devuelve Nx = 64 bytes con las etiquetas de OPAQUE', function (string $label): void {
+it('deriveSecret returns Nx = 64 bytes with the OPAQUE labels', function (string $label): void {
     $secret = str_repeat("\x5c", 64);
     $transcriptHash = hash('sha512', 'preamble', true);
 
@@ -82,7 +82,7 @@ it('separa dominios: etiquetas o contextos distintos dan secretos distintos', fu
         ->not->toBe($sessionKey);
 });
 
-it('la longitud entra en CustomLabel, así que salidas de distinto tamaño no son prefijo', function (): void {
+it('the length goes into CustomLabel, so outputs of different sizes are not prefixes', function (): void {
     $secret = str_repeat("\x3b", 64);
 
     $short = ExpandLabel::expandLabel($secret, 'SessionKey', '', 32);
@@ -94,7 +94,7 @@ it('la longitud entra en CustomLabel, así que salidas de distinto tamaño no so
 it('usa big-endian en el campo de longitud', function (): void {
     $secret = str_repeat("\x2a", 64);
 
-    // 256 = 0x0100 en big-endian; en little-endian sería 0x0001.
+    // 256 = 0x0100 big-endian; little-endian it would be 0x0001.
     $bigEndian = hex2bin('0100').chr(17).'OPAQUE-SessionKey'.chr(0);
 
     expect(ExpandLabel::expandLabel($secret, 'SessionKey', '', 256))
@@ -108,7 +108,7 @@ it('rechaza etiquetas y contextos que no caben en un uint8', function (): void {
     expect(fn (): string => ExpandLabel::expandLabel($secret, str_repeat('a', 249), '', 64))
         ->toThrow(InvalidArgumentException::class);
 
-    // 248 + 7 = 255, el máximo admisible.
+    // 248 + 7 = 255, the maximum allowed.
     expect(strlen(ExpandLabel::expandLabel($secret, str_repeat('a', 248), '', 64)))->toBe(64);
 
     expect(fn (): string => ExpandLabel::expandLabel($secret, 'SessionKey', str_repeat("\x00", 256), 64))
@@ -117,7 +117,7 @@ it('rechaza etiquetas y contextos que no caben en un uint8', function (): void {
     expect(strlen(ExpandLabel::expandLabel($secret, 'SessionKey', str_repeat("\x00", 255), 64)))->toBe(64);
 });
 
-it('rechaza longitudes que no caben en el uint16 o que exceden HKDF-Expand', function (int $length): void {
+it('rejects lengths that do not fit in the uint16 or that exceed HKDF-Expand', function (int $length): void {
     $secret = str_repeat("\x2a", 64);
 
     expect(fn (): string => ExpandLabel::expandLabel($secret, 'SessionKey', '', $length))

@@ -1,27 +1,27 @@
 /**
- * Componente Alpine del cambio de contraseña de quien recuerda la actual.
+ * Alpine component of the password change for someone who remembers the current one.
  *
- * La propiedad que ordena todo el módulo: **la clave maestra no cambia**. Lo único que cambia es la
- * KEK que la envuelve, porque `exportKey` cambia con cada re-registro OPAQUE mientras la clave
- * maestra persiste (`docs/OPAQUE.md` §17). Generar una clave maestra nueva obligaría a re-cifrar
- * todo el histórico desde el navegador, y cualquier registro que se quedara sin re-cifrar sería
- * ilegible para siempre. Por eso la clave maestra se **abre** con la KEK vieja y se **reenvuelve**
- * con la nueva, nunca se crea. De ahí también que la configuración cifrada no se toque: va bajo una
- * clave derivada de la clave maestra, que sigue siendo la misma.
+ * The property that orders the whole module: **the master key does not change**. The only thing
+ * that changes is the KEK wrapping it, because `exportKey` changes with every OPAQUE
+ * re-registration while the master key survives (`docs/OPAQUE.md` §17). Generating a new master
+ * key would force re-encrypting the whole history from the browser, and any record left
+ * un-re-encrypted would be unreadable forever. That is why the master key is **opened** with the
+ * old KEK and **rewrapped** with the new one, never created. Hence also that the encrypted
+ * configuration is not touched: it sits under a key derived from the master key, which stays the same.
  *
- * Tres cosas más que el orden de este archivo protege y que no son negociables:
+ * Three more things the order of this file protects, and they are not negotiable:
  *
- * * La contraseña actual se verifica con un **login OPAQUE completo** (fase A). No basta con que la
- *   sesión esté abierta —un puesto desatendido cambiaría la contraseña de otra persona— y, sobre
- *   todo, ese login es la única forma de obtener el `exportKey` viejo del que sale la KEK vieja.
- * * `assertPinned` corre **antes** de `finishRegistration` (paso 14): en un registro no existe
- *   `server_mac` y nada más autentica al servidor.
- * * La verificación local del paso 18 ocurre **antes** de escribir nada. Es la única barrera que
- *   puede abortar sin dejar rastro en la base de datos; la del paso 24 solo diagnostica.
+ * * The current password is verified with a **full OPAQUE login** (phase A). An open session is
+ *   not enough —an unattended desk would change somebody else's password— and, above all, that
+ *   login is the only way to obtain the old `exportKey` the old KEK comes from.
+ * * `assertPinned` runs **before** `finishRegistration` (step 14): in a registration there is no
+ *   `server_mac` and nothing else authenticates the server.
+ * * The local verification of step 18 happens **before** writing anything. It is the only barrier
+ *   that can abort without leaving a trace in the database; the one in step 24 only diagnoses.
  *
- * Las contraseñas vieja y nueva viven en memoria hasta el final a propósito: zeroizar la vieja antes
- * del commit impide reintentar tras un corte de red, y zeroizar la nueva antes de la comprobación
- * final la haría imposible justo cuando más informa.
+ * The old and new passwords live in memory until the end on purpose: wiping the old one before
+ * the commit prevents retrying after a network drop, and wiping the new one before the final check
+ * would make that check impossible exactly when it tells us most.
  */
 
 import { deriveKey, KDF_LABELS } from '../crypto/kdf.js';
@@ -50,7 +50,7 @@ import {
 import { KEY_STRETCHING_SECONDS, progressMixin } from './progress.js';
 
 /**
- * Factoría del componente Alpine. Se registra como `phrChangePasswordForm`.
+ * Alpine component factory. Registered as `phrChangePasswordForm`.
  *
  * @returns {object}
  */
@@ -75,7 +75,7 @@ export function changePasswordForm() {
 
             const form = event.target;
 
-            /** Paso 2: las tres contraseñas salen del DOM y los campos quedan vacíos en el acto. */
+            /** Step 2: the three passwords leave the DOM and the fields are emptied at once. */
             let currentPassword = this.$refs.currentPassword.value;
             let newPassword = this.$refs.newPassword.value;
             const confirmation = this.$refs.newPasswordConfirmation.value;
@@ -110,7 +110,7 @@ export function changePasswordForm() {
                 this.error = describe(failure);
                 this.resetProgress();
             } finally {
-                /** Paso 22: aquí, y no antes; hasta el commit hay que poder reintentar. */
+                /** Step 22: here, and not before; until the commit a retry must be possible. */
                 currentPassword = '';
                 newPassword = '';
                 this.busy = false;
@@ -118,8 +118,8 @@ export function changePasswordForm() {
         },
 
         /**
-         * Delega en {@see changePassword}, que es donde vive el procedimiento, y traduce sus etapas
-         * a las de esta barra de progreso. La pantalla de perfil llama a la misma función.
+         * Delegates to {@see changePassword}, where the procedure lives, and maps its stages onto
+         * those of this progress bar. The profile screen calls the same function.
          *
          * @param {HTMLFormElement} form
          * @param {string} currentPassword
@@ -153,19 +153,19 @@ export function changePasswordForm() {
 }
 
 /**
- * El procedimiento completo del cambio de contraseña, sin nada de interfaz: reautenticación OPAQUE
- * con la contraseña actual, re-registro con la nueva y reenvoltura de la clave maestra.
+ * The full password change procedure, with no interface at all: OPAQUE reauthentication with the
+ * current password, re-registration with the new one and rewrapping of the master key.
  *
- * Vive fuera del componente Alpine porque tiene **dos** pantallas: esta y la sección «Cambiar la
- * contraseña» del perfil (`profilePage.js`). Antes solo existía dentro del componente, y el perfil
- * lo importaba con `const { changePassword } = await import('./changePasswordPage.js')` — un nombre
- * que no se exportaba: la constante quedaba `undefined` y el cambio de contraseña del perfil moría
- * con un `TypeError` en el clic, sin que ningún test ni el empaquetado lo vieran, porque un
- * `import()` dinámico no comprueba los nombres hasta que se ejecuta.
+ * It lives outside the Alpine component because it has **two** screens: this one and the "Change
+ * password" section of the profile (`profilePage.js`). It used to exist only inside the component,
+ * and the profile imported it with `const { changePassword } = await import('./changePasswordPage.js')`
+ * — a name that was not exported: the constant stayed `undefined` and the profile password change
+ * died with a `TypeError` on click, with neither the tests nor the bundler seeing it, because a
+ * dynamic `import()` does not check names until it runs.
  *
- * Las etapas se anuncian por `onStage`, con nombres propios: cada pantalla decide qué texto y qué
- * fracción de barra les corresponde. Se espera al valor que devuelva, para que la barra pueda pintar
- * antes de que empiece un Argon2id que bloquea el hilo principal.
+ * Stages are announced through `onStage`, with names of their own: each screen decides which text
+ * and which bar fraction they get. The returned value is awaited, so the bar can paint before an
+ * Argon2id that blocks the main thread starts.
  *
  * @param {object} params
  * @param {string} params.currentPassword
@@ -175,25 +175,25 @@ export function changePasswordForm() {
  * @returns {Promise<void>}
  */
 export async function changePassword({ currentPassword, newPassword, urls, onStage = () => {} }) {
-    /** Paso 1. */
+    /** Step 1. */
     await opaqueReady();
 
     const pinned = opaqueParameters();
 
-    /** Paso 3: `startLogin` sin `keyStretching`. */
+    /** Step 3: `startLogin` without `keyStretching`. */
     const { clientLoginState, startLoginRequest } = startLogin(currentPassword);
 
     await onStage('reauth');
 
-    /** Paso 4: el usuario sale de la sesión, no del cuerpo. */
+    /** Step 4: the user comes from the session, not from the body. */
     const reauthStarted = await postJson(urls.reauthStartUrl, { startLoginRequest });
 
-    /** Paso 5: pinning antes de derivar nada. */
+    /** Step 5: pinning before deriving anything. */
     assertPinned(reauthStarted, pinned);
 
     await onStage('stretchingOld');
 
-    /** Paso 6: primer Argon2id. */
+    /** Step 6: first Argon2id. */
     const reauthenticated = finishLogin({
         password: currentPassword,
         clientLoginState,
@@ -201,14 +201,14 @@ export async function changePassword({ currentPassword, newPassword, urls, onSta
         serverIdentity: pinned.serverIdentity,
     });
 
-    /** `undefined` es «la contraseña actual no es correcta», no un error técnico. */
+    /** `undefined` means "the current password is not correct", not a technical error. */
     if (reauthenticated === undefined) {
         throw new AuthRequestError('Reauthentication failed.', null, 'current_password');
     }
 
     await onStage('opening');
 
-    /** Paso 7. */
+    /** Step 7. */
     const reauthFinished = await postJson(urls.reauthFinishUrl, {
         handshakeId: reauthStarted.handshakeId,
         finishLoginRequest: reauthenticated.finishLoginRequest,
@@ -217,7 +217,7 @@ export async function changePassword({ currentPassword, newPassword, urls, onSta
     const userId = reauthFinished.userId;
     const umkContext = envelopeContext(userId, ENVELOPE_PURPOSES.UserMasterKey);
 
-    /** Pasos 8 a 11: abrir el sobre vigente con la KEK vieja y adoptar la clave maestra. */
+    /** Steps 8 to 11: open the current envelope with the old KEK and adopt the master key. */
     adoptCurrentMasterKey({
         exportKey: reauthenticated.exportKey,
         envelope: reauthFinished.encryptedUserMasterKey,
@@ -227,21 +227,21 @@ export async function changePassword({ currentPassword, newPassword, urls, onSta
 
     await onStage('registering');
 
-    /** Paso 12: `startRegistration` sin `keyStretching`. */
+    /** Step 12: `startRegistration` without `keyStretching`. */
     const { clientRegistrationState, registrationRequest } = startRegistration(newPassword);
 
-    /** Paso 13: el ticket se comprueba, no se consume. */
+    /** Step 13: the ticket is checked, not consumed. */
     const registrationStarted = await postJson(urls.registrationStartUrl, {
         registrationRequest,
         ticket: reauthFinished.ticket,
     });
 
-    /** Paso 14: antes del Argon2id; en un registro no hay `server_mac`. */
+    /** Step 14: before Argon2id; in a registration there is no `server_mac`. */
     assertPinned(registrationStarted, pinned);
 
     await onStage('stretching');
 
-    /** Paso 15: segundo Argon2id. */
+    /** Step 15: second Argon2id. */
     const registered = finishRegistration({
         password: newPassword,
         clientRegistrationState,
@@ -251,12 +251,12 @@ export async function changePassword({ currentPassword, newPassword, urls, onSta
 
     await onStage('wrapping');
 
-    /** Pasos 16 a 19: reenvoltura y verificación local **antes** de escribir nada. */
+    /** Steps 16 to 19: rewrap and local verification **before** writing anything. */
     const wrappedUserMasterKey = rewrapMasterKey(registered.exportKey, umkContext);
 
     await onStage('saving');
 
-    /** Paso 20: una única petición, una única transacción. */
+    /** Step 20: one single request, one single transaction. */
     const changed = await postJson(urls.changeUrl, {
         registrationId: registrationStarted.registrationId,
         ticket: reauthFinished.ticket,
@@ -265,10 +265,10 @@ export async function changePassword({ currentPassword, newPassword, urls, onSta
     });
 
     /**
-     * Paso 21: el servidor regeneró la sesión, así que el secreto anterior ya no existe y el
-     * paquete de `sessionStorage` no lo abre nadie. Sin esto, el primer F5 después de cambiar la
-     * contraseña echa a la persona al login sin causa aparente. No se borra el paquete: se
-     * sobrescribe, con la misma clave maestra de siempre.
+     * Step 21: the server regenerated the session, so the previous secret no longer exists and
+     * nobody can open the `sessionStorage` package. Without this, the first F5 after changing the
+     * password throws the person back to the login for no visible reason. The package is not
+     * deleted: it is overwritten, with the same master key as always.
      */
     const sessionSecret = decodeSessionSecret(changed.sessionSecret);
 
@@ -278,19 +278,19 @@ export async function changePassword({ currentPassword, newPassword, urls, onSta
         zeroize(sessionSecret);
     }
 
-    /** Paso 23: el CSRF nuevo, o el siguiente POST da 419. */
+    /** Step 23: the new CSRF, or the next POST gives 419. */
     updateCsrfToken(changed.csrf);
 }
 
 /**
- * Pasos 8 a 11: KEK vieja, apertura del sobre vigente y adopción de la clave maestra.
+ * Steps 8 to 11: old KEK, opening of the current envelope and adoption of the master key.
  *
- * Si ya había clave en memoria se compara en tiempo constante con la que abre el sobre y se aborta
- * si difieren: la clave en memoria puede haber llegado por recuperación con el secreto de sesión, sin
- * contraseña de por medio (ADR 0003), así que reenvolver esa sin comprobar podría atar la contraseña
- * nueva a una clave que no descifra nada.
+ * If there already was a key in memory it is compared in constant time with the one that opens the
+ * envelope, and the change aborts if they differ: the key in memory may have arrived by recovery
+ * with the session secret, with no password involved (ADR 0003), so rewrapping that one unchecked
+ * could tie the new password to a key that decrypts nothing.
  *
- * Un fallo al abrir es **visible**, nunca silencioso (ADR 0004), y aborta el cambio.
+ * A failure to open is **visible**, never silent (ADR 0004), and it aborts the change.
  *
  * @param {{exportKey: string, envelope: string, context: string, userId: string}} params
  */
@@ -322,18 +322,18 @@ function adoptCurrentMasterKey({ exportKey, envelope, context, userId }) {
 }
 
 /**
- * Pasos 16 a 19: KEK nueva, reenvoltura de la **misma** clave maestra y verificación local.
+ * Steps 16 to 19: new KEK, rewrapping of the **same** master key and local verification.
  *
- * El dato asociado es el mismo que el del sobre viejo, porque el identificador de usuario no cambia:
- * usar otro produciría un sobre que no abriría nunca.
+ * The associated data is the same as the old envelope's, because the user identifier does not
+ * change: using another one would produce an envelope that would never open.
  *
- * La verificación del paso 18 no cuesta ningún Argon2id y es la única comprobación anterior a
- * cualquier escritura. Si falla, se aborta sin haber tocado la base de datos y la cuenta queda
- * exactamente como estaba.
+ * The verification of step 18 costs no Argon2id and is the only check before any write. If it
+ * fails, the change aborts without having touched the database and the account stays exactly as it
+ * was.
  *
- * @param {string} exportKey `exportKey` del registro con la contraseña nueva.
- * @param {string} context Dato asociado del sobre de la clave maestra.
- * @returns {string} Sobre nuevo, listo para el commit.
+ * @param {string} exportKey `exportKey` of the registration with the new password.
+ * @param {string} context Associated data of the master key envelope.
+ * @returns {string} New envelope, ready for the commit.
  */
 function rewrapMasterKey(exportKey, context) {
     const kek = deriveKey({ ikm: exportKey, label: KDF_LABELS.KEK });
@@ -365,7 +365,7 @@ function rewrapMasterKey(exportKey, context) {
 }
 
 /**
- * Comparación en tiempo constante de dos búferes.
+ * Constant-time comparison of two buffers.
  *
  * @param {Uint8Array} a
  * @param {Uint8Array} b
@@ -386,7 +386,7 @@ function constantTimeEquals(a, b) {
 }
 
 /**
- * Traduce un fallo al mensaje que corresponde.
+ * Translates a failure into the message that fits.
  *
  * @param {unknown} failure
  * @returns {string}

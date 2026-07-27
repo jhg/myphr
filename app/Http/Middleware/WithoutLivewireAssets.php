@@ -9,23 +9,24 @@ use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Impide que Livewire inyecte su runtime en la página del lector (ADR 0011).
+ * Stops Livewire from injecting its runtime into the reader page (ADR 0011).
  *
- * Livewire no espera a que una plantilla pida sus scripts: escucha `RequestHandled` y, si durante la
- * petición se renderizó algún componente, **inyecta él mismo** sus estilos y su JavaScript en
- * cualquier respuesta HTML de 200 que contenga `</html>`
- * (`SupportAutoInjectedAssets::shouldInjectLivewireAssets()`). La página del lector es exactamente
- * eso: HTML, 200 y con `</html>`.
+ * Livewire does not wait for a template to ask for its scripts: it listens to `RequestHandled` and,
+ * if any component was rendered during the request, it **injects** its styles and JavaScript itself
+ * into any 200 HTML response containing `</html>`
+ * (`SupportAutoInjectedAssets::shouldInjectLivewireAssets()`). The reader page is exactly that:
+ * HTML, 200 and with `</html>`.
  *
- * Que hoy no se renderice ningún componente en esa ruta no basta como defensa. Sería un detalle de
- * implementación —basta un componente pintado por un `View::composer`, o un cambio en Livewire, para
- * que la condición se cumpla— y el fallo sería silencioso y grave: el runtime del panel cargado en
- * una página pública, sin sesión y abierta en el dispositivo de otra persona. De hecho ya ocurre en
- * el banco de pruebas, donde el marcador estático de Livewire sobrevive de una petición a la
- * siguiente y la página del lector aparecía con `<!-- Livewire Scripts -->` dentro.
+ * The fact that no component is rendered on that route today is not enough of a defence. It would be
+ * an implementation detail —one component painted by a `View::composer`, or a change in Livewire, is
+ * enough for the condition to hold— and the failure would be silent and serious: the panel runtime
+ * loaded on a public page, with no session, opened on somebody else's device. It already happens in
+ * the test suite, where Livewire's static marker survives from one request to the next and the
+ * reader page showed up with `<!-- Livewire Scripts -->` inside.
  *
- * `livewire.inject_assets` es la única palanca pública que apaga esa inyección, y se apaga solo para
- * esta ruta: el panel no la usa, porque sus layouts piden `@livewireScripts` explícitamente.
+ * `livewire.inject_assets` is the only public lever that turns that injection off, and it is turned
+ * off for this route only: the panel does not use it, because its layouts ask for
+ * `@livewireScripts` explicitly.
  */
 final class WithoutLivewireAssets
 {

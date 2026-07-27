@@ -28,6 +28,8 @@ import {
     buildSharePackageBody,
     defaultTypeSelection,
     describeRange,
+    describeReadError,
+    describeShareError,
     expiryFor,
     partitionTypes,
     QR_BORDER_MODULES,
@@ -321,4 +323,42 @@ test('describeRange: un rango abierto se dice con palabras, no con un hueco', ()
         describeRange({ from: '2026-07-01T00:00:00.000000Z', to: '2026-07-31T00:00:00.000000Z' }),
         /^Del .* al /
     );
+});
+
+// --- Qué se le dice a quien comparte cuando algo falla -------------------------------------------
+
+/**
+ * A read that fails is not an encryption that fails, and the screen used to say the second.
+ *
+ * Livewire rejects with a bare `{status, body, json, errors}`, which is not an `Error`, so it fell
+ * through every named case of `describeShareError` and landed on «no se ha podido crear el recorte».
+ * That sentence blames the clipping — the part that never ran — and leaves the person unsure whether
+ * anything was sent. This is the regression test of the message, not of the transport: the transport
+ * is `tests/Feature/SharingFlowTest.php`.
+ */
+test('describeReadError: un fallo de lectura dice que no se ha compartido nada, no que falló el cifrado', () => {
+    assert.equal(
+        describeReadError({ status: 500, body: null, json: null, errors: null }),
+        'No se han podido leer tus registros, así que no se ha creado ningún recorte ni se ha compartido nada.',
+    );
+});
+
+test('describeReadError: un 404 o un 419 se dicen como pestaña caducada, con la recarga por delante', () => {
+    for (const status of [404, 419]) {
+        assert.match(describeReadError({ status }), /^Esta página está desactualizada/);
+    }
+});
+
+test('describeReadError: una petición que no llegó a contestar es la red, no los datos', () => {
+    assert.equal(
+        describeReadError({ status: null }),
+        'No hemos podido contactar con el servidor. Inténtalo de nuevo.',
+    );
+});
+
+test('describeShareError: el rechazo de Livewire no cae en el mensaje genérico', () => {
+    const message = describeShareError({ status: 404, body: null, json: null, errors: null });
+
+    assert.match(message, /^Esta página está desactualizada/);
+    assert.notEqual(message, 'No se ha podido crear el recorte.');
 });

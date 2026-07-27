@@ -7,29 +7,29 @@ namespace App\Security\Opaque;
 use InvalidArgumentException;
 
 /**
- * HKDF instanciado con HMAC-SHA-512, según RFC 5869.
+ * HKDF instantiated with HMAC-SHA-512, per RFC 5869.
  *
- * Implementación manual (no se usa `hash_hkdf()`) para que el comportamiento
- * quede fijado por este código y no por la interpretación de la extensión
- * `hash` de PHP. Todas las entradas y salidas son cadenas binarias: nunca se
- * pasa por representaciones hexadecimales ni por funciones `mb_*`.
+ * A manual implementation (we do not use `hash_hkdf()`) so the behaviour is
+ * pinned by this code and not by how PHP's `hash` extension reads the spec.
+ * Every input and output is a binary string: we never go through hexadecimal
+ * representations or `mb_*` functions.
  *
  * @see https://www.rfc-editor.org/rfc/rfc5869 RFC 5869
  */
 final class HkdfSha512
 {
     /**
-     * HashLen de SHA-512 en bytes (RFC 5869 §2).
+     * SHA-512 HashLen in bytes (RFC 5869 §2).
      */
     public const int HASH_LENGTH = 64;
 
     /**
-     * Bloque interno de SHA-512 en bytes; tamaño del salt cero por defecto.
+     * SHA-512 internal block in bytes; size of the default zero salt.
      */
     public const int BLOCK_LENGTH = 128;
 
     /**
-     * Longitud máxima de salida de Expand: 255 * HashLen (RFC 5869 §2.3).
+     * Maximum Expand output length: 255 * HashLen (RFC 5869 §2.3).
      */
     public const int MAX_OUTPUT_LENGTH = 255 * self::HASH_LENGTH;
 
@@ -40,13 +40,13 @@ final class HkdfSha512
      *
      * PRK = HMAC-SHA-512(key = salt, data = IKM)
      *
-     * Si `$salt` es la cadena vacía se sustituye por HashLen (64) bytes cero,
-     * tal y como exige RFC 5869 §2.2 ("if not provided, it is set to a string
+     * If `$salt` is the empty string it is replaced by HashLen (64) zero bytes,
+     * exactly as RFC 5869 §2.2 requires ("if not provided, it is set to a string
      * of HashLen zeros").
      *
-     * @param  string  $salt  Salt binario, opcionalmente vacío. Longitud arbitraria.
-     * @param  string  $ikm  Input Keying Material binario. Longitud arbitraria.
-     * @return string PRK binario de exactamente 64 bytes.
+     * @param  string  $salt  Binary salt, optionally empty. Arbitrary length.
+     * @param  string  $ikm  Binary Input Keying Material. Arbitrary length.
+     * @return string Binary PRK of exactly 64 bytes.
      */
     public static function extract(string $salt, string $ikm): string
     {
@@ -62,39 +62,39 @@ final class HkdfSha512
      *
      * T(0) = ""
      * T(i) = HMAC-SHA-512(key = PRK, data = T(i-1) || info || I2OSP(i, 1))
-     * OKM  = primeros L bytes de T(1) || T(2) || ... || T(N)
+     * OKM  = first L bytes of T(1) || T(2) || ... || T(N)
      *
-     * El contador `i` ocupa un solo byte, lo que limita N a 255 y por tanto
-     * L a 255 * 64 = 16320 bytes.
+     * The counter `i` takes a single byte, which limits N to 255 and therefore
+     * L to 255 * 64 = 16320 bytes.
      *
-     * @param  string  $prk  Pseudorandom key binaria. RFC 5869 §2.3 exige al menos
-     *                       HashLen (64) bytes.
-     * @param  string  $info  Información de contexto binaria, posiblemente vacía.
-     * @param  int  $length  L, longitud de salida en bytes. 1 <= L <= 16320.
-     * @return string OKM binario de exactamente `$length` bytes.
+     * @param  string  $prk  Binary pseudorandom key. RFC 5869 §2.3 requires at
+     *                       least HashLen (64) bytes.
+     * @param  string  $info  Binary context information, possibly empty.
+     * @param  int  $length  L, output length in bytes. 1 <= L <= 16320.
+     * @return string Binary OKM of exactly `$length` bytes.
      *
-     * @throws InvalidArgumentException Si `$length` está fuera de rango. Es un
-     *                                  error del llamante, nunca alcanzable
-     *                                  desde una entrada remota.
-     * @throws InvalidConfigurationException Si `$prk` mide menos de HashLen
-     *                                       bytes. Un PRK corto solo puede venir
-     *                                       de material estático mal configurado
-     *                                       (p. ej. `oprf_seed`), así que entra en
-     *                                       la jerarquía de `docs/OPAQUE.md` §18
-     *                                       para que la capa HTTP lo colapse junto
-     *                                       al resto de errores del subsistema.
+     * @throws InvalidArgumentException If `$length` is out of range. This is a
+     *                                  caller error, never reachable from
+     *                                  remote input.
+     * @throws InvalidConfigurationException If `$prk` is shorter than HashLen
+     *                                       bytes. A short PRK can only come
+     *                                       from misconfigured static material
+     *                                       (`oprf_seed`, say), so it belongs to
+     *                                       the `docs/OPAQUE.md` §18 hierarchy
+     *                                       and the HTTP layer collapses it with
+     *                                       the rest of the subsystem errors.
      */
     public static function expand(string $prk, string $info, int $length): string
     {
         if ($length < 1 || $length > self::MAX_OUTPUT_LENGTH) {
             throw new InvalidArgumentException(
-                'HKDF-Expand: la longitud debe estar entre 1 y '.self::MAX_OUTPUT_LENGTH.' bytes, recibida '.$length.'.'
+                'HKDF-Expand: the length must be between 1 and '.self::MAX_OUTPUT_LENGTH.' bytes, got '.$length.'.'
             );
         }
 
         if (strlen($prk) < self::HASH_LENGTH) {
             throw new InvalidConfigurationException(
-                'HKDF-Expand: el PRK debe medir al menos '.self::HASH_LENGTH.' bytes, recibidos '.strlen($prk).'.'
+                'HKDF-Expand: the PRK must be at least '.self::HASH_LENGTH.' bytes, got '.strlen($prk).'.'
             );
         }
 
