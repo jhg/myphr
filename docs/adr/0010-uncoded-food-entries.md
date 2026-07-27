@@ -1,4 +1,4 @@
-# ADR 0010: Alimentos en texto libre, con cantidad y unidad codificada
+# ADR 0010: Free-text food items, with quantity and a coded unit
 
 * **Status**: Accepted
 * **Date**: 2026-07-25
@@ -6,40 +6,38 @@
 
 ## Context
 
-El tipo de evento `meal` del ADR 0006 (`docs/adr/0006-encrypted-event-model.md`) guarda qué comió la
-persona. La regla general del vocabulario clínico, en el ADR 0005
-(`docs/adr/0005-clinical-vocabulary-loinc-snomed.md`), es que todo lo que se registra lleva su código
-estándar desde el primer dato, porque codificar texto libre histórico exige recodificación manual y
-pierde el contexto de captura. Guardar solo la etiqueta es la única opción irreversible, y por eso el
-0005 la descarta.
+The `meal` event type from ADR 0006 (`docs/adr/0006-encrypted-event-model.md`) stores what the person ate.
+The general rule for clinical vocabulary, in ADR 0005 (`docs/adr/0005-clinical-vocabulary-loinc-snomed.md`),
+is that everything recorded carries its standard code from the very first data point, because coding
+historical free text requires manual recoding and loses the capture context. Storing only the label is the
+one irreversible option, and that's why 0005 rejects it.
 
-Con los alimentos esa regla no se puede cumplir hoy y conviene decirlo en voz alta en lugar de dejar el
-hueco sin explicar. El ADR 0005 impone a toda fuente del catálogo dos requisitos a la vez: licencia libre
-y alcance mundial, verificados contra la fuente primaria. Para alimentos no tenemos ninguna fuente
-elegida que los cumpla, y las candidatas habituales son bases nacionales o de composición nutricional,
-con un catálogo pensado para el análisis dietético y no para lo que una persona escribe después de comer.
+With food items that rule can't be met today, and it's better to say so out loud than to leave the gap
+unexplained. ADR 0005 imposes two requirements at once on any catalog source: a free license and worldwide
+scope, verified against the primary source. For food we have no chosen source that meets them, and the usual
+candidates are national or nutritional composition databases, with a catalog designed for dietary analysis
+and not for what a person writes down after eating.
 
-Hay además un problema de uso, no de licencia. Codificar el alimento en el momento de registrarlo obliga
-a buscar en una lista y elegir una entrada, y esa fricción se paga siempre en el mismo sitio: la gente
-deja de registrar. Un diario de comidas incompleto no vale para nada, por muy bien codificado que esté lo
-poco que contiene.
+There is also a usage problem, not a licensing one. Coding the food item at the moment of recording it forces
+searching a list and picking an entry, and that friction is always paid in the same place: people stop
+recording. An incomplete meal diary is worth nothing, no matter how well coded the little it contains is.
 
 ## Decision
 
-Los alimentos de una comida se guardan como texto libre, sin codificar contra ningún vocabulario. Cada
-elemento de la comida lleva tres campos: el texto que escribe la persona, una cantidad numérica y una
-unidad elegida de una lista cerrada. El texto no se normaliza ni se intenta casar con ninguna tabla, ni
-al registrar ni después.
+The food items in a meal are stored as free text, without coding them against any vocabulary. Each element of
+the meal carries three fields: the text the person writes, a numeric quantity, and a unit chosen from a
+closed list. The text is not normalized and no attempt is made to match it against any table, neither at
+recording time nor later.
 
-La unidad sí va codificada en UCUM, que es lo que exige el ADR 0005 y lo que evita una conversión
-imposible más adelante. La lista cerrada tiene siete valores y su código es este: gramos `g`, miligramos
-`mg`, kilos `kg`, centilitros `cL`, litros `L`, mililitros `mL` y unidades entendidas como recuento de
-piezas `{each}`. Ninguna otra unidad es válida, y en particular no hay ranura de texto libre para la
-cantidad: nada de "un plato" ni "dos cucharadas".
+The unit is coded in UCUM, which is what ADR 0005 requires and what avoids an impossible conversion later on.
+The closed list has seven values and this is its code: grams `g`, milligrams `mg`, kilograms `kg`,
+centiliters `cL`, liters `L`, milliliters `mL`, and units understood as a count of pieces `{each}`. No other
+unit is valid, and in particular there is no free-text slot for the quantity: no "a plate", no "two
+spoonfuls".
 
-La cantidad viaja como cadena, no como número, por la regla de decimales del ADR 0004
-(`docs/adr/0004-client-crypto-and-data-format.md`), igual que el valor de una glucemia. El contenido
-descifrado de una comida queda así:
+The quantity travels as a string, not as a number, by the decimals rule from ADR 0004
+(`docs/adr/0004-client-crypto-and-data-format.md`), just like a blood glucose value. The decrypted content of
+a meal looks like this:
 
 ```json
 {"v": 1, "type": "meal", "tz": "+02:00", "origin": "manual", "recordedBy": "self",
@@ -47,73 +45,74 @@ descifrado de una comida queda así:
           "foods": [{"name": "lentejas con chorizo", "quantity": "250", "unit": "g"}]}}
 ```
 
-El orden de los alimentos que el ADR 0006 pide capturar es el orden de `foods`, sin campo aparte: una lista
-JSON ya lo conserva y numerarlo a mano solo abriría la puerta a que los dos discrepen.
+The order of the food items that ADR 0006 asks to capture is the order of `foods`, with no separate field: a
+JSON list already preserves it, and numbering it by hand would only open the door to the two disagreeing.
 
-Esto refina lo que el ADR 0006 decía de las comidas: allí la cantidad tenía dos ranuras, código de unidad
-cuando existiera y texto cuando la medida fuera doméstica. La ranura de texto desaparece y la unidad sale
-siempre de la lista.
+This refines what ADR 0006 said about meals: there, the quantity had two slots, a unit code when one existed
+and text when the measure was a household one. The text slot disappears and the unit always comes from the
+list.
 
-Los seis primeros códigos son directos: `g` es la unidad base de masa en UCUM y `mg` y `kg` son esa misma
-unidad con prefijo, y `L`, `mL` y `cL` son el litro con y sin prefijo. Preferimos la ele mayúscula, que es
-la forma habitual en clínica y la que recoge el conjunto "Common UCUM units" de HL7 Terminology 7.0.0,
-aunque UCUM admite igualmente `l`, `ml` y `cl` (comprobado el 2026-07-25 contra el fichero normativo
-`ucum-essence.xml` del repositorio oficial, https://github.com/ucum-org/ucum, y contra
+The first six codes are straightforward: `g` is the UCUM base unit of mass and `mg` and `kg` are that same
+unit with a prefix, and `L`, `mL`, and `cL` are the liter with and without a prefix. We prefer the uppercase
+L, which is the usual form in clinical settings and the one collected in the "Common UCUM units" set from HL7
+Terminology 7.0.0, even though UCUM equally accepts `l`, `ml`, and `cl` (checked on 2026-07-25 against the
+normative file `ucum-essence.xml` in the official repository, https://github.com/ucum-org/ucum, and against
 https://terminology.hl7.org/7.0.0/ValueSet-ucum-common.html).
 
-El séptimo no es directo, porque UCUM no tiene ningún átomo para "unidad", "pieza" o "each": lo que tiene
-es la unidad adimensional `1` y la posibilidad de anotarla entre llaves. `{each}` es exactamente `1` con
-una etiqueta pegada, porque las anotaciones no aportan semántica.
+The seventh is not straightforward, because UCUM has no atom for "unit", "piece", or "each": what it has is
+the dimensionless unit `1` and the option of annotating it inside braces. `{each}` is exactly `1` with a
+label attached, because annotations carry no semantics.
 
 ## Rationale
 
-Elegimos `{each}` y no `1` a secas por una asimetría: de `{each}` se llega a `1` ignorando la anotación,
-que es lo que hace cualquier motor UCUM, mientras que de `1` no se recupera que lo que se contaban eran
-piezas. Como el código viaja dentro del sobre cifrado, cambiarlo después obligaría a descifrar y volver a
-cifrar todos los eventos en el navegador de cada usuario, uno a uno, así que conviene guardar la forma más
-informativa desde el principio. LOINC usa anotaciones en sus propias unidades de ejemplo (`{beats}/min`
-para la frecuencia cardiaca, `{score}` en escalas), luego el precedente existe. La contrapartida es que
-ninguna anotación figura en el conjunto común de HL7, porque las llaves admiten texto libre y no se
-enumeran, y un validador que solo acepte esa lista rechazaría `{each}`.
+We chose `{each}` and not plain `1` because of an asymmetry: from `{each}` you get to `1` by ignoring the
+annotation, which is what any UCUM engine does, whereas from `1` you can't recover that what was being counted
+was pieces. Since the code travels inside the encrypted envelope, changing it later would force decrypting
+and re-encrypting every event in each user's browser, one by one, so it's better to store the most
+informative form from the start. LOINC uses annotations in its own example units (`{beats}/min` for heart
+rate, `{score}` in scales), so the precedent exists. The trade-off is that no annotation appears in the HL7
+common set, because braces accept free text and can't be enumerated, and a validator that only accepts that
+list would reject `{each}`.
 
-Sobre no codificar el alimento, la alternativa era retrasar las comidas hasta tener una fuente que cumpla
-el ADR 0005. La descartamos porque el ADR 0006 ya resolvió un caso emparentado en la dirección contraria:
-allí decidimos no pedir los hidratos de carbono, porque si el paciente no los sabe el campo se rellena con
-números inventados y un número inventado es peor que ninguno, y porque el médico estima mejor a partir del
-alimento y la cantidad. El mismo argumento vale aquí: obligar a elegir una entrada de un catálogo produce
-la entrada más parecida, no la correcta, y el resultado es un dato codificado que dice algo falso con
-apariencia de rigor.
+On not coding the food item, the alternative was to delay meals until we have a source that meets ADR 0005.
+We rejected it because ADR 0006 already solved a related case in the opposite direction: there we decided not
+to ask for carbohydrates, because if the patient doesn't know them the field gets filled with made-up numbers
+and a made-up number is worse than none, and because the doctor estimates better from the food item and the
+quantity. The same argument holds here: forcing someone to pick an entry from a catalog produces the closest
+entry, not the correct one, and the result is coded data that says something false with an appearance of
+rigor.
 
-Esta es una excepción consciente y acotada al ADR 0005, no un descuido. Se limita al texto del
-alimento dentro de un evento `meal`. Todo lo demás del evento sigue la regla: la unidad es UCUM y el tipo
-de comida es un token estable del catálogo. Si alguien lee esto dentro de un año, lo que tiene que
-comprobar antes de "arreglarlo" es si ya existe una fuente de alimentos con licencia libre y alcance
-mundial, no si el texto libre le parece poco riguroso.
+This is a deliberate, narrowly scoped exception to ADR 0005, not an oversight. It is limited to the food item
+text inside a `meal` event. Everything else in the event follows the rule: the unit is UCUM and the meal type
+is a stable token from the catalog. If someone reads this a year from now, what they have to check before
+"fixing" it is whether a food source with a free license and worldwide scope now exists, not whether the free
+text strikes them as insufficiently rigorous.
 
-* **Pros**: registrar una comida cuesta escribir una frase y un número, que es la única forma de que el
-  diario esté completo; no añadimos una fuente de terminología con su licencia, su tamaño y su
-  mantenimiento por una funcionalidad que todavía no la necesita; y la parte que sí es interoperable, la
-  cantidad con su unidad UCUM, queda bien desde el primer registro.
-* **Cons**: no hay agregación posible sobre los alimentos, ni contar cuántas veces aparece uno, porque
-  "arroz", "arroz blanco" y "arrocito" son cadenas distintas; el mapeo a FHIR de un `meal` llevará el
-  alimento en `text` sin `coding`, que es válido pero pobre; y codificar el histórico el día que exista
-  una fuente será manual y perderá el contexto de captura, exactamente el coste que el ADR 0005 advierte.
+* **Pros**: recording a meal costs writing a phrase and a number, which is the only way for the diary to be
+  complete; we don't add a terminology source with its license, its size, and its maintenance for a feature
+  that doesn't need it yet; and the part that is interoperable, the quantity with its UCUM unit, is right
+  from the very first record.
+* **Cons**: no aggregation over food items is possible, not even counting how many times one appears, because
+  "rice", "white rice", and "a bit of rice" are different strings; the FHIR mapping of a `meal` will carry the
+  food item in `text` with no `coding`, which is valid but poor; and coding the history the day a source
+  exists will be manual and will lose the capture context, exactly the cost ADR 0005 warns about.
 
 ## Consequences
 
-El catálogo público en claro gana las siete unidades de comidas, con su código UCUM y su etiqueta por
-idioma, y ninguna entrada de alimentos. Viven en su propio enum (`App\Catalog\FoodQuantityUnit`) y no
-dentro de `UcumUnit`, que enumera las unidades de las magnitudes clínicas: son listas con vidas distintas
-aunque compartan estándar. La lista es cerrada en los dos lados, y la unidad recibida en el formulario se
-valida contra ella antes de construir el contenido que se va a cifrar.
+The public plaintext catalog gains the seven meal units, with their UCUM code and their label per language,
+and no food entries. They live in their own enum (`App\Catalog\FoodQuantityUnit`) and not inside `UcumUnit`,
+which enumerates the units of the clinical quantities: they are lists with different lives even though they
+share a standard. The list is closed on both sides, and the unit received from the form is validated against
+it before building the content that is going to be encrypted.
 
-No hay conversión entre unidades, por el mismo motivo que en la glucemia: exigiría fijar precisión y
-redondeo. Un resumen de comidas que mezcle gramos y mililitros no suma, agrupa por unidad o no agrupa.
+There is no conversion between units, for the same reason as with blood glucose: it would require fixing
+precision and rounding. A meal summary that mixes grams and milliliters doesn't add up; it groups by unit or
+it doesn't group.
 
-Como el texto del alimento lo escribe la persona, es dato clínico en el sentido más literal (puede
-contener cualquier cosa que se le ocurra escribir) y viaja cifrado dentro del sobre del evento como todo
-lo demás, sin índice ciego ni búsqueda en servidor.
+Since the food item text is written by the person, it is clinical data in the most literal sense (it can
+contain anything they think of writing) and it travels encrypted inside the event's envelope like everything
+else, with no blind index and no server-side search.
 
-Cuando aparezca una fuente de alimentos que cumpla el ADR 0005, el camino es añadir un campo opcional de
-código junto al texto, nunca sustituirlo. El texto original se conserva siempre: es lo que la persona
-declaró, y una codificación posterior es una interpretación nuestra que no debe borrarla.
+When a food source that meets ADR 0005 shows up, the way forward is to add an optional code field next to the
+text, never to replace it. The original text is always kept: it is what the person stated, and a later coding
+is an interpretation of ours that must not erase it.

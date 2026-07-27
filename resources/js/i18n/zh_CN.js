@@ -198,6 +198,9 @@ export const ZH_CN = Object.freeze({
     'dashboard.stat.max': '最大值',
     'dashboard.stat.lastReading': '最近一次读数',
     'dashboard.stat.timeInRange': '范围内时间占比',
+    'dashboard.stat.belowRange': '低于范围',
+    'dashboard.stat.inRange': '范围内',
+    'dashboard.stat.aboveRange': '高于范围',
     'dashboard.stat.withMean': '{magnitude} · 平均值',
     'dashboard.stat.withMedian': '{magnitude} · 中位数',
     'dashboard.stat.withRange': '{magnitude} · 区间',
@@ -304,6 +307,38 @@ export const ZH_CN = Object.freeze({
     'dashboard.chart.tooltip': '{label}：中位数 {median} {unit}（从 {min} 到 {max}）',
     'dashboard.chart.tooltipSingle': '{label}：{value} {unit}（仅一次读数）',
     'dashboard.chart.ariaLabel': '{type} 的每日中位数与每日范围',
+
+    // --- Curva de glucemia con marcas de comida e insulina (`glucoseContext.js`) -----------------
+    'dashboard.chart.context.title': '血糖与进餐、胰岛素',
+    'dashboard.chart.context.ariaLabel': '随时间变化的血糖曲线，每次进餐和每次注射胰岛素都有标记',
+    'dashboard.chart.context.caption': '按时间顺序显示每次血糖读数（{unit}），时间轴上每次进餐和每次注射胰岛素各有一个标记。包含：{series}。超过 {hours} 小时没有读数的时段留空，绝不用线连接。',
+    'dashboard.chart.context.meals': '进餐',
+    'dashboard.chart.context.injections': '胰岛素注射',
+    'dashboard.chart.context.reading': '{label}：{value} {unit}',
+    'dashboard.chart.context.grouped': {
+        other: '为保持清晰，有 {count} 个标记与邻近标记合并显示。',
+    },
+    'dashboard.chart.context.moreGrouped': {
+        other: '同一时段内还有 {count} 个。',
+    },
+    'dashboard.chart.context.groupedShort': '\u00d7{count}',
+    'dashboard.chart.context.omittedReadings': {
+        other: '为保持图表清晰，本时间段中较早的 {count} 次读数未绘制。',
+    },
+    'dashboard.chart.context.omittedMarkers': {
+        other: '有 {count} 个标记早于所绘制的第一次读数，未予显示。',
+    },
+
+    // --- Superposición de días sobre 24 horas (`dayOverlay.js`) ---------------------------------
+    'dashboard.chart.overlay.title': '24 小时曲线',
+    'dashboard.chart.overlay.ariaLabel': '本时间段的每一天叠加在同一条 24 小时轴上，并显示每小时的中位数',
+    'dashboard.chart.overlay.caption': '本时间段的全部读数（{unit}）叠加在同一条 24 小时轴上：每天一条浅色细线，每小时的中位数用粗线表示。包含：{series}。没有读数的小时留空。',
+    'dashboard.chart.overlay.days': {
+        other: '共叠加 {count} 天。',
+    },
+    'dashboard.chart.overlay.medianLabel': '{group} \u00b7 每小时中位数',
+    'dashboard.chart.overlay.tooltip': '{label}：{value} {unit}',
+    'dashboard.chart.overlay.targetRange': '阴影带是你的目标范围：{low}\u2013{high} {unit}。',
 
     // --- Recorte compartido: la vista que comparten el lector y la vista previa (ADR 0011) -------
     'clip.controls.title': '你正在查看的内容',

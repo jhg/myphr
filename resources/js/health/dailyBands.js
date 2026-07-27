@@ -64,13 +64,37 @@ const SERIES_KEY_SEPARATOR = '\u0000';
  * @returns {string} `YYYY-MM-DD`, o cadena vacía si el instante no se pudo interpretar.
  */
 export function eventDayKey(occurredAt, tz) {
-    const shifted = new Date(new Date(occurredAt).getTime() + tzOffsetMinutes(tz) * 60_000);
+    const shifted = eventWallClockMs(occurredAt, tz);
 
-    if (Number.isNaN(shifted.getTime())) {
+    if (shifted === null) {
         return '';
     }
 
-    return utcDayKey(shifted);
+    return utcDayKey(new Date(shifted));
+}
+
+/**
+ * Instante del evento **en el reloj de pared de quien lo registró**, expresado como milisegundos
+ * desde la época leídos en UTC.
+ *
+ * Es la misma cuenta que hace {@see eventDayKey} y existe aparte porque las gráficas que colocan
+ * cada lectura en un eje de tiempo —la curva con marcas de comida e insulina, y la superposición de
+ * días sobre 24 horas— necesitan la hora, no solo el día. La regla es la misma y por el mismo
+ * motivo: una cena de las 23:30 en Madrid ocurrió a las 23:30 para quien la comió, y colocarla a las
+ * 21:30 porque quien mira está en Londres movería el pico posprandial a otra franja del día.
+ *
+ * Lo que devuelve **no es un instante absoluto** y no se puede comparar con `Date.now()`: es una
+ * hora de pared codificada como si fuera UTC, así que quien la formatee tiene que hacerlo con
+ * `timeZone: 'UTC'` o la desplazará por segunda vez.
+ *
+ * @param {string} occurredAt Instante en forma canónica (ADR 0004).
+ * @param {string} [tz] Desfase del tipo `+02:00`, `-05:30` o `Z`.
+ * @returns {number|null} `null` si el instante no se pudo interpretar (nunca un cero, que sería 1970).
+ */
+export function eventWallClockMs(occurredAt, tz) {
+    const shifted = new Date(occurredAt).getTime() + tzOffsetMinutes(tz) * 60_000;
+
+    return Number.isNaN(shifted) ? null : shifted;
 }
 
 /**

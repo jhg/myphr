@@ -1,4 +1,4 @@
-# ADR 0009: Alta de usuarios, nacimiento de la clave y fin de sesión
+# ADR 0009: Account creation, where the key is born, and session end
 
 * **Status**: Accepted
 * **Date**: 2026-07-25
@@ -7,168 +7,164 @@
 
 ## Context
 
-Faltaba escribir tres momentos del ciclo de vida que hasta ahora estaban implícitos: cómo aparece un
-usuario en el sistema, dónde nace su clave maestra y cómo termina su sesión. Los tres tocan a la vez la
-autenticación, la configuración cifrada y el modelo de datos, así que conviene decidirlos juntos.
+Three moments of the lifecycle were still unwritten and until now implicit: how a user appears in the system,
+where their master key is born, and how their session ends. All three touch authentication, encrypted
+configuration, and the data model at once, so it's better to decide them together.
 
-La clave maestra es aleatoria, cifra todos los datos del usuario y el servidor no puede verla nunca. Eso
-condiciona por completo el alta: no hay forma de crear una cuenta con datos utilizables sin que una
-persona escriba su contraseña en un navegador.
+The master key is random, it encrypts all of the user's data, and the server can never see it. That fully
+constrains account creation: there is no way to create an account with usable data without a person typing
+their password into a browser.
 
 ## Decision
 
-Hay tres vías para crear una cuenta. La persona puede registrarse ella misma desde la pantalla de acceso,
-sin código de invitación: escribe su nombre, su correo y su contraseña, y el navegador ejecuta el registro
-OPAQUE en el acto, sin ningún enlace de por medio. Un usuario existente puede dar de alta a otro desde el
-panel, o el primer usuario se crea con un comando de consola; en estas dos vías lo único que se crea es la
-fila del usuario y un enlace de un solo uso con caducidad de 24 horas, como parámetro explícito del comando
-y no un valor por defecto oculto.
+There are three ways to create an account. A person can sign up themselves from the login screen, with no
+invitation code: they type their name, their email, and their password, and the browser runs the OPAQUE
+registration right there, with no link in between. An existing user can create another person's account from
+the panel, or the first user is created with a console command; in these two ways, all that gets created is
+the user row and a single-use link that expires in 24 hours, as an explicit parameter of the command and not
+a hidden default.
 
-**El registro público revela si una cuenta existe.** Si el correo ya tiene cuenta, el formulario lo dice
-para que la persona pueda ir a iniciar sesión en vez de creer que su alta se ha perdido. Todo el diseño
-OPAQUE de este proyecto está construido para lo contrario: el login tiene una rama falsa que responde igual
-en forma y en coste cuando la cuenta no existe, precisamente para no delatar cuentas (`docs/OPAQUE.md` lo
-razona con detalle). El formulario de alta abre esa puerta por otro lado, y es una decisión consciente y
-acotada, no un descuido: sin decirlo, quien se equivoca de correo no tiene forma de saber qué le ha pasado
-ni qué hacer a continuación. Se mitiga con un límite de intentos por IP, más estricto que el del registro
-por invitación porque aquí no hay token de enlace que reparta el abuso entre varios cubos.
+**Public sign-up reveals whether an account exists.** If the email already has an account, the form says so,
+so the person can go and log in instead of thinking their sign-up got lost. The entire OPAQUE design in this
+project is built for the opposite: login has a fake branch that answers identically in shape and in cost when
+the account doesn't exist, precisely so as not to give accounts away (`docs/OPAQUE.md` reasons it out in
+detail). The sign-up form opens that door from another side, and it's a deliberate, narrowly scoped decision,
+not an oversight: without saying it, someone who mistypes their email has no way of knowing what happened to
+them or what to do next. It is mitigated with a per-IP attempt limit, stricter than the one for invitation
+sign-up because here there is no link token to spread the abuse across several buckets.
 
-**En la vía de invitación y en la del primer usuario, el enlace se muestra en pantalla una sola vez y nunca
-se envía por correo.** La aplicación lo entrega al administrador que lo emite, y es él quien lo hace llegar
-a la persona por el canal que elija. Enviarlo por correo serializaría la URL en la tabla de trabajos y la
-haría pasar por el proveedor de correo, que puede registrarla, y eso añade una superficie que hoy no
-existe. El coste aceptado es que esa vía lleva siempre un paso manual de comunicación.
+**In the invitation path and in the first-user path, the link is shown on screen once and never sent by
+email.** The application hands it to the administrator who issues it, and it's up to them to get it to the
+person through whatever channel they choose. Sending it by email would serialize the URL into the jobs table
+and push it through the mail provider, which can log it, and that adds a surface that doesn't exist today.
+The accepted cost is that this path always carries a manual communication step.
 
-**La clave maestra nace siempre en el navegador, tanto si la persona usa un enlace como si se registra por
-sí misma.** La persona elige contraseña, se ejecuta el registro OPAQUE, de ahí sale la clave de cifrado de
-claves, el navegador genera una clave maestra aleatoria, la envuelve con ella y envía al servidor
-únicamente la versión envuelta. El servidor no ve la clave en ningún momento, ni siquiera transitoriamente.
+**The master key is always born in the browser, whether the person uses a link or signs up themselves.** The
+person chooses a password, the OPAQUE registration runs, out of it comes the key encryption key, the browser
+generates a random master key, wraps it with the KEK, and sends the server only the wrapped version. The
+server never sees the key at any point, not even transiently.
 
-El primer usuario se crea con un comando de Artisan que **solo emite el enlace**, sin generar ninguna
-clave. El administrador lo abre en su navegador y su clave nace exactamente igual que la de cualquier
-otro. A partir de ahí, ese usuario da de alta a los demás con el mismo mecanismo, y cualquiera puede además
-darse de alta él mismo por la vía pública.
+The first user is created with an Artisan command that **only issues the link**, without generating any key.
+The administrator opens it in their browser and their key is born exactly like anyone else's. From there on,
+that user creates the other accounts with the same mechanism, and anyone can also sign themselves up through
+the public path.
 
-Lo que no cambia: la clave maestra sigue naciendo en el navegador y la contraseña sigue sin llegar nunca al
-servidor, en las tres vías. El enlace de invitación sigue existiendo para dar de alta a alguien desde el
-panel, y el comando de consola sigue siendo la vía del primer usuario: el registro público es una vía más,
-no un reemplazo de ninguna de las dos. Tampoco cambia la falta de verificación de correo: ni un enlace
-consumido ni un registro público demuestran que la persona controla el buzón, así que la consecuencia de
-siempre sigue en pie, si se olvida la contraseña, los datos no se recuperan.
+What doesn't change: the master key is still born in the browser and the password still never reaches the
+server, in all three paths. The invitation link still exists for creating someone's account from the panel,
+and the console command is still the path for the first user: public sign-up is one more path, not a
+replacement for either of the other two. The lack of email verification doesn't change either: neither a
+consumed link nor a public sign-up proves that the person controls the mailbox, so the usual consequence
+still stands, if the password is forgotten, the data is not recoverable.
 
-La sesión se bloquea a los quince minutos de inactividad y exige la contraseña de nuevo. El bloqueo es
-recarga dura, no una pantalla superpuesta, porque hay que destruir el contexto de JavaScript para vaciar
-las instantáneas del DOM que Livewire retiene con datos descifrados, según fija el ADR 0003.
+The session locks after fifteen minutes of inactivity and asks for the password again. The lock is a hard
+reload, not an overlay screen, because the JavaScript context has to be destroyed to clear the DOM
+snapshots Livewire retains with decrypted data, as ADR 0003 requires.
 
-**Bloquear implica destruir el secreto de sesión en el servidor**, no solo vaciar la memoria del
-navegador. El mecanismo de recuperación del ADR 0003 existe precisamente para que una recarga no eche al
-usuario: el paquete cifrado sigue en `sessionStorage` y el cliente puede volver a pedir el secreto y
-abrirlo sin contraseña. Si el bloqueo no mata ese secreto, la recarga del bloqueo es justo el caso que la
-recuperación resuelve y el bloqueo no bloquea nada. Y tiene que hacerlo el servidor: borrar el paquete en
-el cliente no basta, porque quien tenga la máquina delante puede impedir que ese código llegue a
-ejecutarse.
+**Locking means destroying the session secret on the server**, not just clearing the browser's memory. The
+recovery mechanism from ADR 0003 exists precisely so that a reload doesn't throw the user out: the encrypted
+package is still in `sessionStorage` and the client can ask for the secret again and open it without a
+password. If the lock doesn't kill that secret, the lock's reload is exactly the case recovery solves and the
+lock locks nothing. And the server has to do it: deleting the package on the client isn't enough, because
+whoever has the machine in front of them can stop that code from ever running.
 
-El bloqueo cierra la sesión entera, no solo el secreto. Dejar la sesión de Laravel viva mantiene al
-usuario dentro del panel, con acceso a los datos en claro del resto de personas y a acciones destructivas
-como reemitir un enlace, que es justo el riesgo del puesto compartido que motiva los quince minutos. Y la
-caducidad la cuenta el servidor sobre la última petición autenticada: un temporizador en el navegador no
-se ejecuta en una pestaña descartada por el sistema ni en una que nunca se abrió.
+The lock closes the whole session, not just the secret. Leaving the Laravel session alive keeps the user
+inside the panel, with access to other people's plaintext data and to destructive actions such as reissuing a
+link, which is exactly the shared workstation risk that motivates the fifteen minutes. And the server counts
+the timeout from the last authenticated request: a timer in the browser doesn't run in a tab the system has
+discarded, nor in one that was never opened.
 
-Volver a entrar es entonces una autenticación completa: la clave se deriva de la contraseña y no hay
-atajo.
+Coming back in is then a full authentication: the key is derived from the password and there is no shortcut.
 
 ## Rationale
 
-La alternativa era que el comando de consola generase la clave maestra del primer usuario en el servidor,
-que es lo cómodo. Rompe el zero-knowledge para esa cuenta, porque el servidor tendría la clave en claro
-aunque fuese un instante, y sobre todo sienta un precedente que alguien copiará para el siguiente caso que
-parezca inofensivo. Que el comando emita un enlace cuesta lo mismo y deja un solo mecanismo sin
-excepciones que explicar.
+The alternative was for the console command to generate the first user's master key on the server, which is
+the convenient thing. It breaks zero-knowledge for that account, because the server would hold the key in the
+clear even if only for an instant, and above all it sets a precedent someone will copy for the next case that
+looks harmless. Having the command issue a link costs the same and leaves a single mechanism with no
+exceptions to explain.
 
-Quince minutos es un equilibrio entre un puesto compartido, donde el riesgo es que alguien se levante y
-deje la sesión abierta, y el uso real de alguien que registra una glucemia, se distrae y vuelve. Es un
-parámetro y se puede revisar con uso real, pero conviene que sea explícito y no lo que traiga por defecto
-el framework.
+Fifteen minutes is a balance between a shared workstation, where the risk is someone getting up and leaving
+the session open, and the real use of someone who records a blood glucose reading, gets distracted, and comes
+back. It's a parameter and it can be revisited with real usage, but it's better for it to be explicit and not
+whatever the framework ships by default.
 
-* **Pros**: no existe ninguna ruta por la que el servidor toque una clave maestra; el registro público, la
-  invitación y el primer usuario comparten el mismo nacimiento de la clave; el bloqueo por inactividad no
-  deja datos descifrados retenidos en memoria; y el registro público permite que cualquiera empiece a usar
-  la aplicación sin depender de que otra persona la invite.
-* **Cons**: no se puede automatizar el alta masiva sin que cada persona pase por un navegador; el primer
-  arranque exige un paso manual; quince minutos de inactividad obligan a teclear la contraseña, que con
-  Argon2id no es instantáneo en un dispositivo lento; y el registro público confirma si un correo ya tiene
-  cuenta, un oráculo de existencia que el resto del diseño evita a propósito.
+* **Pros**: there is no path by which the server touches a master key; public sign-up, invitation, and the
+  first user share the same key birth; the idle lock leaves no decrypted data retained in memory; and public
+  sign-up lets anyone start using the application without depending on someone else inviting them.
+* **Cons**: bulk account creation can't be automated without every person going through a browser; the first
+  start-up requires a manual step; fifteen minutes of inactivity force typing the password again, which with
+  Argon2id is not instant on a slow device; and public sign-up confirms whether an email already has an
+  account, an existence oracle the rest of the design deliberately avoids.
 
-El tiempo de vida de la sesión de Laravel deja de ser un parámetro suelto: si es mayor que el bloqueo, no
-pasa nada mientras el bloqueo destruya el secreto, pero conviene revisarlos juntos y no dejar que uno
-cambie sin mirar el otro.
+The Laravel session lifetime stops being a loose parameter: if it is longer than the lock, nothing happens as
+long as the lock destroys the secret, but it's better to review them together and not let one change without
+looking at the other.
 
 ## Consequences
 
-**El enlace sirve para establecer la contraseña inicial, no para recuperarla.** Si se emite sobre una
-cuenta que ya tiene datos, la persona podrá entrar con una contraseña nueva y **no podrá abrir nada de lo
-anterior**, porque la clave maestra estaba envuelta bajo la clave derivada de la contraseña antigua. No es
-un fallo, es la consecuencia directa de que no haya recuperación en esta versión, pero la interfaz tiene
-que impedir que alguien lo use creyendo que ayuda: un administrador reseteando la contraseña de un usuario
-le destruye el historial.
+**The link is for setting the initial password, not for recovering it.** If it is issued against an account
+that already has data, the person will be able to log in with a new password and **will not be able to open
+anything from before**, because the master key was wrapped under the key derived from the old password. It's
+not a bug, it's the direct consequence of there being no recovery in this version, but the interface has to
+stop anyone from using it believing it helps: an administrator resetting a user's password destroys their
+history.
 
-Por eso el sobre de la clave maestra es de solo añadir: emitir un enlace nunca sobrescribe el que existe,
-se guarda uno nuevo y el anterior queda retirado con su fecha. Sin esa regla la reemisión destruye el
-único criptograma que la contraseña antigua sabía abrir, y una pérdida que era recuperable para quien la
-recordase deja de serlo. Emitir sobre una cuenta ya registrada exige confirmación explícita, y esa guardia
-vive en el servicio que emite enlaces, no en cada interfaz que lo llama.
+That's why the master key envelope is append-only: issuing a link never overwrites the existing one, a new
+one is stored and the previous one is left retired with its date. Without that rule, reissuing destroys the
+only ciphertext the old password knew how to open, and a loss that was recoverable for anyone who remembered
+it stops being so. Issuing against an already registered account requires explicit confirmation, and that
+guard lives in the service that issues links, not in each interface that calls it.
 
-El cambio de contraseña de alguien que sí recuerda la actual es otra cosa y sí funciona: se abre la clave
-maestra con la contraseña vieja y se vuelve a envolver con la nueva, sin tocar los datos. **Ese flujo está
-implementado**, así que ante una contraseña comprometida o que se quiere rotar la vía correcta es el cambio
-de contraseña, no la reemisión del enlace: el enlace solo queda para quien la ha olvidado del todo, con la
-pérdida que describe el párrafo anterior.
+Changing the password for someone who does remember the current one is a different thing and it does work:
+the master key is opened with the old password and wrapped again with the new one, without touching the data.
+**That flow is implemented**, so for a compromised password or one you want to rotate, the correct path is
+the password change, not reissuing the link: the link is left only for someone who has forgotten it
+completely, with the loss the previous paragraph describes.
 
-El flujo son cuatro rutas bajo el prefijo `password` del panel (`reauth/start`, `reauth/finish`,
-`registration/start` y `change`, en `PhrPanelProvider`), servidas por los controladores
-`app/Http/Controllers/Auth/Opaque/PasswordChange*`: la reautenticación es un login OPAQUE completo contra
-la contraseña actual —que además devuelve el sobre para abrir la clave maestra— y el registro rehace la
-credencial con la nueva. La clave maestra no cambia, solo se reenvuelve, así que el historial se conserva
-entero. Va con su propio limitador `opaque-password-change` (5/min por usuario, 30/min por IP), más
-estricto que el de login porque cada intento cuesta un handshake completo, y lo cubre
-`tests/Feature/PasswordChangeTest.php`.
+The flow is four routes under the panel's `password` prefix (`reauth/start`, `reauth/finish`,
+`registration/start`, and `change`, in `PhrPanelProvider`), served by the
+`app/Http/Controllers/Auth/Opaque/PasswordChange*` controllers: reauthentication is a full OPAQUE login
+against the current password —which also returns the envelope for opening the master key— and the
+registration rebuilds the credential with the new one. The master key doesn't change, it's only re-wrapped,
+so the history is kept whole. It comes with its own `opaque-password-change` rate limiter (5/min per user,
+30/min per IP), stricter than the login one because each attempt costs a full handshake, and
+`tests/Feature/PasswordChangeTest.php` covers it.
 
-El registro de actividad anota el alta de usuarios y el uso del enlace, sin contenido, como fija el
-ADR 0006.
+The activity log records account creation and link use, without content, as ADR 0006 requires.
 
-El bloqueo a los quince minutos tiene un efecto incómodo en la compartición con profesionales
-(`docs/adr/0011-shared-clipping-for-professionals.md`): destruye la pantalla que muestra el enlace, el QR y
-el PIN mientras la persona espera en la sala. No cambiamos el plazo por eso, se resuelve avisando de que
-hay que anotar el PIN en el momento y recomendando generar el recorte antes de entrar en consulta.
+The fifteen-minute lock has an awkward effect on sharing with professionals
+(`docs/adr/0011-shared-clipping-for-professionals.md`): it destroys the screen showing the link, the QR, and
+the PIN while the person is waiting in the waiting room. We're not changing the timeout for that; it's
+handled by warning that the PIN has to be written down right away and recommending generating the clipping
+before going into the appointment.
 
-El login normalizado queda fijo una vez la cuenta está registrada: el identificador de credencial se
-derivó de él, cambiarlo dejaría el envelope irrecuperable y reintroduciría el oráculo de enumeración que
-describe `docs/OPAQUE.md`. Ni consumir un enlace ni completar el registro público verifican el correo: el
-primero lo entrega un administrador por el canal que sea, y el segundo lo escribe la propia persona sin que
-nadie demuestre control del buzón, así que en ningún caso se marca nada como verificado. Y entrar al panel
-exige únicamente tener el registro OPAQUE completo sobre una cuenta activa: cualquier criterio que dependa
-de que otro usuario apruebe deja al primero sin quien lo apruebe.
+The normalized login is fixed once the account is registered: the credential identifier was derived from it,
+changing it would leave the envelope unrecoverable and would reintroduce the enumeration oracle that
+`docs/OPAQUE.md` describes. Neither consuming a link nor completing a public sign-up verifies the email: the
+first is handed over by an administrator through whatever channel, and the second is typed by the person
+themselves without anyone proving control of the mailbox, so nothing is ever marked as verified. And entering
+the panel requires only having a complete OPAQUE registration on an active account: any criterion that
+depends on another user approving leaves the first one with nobody to approve them.
 
-El comando de Artisan no recibe ni pide contraseñas, y por tanto no hay riesgo de que queden en el
-historial del intérprete de comandos ni en los registros del servidor.
+The Artisan command neither receives nor asks for passwords, so there's no risk of them ending up in the
+shell history or in the server logs.
 
-**El nombre del usuario se guarda en claro.** El identificador de login ya está en claro por necesidad, así
-que cifrar el nombre añade poca privacidad real y a cambio rompería el menú de usuario, los breadcrumbs y
-el listado de administración de Filament, que los resuelven en servidor. Es una excepción consciente y
-acotada a la regla general de cifrar, y no se extiende a ningún otro campo.
+**The user's name is stored in the clear.** The login identifier is already in the clear out of necessity, so
+encrypting the name adds little real privacy and in exchange would break the user menu, the breadcrumbs, and
+the Filament administration listing, which resolve them on the server. It is a deliberate, narrowly scoped
+exception to the general rule of encrypting, and it doesn't extend to any other field.
 
-La otra excepción, con el mismo razonamiento y decidida después, es el idioma de la interfaz en
-`users.locale`: el ADR 0007 (`docs/adr/0007-encrypted-user-configuration.md`) la documenta con su coste.
+The other exception, with the same reasoning and decided later, is the interface language in `users.locale`:
+ADR 0007 (`docs/adr/0007-encrypted-user-configuration.md`) documents it with its cost.
 
 ## Decision History
 
-### 2026-07-26 — Se añade el registro público, sin invitación
-Previamente decidido: no había registro público. Solo un usuario existente podía dar de alta a otro desde
-el panel, o el primer usuario se creaba con el comando de consola; en ambos casos con un enlace de un solo
-uso.
-Cambió porque: se decidió abrir el registro directamente desde la pantalla de acceso, sin código de
-invitación, para que cualquiera pueda crear su cuenta sin depender de que otra persona la invite. Esto
-introduce un compromiso que no existía antes, el registro público revela si un correo ya tiene cuenta, y se
-acepta de forma consciente porque sin decirlo la persona que se equivoca de correo no tiene forma de saber
-qué hacer. Se mitiga con un límite de intentos por IP. Las dos vías anteriores, la invitación y el comando
-de consola, siguen existiendo tal cual.
+### 2026-07-26 — Public sign-up is added, with no invitation
+Previously decided: there was no public sign-up. Only an existing user could create another person's account
+from the panel, or the first user was created with the console command; in both cases with a single-use link.
+Changed because: we decided to open sign-up directly from the login screen, with no invitation code, so that
+anyone can create their account without depending on someone else inviting them. This introduces a trade-off
+that didn't exist before, public sign-up reveals whether an email already has an account, and it is
+deliberately accepted because without saying it, the person who mistypes their email has no way of knowing
+what to do. It is mitigated with a per-IP attempt limit. The two earlier paths, the invitation and the
+console command, still exist unchanged.

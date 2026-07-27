@@ -24,7 +24,8 @@ import {
     TEMPERATURE_SITE_KEYS,
     typeLabel,
 } from './eventLabels.js';
-import { createCallout, createStatTile, renderEmptyState } from './eventVisuals.js';
+import { buildDailyBands } from './dailyBands.js';
+import { createCallout, createSegmentedBar, createStatTile, renderEmptyState } from './eventVisuals.js';
 import { selectedTypeTokens } from './eventTypes.js';
 import {
     dominantUnit,
@@ -32,9 +33,6 @@ import {
     summarizeGlucosePeriod,
     summarizeMeasurementPeriod,
 } from './statistics.js';
-
-/** Referencia clínica habitual de tiempo en rango, en porcentaje. */
-const TIME_IN_RANGE_TARGET = 70;
 
 /**
  * Resuelve el rango objetivo de glucemia de los ajustes cifrados del usuario (ADR 0007).
@@ -175,6 +173,114 @@ function createExcludedNote(excludedByUnit, unit) {
 }
 
 /**
+ * Separador de la clave compuesta grupo + magnitud, el mismo carácter nulo y por el mismo motivo que
+ * en `dailyBands.js`: los tokens de catálogo pueden llevar guiones y espacios, y una clave que se
+ * pudiera partir mal mezclaría dos series clínicas distintas.
+ */
+const TREND_KEY_SEPARATOR = '\u0000';
+
+/**
+ * @param {string} group Método de medición, sitio, tipo de insulina... o `''` si el tipo no agrupa.
+ * @param {string} valueKey Magnitud dentro del sobre (`value`, `systolic`, `dose`, ...).
+ * @returns {string}
+ */
+function trendKey(group, valueKey) {
+    return `${group}${TREND_KEY_SEPARATOR}${valueKey}`;
+}
+
+/**
+ * Series diarias para las minigráficas de las baldosas, una por grupo y magnitud.
+ *
+ * **Se apoya en `buildDailyBands` en vez de recalcular nada**, y eso es lo importante: la
+ * minigráfica de una tarjeta y la gráfica grande de al lado tienen que estar dibujando el mismo día
+ * con el mismo número. De ahí salen ya resueltas las tres reglas que no se negocian: una serie por
+ * método de medición (ADR 0008), el día en la zona horaria del **propio evento** y no la del
+ * navegador que mira, y los días sin lecturas como `null` —hueco— y jamás como cero.
+ *
+ * De cada día se toma la **mediana**, la misma cifra que la gráfica dibuja como línea central: la
+ * media de un día con una hipoglucemia y cinco lecturas normales cuenta otra historia.
+ *
+ * @param {list<object>} events Eventos del periodo, ya descifrados.
+ * @param {{type: string, valueKeys?: list<string>, groupBy?: string, unit?: string}} params
+ * @returns {Map<string, list<number|null>>} Clave de {@see trendKey}.
+ */
+export function dailyTrends(events, { type, valueKeys = ['value'], groupBy, unit } = {}) {
+    const { series } = buildDailyBands(events, { type, valueKeys, groupBy, unit });
+    /** @type {Map<string, list<number|null>>} */
+    const trends = new Map();
+
+    for (const entry of series) {
+        trends.set(
+            trendKey(entry.group, entry.valueKey),
+            entry.points.map((point) => (point === null ? null : point.median)),
+        );
+    }
+
+    return trends;
+}
+
+/**
+ * Barra segmentada del tiempo en rango: por debajo, dentro y por encima del rango objetivo.
+ *
+ * **El único dato de esta pantalla que se puede leer como bueno o mejorable sin interpretar nada**:
+ * el rango lo eligió la propia persona en su perfil (ADR 0007), así que el umbral no lo pone la
+ * aplicación. Un número solo —«68 %»— no dice hacia qué lado se va el 32 % restante, y por debajo y
+ * por encima son situaciones clínicas opuestas.
+ *
+ * **Los dos tramos de fuera comparten tono a propósito.** El sistema reserva el rojo para errores y
+ * acciones destructivas (DESIGN.md, Don'ts #4), y esto es un resumen personal, no un diagnóstico:
+ * teñir de rojo la glucemia de alguien es un mensaje que esta aplicación no está en posición de dar.
+ * Inventar un quinto color para distinguirlos sería inventar un papel que el sistema no tiene, así
+ * que lo que los distingue es su sitio en la barra —abajo a la izquierda, arriba a la derecha— y su
+ * etiqueta escrita en la leyenda, que es lo que de verdad se lee.
+ *
+ * **El tramo de dentro siempre va en tono de acierto**, sin umbral que lo cambie. Antes esto era una
+ * cifra suelta y el 70 % de referencia clínica decidía si salía verde o ámbar; con la barra ese
+ * umbral sobra y además estorbaría: a quien esté en el 68 % le pintaría los tres tramos del mismo
+ * ámbar y la barra dejaría de segmentarse justo cuando más falta hace verla. Esas lecturas estuvieron
+ * dentro del rango, que es un hecho y no una nota.
+ *
+ * @param {{inRangePercent: number, belowRangePercent: number, aboveRangePercent: number}} methodSummary
+ * @returns {HTMLElement}
+ */
+function renderTimeInRangeBar(methodSummary) {
+    const section = document.createElement('div');
+    section.className = 'mt-3 rounded-card border border-border bg-background px-4 py-3';
+
+    const caption = document.createElement('p');
+    caption.className = 'text-caption text-ink-secondary';
+    caption.textContent = t('dashboard.stat.timeInRange');
+    section.appendChild(caption);
+
+    const asPercent = (percent) => `${formatNumber(percent)} %`;
+
+    const bar = createSegmentedBar([
+        {
+            label: t('dashboard.stat.belowRange'),
+            percent: methodSummary.belowRangePercent,
+            value: asPercent(methodSummary.belowRangePercent),
+            tone: 'warning',
+        },
+        {
+            label: t('dashboard.stat.inRange'),
+            percent: methodSummary.inRangePercent,
+            value: asPercent(methodSummary.inRangePercent),
+            tone: 'good',
+        },
+        {
+            label: t('dashboard.stat.aboveRange'),
+            percent: methodSummary.aboveRangePercent,
+            value: asPercent(methodSummary.aboveRangePercent),
+            tone: 'warning',
+        },
+    ]);
+    bar.classList.add('mt-2');
+    section.appendChild(bar);
+
+    return section;
+}
+
+/**
  * Estado vacío de una sección.
  *
  * La frase no nombra el tipo porque la cabecera de la tarjeta ya lo dice. Lo que sí dice es «en este
@@ -201,9 +307,11 @@ function renderTypeEmptyState(type, urlForType, emptyText) {
  * @param {string} method
  * @param {object} methodSummary Una entrada de `byMethod` de `summarizeGlucosePeriod`.
  * @param {string} unit
+ * @param {list<number|null>} [trend] Serie diaria de este método para la minigráfica de la mediana
+ *        ({@see dailyTrends}).
  * @returns {HTMLDivElement}
  */
-function renderGlucoseMethodCard(method, methodSummary, unit) {
+function renderGlucoseMethodCard(method, methodSummary, unit, trend) {
     const card = document.createElement('div');
     card.className = 'rounded-card border border-border bg-surface p-pad-md';
 
@@ -217,10 +325,16 @@ function renderGlucoseMethodCard(method, methodSummary, unit) {
 
     grid.appendChild(createStatTile({ label: t('dashboard.stat.count'), value: String(methodSummary.count) }));
     grid.appendChild(createStatTile({ label: t('dashboard.stat.mean'), value: formatNumber(methodSummary.mean), unit }));
+    /**
+     * La minigráfica acompaña a la **mediana** y no a la media: es la cifra que la gráfica grande
+     * dibuja como línea, así que la tarjeta y la gráfica cuentan lo mismo. Colgarla de las seis
+     * baldosas sería repetir seis veces el mismo trazo.
+     */
     grid.appendChild(createStatTile({
         label: t('dashboard.stat.median'),
         value: formatNumber(methodSummary.median),
         unit,
+        trend,
     }));
     grid.appendChild(createStatTile({ label: t('dashboard.stat.min'), value: formatNumber(methodSummary.min), unit }));
     grid.appendChild(createStatTile({ label: t('dashboard.stat.max'), value: formatNumber(methodSummary.max), unit }));
@@ -230,25 +344,17 @@ function renderGlucoseMethodCard(method, methodSummary, unit) {
         unit: `${unit} · ${formatDateTime(methodSummary.last.occurredAt)}`,
     }));
 
-    if (methodSummary.inRangePercent !== undefined) {
-        /**
-         * El único dato que se puede leer como bueno o mejorable sin interpretar nada: el rango
-         * objetivo lo eligió la propia persona en su perfil, así que el umbral no lo pone la
-         * aplicación.
-         *
-         * El 70 % es la referencia clínica habitual para tiempo en rango. Por debajo se marca en
-         * ámbar, no en rojo: esto es un resumen personal, no un diagnóstico, y teñir de rojo la
-         * glucemia de alguien es un mensaje que esta aplicación no está en posición de dar.
-         */
-        grid.appendChild(createStatTile({
-            label: t('dashboard.stat.timeInRange'),
-            value: formatNumber(methodSummary.inRangePercent),
-            unit: '%',
-            tone: methodSummary.inRangePercent >= TIME_IN_RANGE_TARGET ? 'good' : 'warning',
-        }));
-    }
-
     card.appendChild(grid);
+
+    /**
+     * El tiempo en rango no es una baldosa más: es un reparto, y como barra segmentada se lee sin
+     * hacer ninguna cuenta ({@see renderTimeInRangeBar}). Sin rango objetivo configurado no hay
+     * barra —la clave `inRangePercent` no existe, ADR 0007— y lo que queda en su lugar es la
+     * invitación a configurarlo que pinta la sección.
+     */
+    if (methodSummary.inRangePercent !== undefined) {
+        card.appendChild(renderTimeInRangeBar(methodSummary));
+    }
 
     return card;
 }
@@ -262,7 +368,12 @@ function renderGlucoseMethodCard(method, methodSummary, unit) {
  * @param {{low: number, high: number, unit: string}|undefined} targetRange
  * @param {boolean} unitMismatch Hay rango guardado, pero en otra unidad (ver
  *        {@see targetRangeUnitMismatch}).
- * @param {{urlForType?: (type: string) => string|null, inviteTargetRange?: boolean}} [options]
+ * @param {{
+ *   urlForType?: (type: string) => string|null,
+ *   inviteTargetRange?: boolean,
+ *   trends?: Map<string, list<number|null>>,
+ * }} [options] `trends` llega de fuera porque esta función recibe el resumen ya calculado y no los
+ *        eventos, y las series diarias solo se pueden construir con los eventos ({@see dailyTrends}).
  * @returns {DocumentFragment}
  */
 export function renderGlucoseSection(glucoseSummary, unit, targetRange, unitMismatch = false, options = {}) {
@@ -318,7 +429,9 @@ export function renderGlucoseSection(glucoseSummary, unit, targetRange, unitMism
     methods.className = 'space-y-3';
 
     for (const [method, methodSummary] of sortedMethodEntries(glucoseSummary.byMethod)) {
-        methods.appendChild(renderGlucoseMethodCard(method, methodSummary, unit));
+        methods.appendChild(
+            renderGlucoseMethodCard(method, methodSummary, unit, options.trends?.get(trendKey(method, 'value'))),
+        );
     }
 
     const note = createExcludedNote(glucoseSummary.excludedByUnit, unit);
@@ -335,9 +448,10 @@ export function renderGlucoseSection(glucoseSummary, unit, targetRange, unitMism
 /**
  * @param {string} method
  * @param {object} methodSummary Una entrada de `byMethod` de `summarizeBloodPressurePeriod`.
+ * @param {Map<string, list<number|null>>} [trends] Series diarias del periodo ({@see dailyTrends}).
  * @returns {HTMLDivElement}
  */
-function renderBloodPressureMethodCard(method, methodSummary) {
+function renderBloodPressureMethodCard(method, methodSummary, trends) {
     const card = document.createElement('div');
     card.className = 'rounded-card border border-border bg-surface p-pad-md';
 
@@ -383,10 +497,12 @@ function renderBloodPressureMethodCard(method, methodSummary) {
             value: formatNumber(magnitude.mean),
             unit,
         }));
+        /** Una minigráfica por magnitud: sistólica, diastólica y pulso tienen tendencias distintas. */
         grid.appendChild(createStatTile({
             label: t('dashboard.stat.withMedian', { magnitude: label }),
             value: formatNumber(magnitude.median),
             unit,
+            trend: trends?.get(trendKey(method, key)),
         }));
         grid.appendChild(createStatTile({
             label: t('dashboard.stat.withRange', { magnitude: label }),
@@ -405,7 +521,11 @@ function renderBloodPressureMethodCard(method, methodSummary) {
  * el estado vacío.
  *
  * @param {{byMethod: object}} bloodPressureSummary Resumen del periodo.
- * @param {{urlForType?: (type: string) => string|null}} [options]
+ * @param {{
+ *   urlForType?: (type: string) => string|null,
+ *   trends?: Map<string, list<number|null>>,
+ * }} [options] `trends` llega de fuera por lo mismo que en la glucemia: aquí solo hay resumen, y las
+ *        series diarias se construyen con los eventos ({@see dailyTrends}).
  * @returns {DocumentFragment}
  */
 export function renderBloodPressureSection(bloodPressureSummary, options = {}) {
@@ -423,7 +543,7 @@ export function renderBloodPressureSection(bloodPressureSummary, options = {}) {
     methods.className = 'space-y-3';
 
     for (const [method, methodSummary] of sortedMethodEntries(bloodPressureSummary.byMethod)) {
-        methods.appendChild(renderBloodPressureMethodCard(method, methodSummary));
+        methods.appendChild(renderBloodPressureMethodCard(method, methodSummary, options.trends));
     }
 
     fragment.appendChild(methods);
@@ -456,9 +576,10 @@ export const MEASUREMENT_SECTIONS = Object.freeze([
  * @param {string|null} groupLabel Etiqueta del grupo, o `null` si el tipo no agrupa.
  * @param {object} groupSummary Una entrada de `byGroup` de `summarizeMeasurementPeriod`.
  * @param {string} unit
+ * @param {list<number|null>} [trend] Serie diaria del grupo para la minigráfica de la mediana.
  * @returns {HTMLDivElement}
  */
-function renderMeasurementCard(groupLabel, groupSummary, unit) {
+function renderMeasurementCard(groupLabel, groupSummary, unit, trend) {
     const card = document.createElement('div');
     card.className = 'rounded-card border border-border bg-surface p-pad-md';
 
@@ -478,6 +599,7 @@ function renderMeasurementCard(groupLabel, groupSummary, unit) {
         label: t('dashboard.stat.median'),
         value: formatNumber(groupSummary.median),
         unit,
+        trend,
     }));
     grid.appendChild(createStatTile({ label: t('dashboard.stat.min'), value: formatNumber(groupSummary.min), unit }));
     grid.appendChild(createStatTile({ label: t('dashboard.stat.max'), value: formatNumber(groupSummary.max), unit }));
@@ -533,10 +655,22 @@ export function renderMeasurementSection(section, events, options = {}) {
     const groups = document.createElement('div');
     groups.className = 'space-y-3';
 
+    /**
+     * Aquí sí se construyen las series en casa, y no llegan por `options`: esta función recibe los
+     * eventos, que es lo único que hacía falta. La glucemia y la tensión reciben resúmenes ya
+     * hechos, y por eso las suyas se las tienen que dar.
+     */
+    const trends = dailyTrends(events, {
+        type: section.type,
+        valueKeys: [valueKey],
+        groupBy: section.groupBy,
+        unit,
+    });
+
     for (const [group, groupSummary] of sortedMethodEntries(summary.byGroup)) {
         const label = section.groupKeys === undefined ? null : catalogLabel(section.groupKeys, group);
 
-        groups.appendChild(renderMeasurementCard(label, groupSummary, unit));
+        groups.appendChild(renderMeasurementCard(label, groupSummary, unit, trends.get(trendKey(group, valueKey))));
     }
 
     const note = createExcludedNote(summary.excludedByUnit, unit);
@@ -623,14 +757,26 @@ export function renderStatsSections(events, {
 
     if (selectedTypes.glucose === true) {
         const summary = summarizeGlucosePeriod(events, { unit, targetRange });
+        /** Una serie por método (ADR 0008) y solo de la unidad de presentación (ADR 0007). */
+        const trends = dailyTrends(events, { type: 'glucose', groupBy: 'method', unit });
 
-        sections.push(['glucose', renderGlucoseSection(summary, unit, targetRange, unitMismatch, options)]);
+        sections.push([
+            'glucose',
+            renderGlucoseSection(summary, unit, targetRange, unitMismatch, { ...options, trends }),
+        ]);
     }
 
     if (selectedTypes.bloodPressure === true) {
+        /** Las tres magnitudes del sobre van juntas y salen como tres series por método. */
+        const trends = dailyTrends(events, {
+            type: 'bloodPressure',
+            valueKeys: ['systolic', 'diastolic', 'pulse'],
+            groupBy: 'method',
+        });
+
         sections.push([
             'bloodPressure',
-            renderBloodPressureSection(summarizeBloodPressurePeriod(events), options),
+            renderBloodPressureSection(summarizeBloodPressurePeriod(events), { ...options, trends }),
         ]);
     }
 

@@ -1,4 +1,4 @@
-# ADR 0001: Stack de interfaz: Livewire, Filament y Alpine
+# ADR 0001: UI stack: Livewire, Filament, and Alpine
 
 * **Status**: Accepted
 * **Date**: 2026-07-25
@@ -6,100 +6,92 @@
 
 ## Context
 
-Construimos un PHR (Personal Health Record): una historia de salud que controla la propia persona, no un
-centro sanitario. La distinción frente a EMR y EHR es deliberada y define el producto, porque en un PHR
-el titular decide qué guarda y con quién lo comparte (ver
-https://orionhealth.com/us/blog/emr-vs-ehr-vs-phr-whats-the-difference-and-why-does-it-matter/). Encaja
-con el diseño zero-knowledge: la clave la tiene el titular, no el proveedor del servicio.
+We are building a PHR (Personal Health Record): a health history controlled by the person themselves, not by a
+healthcare facility. The distinction from EMR and EHR is deliberate and defines the product, because in a PHR the owner
+decides what is stored and who it is shared with (see
+https://orionhealth.com/us/blog/emr-vs-ehr-vs-phr-whats-the-difference-and-why-does-it-matter/). It fits the
+zero-knowledge design: the key belongs to the owner, not to the service provider.
 
-Dos fuerzas condicionan la interfaz y tiran en direcciones opuestas.
+Two forces shape the interface, and they pull in opposite directions.
 
-La primera es el volumen de CRUD. Un PHR es sobre todo formularios, tablas, filtros y permisos sobre
-entidades de dominio: episodios, medicación, pruebas, profesionales con quien se comparte. Escribir eso a
-mano, pantalla a pantalla, se come el tiempo que necesitamos para el dominio clínico.
+The first is the volume of CRUD. A PHR is mostly forms, tables, filters, and permissions over domain entities:
+episodes, medication, tests, professionals it is shared with. Writing all of that by hand, screen by screen, eats the
+time we need for the clinical domain.
 
-La segunda es el zero-knowledge. Los datos clínicos se cifran en el navegador y el servidor almacena
-solo ciphertext, sin ver nunca la contraseña ni las claves. La autenticación es OPAQUE (ver
-`docs/OPAQUE.md`) y de ella el cliente deriva la clave con la que cifra. Eso exige JavaScript real, con
-control fino sobre dónde vive cada secreto.
+The second is zero-knowledge. Clinical data is encrypted in the browser and the server stores only ciphertext, never
+seeing the password or the keys. Authentication is OPAQUE (see `docs/OPAQUE.md`) and from it the client derives the key
+it encrypts with. That demands real JavaScript, with fine control over where each secret lives.
 
-El equipo es pequeño y mayoritariamente PHP. Hoy no hay que dar servicio a un cliente móvil nativo ni a
-terceros que consuman una API.
+The team is small and mostly PHP. Today there is no native mobile client to serve, and no third parties consuming an
+API.
 
 ## Decision
 
-Adoptamos el stack de interfaz de Laravel de primera parte: Livewire 4 para los componentes, con el
-estado en el servidor y el render en Blade; Filament 5 para el panel y el CRUD de dominio, sobre el panel
-`phr` que ya existe en `app/Providers/Filament/PhrPanelProvider.php`; Alpine para la interactividad de
-cliente; y Tailwind con Vite para estilos y bundling.
+We adopt Laravel's first-party interface stack: Livewire 4 for components, with state on the server and rendering in
+Blade; Filament 5 for the panel and the domain CRUD, on the `phr` panel that already exists in
+`app/Providers/Filament/PhrPanelProvider.php`; Alpine for client-side interactivity; and Tailwind with Vite for styles
+and bundling.
 
-Alpine no es una decisión independiente: Livewire lo incluye y Filament lo usa por dentro, así que elegir
-Livewire y Filament ya es elegir Alpine. Lo que decidimos de verdad es no añadir un segundo framework de
-cliente.
+Alpine is not an independent decision: Livewire ships it and Filament uses it internally, so choosing Livewire and
+Filament is already choosing Alpine. What we really decide is not to add a second client framework.
 
-La excepción, acotada: escribimos JavaScript propio únicamente para la criptografía de cliente, con
-`@serenity-kit/opaque` para la autenticación y las bibliotecas de cifrado que fija el ADR 0004
-(`docs/adr/0004-client-crypto-and-data-format.md`). Es el único código JS que mantenemos y auditamos
-nosotros.
+The exception, narrowly scoped: we write our own JavaScript only for client-side cryptography, with
+`@serenity-kit/opaque` for authentication and the encryption libraries fixed by ADR 0004
+(`docs/adr/0004-client-crypto-and-data-format.md`). It is the only JS code we maintain and audit ourselves.
 
-Para dibujar gráficas usamos Chart.js instalado por npm con versión exacta. Filament lo empaqueta para
-sus widgets, pero no lo expone: su build solo exporta el componente Alpine y lo carga bajo demanda al
-renderizar un widget, que aquí no usamos porque los datos llegan cifrados. Es un tercero que recibe datos
-clínicos en claro y está dentro de la frontera de confianza. Lo que sí verificamos: no hace peticiones de
-red, no carga fuentes externas, no usa `eval`, no escribe en almacenamiento del navegador y no obliga a
-relajar ninguna política de contenido.
+For charts we use Chart.js installed via npm, pinned to an exact version. Filament bundles it for its widgets but does
+not expose it: its build only exports the Alpine component and loads it on demand when rendering a widget, which we do
+not use here because the data arrives encrypted. It is a third party that receives clinical data in the clear and sits
+inside the trust boundary. What we do verify: it makes no network requests, loads no external fonts, does not use
+`eval`, does not write to browser storage, and does not force us to relax any content policy.
 
 ## Rationale
 
-Livewire mantiene el estado en el servidor, y eso elimina tres trabajos que un SPA obliga a hacer:
-definir y versionar una API para la interfaz, duplicar el modelo de datos en el cliente y mantener
-sincronizadas ambas copias. Validación y autorización se escriben una vez, en PHP. Para un PHR hay un
-beneficio extra: si el estado no viaja al cliente, los datos clínicos no se replican en un store de
-JavaScript, con menos sitios donde acaban apareciendo por accidente.
+Livewire keeps state on the server, and that removes three jobs an SPA forces on you: defining and versioning an API
+for the interface, duplicating the data model on the client, and keeping both copies in sync. Validation and
+authorization are written once, in PHP. For a PHR there is an extra benefit: if state never travels to the client,
+clinical data is not replicated into a JavaScript store, so there are fewer places it can end up by accident.
 
-Filament nos da hecho el grueso del CRUD (tablas con búsqueda y paginación, formularios, filtros,
-acciones con modal, relation managers, autorización por policies) y deja puntos de extensión limpios:
-columnas y campos propios, vistas Blade a medida y páginas Livewire completas dentro del panel.
+Filament gives us the bulk of the CRUD for free (tables with search and pagination, forms, filters, modal actions,
+relation managers, authorization via policies) and leaves clean extension points: custom columns and fields, tailored
+Blade views, and full Livewire pages inside the panel.
 
-Consideramos tres alternativas. Inertia con Vue o React tiene mejor ergonomía para interfaces muy
-interactivas y sería el camino natural hacia una app nativa, pero no aporta CRUD hecho, duplica el modelo
-en el cliente y añade un segundo ecosistema de dependencias. Un SPA con API propia da máxima flexibilidad
-y es requisito para móvil nativo, pero obliga a construir, versionar y proteger una API entera antes de
-la primera pantalla útil. Blade puro con JavaScript a medida da el máximo control, a cambio de escribir a
-mano justo lo que Filament elimina. Entre paneles alternativos (Nova, Backpack), Filament gana por ser el
-más cercano al stack que ya usamos y por no añadir licencias.
+We considered three alternatives. Inertia with Vue or React has better ergonomics for highly interactive interfaces and
+would be the natural path toward a native app, but it brings no CRUD for free, duplicates the model on the client, and
+adds a second dependency ecosystem. An SPA with its own API gives maximum flexibility and is a requirement for native
+mobile, but it forces us to build, version, and defend an entire API before the first useful screen. Plain Blade with
+hand-written JavaScript gives maximum control, in exchange for writing by hand exactly what Filament removes. Among
+alternative panels (Nova, Backpack), Filament wins for being closest to the stack we already use and for adding no
+licenses.
 
-* **Pros**: entrega rápida en la parte CRUD; un solo lenguaje para lógica, validación y autorización; sin
-  API pública que diseñar ni defender; sin build ni dependencias que gestionar para el framework de
-  cliente; el JS propio queda reducido a un módulo pequeño y auditable.
-* **Cons**: cada interacción de Livewire es un viaje al servidor, lo que penaliza con red inestable;
-  dependemos de un framework grande y opinionado, con coste real en las actualizaciones mayores; Alpine
-  no sirve para estado de cliente complejo; y si algún día hace falta móvil nativo, habrá que construir
-  la API que aquí evitamos y reescribir el cliente criptográfico.
+* **Pros**: fast delivery on the CRUD side; a single language for logic, validation, and authorization; no public API
+  to design or defend; no build or dependencies to manage for the client framework; our own JS stays a small, auditable
+  module.
+* **Cons**: every Livewire interaction is a round trip to the server, which hurts on an unstable network; we depend on
+  a large, opinionated framework, with real cost on major upgrades; Alpine is not usable for complex client state; and
+  if native mobile is ever needed, we will have to build the API we avoid here and rewrite the crypto client.
 
 ## Consequences
 
-La consecuencia que más condiciona el día a día es dónde vive cada secreto. Livewire mantiene el estado
-en el servidor, así que el plaintext y las claves no pueden entrar nunca en el estado de un componente.
-El ciphertext sí circula por Livewire, esa es la vía normal; lo que no circula jamás es el dato en claro.
+The consequence that shapes day-to-day work most is where each secret lives. Livewire keeps state on the server, so
+plaintext and keys can never enter a component's state. Ciphertext does travel through Livewire — that is the normal
+route; what never travels is plaintext data.
 
-De ahí salen cuatro reglas vinculantes. La contraseña, la export key y las claves derivadas nunca se
-enlazan con `wire:model` ni se guardan en propiedades públicas. Los formularios que manejan secretos usan
-un input gobernado por Alpine, aislado del re-render de Livewire, que cifra antes de enviar. Al servidor
-solo salen los mensajes del protocolo OPAQUE, ciphertext y nonces. Y las rutas de OPAQUE viven en el
-grupo de middleware `web`, porque necesitan sesión y CSRF para autenticar al usuario al terminar el
-handshake.
+Four binding rules follow. The password, the export key, and the derived keys are never bound with `wire:model` nor
+stored in public properties. Forms that handle secrets use an input governed by Alpine, isolated from Livewire's
+re-render, which encrypts before sending. Only OPAQUE protocol messages, ciphertext, and nonces go to the server. And
+the OPAQUE routes live in the `web` middleware group, because they need session and CSRF to authenticate the user once
+the handshake finishes.
 
-Filament recibe únicamente una sesión Laravel ya autenticada y no participa en la criptografía. Las
-vistas que muestren datos cifrados no podrán apoyarse en la búsqueda ni la ordenación en servidor, que
-trabajan en SQL sobre un contenido que el servidor no entiende: esas pantallas serán componentes Livewire
-propios. Cómo circula el ciphertext entre Livewire, Alpine y Filament se decide en el ADR 0002
-(`docs/adr/0002-encrypted-data-flow-livewire-alpine-filament.md`).
+Filament receives only an already-authenticated Laravel session and takes no part in the cryptography. Views showing
+encrypted data will not be able to rely on server-side search or sorting, which work in SQL over content the server
+does not understand: those screens will be our own Livewire components. How ciphertext travels between Livewire,
+Alpine, and Filament is decided in ADR 0002 (`docs/adr/0002-encrypted-data-flow-livewire-alpine-filament.md`).
 
-Damos por aceptado el riesgo de que un `wire:model` puesto sin pensar rompa la propiedad principal del
-sistema sin fallar de forma visible, y lo compensamos con revisión explícita en code review y un test que
-verifique que ningún dato en claro aparece en el payload de Livewire.
+We accept the risk that a thoughtlessly placed `wire:model` breaks the system's main property without failing
+visibly, and we offset it with explicit code review and a test verifying that no plaintext data appears in the Livewire
+payload.
 
-Por último, `npm` sigue presente pese a que no gestionamos build del framework de interfaz: Vite y
-Tailwind ya compilan CSS, y el módulo criptográfico añade dependencias JS que hay que fijar por versión
-exacta, porque un cambio de sus valores por defecto puede invalidar todos los registros existentes.
+Finally, `npm` stays around even though we manage no build for the interface framework: Vite and Tailwind already
+compile CSS, and the crypto module adds JS dependencies that must be pinned to exact versions, because a change to
+their default values can invalidate every existing record.

@@ -1,5 +1,15 @@
 /**
- * Gráficas por tipo de evento: mediana de cada día con una banda del mínimo al máximo de ese día.
+ * Las gráficas del periodo: qué se dibuja, con qué nombre y en qué bloque.
+ *
+ * Son tres familias, y las tres se pintan a la vez en las tres pantallas que consumen este módulo
+ * —el panel del paciente, el lector del profesional y la vista previa de compartir—:
+ *
+ * 1. **La curva de glucemia con las marcas de comida e insulina** ({@see GLUCOSE_CONTEXT_TYPE}), que
+ *    es la que enseña la relación entre comer, pincharse y lo que hace la glucosa después.
+ * 2. **La superposición de días sobre 24 horas** ({@see DAY_OVERLAY_TYPE}), el perfil glucémico
+ *    ambulatorio, que enseña el patrón que se repite cada día.
+ * 3. **Una por tipo de evento** ({@see CHART_SECTIONS}): mediana de cada día con una banda del
+ *    mínimo al máximo de ese día.
  *
  * **Por qué es un módulo propio.** El cálculo ya vivía fuera (`dailyBands.js`) y el dibujo también
  * (`medianBandChart.js`); lo que seguía atado al panel del paciente era la tabla de qué se dibuja de
@@ -16,8 +26,10 @@
  * donde esté (ver `resources/views/phr/pages/dashboard.blade.php`).
  */
 
-import { joinList, t } from '../i18n/index.js';
+import { formatNumber, joinList, t } from '../i18n/index.js';
 import { buildDailyBands } from './dailyBands.js';
+import { buildDayOverlay } from './dayOverlay.js';
+import { renderDayOverlayChart } from './dayOverlayChart.js';
 import {
     catalogLabel,
     formatMethodLabel,
@@ -25,6 +37,8 @@ import {
     TEMPERATURE_SITE_KEYS,
     typeLabel,
 } from './eventLabels.js';
+import { buildGlucoseContext, MAX_READING_GAP_MS } from './glucoseContext.js';
+import { renderGlucoseContextChart } from './glucoseContextChart.js';
 import { renderMedianBandChart } from './medianBandChart.js';
 import { describeExcludedByUnit } from './statsView.js';
 import { dominantUnit } from './statistics.js';
@@ -65,6 +79,61 @@ export const CHART_SECTIONS = Object.freeze([
     { type: 'bodyWeight' },
     { type: 'temperature', groupBy: 'site', groupKeys: TEMPERATURE_SITE_KEYS },
 ]);
+
+/**
+ * Las dos gráficas que **no** son de un tipo de evento, sino de una pregunta clínica.
+ *
+ * `glucoseContext` cruza tres tipos —glucemia, comidas e insulina— sobre el mismo eje temporal, que
+ * es lo que se mira en consulta y lo que ninguna pantalla por tipo puede enseñar. `dayOverlay`
+ * superpone todos los días del periodo sobre 24 horas: el formato del perfil glucémico ambulatorio,
+ * que revela el patrón que se repite cada día y que una serie cronológica disuelve.
+ *
+ * Sus identificadores de bloque salen de {@see chartElementIds} igual que los de un tipo: para la
+ * plantilla y para el lector son un bloque más.
+ */
+export const GLUCOSE_CONTEXT_TYPE = 'glucoseContext';
+export const DAY_OVERLAY_TYPE = 'dayOverlay';
+
+/**
+ * Todos los bloques de gráfica que emite una pantalla, en el orden en que se leen: primero las dos
+ * que responden una pregunta, después una por tipo de evento.
+ *
+ * @type {Readonly<list<string>>}
+ */
+export const CHART_BLOCKS = Object.freeze([
+    GLUCOSE_CONTEXT_TYPE,
+    DAY_OVERLAY_TYPE,
+    ...CHART_SECTIONS.map((section) => section.type),
+]);
+
+/** Claves de los textos propios de las dos gráficas que no son de un tipo. */
+const BLOCK_KEYS = Object.freeze({
+    [GLUCOSE_CONTEXT_TYPE]: { title: 'dashboard.chart.context.title', aria: 'dashboard.chart.context.ariaLabel' },
+    [DAY_OVERLAY_TYPE]: { title: 'dashboard.chart.overlay.title', aria: 'dashboard.chart.overlay.ariaLabel' },
+});
+
+/**
+ * Encabezado del bloque de una gráfica.
+ *
+ * @param {string} type Uno de {@see CHART_BLOCKS}.
+ * @returns {string}
+ */
+export function chartBlockTitle(type) {
+    return BLOCK_KEYS[type] === undefined ? typeLabel(type) : t(BLOCK_KEYS[type].title);
+}
+
+/**
+ * Nombre accesible del lienzo: un `<canvas>` es un objeto gráfico sin texto y sin esto no tiene
+ * nombre ninguno (Do's #3).
+ *
+ * @param {string} type
+ * @returns {string}
+ */
+export function chartBlockAriaLabel(type) {
+    return BLOCK_KEYS[type] === undefined
+        ? t('dashboard.chart.ariaLabel', { type: typeLabel(type) })
+        : t(BLOCK_KEYS[type].aria);
+}
 
 /**
  * Etiqueta del grupo de una serie: el método de medición, el sitio o el tipo de insulina.
@@ -211,10 +280,134 @@ export function destroyChart(charts, type) {
  * @param {string} [prefix]
  */
 export function destroyCharts(charts, prefix = DASHBOARD_CHART_PREFIX) {
-    for (const section of CHART_SECTIONS) {
-        destroyChart(charts, section.type);
-        elementById(chartElementIds(section.type, prefix).block)?.classList.add('hidden');
+    for (const type of CHART_BLOCKS) {
+        destroyChart(charts, type);
+        elementById(chartElementIds(type, prefix).block)?.classList.add('hidden');
     }
+}
+
+/**
+ * Plumbing común de un bloque de gráfica: encontrarlo, destruir la anterior, decidir si hay algo que
+ * dibujar, escribir el pie y dibujar.
+ *
+ * El bloque se descubre **antes** de construir la gráfica: Chart.js mide el ancho del contenedor al
+ * crearse y dentro de un elemento oculto ese ancho es cero, así que el lienzo saldría de un píxel y
+ * no se recuperaría al mostrarlo.
+ *
+ * @param {object} params
+ * @param {string} params.type
+ * @param {string} params.prefix
+ * @param {Record<string, object>} params.charts Se modifica.
+ * @param {() => {caption: string, draw: (canvas: HTMLCanvasElement, ids: object) => object|null}|null} params.plan
+ *        Devuelve `null` cuando no hay nada que dibujar y el bloque tiene que quedarse oculto: un
+ *        lienzo con los ejes vacíos parece un fallo, no un estado vacío.
+ */
+function paintChartBlock({ type, prefix, charts, plan }) {
+    const ids = chartElementIds(type, prefix);
+    const block = elementById(ids.block);
+
+    destroyChart(charts, type);
+
+    if (block === null) {
+        return;
+    }
+
+    const canvas = elementById(ids.canvas);
+    const drawing = canvas === null ? null : plan();
+
+    if (drawing === null) {
+        block.classList.add('hidden');
+
+        return;
+    }
+
+    block.classList.remove('hidden');
+
+    const caption = elementById(ids.caption);
+
+    if (caption !== null) {
+        caption.textContent = drawing.caption;
+    }
+
+    charts[type] = drawing.draw(canvas, ids);
+}
+
+/**
+ * Pie de la curva de glucemia con marcas: qué series lleva, qué se agrupó y qué se quedó fuera.
+ *
+ * Todo lo que no se ve se dice con un número. Una marca agrupada en silencio es una comida que el
+ * ojo da por no ocurrida, y una lectura recortada sin avisar se lee como «antes no había nada».
+ *
+ * @param {object} params
+ * @returns {string}
+ */
+export function contextCaptionText({
+    seriesLabels,
+    unit,
+    excludedByUnit,
+    groupedMarkers,
+    omittedReadings,
+    omittedMarkers,
+}) {
+    const parts = [t('dashboard.chart.context.caption', {
+        unit,
+        series: joinList(seriesLabels),
+        hours: formatNumber(MAX_READING_GAP_MS / 3_600_000),
+    })];
+
+    if (groupedMarkers > 0) {
+        parts.push(t('dashboard.chart.context.grouped', { count: groupedMarkers }));
+    }
+
+    if (omittedReadings > 0) {
+        parts.push(t('dashboard.chart.context.omittedReadings', { count: omittedReadings }));
+    }
+
+    if (omittedMarkers > 0) {
+        parts.push(t('dashboard.chart.context.omittedMarkers', { count: omittedMarkers }));
+    }
+
+    const excludedText = describeExcludedByUnit(excludedByUnit, unit);
+
+    if (excludedText !== null) {
+        parts.push(excludedText);
+    }
+
+    return parts.join(' ');
+}
+
+/**
+ * Pie de la superposición de 24 horas: qué series lleva, cuántos días se superponen, qué banda de
+ * fondo hay y qué se quedó fuera.
+ *
+ * @param {object} params
+ * @returns {string}
+ */
+export function overlayCaptionText({ seriesLabels, unit, dayCount, omittedDays, excludedByUnit, targetRange }) {
+    const parts = [
+        t('dashboard.chart.overlay.caption', { unit, series: joinList(seriesLabels) }),
+        t('dashboard.chart.overlay.days', { count: dayCount }),
+    ];
+
+    if (targetRange !== undefined && targetRange !== null) {
+        parts.push(t('dashboard.chart.overlay.targetRange', {
+            low: formatNumber(targetRange.low),
+            high: formatNumber(targetRange.high),
+            unit: targetRange.unit,
+        }));
+    }
+
+    if (omittedDays > 0) {
+        parts.push(t('dashboard.chart.omittedDays', { count: omittedDays }));
+    }
+
+    const excludedText = describeExcludedByUnit(excludedByUnit, unit);
+
+    if (excludedText !== null) {
+        parts.push(excludedText);
+    }
+
+    return parts.join(' ');
 }
 
 /**
@@ -230,13 +423,21 @@ export function destroyCharts(charts, prefix = DASHBOARD_CHART_PREFIX) {
  * @param {Record<string, object>} params.charts Instancias vivas indexadas por tipo. Se modifica.
  * @param {(type: string) => boolean} [params.includesType] Qué tipos están marcados.
  * @param {string} [params.prefix]
+ * @param {{low: number, high: number, unit: string}} [params.targetRange] Rango objetivo de glucemia
+ *        ya resuelto y ya comprobado en la misma unidad (ADR 0007: no se convierte). Sin él, la
+ *        superposición de 24 horas se dibuja sin banda de fondo, que es lo correcto: una banda con
+ *        números de otra unidad sería una referencia falsa.
  */
 export function renderCharts(events, {
     glucoseUnit,
     charts,
     includesType = () => true,
     prefix = DASHBOARD_CHART_PREFIX,
+    targetRange,
 }) {
+    renderGlucoseContextBlock(events, { glucoseUnit, charts, includesType, prefix });
+    renderDayOverlayBlock(events, { glucoseUnit, charts, includesType, prefix, targetRange });
+
     for (const section of CHART_SECTIONS) {
         const ids = chartElementIds(section.type, prefix);
         const block = elementById(ids.block);
@@ -295,4 +496,98 @@ export function renderCharts(events, {
             legendId: ids.legend,
         });
     }
+}
+
+/**
+ * La curva de glucemia con las marcas de comida e insulina encima.
+ *
+ * **Solo depende de que la glucemia esté marcada**, no de las comidas ni de la insulina: la gráfica
+ * es la glucemia, y las marcas son el contexto que la explica. Si el filtro deja fuera las comidas,
+ * los eventos de comida ya no llegan aquí —quien llama filtra antes— y la curva se dibuja sin ellas,
+ * que es exactamente lo que se ha pedido.
+ *
+ * @param {list<object>} events
+ * @param {object} params
+ */
+function renderGlucoseContextBlock(events, { glucoseUnit, charts, includesType, prefix }) {
+    paintChartBlock({
+        type: GLUCOSE_CONTEXT_TYPE,
+        prefix,
+        charts,
+        plan: () => {
+            if (!includesType('glucose')) {
+                return null;
+            }
+
+            const context = buildGlucoseContext(events, { unit: glucoseUnit });
+
+            if (context.series.length === 0) {
+                return null;
+            }
+
+            const seriesLabels = context.series.map(
+                (series) => (series.group === '' ? typeLabel('glucose') : formatMethodLabel(series.group)),
+            );
+
+            return {
+                caption: contextCaptionText({ seriesLabels, unit: glucoseUnit, ...context }),
+                draw: (canvas, ids) => renderGlucoseContextChart(canvas, {
+                    series: context.series.map((series, index) => ({
+                        label: seriesLabels[index],
+                        points: series.points,
+                    })),
+                    markers: context.markers,
+                    unit: glucoseUnit,
+                    legendId: ids.legend,
+                }),
+            };
+        },
+    });
+}
+
+/**
+ * La superposición de todos los días del periodo sobre un eje de 24 horas.
+ *
+ * @param {list<object>} events
+ * @param {object} params
+ */
+function renderDayOverlayBlock(events, { glucoseUnit, charts, includesType, prefix, targetRange }) {
+    paintChartBlock({
+        type: DAY_OVERLAY_TYPE,
+        prefix,
+        charts,
+        plan: () => {
+            if (!includesType('glucose')) {
+                return null;
+            }
+
+            const overlay = buildDayOverlay(events, { unit: glucoseUnit });
+
+            if (overlay.groups.length === 0) {
+                return null;
+            }
+
+            const groups = overlay.groups.map((group) => ({
+                ...group,
+                label: group.group === '' ? typeLabel('glucose') : formatMethodLabel(group.group),
+            }));
+
+            return {
+                caption: overlayCaptionText({
+                    seriesLabels: groups.map((group) => group.label),
+                    unit: glucoseUnit,
+                    dayCount: overlay.dayCount,
+                    omittedDays: overlay.omittedDays,
+                    excludedByUnit: overlay.excludedByUnit,
+                    targetRange,
+                }),
+                draw: (canvas, ids) => renderDayOverlayChart(canvas, {
+                    groups,
+                    unit: glucoseUnit,
+                    legendId: ids.legend,
+                    targetRange,
+                }),
+            };
+        },
+    });
 }

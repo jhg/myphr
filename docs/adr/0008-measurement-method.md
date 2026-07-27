@@ -1,4 +1,4 @@
-# ADR 0008: El método de medición forma parte del dato
+# ADR 0008: The measurement method is part of the data
 
 * **Status**: Accepted
 * **Date**: 2026-07-25
@@ -7,109 +7,105 @@
 
 ## Context
 
-La misma magnitud medida de dos formas distintas no es el mismo dato. La glucemia lo deja claro: un sensor
-de los que se llevan puestos mide en líquido intersticial y va con un retardo fisiológico de varios
-minutos respecto a la sangre, un medidor capilar mide sangre tras el pinchazo, y una tira de orina no da
-un número sino una presencia. Y no es exclusivo de la glucemia: la temperatura corporal cambia hasta medio
-grado entre la vía oral, la axilar y la timpánica, y la tensión arterial no da lo mismo en un brazo que en
-el otro, ni sentado que tumbado o de pie.
+The same quantity measured in two different ways is not the same data. Blood glucose makes it obvious: a
+wearable sensor measures in interstitial fluid and lags blood by several minutes for physiological reasons, a
+capillary meter measures blood after the finger prick, and a urine test strip gives a presence rather than a
+number. And this isn't specific to blood glucose: body temperature varies by up to half a degree between the
+oral, axillary, and tympanic routes, and blood pressure is not the same in one arm as in the other, nor
+sitting as lying down or standing.
 
-LOINC ya lo reconoce y publica un código distinto para cada combinación de magnitud, unidad y método:
-`99504-3` y `105272-9` para glucosa en líquido intersticial según la unidad, `41653-7` y `14743-9` para
-capilar, `25428-4` para presencia en orina.
+LOINC already recognizes this and publishes a different code for each combination of quantity, unit, and
+method: `99504-3` and `105272-9` for glucose in interstitial fluid depending on the unit, `41653-7` and
+`14743-9` for capillary, `25428-4` for presence in urine.
 
-El ADR 0006 introdujo un campo para distinguir si un dato se tecleó a mano o vino de un aparato. Es
-insuficiente: alguien puede mirar su sensor y teclear el número, y eso no lo convierte en una medición
-capilar. Lo que distingue no es cómo entró el dato sino qué se midió y dónde.
+ADR 0006 introduced a field to distinguish whether a data point was typed by hand or came from a device.
+That's not enough: someone can look at their sensor and type the number, and that doesn't make it a capillary
+measurement. What tells them apart is not how the data got in but what was measured and where.
 
 ## Decision
 
-Todo evento de medición guarda un token explícito del método, además del código de la magnitud. No se
-deduce del código ni del campo de origen manual o de aparato, que responden a otra pregunta.
+Every measurement event stores an explicit method token, in addition to the code for the quantity. It is not
+inferred from the code nor from the manual-or-device origin field, which answers a different question.
 
-Al añadir una magnitud nueva al catálogo hay que enumerar antes sus métodos y decidir cuáles se soportan.
-Es parte del diseño del tipo de evento, no un detalle posterior, porque el método es de los campos que
-solo se conocen en el momento de registrar y después no se recuperan.
+When adding a new quantity to the catalog, its methods have to be enumerated first and a decision made about
+which ones are supported. It's part of designing the event type, not a later detail, because the method is
+one of those fields that are only known at the moment of recording and can't be recovered afterwards.
 
-En la tensión arterial el método lo forman el brazo y la postura. Son las dos formas de medir que cambian
-el número de manera conocida, ninguna de las dos se reconstruye después, y las dos son método y no
-metadato accesorio. Los dos vocabularios quedan cerrados aquí, con las mismas garantías de inmutabilidad
-que cualquier otro token del ADR 0004 (`docs/adr/0004-client-crypto-and-data-format.md`): brazo izquierdo
-o derecho (`left`, `right`) y postura sentado, tumbado o de pie (`sitting`, `lying`, `standing`). En el
-evento viajan como dos tokens propios y no como uno compuesto, porque la pantalla los pregunta por
-separado y así se leen y se filtran por separado; el método con el que agrupan las estadísticas es su
-combinación, de `left_sitting` a `right_standing`, y se calcula al agrupar en lugar de guardarse. Los
-códigos LOINC de esta magnitud, `8480-6` para la sistólica y `8462-4` para la diastólica, nombran la
-magnitud y nada más, así que esos dos tokens son el único sitio donde vive esta información. Con esto la
-tensión queda enumerada y deja de ser el caso pendiente que este ADR exigía cerrar antes de soportarla.
+For blood pressure, the method is made up of the arm and the posture. They are the two ways of measuring that
+change the number in a known way, neither of them can be reconstructed afterwards, and both are method and
+not incidental metadata. Both vocabularies are closed here, with the same immutability guarantees as any
+other token from ADR 0004 (`docs/adr/0004-client-crypto-and-data-format.md`): left or right arm (`left`,
+`right`) and sitting, lying, or standing posture (`sitting`, `lying`, `standing`). They travel in the event as
+two separate tokens and not as one compound token, because the screen asks for them separately and that way
+they are read and filtered separately; the method that statistics group by is their combination, from
+`left_sitting` to `right_standing`, and it is computed at grouping time instead of being stored. The LOINC
+codes for this quantity, `8480-6` for systolic and `8462-4` for diastolic, name the quantity and nothing
+else, so those two tokens are the only place where this information lives. With this, blood pressure is
+enumerated and stops being the pending case that this ADR required closing before supporting it.
 
-Las estadísticas no mezclan métodos en silencio. Por defecto se calculan por método, y el usuario
-puede elegir combinarlos cuando tenga sentido. La vista indica siempre qué métodos están incluidos en el
-número que muestra, de modo que un promedio nunca sea ambiguo.
+Statistics don't mix methods silently. By default they are computed per method, and the user can choose to
+combine them when that makes sense. The view always states which methods are included in the number it shows,
+so that an average is never ambiguous.
 
-Los resultados cualitativos no entran en estadísticas de rango. Una tira de orina no tiene promedio ni
-porcentaje en rango, y su payload tiene otra forma: en lugar de valor con unidad lleva un resultado
-ordinal.
+Qualitative results don't enter range statistics. A urine test strip has no mean and no percentage in range,
+and its payload has a different shape: instead of a value with a unit it carries an ordinal result.
 
 ## Rationale
 
-Se puede argumentar que el método ya está implícito en el código LOINC y que guardarlo aparte es
-redundante. Lo guardamos igual por dos motivos. El primero es de lectura: el cliente tiene que saber cómo
-representar y agrupar un evento sin resolver antes el código contra el catálogo, y con miles de eventos en
-pantalla eso importa. El segundo es de robustez: si algún día hay que corregir la asignación de un código,
-el método sigue siendo correcto, mientras que si el método solo vive dentro del código, un error de
-asignación lo pierde.
+You could argue that the method is already implicit in the LOINC code and that storing it separately is
+redundant. We store it anyway for two reasons. The first is about reading: the client has to know how to
+display and group an event without first resolving the code against the catalog, and with thousands of events
+on screen that matters. The second is about robustness: if one day a code assignment has to be corrected, the
+method is still correct, whereas if the method only lives inside the code, an assignment error loses it.
 
-Sobre no mezclar por defecto, la alternativa era promediarlo todo. En el caso concreto de sensor y capilar
-el error sería pequeño, porque el capilar se usa precisamente para calibrar el sensor y ambos deberían dar
-valores muy próximos, pero no idénticos: divergen justo cuando la glucosa cambia deprisa, que es cuando el
-dato importa. Y el argumento general no depende de ese caso: mezclar temperatura axilar con timpánica
-produce una media que no significa nada.
+On not mixing by default, the alternative was to average everything. In the specific case of sensor and
+capillary the error would be small, because capillary is used precisely to calibrate the sensor and both
+should give very close values, but not identical ones: they diverge exactly when glucose is changing fast,
+which is when the data matters. And the general argument doesn't depend on that case: mixing axillary with
+tympanic temperature produces a mean that means nothing.
 
-La alternativa opuesta, prohibir la combinación, la descartamos por el mismo criterio del ADR 0007: la
-aplicación presenta y el usuario decide. Prohibirlo sería imponer un juicio clínico, y el usuario con un
-sensor calibrado tiene motivos legítimos para querer verlo todo junto.
+We rejected the opposite alternative, forbidding the combination, by the same criterion as ADR 0007: the
+application presents and the user decides. Forbidding it would be imposing a clinical judgment, and a user
+with a calibrated sensor has legitimate reasons to want to see it all together.
 
-En la tensión valoramos quedarnos solo con el brazo, que es lo que el ADR 0006 apuntaba al principio. Lo
-descartamos porque pierde la postura, y la postura cambia el valor tanto como el brazo: la tensión de
-alguien tumbado no es la misma que de pie, y esa diferencia es justo lo que un médico busca cuando
-sospecha hipotensión ortostática. Es además un dato que solo existe en el momento de medir, así que
-guardar el brazo y no la postura sería tirar la mitad del método.
+For blood pressure we considered keeping only the arm, which is what ADR 0006 pointed at to begin with. We
+rejected it because it loses the posture, and posture changes the value as much as the arm does: the blood
+pressure of someone lying down is not the same as standing, and that difference is exactly what a doctor
+looks for when they suspect orthostatic hypotension. It's also a data point that only exists at the moment of
+measuring, so storing the arm and not the posture would be throwing away half the method.
 
-También valoramos capturar el tamaño del manguito, que influye de verdad en la lectura. Lo dejamos fuera
-por el mismo argumento que el ADR 0006 usa para no pedir los hidratos de carbono: en casa casi nadie sabe
-qué manguito lleva su aparato, y preguntarlo produce campos vacíos o valores inventados, que es peor que
-no tenerlo. Si más adelante hay demanda, entra como campo opcional sin romper nada.
+We also considered capturing the cuff size, which really does affect the reading. We left it out by the same
+argument ADR 0006 uses for not asking about carbohydrates: at home almost nobody knows which cuff their
+device has, and asking produces empty fields or made-up values, which is worse than not having it. If demand
+shows up later, it comes in as an optional field without breaking anything.
 
-* **Pros**: ningún promedio mezcla cosas incomparables sin que se vea; el modelo admite magnitudes nuevas
-  sin rehacer nada; y el dato queda completo para exportar, donde el método es parte del código destino.
-* **Cons**: un campo más por evento; la capa de estadísticas necesita el método como dimensión de
-  agrupación desde el principio, no como añadido; y la interfaz tiene que explicar una distinción que
-  algunos usuarios no esperan encontrar.
+* **Pros**: no average mixes incomparable things without it being visible; the model takes new quantities
+  without redoing anything; and the data is complete for export, where the method is part of the target code.
+* **Cons**: one more field per event; the statistics layer needs the method as a grouping dimension from the
+  start, not as an add-on; and the interface has to explain a distinction some users don't expect to find.
 
 ## Consequences
 
-El catálogo del ADR 0005 pasa a resolver el código a partir de tres cosas y no de dos: magnitud, unidad y
-método. La relación entre lo que ve el usuario y el código guardado deja de ser uno a uno por partida
-doble.
+The ADR 0005 catalog now resolves the code from three things instead of two: quantity, unit, and method. The
+relation between what the user sees and the code stored stops being one-to-one twice over.
 
-La capa de estadísticas agrupa por método antes de calcular nada, y el selector de qué métodos incluir
-forma parte de la vista desde la primera versión, no de una mejora posterior.
+The statistics layer groups by method before computing anything, and the selector for which methods to
+include is part of the view from the first version, not a later improvement.
 
-La pantalla de tensión pide brazo y postura en el momento de registrar, ambos dentro del sobre cifrado, y
-sus estadísticas se agrupan por su combinación igual que las de glucemia por su método. El
-catálogo del ADR 0005 gana los dos vocabularios como enums (`BloodPressureArm` y `BloodPressurePosture`),
-aunque el código LOINC no varíe con ellos.
+The blood pressure screen asks for arm and posture at the moment of recording, both inside the encrypted
+envelope, and its statistics are grouped by their combination just as blood glucose ones are grouped by its
+method. The ADR 0005 catalog gains the two vocabularies as enums (`BloodPressureArm` and
+`BloodPressurePosture`), even though the LOINC code doesn't vary with them.
 
-Cuando se añada la temperatura corporal habrá que capturar el sitio de medición, y cuando se añada
-cualquier magnitud nueva, la pregunta es siempre la misma: de cuántas formas se mide esto, y cambian el
-significado del número.
+When body temperature is added we'll have to capture the measurement site, and when any new quantity is
+added, the question is always the same: how many ways is this measured, and do they change the meaning of the
+number.
 
 ## Decision History
 
-### 2026-07-25: el método de la tensión arterial queda enumerado como brazo y postura
-Previously decided: este ADR exigía enumerar los métodos de cada magnitud antes de soportarla, pero dejaba
-la tensión sin enumerar, y el ADR 0006 la listaba con el brazo como único campo capturado.
-Changed because: la postura cambia el valor tanto como el brazo y solo se conoce al medir, así que ambas
-pasan a formar el método de esta magnitud, con sus dos vocabularios cerrados. El tamaño del manguito se
-valoró y se dejó fuera para no producir campos vacíos o inventados.
+### 2026-07-25: the blood pressure method is enumerated as arm and posture
+Previously decided: this ADR required enumerating the methods of every quantity before supporting it, but it
+left blood pressure unenumerated, and ADR 0006 listed it with the arm as the only captured field.
+Changed because: posture changes the value as much as the arm does and is only known at the moment of
+measuring, so both become the method for this quantity, with their two vocabularies closed. Cuff size was
+considered and left out so as not to produce empty or made-up fields.

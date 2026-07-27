@@ -95,15 +95,26 @@ test('legendItems: conserva el orden y traslada color, trazo y forma de cada ser
     ]);
 
     assert.deepEqual(items, [
-        { text: 'Capilar', color: '#0077b6', dash: [], shape: 'circle' },
-        { text: 'Intersticial', color: '#005280', dash: [6, 4], shape: 'triangle' },
+        { text: 'Capilar', color: '#0077b6', dash: [], shape: 'circle', line: true },
+        { text: 'Intersticial', color: '#005280', dash: [6, 4], shape: 'triangle', line: true },
     ]);
 });
 
 test('legendItems: una serie sin trazo ni forma declarados cae en línea continua y círculo', () => {
     assert.deepEqual(
         legendItems([{ label: 'Rápida', color: '#0077b6' }]),
-        [{ text: 'Rápida', color: '#0077b6', dash: [], shape: 'circle' }],
+        [{ text: 'Rápida', color: '#0077b6', dash: [], shape: 'circle', line: true }],
+    );
+});
+
+test('legendItems: una serie declarada sin línea no la lleva en la leyenda', () => {
+    /**
+     * Las marcas de comida e insulina de la curva de glucemia son sucesos sueltos, no una serie
+     * continua: un trazo en su entrada de leyenda afirmaría una línea que la gráfica no dibuja.
+     */
+    assert.deepEqual(
+        legendItems([{ label: 'Comidas', color: '#059669', pointStyle: 'rectRot', lineless: true }]),
+        [{ text: 'Comidas', color: '#059669', dash: [], shape: 'rectRot', line: false }],
     );
 });
 

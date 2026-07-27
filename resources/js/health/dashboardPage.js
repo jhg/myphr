@@ -286,6 +286,14 @@ export function dashboardPage() {
                 glucoseUnit: unit,
                 charts: this.charts,
                 includesType: (type) => this.selectedTypes[type] === true,
+                /**
+                 * El rango objetivo pinta la banda de fondo de la superposición de 24 horas, que es
+                 * lo que convierte esa nube de puntos en información. Llega ya resuelto y ya
+                 * comprobado en la unidad de presentación (ADR 0007: no se convierte), así que si
+                 * está en otra unidad llega `undefined` y la gráfica se dibuja sin banda, en vez de
+                 * con una referencia falsa.
+                 */
+                targetRange,
             });
         },
 

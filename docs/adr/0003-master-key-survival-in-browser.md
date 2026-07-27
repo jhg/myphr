@@ -1,4 +1,4 @@
-# ADR 0003: Supervivencia de la clave maestra en el navegador
+# ADR 0003: Master key survival in the browser
 
 * **Status**: Accepted
 * **Date**: 2026-07-25
@@ -6,135 +6,119 @@
 
 ## Context
 
-El ADR 0002 dejó la clave maestra viviendo en el scope de un módulo ES, y con ella una consecuencia
-incómoda: cualquier carga de página completa la destruye y obliga a volver a autenticarse. La propuesta
-inicial era convertir el panel entero en SPA para que esa carga no llegue a producirse nunca.
+ADR 0002 left the master key living in the scope of an ES module, and with it an uncomfortable consequence: any full
+page load destroys it and forces re-authentication. The initial proposal was to turn the whole panel into an SPA so
+that such a load never happens.
 
-El modo SPA de Filament existe, está desactivado por defecto y cubre bien el panel, pero el redirect
-posterior al login es una carga dura, verificado ejecutando el flujo contra el código instalado. La clave
-moriría justo después de derivarla.
+Filament's SPA mode exists, is off by default, and covers the panel well, but the redirect after login is a hard
+load, verified by running the flow against the installed code. The key would die right after being derived.
 
-Y el SPA no resuelve el problema que parecía resolver. Quedan fuera de su alcance el F5 manual, el error
-419 por sesión caducada, el redirect duro de un middleware, el crash de pestaña, la pestaña nueva y,
-sobre todo, el despliegue a mitad de sesión: Filament marca todos sus assets para forzar recarga cuando
-cambia de versión, así que actualizar el paquete expulsa a todo el personal conectado.
+And the SPA does not solve the problem it appeared to solve. Out of its reach: a manual F5, a 419 from an expired
+session, a hard redirect from a middleware, a tab crash, a new tab and, above all, a deployment mid-session. Filament
+marks all of its assets to force a reload when it changes version, so updating the package kicks out every connected
+user.
 
-Sobre las primitivas del navegador, probadas en Safari 26.5 y Chromium 145, el hallazgo que decide:
-ninguna permite recuperar una clave tras una recarga sin dar esa misma capacidad a un XSS del mismo
-origen. Lo que sí se elige es contra qué otros adversarios se protege.
+On browser primitives, tested in Safari 26.5 and Chromium 145, the finding that decides it: none of them lets you
+recover a key after a reload without giving that same ability to a same-origin XSS. What you do get to choose is which
+other adversaries you protect against.
 
 ## Decision
 
-Activamos el modo SPA del panel, sin prefetching, con excepciones para las URL del mismo dominio que no
-sirven HTML (descargas, PDF, exports), porque Filament marca para navegación cualquier enlace del mismo
-host y un binario pasado por el parser de HTML rompe la interfaz. El SPA es una decisión de interfaz y no
-es lo que sostiene la clave: el módulo criptográfico se carga en la cabecera del documento, que la
-navegación de Livewire conserva sin volver a ejecutar, con SPA o sin él.
+We turn on the panel's SPA mode, without prefetching, with exceptions for same-domain URLs that do not serve HTML
+(downloads, PDFs, exports), because Filament marks any same-host link for navigation and a binary run through the HTML
+parser breaks the interface. The SPA is an interface decision and it is not what holds the key: the crypto module is
+loaded in the document head, which Livewire navigation preserves without re-executing, SPA or no SPA.
 
-Sustituimos la página de login por una propia, que ya necesitábamos para OPAQUE. Al hacerlo dejamos de
-pasar por el flujo de respuesta de Filament, así que el destino que el usuario intentaba abrir hay que
-devolverlo nosotros en la respuesta del login en lugar de darlo por hecho.
+We replace the login page with our own, which we needed for OPAQUE anyway. In doing so we stop going through Filament's
+response flow, so the destination the user was trying to open has to be returned by us in the login response rather
+than assumed.
 
-La supervivencia de la clave, sin embargo, no se apoya en el SPA. Al autenticarse, el servidor genera un
-secreto aleatorio ligado a la sesión de Laravel y lo entrega al cliente. El navegador guarda en
-`sessionStorage` la clave maestra envuelta bajo una clave derivada de ese secreto. Tras una carga de
-página, el cliente pide el secreto a un endpoint autenticado con la cookie de sesión, abre el paquete y
-recupera la clave sin pedir contraseña. Así sobrevive al F5, al 419, al redirect duro y al despliegue, y
-muere al cerrar la pestaña. La mitad del servidor caduca y se puede revocar, de modo que el material que
-quede huérfano en el navegador no abre nada.
+The key's survival, however, does not rest on the SPA. On authentication, the server generates a random secret tied to
+the Laravel session and hands it to the client. The browser stores in `sessionStorage` the master key wrapped under a
+key derived from that secret. After a page load, the client asks a dedicated endpoint — authenticated with the session
+cookie — for the secret, opens the package, and recovers the key without asking for the password. That way it survives
+F5, the 419, the hard redirect, and deployment, and it dies when the tab is closed. The server's half expires and can
+be revoked, so any material left orphaned in the browser opens nothing.
 
-El ámbito por pestaña de `sessionStorage` es una propiedad de visibilidad, no de borrado: los navegadores
-lo persisten en el perfil para restaurar la sesión tras un cierre inesperado. Lo que hace inútil ese
-material no es su volatilidad, es que el secreto que lo abre vive en el servidor y se puede revocar.
+`sessionStorage`'s per-tab scope is a visibility property, not a deletion one: browsers persist it in the profile to
+restore the session after an unexpected close. What makes that material useless is not its volatility, it is that the
+secret that opens it lives on the server and can be revoked.
 
-**La sesión de Laravel tiene que vivir en el servidor**, con almacén de base de datos o Redis, nunca con
-el driver de cookie. Con cookie, el contenido de la sesión viaja al navegador en cada petición y el
-cliente pasaría a tener las dos mitades a la vez, con lo que la propiedad se cae entera por un cambio de
-una línea en la configuración y sin ningún síntoma visible.
+**The Laravel session has to live on the server**, with a database or Redis store, never with the cookie driver. With
+cookies, the session content travels to the browser on every request and the client would then hold both halves at
+once, so the whole property falls over from a one-line config change, with no visible symptom.
 
-El secreto de sesión no tiene tabla ni columna propia: se guarda dentro de la propia carga útil de la
-sesión de Laravel. Con almacén de servidor y sin driver de cookie, la revocación sigue funcionando igual,
-porque destruir la sesión destruye su carga útil y con ella el secreto, sin ningún mecanismo adicional que
-mantener. Lo que se pierde es poder inspeccionar o revocar de forma selectiva la sesión criptográfica de
-alguien sin deserializar su carga útil; se acepta a cambio de no mantener un esquema propio para un único
-valor.
+The session secret has no table or column of its own: it is stored inside the Laravel session payload itself. With a
+server-side store and no cookie driver, revocation still works the same, because destroying the session destroys its
+payload and with it the secret, with no extra mechanism to maintain. What we lose is the ability to inspect or
+selectively revoke someone's crypto session without deserializing their payload; that is accepted in exchange for not
+maintaining a schema of our own for a single value.
 
-Quedan por tanto dos envoltorios independientes de la misma clave maestra: el permanente bajo la KEK que
-sale de `export_key`, que vive en el servidor y se abre al iniciar sesión con la contraseña, y el de
-recuperación bajo el secreto de sesión, que vive en el navegador. La regla que sostiene el diseño es que
-el paquete y el secreto nunca pueden estar en el mismo sitio: si el paquete se guardase en el servidor,
-el servidor tendría las dos mitades y podría abrir la clave maestra por su cuenta.
+So there are two independent wrapped copies of the same master key: the permanent one under the KEK derived from
+`export_key`, which lives on the server and is opened at login with the password, and the recovery one under the
+session secret, which lives in the browser. The rule that holds the design together is that the package and the secret
+can never be in the same place: if the package were stored on the server, the server would hold both halves and could
+open the master key on its own.
 
-No usamos almacenamiento persistente del navegador para material de clave. Una clave de dispositivo en
-IndexedDB añadiría protección solo frente a quien obtuviese a la vez una copia del perfil del navegador y
-el secreto de sesión, y a cambio dejaría material de clave que sobrevive al cierre de sesión y al cambio
-de usuario en un puesto compartido, sin ninguna garantía de borrado.
+We do not use persistent browser storage for key material. A device key in IndexedDB would add protection only against
+someone who obtained both a copy of the browser profile and the session secret, and in exchange it would leave key
+material that survives logout and a change of user on a shared workstation, with no deletion guarantee.
 
-Tres momentos usan recarga dura de forma deliberada: el cierre de sesión, el bloqueo por inactividad y
-aterrizar en la página de login con la clave todavía en memoria. Livewire mantiene en memoria hasta diez
-instantáneas del DOM de páginas ya visitadas, con datos clínicos descifrados, y no expone forma de
-purgarlas: solo destruir el contexto de JavaScript las elimina.
+Three moments use a hard reload deliberately: logout, the idle lock, and landing on the login page with the key still
+in memory. Livewire keeps up to ten DOM snapshots of already-visited pages in memory, with decrypted clinical data, and
+exposes no way to purge them: only destroying the JavaScript context removes them.
 
-Asumimos que perder la clave es un estado normal y frecuente, no un error. La interfaz degrada a pedir
-autenticación, nunca a una pantalla rota.
+We assume losing the key is a normal and frequent state, not an error. The interface degrades to asking for
+authentication, never to a broken screen.
 
 ## Rationale
 
-Hacer solo SPA costaba una reescritura del panel a cambio de reducir la frecuencia del problema, sin
-ninguna ganancia de seguridad, y ataba la arquitectura entera de la aplicación a una propiedad
-criptográfica. Persistir la clave envuelta resuelve más casos por mucho menos código. Las dos cosas se
-complementan: el SPA evita las recargas por navegación, que son las más frecuentes, y la persistencia
-cubre las que el SPA no puede evitar.
+Doing SPA alone cost a rewrite of the panel in exchange for reducing how often the problem happens, with no security
+gain, and it tied the whole application architecture to a cryptographic property. Persisting the wrapped key solves
+more cases for far less code. The two complement each other: the SPA avoids navigation reloads, which are the most
+frequent, and persistence covers the ones the SPA cannot avoid.
 
-Descartamos tres alternativas. Persistir una clave no exportable de WebCrypto en IndexedDB no aporta
-revocación desde el servidor y, con la biblioteca de cifrado que elegimos en el ADR 0004, tampoco protege
-contra XSS, porque la clave maestra tiene que materializarse como bytes para poder usarla. Una cadena
-enteramente de WebCrypto sí evitaría eso, y por eso el ADR 0004 la deja como ensayo pendiente, pero es
-una decisión sobre el algoritmo de cifrado, no sobre dónde se guarda la clave. Un Service Worker como
-custodio no sirve: el navegador lo termina a los
-treinta segundos de inactividad y un despliegue lo reinicia con memoria vacía, así que pierde la clave
-más veces que las recargas que pretendía evitar, y además añade superficie de ataque. `localStorage`
-queda descartado sin matices porque persiste indefinidamente y se comparte entre pestañas y sesiones, que
-es justo lo contrario de lo que queremos en un puesto compartido.
+We rejected three alternatives. Persisting a non-extractable WebCrypto key in IndexedDB brings no server-side
+revocation and, with the encryption library we chose in ADR 0004, does not protect against XSS either, because the
+master key has to materialize as bytes to be usable. An all-WebCrypto chain would avoid that, and that is why ADR 0004
+leaves it as a pending trial, but it is a decision about the encryption algorithm, not about where the key is stored. A
+Service Worker as custodian does not work: the browser terminates it after thirty seconds of inactivity and a
+deployment restarts it with empty memory, so it loses the key more often than the reloads it aimed to avoid, and it
+adds attack surface on top. `localStorage` is rejected outright because it persists indefinitely and is shared across
+tabs and sessions, which is the exact opposite of what we want on a shared workstation.
 
-* **Pros**: el F5, el 419 y el despliegue dejan de expulsar al usuario; el material persistido es inútil
-  sin la sesión de servidor, así que no depende de que nadie limpie nada; ganamos revocación de sesión
-  sobre datos ya descifrables, que hoy no existe; el ámbito por pestaña de `sessionStorage` encaja con un
-  puesto clínico compartido.
-* **Cons**: abrir una pestaña nueva sigue exigiendo autenticarse, porque `sessionStorage` no se hereda;
-  el modo SPA duplica la superficie de pruebas de interfaz, ya que cada pantalla hay que probarla también
-  llegando por navegación; y seguimos sin defensa real frente a XSS.
+* **Pros**: F5, the 419, and deployment stop throwing the user out; the persisted material is useless without the
+  server session, so it does not depend on anyone cleaning anything up; we gain session revocation over data that is
+  already decryptable, which does not exist today; `sessionStorage`'s per-tab scope fits a shared clinical workstation.
+* **Cons**: opening a new tab still requires authenticating, because `sessionStorage` is not inherited; SPA mode
+  doubles the interface test surface, since every screen also has to be tested when reached by navigation; and we still
+  have no real defense against XSS.
 
 ## Consequences
 
-El despliegue pasa a ser una operación con impacto clínico: no es solo actualizar Filament, es reconstruir
-cualquier asset propio, y ocurre igual con el modo SPA desactivado. Cualquiera de los dos casos expulsa a
-todos los usuarios conectados en su siguiente navegación, con pérdida del trabajo en curso. Necesita
-ventana de mantenimiento o aviso previo, y hay que tratarlo como requisito operativo, no como detalle de
-infraestructura.
+Deployment becomes an operation with clinical impact: it is not just updating Filament, it is rebuilding any of our own
+assets, and it happens the same with SPA mode off. Either case throws out every connected user on their next
+navigation, losing work in progress. It needs a maintenance window or advance notice, and it has to be treated as an
+operational requirement, not an infrastructure detail.
 
-Ante un 419, Livewire pide confirmación y recarga, lo que para alguien con una nota a medio escribir es
-pérdida de datos. Hace falta interceptarlo con un aviso propio que permita conservar el borrador antes de
-recargar.
+On a 419, Livewire asks for confirmation and reloads, which for someone with a half-written note is data loss. We need
+to intercept it with our own warning that lets the draft be kept before reloading.
 
-Queda prohibido activar el prefetching del modo SPA: precarga al pasar el ratón por encima, lo que genera
-accesos no solicitados a historias clínicas en el registro de auditoría. Cualquier redirect propio lleva
-navegación explícita, y añadimos una red de seguridad en cliente para los redirects de terceros que no
-la lleven.
+Turning on SPA mode's prefetching is banned: it preloads on mouse hover, which generates unrequested accesses to
+medical records in the audit log. Every redirect of ours carries explicit navigation, and we add a client-side safety
+net for third-party redirects that do not.
 
-`APP_DEBUG` queda desactivado en todo entorno con datos reales, incluido preproducción: ante un error
-500, Livewire abre el trace en un diálogo sin recargar, y ese trace puede contener datos clínicos en los
-argumentos.
+`APP_DEBUG` stays off in every environment with real data, staging included: on a 500 error, Livewire opens the trace
+in a dialog without reloading, and that trace can contain clinical data in the arguments.
 
-Describimos el sistema con precisión: es zero-knowledge frente al almacenamiento, es decir base de datos,
-copias de seguridad, personal con acceso a SQL y proveedor de hosting, y no lo es frente a la entrega,
-porque quien controla el servidor que sirve el JavaScript puede servir una versión que capture la clave.
-La formulación "el servidor nunca ve nada" es falsa y no debe usarse ante auditoría. La compartición con
-profesionales del ADR 0011 (`docs/adr/0011-shared-clipping-for-professionals.md`) agrava esa mitad: su
-página se abre en dispositivos ajenos y con material de clave en la propia URL.
+We describe the system precisely: it is zero-knowledge with respect to storage — meaning the database, backups, staff
+with SQL access, and the hosting provider — and it is not zero-knowledge with respect to delivery, because whoever
+controls the server that serves the JavaScript can serve a version that captures the key. The phrasing "the server
+never sees anything" is false and must not be used in front of an audit. Sharing with professionals in ADR 0011
+(`docs/adr/0011-shared-clipping-for-professionals.md`) makes that half worse: its page is opened on other people's
+devices and with key material in the URL itself.
 
-Tres decisiones quedan pendientes y no se toman aquí. El desbloqueo con gesto biométrico mediante la
-extensión PRF de WebAuthn resolvería la pestaña nueva sin persistir material de clave, pero su soporte
-todavía es desigual. Sacar la criptografía a un origen separado es la única medida con efecto real contra
-XSS y sale más barata que reescribir el panel. Y migrar el cifrado de datos a WebCrypto solo tiene
-sentido antes de que existan datos en producción.
+Three decisions are pending and are not taken here. Biometric-gesture unlock through the WebAuthn PRF extension would
+solve the new tab without persisting key material, but support for it is still uneven. Moving the cryptography to a
+separate origin is the only measure with real effect against XSS, and it costs less than rewriting the panel. And
+migrating data encryption to WebCrypto only makes sense before there is production data.

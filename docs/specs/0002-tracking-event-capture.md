@@ -1,338 +1,331 @@
-# Spec 0002: Registro de eventos de seguimiento
+# Spec 0002: Tracking event capture
 
 * Related ADR(s): `docs/adr/0002-encrypted-data-flow-livewire-alpine-filament.md`,
   `docs/adr/0004-client-crypto-and-data-format.md`, `docs/adr/0005-clinical-vocabulary-loinc-snomed.md`,
   `docs/adr/0006-encrypted-event-model.md`, `docs/adr/0007-encrypted-user-configuration.md`,
   `docs/adr/0008-measurement-method.md`, `docs/adr/0010-uncoded-food-entries.md`
 
-Esta spec depende de esos ADR como lectura previa: no repite su justificación, solo la aplica. Si un punto
-de esta spec y un ADR no coinciden, el ADR manda y esta spec tiene un error que corregir. La spec 0001
-(`docs/specs/0001-account-provisioning-and-session-bootstrap.md`) cubre lo que ocurre antes: sin clave
-maestra en memoria, nada de lo que sigue puede ejecutarse.
+This spec depends on those ADRs as prior reading: it does not repeat their rationale, it only applies it. If a
+point in this spec and an ADR disagree, the ADR wins and this spec has an error to fix. Spec 0001
+(`docs/specs/0001-account-provisioning-and-session-bootstrap.md`) covers what happens before: with no master key
+in memory, nothing that follows can run.
 
-## 1. Alcance y por qué una sola spec
+## 1. Scope, and why a single spec
 
-Cubre las cuatro pantallas de captura del MVP que ya tienen forma decidida: glucemia, insulina, tensión
-arterial y comidas. Para cada una, qué se pregunta al usuario, qué JSON sale de esa pantalla, cómo se cifra
-y cómo viaja. Deja fuera las notas, que son el único tipo del ADR 0006 todavía sin forma de dato cerrada:
-no existe ni pantalla ni catálogo de hallazgos codificados, así que su JSON no está decidido. Deja fuera
-también el panel de inicio con sus estadísticas por periodo, que tiene su propia spec
-(`docs/specs/0003-health-dashboard-summaries.md`) porque consume estos eventos en vez de producirlos.
+It covers the four MVP capture screens that already have a settled shape: blood glucose, insulin, blood pressure
+and meals. For each one, what the user is asked, what JSON comes out of that screen, how it is encrypted and how
+it travels. It leaves out notes, the only type in ADR 0006 that still has no settled data shape: there is
+neither a screen nor a catalog of coded findings, so their JSON is not decided. It also leaves out the home
+dashboard with its per-period statistics, which has its own spec
+(`docs/specs/0003-health-dashboard-summaries.md`) because it consumes these events instead of producing them.
 
-Es una sola spec para los cuatro tipos, y conviene dejar escrito por qué. Lo que comparten no es la
-maquetación, que es distinta en cada pantalla, sino el contrato criptográfico: la cadena de contexto, la
-forma canónica de la fecha, las etiquetas de derivación y el formato del sobre. Si eso vive repetido en
-cuatro documentos, acaban divergiendo, y aquí divergir no produce una inconsistencia de documentación sino
-un histórico entero indescifrable. Una sola fuente para la parte compartida, y una sección corta por tipo
-para lo que de verdad cambia.
+It is a single spec for the four types, and it is worth writing down why. What they share is not the layout,
+which differs on every screen, but the cryptographic contract: the context string, the canonical date form, the
+derivation labels and the envelope format. If that lives duplicated across four documents, they end up
+diverging, and diverging here does not produce a documentation inconsistency but an entire history that cannot
+be decrypted. One source for the shared part, and one short section per type for what really changes.
 
-Las cuatro pantallas existen ya (`app/Filament/Pages/`, `resources/js/health/`), así que esta spec describe
-código que corre. Donde algo siga pendiente, se dice.
+The four screens already exist (`app/Filament/Pages/`, `resources/js/health/`), so this spec describes code that
+runs. Where something is still pending, it says so.
 
-## 2. Historias de usuario
+## 2. User stories
 
-Persona que apunta una glucemia. Acaba de pincharse el dedo, mira el número del medidor y lo teclea.
-Elige el método (capilar o sensor), ajusta la fecha y la hora si no es el momento presente, y opcionalmente
-indica si estaba en ayunas, antes de comer, después de comer o al acostarse. La unidad no la elige aquí:
-sale de su configuración. Al guardar, el registro aparece en la lista y en la gráfica sin recargar la
-página.
+Person recording a blood glucose reading. They have just pricked their finger, they look at the number on the
+meter and type it in. They pick the method (capillary or sensor), adjust the date and time if it is not right
+now, and optionally state whether they were fasting, before a meal, after a meal or at bedtime. They do not pick
+the unit here: it comes from their configuration. On save, the record appears in the list and in the chart
+without reloading the page.
 
-Persona que apunta su tensión. El tensiómetro le da tres números de una vez, sistólica, diastólica y
-pulso, y los teclea juntos porque es una sola medición y así la vive. Indica en qué brazo se la tomó y en
-qué postura, porque su médico le dijo que siempre en el mismo brazo y sentada.
+Person recording their blood pressure. The monitor gives them three numbers at once — systolic, diastolic and
+pulse — and they type them together because it is a single measurement and that is how they experience it. They
+state which arm they took it on and in which posture, because their doctor told them always the same arm and
+sitting down.
 
-Persona que apunta lo que ha comido. Escribe el plato o el alimento con sus palabras, sin buscar en ningún
-catálogo, y añade cuánto: un número y una unidad de una lista corta. Puede añadir varias líneas a la misma
-comida. Nadie le pregunta por los hidratos de carbono.
+Person recording what they ate. They write the dish or the food item in their own words, without searching any
+catalog, and add how much: a number and a unit from a short list. They can add several lines to the same meal.
+Nobody asks them about carbohydrates.
 
-Persona que se pincha insulina. Prepara la dosis en su bolígrafo o su bomba, se la inyecta y la apunta en
-el momento, o algo más tarde si se le olvidó al pincharse. Escribe la dosis tal cual la lee en el bolígrafo,
-con medias unidades incluidas porque en niños son una dosis habitual. Elige el tipo, rápida, lenta o mixta,
-sin que la pantalla le proponga ninguna por defecto, porque confundir una con otra es un error serio.
-Si le interesa, anota el nombre comercial del producto y la zona donde se ha pinchado, para ir alternando y
-no irritar siempre el mismo sitio.
+Person injecting insulin. They prepare the dose in their pen or their pump, inject it and record it right then,
+or a bit later if they forgot at the time. They write the dose exactly as they read it on the pen, half units
+included, because in children those are a common dose. They pick the type — rapid, long-acting or mixed —
+without the screen proposing any default, because confusing one with another is a serious mistake. If they care
+to, they note the product's brand name and the site where they injected, so they can rotate and not irritate the
+same spot every time.
 
-Persona que revisa lo que lleva registrado. Entra en una de las cuatro pantallas y ve sus últimos registros
-ordenados por el momento en que ocurrieron, no por cuándo los apuntó, y puede seguir tirando hacia atrás
-por lotes.
+Person reviewing what they have recorded. They enter one of the four screens and see their latest records
+ordered by when they happened, not by when they wrote them down, and they can keep pulling further back in
+batches.
 
-Persona que registra con la sesión caducada. Han pasado quince minutos, la clave maestra ya no está en
-memoria. La pantalla no se rompe ni pierde lo escrito de forma silenciosa: avisa de que hace falta volver a
-entrar (`Necesitas iniciar sesión para ver tu historial.`).
+Person recording with an expired session. Fifteen minutes have passed, the master key is no longer in memory.
+The screen does not break and does not silently lose what was typed: it warns that they need to log in again
+(`Necesitas iniciar sesión para ver tu historial.`, "You need to log in to see your history.").
 
-## 3. Contrato criptográfico común
+## 3. Shared cryptographic contract
 
-Esta sección es la razón de ser de la spec. Todas las cadenas literales que aparecen aquí entran a la vez
-en la derivación de la clave del registro y en el dato asociado del AEAD, así que **quedan congeladas en
-cuanto exista el primer dato real**: cambiar un separador, el orden de un segmento o un dígito de la
-fracción de segundo deja indescifrable todo lo anterior. No hay forma de re-cifrar desde el servidor,
-porque el servidor no tiene la clave; la única migración posible es abrir cada sobre en el navegador de
-cada usuario, con su clave en memoria, y volver a sellarlo. Antes del primer usuario real esto es una línea
-de código, después es un proyecto.
+This section is the reason the spec exists. Every literal string that appears here goes at once into the
+derivation of the record key and into the AEAD associated data, so they **are frozen the moment the first real
+data exists**: changing a separator, the order of a segment or a digit of the fractional second leaves
+everything before it undecryptable. There is no way to re-encrypt from the server, because the server does not
+have the key; the only possible migration is to open every envelope in every user's browser, with their key in
+memory, and seal it again. Before the first real user this is one line of code, after it it is a project.
 
-### 3.1 Contexto de un evento
+### 3.1 Event context
 
-El contexto de un evento se construye con la plantilla `${userId.toLowerCase()}/event/${canonicalDate(occurredAt)}`,
-donde el segmento intermedio es `event`, en singular y en minúsculas, y el separador es una sola barra.
-Resultado literal:
+The event context is built with the template `${userId.toLowerCase()}/event/${canonicalDate(occurredAt)}`, where
+the middle segment is `event`, singular and lowercase, and the separator is a single slash. Literal result:
 
 ```
-0f1c8a2e-...-uuid-en-minusculas/event/2026-07-25T09:30:00.000000Z
+0f1c8a2e-...-uuid-in-lowercase/event/2026-07-25T09:30:00.000000Z
 ```
 
-El identificador de usuario entra siempre en su forma textual canónica en minúsculas, nunca como bytes
-crudos. El tipo clínico **no** entra en el contexto: solo `user_id` y `occurred_at` atan el sobre a su
-fila, y el motivo está en el ADR 0006 (el tipo está cifrado dentro del propio sobre y no puede participar
-en su propia autenticación). `eventContext` lanza `TypeError('userId must be a non-empty string.')` si el
-identificador no es una cadena no vacía.
+The user identifier always goes in as its canonical lowercase text form, never as raw bytes. The clinical type
+does **not** go into the context: only `user_id` and `occurred_at` tie the envelope to its row, and the reason
+is in ADR 0006 (the type is encrypted inside the envelope itself and cannot take part in its own
+authentication). `eventContext` throws `TypeError('userId must be a non-empty string.')` if the identifier is
+not a non-empty string.
 
-Los otros dos contextos del sistema comparten familia y conviene tenerlos a la vista para no confundirlos:
-`${userId.toLowerCase()}/umk` para el sobre de la clave maestra y `${userId.toLowerCase()}/settings` para
-el de configuración (`resources/js/auth/context.js`).
+The other two contexts in the system are from the same family and are worth keeping in sight so they don't get
+confused: `${userId.toLowerCase()}/umk` for the master key envelope and `${userId.toLowerCase()}/settings` for
+the configuration one (`resources/js/auth/context.js`).
 
-### 3.2 Forma canónica de la fecha
+### 3.2 Canonical date form
 
-`YYYY-MM-DDTHH:MM:SS.ffffffZ`: siempre UTC, sufijo `Z`, separador `T` y **seis** dígitos de fracción
-siempre. `Date` de JavaScript solo da milisegundos, así que se rellenan tres ceros a la derecha. La
-fracción se **trunca** a seis dígitos, nunca se redondea.
+`YYYY-MM-DDTHH:MM:SS.ffffffZ`: always UTC, `Z` suffix, `T` separator and always **six** fraction digits.
+JavaScript's `Date` only gives milliseconds, so three zeros are padded on the right. The fraction is
+**truncated** to six digits, never rounded.
 
-`canonicalDate` acepta un `Date`, un epoch en milisegundos (número finito) o una cadena que case el patrón
-ISO con desfase **obligatorio**. Una cadena sin desfase se rechaza a propósito: adivinar la zona local
-produciría bytes distintos según el dispositivo, y con ello una clave distinta. Además se rechazan los
-componentes de calendario imposibles (mes fuera de 1..12, día fuera de rango con año bisiesto calculado,
-hora mayor que 23, minuto o segundo mayores que 59), porque `Date` desborda en silencio y convierte
-`2026-02-30` en `2026-03-02`: dos cadenas distintas acabarían en la misma forma canónica y por tanto en la
-misma clave. Los fallos son `CanonicalDateError`.
+`canonicalDate` accepts a `Date`, an epoch in milliseconds (a finite number) or a string matching the ISO
+pattern with a **mandatory** offset. A string with no offset is rejected on purpose: guessing the local zone
+would produce different bytes on different devices, and with them a different key. It also rejects impossible
+calendar components (month outside 1..12, day out of range with the leap year computed, hour above 23, minute or
+second above 59), because `Date` overflows silently and turns `2026-02-30` into `2026-03-02`: two different
+strings would end up in the same canonical form and therefore under the same key. Failures are
+`CanonicalDateError`.
 
-`canonicalDateBytes` es esa misma cadena codificada en UTF-8, y es la forma en que entra en el dato
-asociado del AEAD y en el `info` de la derivación.
+`canonicalDateBytes` is that same string encoded as UTF-8, and it is the form that goes into the AEAD associated
+data and into the `info` of the derivation.
 
-En servidor la contraparte es `CANONICAL_DATE_FORMAT = 'Y-m-d\TH:i:s.u\Z'` con
+On the server the counterpart is `CANONICAL_DATE_FORMAT = 'Y-m-d\TH:i:s.u\Z'` with
 `CANONICAL_DATE_REGEX = '/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/'`.
 
-### 3.3 Derivación de la clave del registro
+### 3.3 Record key derivation
 
-Las etiquetas de derivación están congeladas con `Object.freeze` en `resources/js/crypto/kdf.js` y llevan
-la versión dentro del propio texto: `myphr/kek/v1`, `myphr/session/v1`, `myphr/record/v1`,
-`myphr/settings/v1`, `myphr/envelope/v1`. Cambiar el significado de una derivación obliga a subir su
-versión, nunca a reutilizar la etiqueta.
+The derivation labels are frozen with `Object.freeze` in `resources/js/crypto/kdf.js` and carry the version
+inside the text itself: `myphr/kek/v1`, `myphr/session/v1`, `myphr/record/v1`, `myphr/settings/v1`,
+`myphr/envelope/v1`. Changing what a derivation means forces bumping its version, never reusing the label.
 
-El `info` de HKDF se construye como `label || 0x00 || context`: bytes UTF-8 de la etiqueta, un byte
-separador `0x00`, y los bytes del contexto. El separador impide que dos pares distintos de etiqueta y
-contexto produzcan el mismo `info` por concatenación. Sin contexto, el `info` es solo la etiqueta.
+The HKDF `info` is built as `label || 0x00 || context`: UTF-8 bytes of the label, a `0x00` separator byte, and
+the context bytes. The separator stops two different label-and-context pairs from producing the same `info` by
+concatenation. With no context, `info` is just the label.
 
-El KDF es HKDF-SHA-512 (RFC 5869) sobre `@noble/hashes` 2.2.0, byte a byte compatible con
-`app/Security/Opaque/HkdfSha512.php`. `HASH_LENGTH` 64, `MAX_OUTPUT_LENGTH` 16320 (255 por 64),
-`KEY_LENGTH` 32, que es la clave simétrica de XChaCha20-Poly1305. Salida por defecto de 32 bytes, `salt` e
-`info` vacíos por defecto.
+The KDF is HKDF-SHA-512 (RFC 5869) on `@noble/hashes` 2.2.0, byte-for-byte compatible with
+`app/Security/Opaque/HkdfSha512.php`. `HASH_LENGTH` 64, `MAX_OUTPUT_LENGTH` 16320 (255 times 64), `KEY_LENGTH`
+32, which is the symmetric key of XChaCha20-Poly1305. Default output of 32 bytes, `salt` and `info` empty by
+default.
 
-Un evento no se cifra nunca con la clave maestra directamente. Se deriva una clave por registro con la
-etiqueta `myphr/record/v1` y el contexto del evento, ese mismo contexto viaja como dato asociado al sellar
-y al abrir, y la clave derivada se borra con `zeroize` en un `finally`
+An event is never encrypted with the master key directly. A per-record key is derived with the label
+`myphr/record/v1` and the event context, that same context travels as associated data when sealing and when
+opening, and the derived key is wiped with `zeroize` in a `finally`
 (`resources/js/health/eventEnvelope.js`).
 
-### 3.4 Formato del sobre
+### 3.4 Envelope format
 
-Transporte: prefijo literal `v1.` seguido de base64url **sin** padding del sobre binario. La constante vive
-en los dos lados, `ENVELOPE_PREFIX` en el cliente y `EnvelopeValidator::PREFIX` en el servidor.
+Transport: the literal prefix `v1.` followed by base64url **without** padding of the binary envelope. The
+constant lives on both sides, `ENVELOPE_PREFIX` on the client and `EnvelopeValidator::PREFIX` on the server.
 
-Cabecera binaria, 64 bytes:
+Binary header, 64 bytes:
 
 ```
-offset  0   1 byte    versión del formato        0x01
-offset  1   1 byte    algoritmo                  0x01  XChaCha20-Poly1305-IETF
+offset  0   1 byte    format version             0x01
+offset  1   1 byte    algorithm                  0x01  XChaCha20-Poly1305-IETF
 offset  2   1 byte    KDF                        0x01  HKDF-SHA-512
-offset  3   1 byte    banderas                   bit 0 = contenido rellenado (FLAG_PADDED 0x01)
-offset  4   4 bytes   identificador de clave     reservado, hoy siempre cero
-offset  8  32 bytes   sal de la derivación
+offset  3   1 byte    flags                      bit 0 = padded content (FLAG_PADDED 0x01)
+offset  4   4 bytes   key identifier             reserved, always zero today
+offset  8  32 bytes   derivation salt
 offset 40  24 bytes   nonce
 offset 64   n bytes   ciphertext || tag (16 bytes)
 ```
 
-El dato asociado real del AEAD es la cabecera completa concatenada con el contexto que aporta quien llama,
-es decir `header || associatedData`. Así, cambiar una bandera o el identificador de clave invalida el tag.
-Ese mismo contexto entra además como contexto del `deriveKey` con la etiqueta `myphr/envelope/v1` y la sal
-del propio sobre, que es una derivación distinta de la del apartado 3.3 y no debe confundirse con ella.
+The real AEAD associated data is the full header concatenated with the context the caller supplies, that is,
+`header || associatedData`. That way, changing a flag or the key identifier invalidates the tag. That same
+context also goes in as the context of `deriveKey` with the label `myphr/envelope/v1` and the envelope's own
+salt, which is a different derivation from the one in section 3.3 and must not be confused with it.
 
-El contenido se rellena a tamaños fijos de 256, 1024 o 4096 bytes. Se prefija con su longitud en cuatro
-bytes big-endian y se completa con ceros hasta el primer tamaño en que quepa, lo que deja el contenido
-máximo en 4092 bytes. `unpad` rechaza un tamaño que no sea uno de los tres y una longitud declarada mayor
-que el propio tamaño.
+The content is padded to fixed sizes of 256, 1024 or 4096 bytes. It is prefixed with its length in four
+big-endian bytes and filled with zeros up to the first size it fits in, which leaves the maximum content at 4092
+bytes. `unpad` rejects a size that is not one of the three and a declared length larger than the size itself.
 
-Al abrir, el cliente rechaza: prefijo distinto de `v1.`; longitud menor que 336 bytes (64 de cabecera, 16
-de tag y el menor relleno); byte de versión, de algoritmo o de KDF distintos de `0x01`; la bandera de
-relleno sin poner; y un tamaño de contenido que no esté entre los tres permitidos. Todos lanzan
-`EnvelopeError`, que no distingue manipulación de corrupción y **nunca** debe silenciarse.
+When opening, the client rejects: a prefix other than `v1.`; a length below 336 bytes (64 of header, 16 of tag
+and the smallest padding); a version, algorithm or KDF byte other than `0x01`; the padding flag not set; and a
+content size that is not one of the three allowed ones. All of them throw `EnvelopeError`, which does not
+distinguish tampering from corruption and must **never** be silenced.
 
-### 3.5 Qué comprueba el servidor
+### 3.5 What the server checks
 
-`EnvelopeValidator::isValid` comprueba tres cosas y ninguna más: el prefijo `v1.`, que el base64url sea
-canónico, y que la longitud binaria sea exactamente 336, 1104 o 4176 bytes (`HEADER_BYTES` 64 más
-`TAG_BYTES` 16 más cada tamaño de relleno). Nunca valida el contenido, porque no tiene la clave.
+`EnvelopeValidator::isValid` checks three things and nothing more: the `v1.` prefix, that the base64url is
+canonical, and that the binary length is exactly 336, 1104 or 4176 bytes (`HEADER_BYTES` 64 plus `TAG_BYTES` 16
+plus each padding size). It never validates the content, because it does not have the key.
 
-El mismo guardarraíl vive en el modelo: `Event::booted()` lanza
-`LogicException('events.payload no tiene forma de sobre cifrado válido.')` en `saving()` si la validación
-falla. Es un guardarraíl de formato, no de contenido. La columna `payload` no tiene cast ni mutador a
-propósito: es una cadena opaca de extremo a extremo.
+The same guardrail lives in the model: `Event::booted()` throws
+`LogicException('events.payload no tiene forma de sobre cifrado válido.')` in `saving()` if validation fails. It
+is a format guardrail, not a content one. The `payload` column has no cast and no mutator on purpose: it is an
+opaque string end-to-end.
 
-## 4. Contrato de transporte
+## 4. Transport contract
 
-Los dos métodos de transporte son comunes a todas las pantallas de eventos y viven una sola vez, en
-`HealthEventPage`, de la que heredan glucemia, tensión, comidas e insulina. El ciphertext cruza siempre en
-la misma dirección lógica: baja como valor de retorno y sube como parámetro. Nunca vive en una propiedad
-pública del componente, según el ADR 0002.
+The two transport methods are shared by every event screen and live in a single place, `HealthEventPage`, which
+blood glucose, blood pressure, meals and insulin all extend. The ciphertext always crosses in the same logical
+direction: it comes down as a return value and goes up as a parameter. It never lives in a public property of
+the component, per ADR 0002.
 
-`storeEvent(string $payload, string $occurredAt): array{id: string, occurredAt: string}` autoriza con
-`Gate::authorize('create', Event::class)`, valida el sobre con `EnvelopeValidator::isValid` y, si
-falla, lanza `ValidationException` con clave `payload` y el mensaje literal
-`El sobre cifrado no tiene un formato válido.`; después valida la fecha. Las dos comprobaciones abortan
-antes de tocar la base de datos. Crea el `Event` con `user_id` de `Auth::id()`, `occurred_at` y `payload`,
-y devuelve el identificador más el `occurredAt` recanonicalizado **desde la fila guardada**, no desde el
-parámetro: es lo que detecta un truncamiento de microsegundos en el momento, no un mes después.
+`storeEvent(string $payload, string $occurredAt): array{id: string, occurredAt: string}` authorizes with
+`Gate::authorize('create', Event::class)`, validates the envelope with `EnvelopeValidator::isValid` and, if that
+fails, throws `ValidationException` with key `payload` and the literal message
+`El sobre cifrado no tiene un formato válido.` ("The encrypted envelope does not have a valid format."); then it
+validates the date. Both checks abort before touching the database. It creates the `Event` with `user_id` from
+`Auth::id()`, `occurred_at` and `payload`, and returns the identifier plus the `occurredAt` re-canonicalized
+**from the saved row**, not from the parameter: that is what catches a microsecond truncation right away, not a
+month later.
 
-`fetchEvents(?string $before = null, int $limit = 100): list<array{id, occurredAt, payload}>` autoriza con
-`Gate::authorize('viewAny', Event::class)`. El techo duro es `MAX_FETCH_LIMIT = 500`, aplicado como
-`min(max($limit, 1), 500)`: por defecto 100, mínimo 1, máximo 500. La consulta va acotada a
-`where('user_id', Auth::id())`, `orderByDesc('occurred_at')` y `limit`, con un cursor opcional
-`where('occurred_at', '<', ...)` sobre la fecha canónica recibida.
+`fetchEvents(?string $before = null, int $limit = 100): list<array{id, occurredAt, payload}>` authorizes with
+`Gate::authorize('viewAny', Event::class)`. The hard cap is `MAX_FETCH_LIMIT = 500`, applied as
+`min(max($limit, 1), 500)`: 100 by default, minimum 1, maximum 500. The query is narrowed to
+`where('user_id', Auth::id())`, `orderByDesc('occurred_at')` and `limit`, with an optional cursor
+`where('occurred_at', '<', ...)` over the canonical date received.
 
-La validación de fecha en servidor es `parseCanonicalOccurredAt` y tiene tres pasos. Si el regex no casa,
-`ValidationException` con clave `occurredAt` y el mensaje literal
-`La fecha debe tener la forma canónica YYYY-MM-DDTHH:MM:SS.ffffffZ.`. Después
-`CarbonImmutable::createFromFormat` en UTC. Y por último una comprobación de ida y vuelta: si reformatear
-no devuelve exactamente la cadena recibida, `ValidationException` con
-`La fecha no es una fecha canónica válida.`. Esa ida y vuelta es la que atrapa los desbordamientos tipo mes
-13 o día 32, que `createFromFormat` acepta en silencio.
+Date validation on the server is `parseCanonicalOccurredAt` and has three steps. If the regex does not match,
+`ValidationException` with key `occurredAt` and the literal message
+`La fecha debe tener la forma canónica YYYY-MM-DDTHH:MM:SS.ffffffZ.` ("The date must have the canonical form
+YYYY-MM-DDTHH:MM:SS.ffffffZ."). Then `CarbonImmutable::createFromFormat` in UTC. And finally a round-trip check:
+if reformatting does not return exactly the string received, `ValidationException` with
+`La fecha no es una fecha canónica válida.` ("The date is not a valid canonical date."). That round trip is what
+catches overflows like month 13 or day 32, which `createFromFormat` accepts silently.
 
-El servidor no puede filtrar por tipo. Devuelve todos los eventos del usuario en el rango pedido y es
-el cliente quien descarta los que no le tocan, después de descifrar. Es el coste ya aceptado en los Cons
-del ADR 0006, y tiene dos consecuencias prácticas: el límite de 100 registros por lote no equivale a 100
-glucemias, y una pantalla que quiera pintar tres meses de un tipo tiene que pedir lotes hasta agotar el
-rango, no hasta llenar su lista.
+The server cannot filter by type. It returns every event of the user in the requested range and it is the client
+that discards the ones it does not need, after decrypting. That is the cost already accepted in the Cons of
+ADR 0006, and it has two practical consequences: the limit of 100 records per batch does not amount to 100 blood
+glucose readings, and a screen that wants to draw three months of one type has to request batches until the
+range is exhausted, not until its list is full.
 
-Un sobre que no abre no tumba la pantalla: se cuenta aparte (`failedToOpenCount`) y se avisa al usuario,
-mientras el resto del histórico se sigue mostrando.
+An envelope that fails to open doesn't break the screen: it is counted separately (`failedToOpenCount`) and the
+user is told, while the rest of the history keeps being shown.
 
-## 5. Campos comunes a todo evento
+## 5. Fields shared by every event
 
-Los cuatro campos comunes que enumera el ADR 0006 los construye una función pura compartida,
-`buildCommonEventFields` (`resources/js/health/eventCommonFields.js`), y van en el nivel superior del
-contenido descifrado, junto a `v`, `type` y `tz`, nunca dentro de `data`, porque no son propios de ningún
-tipo.
+The four shared fields listed in ADR 0006 are built by a shared pure function, `buildCommonEventFields`
+(`resources/js/health/eventCommonFields.js`), and they go at the top level of the decrypted content, next to
+`v`, `type` and `tz`, never inside `data`, because they do not belong to any one type.
 
-`origin` distingue cómo entró el dato en la aplicación, tecleado (`manual`) o importado de un aparato
-(`device`), y no se pregunta en ningún formulario: hoy no existe ninguna importación automática, así que
-queda fijo en `manual` y será la importación, el día que exista, quien construya el evento con `device`.
-No responde a la misma pregunta que el método de medición (ADR 0008): mirar el sensor y teclear el número
-sigue siendo una lectura intersticial introducida a mano.
+`origin` distinguishes how the data entered the application, typed in (`manual`) or imported from a device
+(`device`), and it is not asked on any form: there is no automatic import today, so it stays fixed at `manual`
+and it will be the import, the day it exists, that builds the event with `device`. It does not answer the same
+question as the measurement method (ADR 0008): looking at the sensor and typing the number is still an
+interstitial reading entered by hand.
 
-`recordedBy` sí se pregunta, con `self` por defecto, y `device` (con qué aparato se hizo la lectura) y
-`note` son texto libre. Los dos últimos se omiten del contenido cuando llegan vacíos, con el mismo criterio
-que el contexto de comida: ausencia significa ausencia y nunca una cadena vacía guardada como si fuera un
-dato.
+`recordedBy` is asked, with `self` as the default, and `device` (which device the reading was taken with) and
+`note` are free text. The last two are omitted from the content when they arrive empty, on the same criterion as
+the meal context: absence means absence and never an empty string saved as if it were data.
 
-## 6. Glucemia
+## 6. Blood glucose
 
-El contenido en claro que produce `buildGlucoseContent`, con todos los campos opcionales presentes, es:
+The plaintext content produced by `buildGlucoseContent`, with every optional field present, is:
 
 ```json
 {"v": 1, "type": "glucose", "tz": "+02:00", "origin": "manual", "recordedBy": "self",
- "device": "Accu-Chek Guide", "note": "después de andar",
+ "device": "Accu-Chek Guide", "note": "after walking",
  "data": {"value": "142", "unit": "mg/dL", "loinc": "41653-7", "method": "capillary",
           "mealContext": "after_meal"}}
 ```
 
-`origin` y `recordedBy` están siempre, porque traen valor por defecto (sección 5); `device`, `note` y
-`mealContext` solo aparecen cuando la persona los rellena, así que el contenido mínimo son las cinco claves
-del nivel superior y `data` con sus cuatro campos obligatorios.
+`origin` and `recordedBy` are always there, because they carry a default (section 5); `device`, `note` and
+`mealContext` only appear when the person fills them in, so the minimum content is the five top-level keys plus
+`data` with its four mandatory fields.
 
-`v` es el número 1 y `type` la cadena literal `glucose`. `value` viaja siempre como cadena, tal cual la
-escribió la persona, nunca como número (ADR 0004, decimales como cadena); si no es una cadena o queda vacía
-tras recortar espacios, la pantalla responde `Introduce un valor.`. `unit` es un código UCUM y `loinc` se
-resuelve contra la tabla del servidor, nunca se inventa: `GlucoseLoincCode::resolve()` es total sobre las
-combinaciones soportadas y lanza `ValueError` ante una combinación sin código, en lugar de devolver un
-código por defecto.
+`v` is the number 1 and `type` the literal string `glucose`. `value` always travels as a string, exactly as the
+person typed it, never as a number (ADR 0004, decimals as strings); if it is not a string or is empty after
+trimming spaces, the screen responds `Introduce un valor.` ("Enter a value."). `unit` is a UCUM code and `loinc`
+is resolved against the server's table, never invented: `GlucoseLoincCode::resolve()` is total over the
+supported combinations and throws `ValueError` for a combination with no code, instead of returning a default
+code.
 
-`tz` es el desfase `±HH:MM` del momento del registro, con convenio positivo cuando la hora local va por
-delante de UTC, y se calcula con el desfase en vigor para **esa** fecha concreta, respetando el horario de
-verano del día registrado y no el de hoy.
+`tz` is the `±HH:MM` offset at the moment of the record, positive when local time is ahead of UTC, and it is
+computed with the offset in force for **that** particular date, respecting the daylight saving time of the day
+recorded and not today's.
 
-El método es un token estable de `GlucoseMeasurementMethod`: `capillary` (sangre capilar con glucómetro
-tras punción digital) e `interstitial` (líquido intersticial con sensor continuo). Ese token se serializa
-dentro del payload cifrado, así que no puede cambiar nunca una vez publicado; añadir un caso nuevo es
-seguro, renombrar o eliminar uno existente no lo es.
+The method is a stable token from `GlucoseMeasurementMethod`: `capillary` (capillary blood with a meter after a
+finger prick) and `interstitial` (interstitial fluid with a continuous sensor). That token is serialized inside
+the encrypted payload, so it can never change once published; adding a new case is safe, renaming or removing an
+existing one is not.
 
-Los cuatro códigos LOINC, resueltos por método y unidad, son `41653-7` y `14743-9` para capilar en mg/dL y
-mmol/L, y `99504-3` y `105272-9` para intersticial en las mismas dos unidades. El intersticial en mmol/L
-tiene seis dígitos antes del guion, que es un formato LOINC válido y que cualquier validación futura debe
-aceptar.
+The four LOINC codes, resolved by method and unit, are `41653-7` and `14743-9` for capillary in mg/dL and
+mmol/L, and `99504-3` and `105272-9` for interstitial in those same two units. Interstitial in mmol/L has six
+digits before the hyphen, which is a valid LOINC format and which any future validation must accept.
 
-### 6.1 El contexto respecto a la comida es opcional
+### 6.1 The meal context is optional
 
-Los tokens de `MealContext` son `fasting`, `before_meal`, `after_meal` y `bedtime`, en snake_case y con el
-mismo pacto de inmutabilidad que los métodos.
+The `MealContext` tokens are `fasting`, `before_meal`, `after_meal` and `bedtime`, in snake_case and with the
+same immutability pact as the methods.
 
-El campo es opcional y sin valor preseleccionado. El desplegable arranca con una opción vacía
-seleccionada (`Sin especificar`) y, cuando la persona no elige nada, la clave `mealContext` no entra en el
-payload, en lugar de entrar con cadena vacía o con `null`. El lector del cliente trata la clave ausente
-como "no consta" y las estadísticas que agrupen por contexto la cuentan aparte, nunca la reparten.
+The field is optional and has no preselected value. The dropdown starts with an empty option selected
+(`Sin especificar`, "Not specified") and, when the person picks nothing, the `mealContext` key does not enter the
+payload, instead of entering with an empty string or with `null`. The client's reader treats the missing key as
+"not stated" and statistics that group by context count it separately, never distribute it.
 
-El motivo es el mismo que el ADR 0006 usa para no pedir los hidratos de carbono: un desplegable que llega
-con "en ayunas" escrito convierte cualquier descuido en un dato falso, y a la hora de leer el histórico un
-valor inventado no se distingue de uno real.
+The reason is the same one ADR 0006 uses for not asking about carbohydrates: a dropdown that arrives with
+"fasting" already written turns any slip into false data, and when reading the history back a made-up value
+cannot be told apart from a real one.
 
-### 6.2 Unidad de presentación
+### 6.2 Display unit
 
-La unidad es una preferencia de presentación que vive en la configuración cifrada (ADR 0007), bajo la clave
-`glucoseUnit`, con `mg/dL` como valor cuando no hay preferencia guardada. El servidor no puede leerla.
+The unit is a presentation preference that lives in the encrypted configuration (ADR 0007), under the key
+`glucoseUnit`, with `mg/dL` as the value when there is no saved preference. The server cannot read it.
 
-No se convierte entre unidades. Los eventos cuya unidad no coincide con la de presentación quedan fuera de
-la gráfica y se cuentan en `excludedByUnit`, porque convertir exigiría fijar precisión y redondeo. Las
-series se agrupan por método, una por método, y el pie de la gráfica dice siempre qué métodos incluye
-(ADR 0008).
+There is no conversion between units. Events whose unit does not match the display unit stay out of the chart
+and are counted in `excludedByUnit`, because converting would require fixing precision and rounding. Series are
+grouped by method, one per method, and the chart caption always says which methods it includes (ADR 0008).
 
-### 6.3 Tira de orina, pendiente
+### 6.3 Urine test strip, pending
 
-El ADR 0008 contempla un tercer método de glucemia cuyo resultado es cualitativo (`25428-4`, presencia en
-orina). Su payload tiene otra forma: en lugar de valor con unidad lleva un resultado ordinal, y no entra en
-medias ni en porcentaje en rango. Hoy ni el catálogo ni el cliente lo soportan, y el vocabulario ordinal
-concreto está sin decidir (sección 11). Mientras tanto, el catálogo expone solo `capillary` e
-`interstitial`, y `units` solo `mg/dL` y `mmol/L`.
+ADR 0008 contemplates a third blood glucose method whose result is qualitative (`25428-4`, presence in urine).
+Its payload has a different shape: instead of a value with a unit it carries an ordinal result, and it does not
+enter means or the percentage in range. Neither the catalog nor the client supports it today, and the specific
+ordinal vocabulary is still undecided (section 11). In the meantime, the catalog exposes only `capillary` and
+`interstitial`, and `units` only `mg/dL` and `mmol/L`.
 
-## 7. Tensión arterial
+## 7. Blood pressure
 
-Un solo evento con los tres números que da el aparato, sistólica, diastólica y pulso, porque es lo que el
-paciente vive como una sola medición (ADR 0006). La asimetría con el destino la resuelve el exportador: el
-perfil de tensión de FHIR no admite el pulso como componente, así que un evento nuestro se exporta como dos
-observaciones separadas. Esa asimetría es deliberada y no debe "arreglarse" partiendo el evento en dos al
-capturarlo, porque perdería que ambas lecturas son del mismo instante y del mismo aparato.
+A single event with the three numbers the device gives — systolic, diastolic and pulse — because that is what
+the patient experiences as one measurement (ADR 0006). The asymmetry with the destination is resolved by the
+exporter: the FHIR blood pressure profile does not admit pulse as a component, so one of our events is exported
+as two separate observations. That asymmetry is deliberate and must not be "fixed" by splitting the event in two
+at capture time, because that would lose that both readings come from the same instant and the same device.
 
-Los tres códigos LOINC son `8480-6` para la sistólica (nombre oficial `Systolic blood pressure`), `8462-4`
-para la diastólica (`Diastolic blood pressure`) y `8867-4` para el pulso (`Heart rate`). El nombre oficial
-del tercero es frecuencia cardiaca, no pulso, así que la documentación y el catálogo usan ese término
-cuando citan el código, aunque la etiqueta al paciente pueda seguir diciendo pulso. Los tres están en
-estado activo y **ninguno lleva aviso de copyright de terceros**, comprobado el 2026-07-25 contra
-`tx.fhir.org` con LOINC 2.82, que sí publica esa propiedad cuando existe. Cumplen la regla del ADR 0005.
+The three LOINC codes are `8480-6` for systolic (official term `Systolic blood pressure`), `8462-4` for
+diastolic (`Diastolic blood pressure`) and `8867-4` for pulse (`Heart rate`). The official term of the third one
+is heart rate, not pulse, so the documentation and the catalog use that term when they cite the code, even
+though the patient-facing label may keep saying pulse. All three are in active status and **none carries a
+third-party copyright notice**, checked on 2026-07-25 against `tx.fhir.org` with LOINC 2.82, which does publish
+that property when it exists. They meet the rule in ADR 0005.
 
-Las unidades UCUM son `mm[Hg]` para las dos presiones, que coincide con las unidades de ejemplo que declara
-el propio LOINC, y `/min` para la frecuencia cardiaca. Sobre esta última hay un matiz verificado: LOINC no
-propone `/min` a secas para `8867-4` sino `{beats}/min`, que es la misma magnitud con una anotación que no
-altera la semántica. `/min` es UCUM válido y figura en el conjunto común de HL7; ver la sección 11.
+The UCUM units are `mm[Hg]` for both pressures, which matches the example units LOINC itself declares, and
+`/min` for heart rate. There is a verified nuance about the latter: LOINC does not propose bare `/min` for
+`8867-4` but `{beats}/min`, which is the same quantity with an annotation that does not change the semantics.
+`/min` is valid UCUM and appears in the HL7 Common UCUM units value set; see section 11.
 
-Brazo y postura son el método de medición de esta magnitud, no dos metadatos accesorios: los dos cambian el
-valor de forma conocida y los dos solo se saben en el momento de medir, que es el criterio del ADR 0008.
-Sus dos vocabularios son cerrados y quedan enumerados en ese ADR: `left` y `right` para el brazo
-(`App\Catalog\BloodPressureArm`), y `sitting`, `lying` y `standing` para la postura
+Arm and posture are the measurement method of this quantity, not two incidental pieces of metadata: both change
+the value in a known way and both are only known at the moment of measuring, which is the criterion in ADR 0008.
+Their two vocabularies are closed and are enumerated in that ADR: `left` and `right` for the arm
+(`App\Catalog\BloodPressureArm`), and `sitting`, `lying` and `standing` for the posture
 (`App\Catalog\BloodPressurePosture`).
 
-Dentro del contenido viajan como dos tokens propios, `data.arm` y `data.posture`, porque la pantalla los
-pregunta por separado y así se leen y se filtran por separado. El método con el que agrupan las
-estadísticas es su combinación, `${arm}_${posture}`, de `left_sitting` a `right_standing`, y se calcula al
-agrupar (`methodKey`) en lugar de guardarse: un dato derivado que se guarda es un dato que puede quedar
-desincronizado del que lo genera.
+Inside the content they travel as two tokens of their own, `data.arm` and `data.posture`, because the screen
+asks for them separately and that is how they are read and filtered. The method the statistics group by is their
+combination, `${arm}_${posture}`, from `left_sitting` to `right_standing`, and it is computed while grouping
+(`methodKey`) instead of being stored: derived data that gets stored is data that can drift out of sync with
+what generates it.
 
-El contenido de una lectura queda así. El pulso es opcional, porque no todos los tensiómetros lo miden, y
-cuando falta no viajan ni `pulse` ni su unidad ni su código, en vez de viajar vacíos:
+The content of a reading looks like this. Pulse is optional, because not every monitor measures it, and when it
+is missing neither `pulse` nor its unit nor its code travel, instead of travelling empty:
 
 ```json
 {"v": 1, "type": "bloodPressure", "tz": "+02:00", "origin": "manual", "recordedBy": "self",
@@ -342,152 +335,144 @@ cuando falta no viajan ni `pulse` ni su unidad ni su código, en vez de viajar v
           "arm": "left", "posture": "sitting"}}
 ```
 
-## 8. Comidas
+## 8. Meals
 
-Una comida se registra con texto libre para el alimento, el plato o la preparación, más un número para la
-cantidad, más un selector de unidad de una lista cerrada de siete valores: gramos, miligramos, kilos,
-centilitros, litros, mililitros y unidades. La cantidad viaja como cadena, igual que cualquier decimal
-(ADR 0004).
+A meal is recorded with free text for the food item, the dish or the preparation, plus a number for the
+quantity, plus a unit selector from a closed list of seven values: grams, milligrams, kilos, centiliters, liters,
+milliliters and units. The quantity travels as a string, like any decimal (ADR 0004).
 
-Los alimentos no se codifican contra ningún vocabulario. Es una excepción consciente y acotada a la regla
-del ADR 0005 de no guardar solo la etiqueta, y la decide el ADR 0010
-(`docs/adr/0010-uncoded-food-entries.md`): codificar comida casera contra un vocabulario de alimentos no
-produce un dato mejor, produce un dato falso con aspecto de preciso. El médico estima a partir del alimento
-y la cantidad, que es el mismo razonamiento por el que el ADR 0006 descarta pedir los hidratos de carbono.
+Food items are not coded against any vocabulary. This is a deliberate, narrowly scoped exception to the ADR 0005
+rule of not storing only the label, and it is decided by ADR 0010
+(`docs/adr/0010-uncoded-food-entries.md`): coding home cooking against a food vocabulary does not produce better
+data, it produces false data that looks precise. The doctor estimates from the food item and the quantity, which
+is the same reasoning by which ADR 0006 rejects asking about carbohydrates.
 
-Esto refina lo que el ADR 0006 decía sobre la forma de la cantidad. Ya no hay una cantidad con dos ranuras,
-código de unidad cuando exista y texto libre cuando la medida sea doméstica: la unidad sale siempre de la
-lista cerrada. Una ranura de texto libre para la unidad convierte cualquier estadística futura en imposible
-y se acumula sin remedio, mientras que siete opciones cubren lo que la gente escribe de verdad y dejan el
-dato comparable.
+This refines what ADR 0006 said about the shape of the quantity. There is no longer a quantity with two slots, a
+unit code when one exists and free text when the measure is a household one: the unit always comes from the
+closed list. A free-text slot for the unit makes any future statistic impossible and piles up beyond repair,
+while seven options cover what people actually write and leave the data comparable.
 
-El mapeo a UCUM de seis de las siete es directo y está verificado contra el fichero normativo
-`ucum-essence.xml` del repositorio oficial de UCUM: `g` para gramos, `mg` para miligramos, `kg` para kilos,
-`cL` para centilitros, `L` para litros y `mL` para mililitros. UCUM admite tanto `l` como `L` para el
-litro; se elige la mayúscula porque es la forma del uso clínico y del conjunto común de HL7, y porque la
-ele minúscula se confunde con el uno.
+The UCUM mapping of six of the seven is direct and is verified against the normative file `ucum-essence.xml`
+from the official UCUM repository: `g` for grams, `mg` for milligrams, `kg` for kilos, `cL` for centiliters, `L`
+for liters and `mL` for milliliters. UCUM admits both `l` and `L` for the liter; the uppercase one is chosen
+because it is the form of clinical use and of the HL7 Common UCUM units value set, and because a lowercase L is
+confused with a one.
 
-La séptima, unidades entendidas como recuento de piezas, no tiene un átomo UCUM propio: no existe `each`,
-`unit` ni `count` en el fichero normativo. El ADR 0010 elige la anotación `{each}`, que la especificación
-define como exactamente `1` con una etiqueta que no aporta semántica, y no la unidad adimensional `1` a
-secas: de `{each}` se llega a `1` ignorando la anotación, mientras que de `1` no se recupera que lo que se
-contaban eran piezas. Las siete viven en `App\Catalog\FoodQuantityUnit`.
+The seventh, units understood as a count of pieces, has no UCUM atom of its own: there is no `each`, `unit` or
+`count` in the normative file. ADR 0010 picks the annotation `{each}`, which the specification defines as
+exactly `1` with a label that adds no semantics, and not the bare dimensionless unit `1`: from `{each}` you get
+to `1` by ignoring the annotation, whereas from `1` you cannot recover that what was being counted were pieces.
+The seven live in `App\Catalog\FoodQuantityUnit`.
 
-Una comida admite varias líneas de alimento en el mismo evento, con `mealType` explícito, como fija el
-ADR 0006. El orden en que se registran es el orden de `data.foods`, sin campo aparte, y cada línea lleva
-`name`, `quantity` y `unit`. Una fila a medias (con dos de los tres campos rellenos) se rechaza con un
-mensaje claro en lugar de guardarse incompleta. Con el relleno a tamaños fijos del sobre, una comida larga
-puede pasar de 256 a 1024 bytes de contenido, que es normal y no requiere ninguna acción: lo único que no
-cabe es un contenido de más de 4092 bytes, y ese caso debe fallar con un mensaje claro al usuario y no con
-un `EnvelopeError` genérico.
+A meal admits several food lines in the same event, with an explicit `mealType`, as ADR 0006 lays down. The
+order they are recorded in is the order of `data.foods`, with no separate field, and each line carries `name`,
+`quantity` and `unit`. A half-filled row (with two of the three fields filled) is rejected with a clear message
+instead of being saved incomplete. With the envelope's fixed-size padding, a long meal can go from 256 to 1024
+bytes of content, which is normal and needs no action: the only thing that does not fit is content larger than
+4092 bytes, and that case must fail with a clear message to the user and not with a generic `EnvelopeError`.
 
-## 9. Insulina
+## 9. Insulin
 
-A diferencia de la glucemia, un evento de insulina no es la observación de una magnitud sino el registro de
-una administración de medicación, y por eso **no lleva código LOINC**. No hay una tabla (tipo, unidad) →
-código que resolver, y no hace falta añadir una: es la diferencia deliberada con `Glucose::catalog()`
-(ADR 0006).
+Unlike blood glucose, an insulin event is not the observation of a quantity but the record of a medication
+administration, and that is why it **carries no LOINC code**. There is no (type, unit) → code table to resolve,
+and there is no need to add one: it is the deliberate difference from `Glucose::catalog()` (ADR 0006).
 
-El contenido en claro que produce `buildInsulinContent` (`resources/js/health/insulinPage.js`), con todos
-los campos opcionales presentes, es:
+The plaintext content produced by `buildInsulinContent` (`resources/js/health/insulinPage.js`), with every
+optional field present, is:
 
 ```json
 {"v": 1, "type": "insulin", "tz": "+02:00", "origin": "manual", "recordedBy": "self",
- "device": "Bolígrafo NovoPen", "note": "antes de comer",
+ "device": "NovoPen pen", "note": "before the meal",
  "data": {"insulinType": "rapid", "dose": "0.5", "unit": "[iU]",
           "product": "NovoRapid", "site": "abdomen"}}
 ```
 
-`insulinType` y `dose` son obligatorios: sin dosis la pantalla responde `Introduce la dosis.` y sin tipo,
-`Selecciona el tipo de insulina.`. `product` y `site` solo entran en `data` cuando la persona los rellena,
-con el mismo criterio que `mealContext` en la glucemia: ausencia significa ausencia, nunca cadena vacía
-guardada como si fuera un dato.
+`insulinType` and `dose` are mandatory: with no dose the screen responds `Introduce la dosis.` ("Enter the
+dose.") and with no type, `Selecciona el tipo de insulina.` ("Select the insulin type."). `product` and `site`
+only enter `data` when the person fills them in, on the same criterion as `mealContext` in blood glucose:
+absence means absence, never an empty string saved as if it were data.
 
-La dosis viaja siempre como cadena, con el punto como separador decimal (ADR 0004), y admite decimales
-porque media unidad es una dosis real en pacientes pediátricos. La unidad es el código UCUM de la unidad
-internacional de insulina, `[iU]`, verificado contra unitsofmeasure.org, y es hoy la única que expone el
-catálogo: el desplegable de unidad se muestra pero no se deja editar, porque no existe otra opción entre
-la que elegir.
+The dose always travels as a string, with the dot as the decimal separator (ADR 0004), and it admits decimals
+because half a unit is a real dose in pediatric patients. The unit is the UCUM code of the insulin international
+unit, `[iU]`, verified against unitsofmeasure.org, and it is the only one the catalog exposes today: the unit
+dropdown is shown but cannot be edited, because there is no other option to choose from.
 
-El producto va en texto libre, y el motivo está en el ADR 0006: "rápida", "lenta" o "mixta" no es un código
-de medicamento y el formato de exportación exige uno, así que el nombre comercial (`NovoRapid`, `Lantus`,
-`Humalog Mix 25`) es lo único que permite resolverlo después.
+The product is free text, and the reason is in ADR 0006: "rapid", "long-acting" or "mixed" is not a drug code
+and the export format requires one, so the brand name (`NovoRapid`, `Lantus`, `Humalog Mix 25`) is the only
+thing that lets it be resolved later.
 
-El tipo es un token estable de `InsulinType` (`App\Catalog\InsulinType`): `rapid`, `long` y `mixed`, sin
-opción preseleccionada en el desplegable, a diferencia del método de glucemia, porque confundir rápida con
-lenta es un error clínico serio. La zona de inyección es un token estable de `InjectionSite`
-(`App\Catalog\InjectionSite`): `abdomen`, `thigh`, `glute` y `arm`, opcional y sin valor preseleccionado,
-con el mismo criterio que el contexto de comida de la glucemia. Los dos vocabularios quedan congelados en
-cuanto exista el primer sobre real: añadir un caso nuevo es seguro, renombrar o eliminar uno existente no
-lo es.
+The type is a stable token from `InsulinType` (`App\Catalog\InsulinType`): `rapid`, `long` and `mixed`, with no
+preselected option in the dropdown, unlike the blood glucose method, because confusing rapid with long-acting is
+a serious clinical error. The injection site is a stable token from `InjectionSite`
+(`App\Catalog\InjectionSite`): `abdomen`, `thigh`, `glute` and `arm`, optional and with no preselected value, on
+the same criterion as the meal context in blood glucose. Both vocabularies are frozen the moment the first real
+envelope exists: adding a new case is safe, renaming or removing an existing one is not.
 
-`origin` no se pregunta en el formulario, igual que en el resto de pantallas (sección 5): hoy no existe
-ninguna integración con ningún aparato en esta pantalla, así que la entrada es siempre manual y
-`buildCommonEventFields` lo fija a `manual` sin mostrar ningún control. `device`, en cambio, sí se
-pregunta, y aquí es el bolígrafo o la bomba con la que se puso la dosis, información útil incluso con
-entrada manual.
+`origin` is not asked on the form, the same as on every other screen (section 5): there is no integration with
+any device on this screen today, so entry is always manual and `buildCommonEventFields` fixes it to `manual`
+without showing any control. `device`, in contrast, is asked, and here it is the pen or the pump the dose was
+given with, useful information even with manual entry.
 
-Una dosis no es una magnitud continua como la glucemia: no hay un valor "entre" dos inyecciones. Por eso el
-historial se agrupa por día de calendario local y tipo de insulina, sumando la dosis total de cada tipo
-(`groupInsulinByDay`), y se pinta con una gráfica de barras, nunca de líneas, que sugeriría una continuidad
-que no existe. El día se calcula con el desfase `tz` con el que se registró cada evento, no con la zona
-horaria del dispositivo que abre la pantalla.
+A dose is not a continuous quantity like blood glucose: there is no value "between" two injections. That is why
+the history is grouped by local calendar day and insulin type, summing the total dose of each type
+(`groupInsulinByDay`), and drawn with a bar chart, never a line chart, which would suggest a continuity that
+does not exist. The day is computed with the `tz` offset each event was recorded with, not with the time zone of
+the device that opens the screen.
 
-El campo de dosis del formulario es hoy un `<input type="text" inputmode="decimal">`, y `buildInsulinContent`
-solo comprueba que no esté vacío. Esto difiere del valor de glucemia y de sistólica, diastólica y pulso, que
-sí usan `numericValue.js` (`type="number"`, `step="any"`, tope de dos decimales y normalización de la coma
-a punto antes de cifrar). Con un campo de texto se puede teclear `7,8` o `7.8`, la misma ambigüedad de
-separador decimal que `numericValue.js` existe para evitar en el resto de valores de medida, y aquí no hay
-guardarraíl equivalente delante de la dosis. Es una discrepancia entre pantallas que esta spec se limita a
-describir, no una decisión tomada; queda como pregunta abierta (sección 11).
+The form's dose field is today an `<input type="text" inputmode="decimal">`, and `buildInsulinContent` only
+checks that it is not empty. This differs from the blood glucose value and from systolic, diastolic and pulse,
+which do use `numericValue.js` (`type="number"`, `step="any"`, a two-decimal limit and normalization of the
+comma to a dot before encrypting). With a text field you can type `7,8` or `7.8`, the same decimal separator
+ambiguity that `numericValue.js` exists to avoid for every other measurement value, and here there is no
+equivalent guardrail in front of the dose. It is a discrepancy between screens that this spec merely describes,
+not a decision taken; it stays as an open question (section 11).
 
-## 10. Criterios de aceptación
+## 10. Acceptance criteria
 
-* Guardar un evento con microsegundos distintos de cero, releerlo por el mismo método y comprobar que la
-  cadena canónica de datos asociados es idéntica byte a byte. Es el test obligatorio del ADR 0006 y sin él
-  el fallo aparece en producción como corrupción sin causa aparente.
-* Por cada combinación de tipo y versión existe un payload cifrado de prueba congelado en el repositorio
-  que integración continua descifra y valida. Ninguno se borra nunca, aunque el tipo evolucione.
-* El contexto de un evento se compara contra su cadena literal esperada en un test, no solo contra el
-  resultado de volver a llamar a la misma función. Un test que compara la función consigo misma no detecta
-  un cambio de plantilla.
-* `canonicalDate` trunca y no redondea: una entrada con nueve dígitos de fracción produce los seis primeros
-  y no un redondeo. Una cadena sin desfase se rechaza. `2026-02-30` se rechaza en lugar de convertirse en
-  marzo.
-* Un sobre manipulado en cualquier byte de la cabecera (bandera, identificador de clave, sal, nonce) falla
-  al abrirse. Un sobre válido movido a otra fecha o a otro usuario también falla.
-* `EnvelopeValidator::isValid` acepta exactamente 336, 1104 y 4176 bytes y rechaza cualquier otro tamaño,
-  el padding de base64 y un prefijo distinto de `v1.`.
-* `storeEvent` rechaza un sobre inválido y una fecha no canónica sin escribir en la base de datos,
-  comprobado contando filas después del intento.
-* `fetchEvents` respeta el techo de 500 aunque se le pida más, y devuelve al menos 1 aunque se le pida 0 o
-  un número negativo.
-* El nombre del método que llama el cliente coincide con el que expone la página. Un renombrado en PHP sin
-  su contraparte en JavaScript deja la pantalla guardando contra un método inexistente, y ningún test de
-  PHP lo detecta.
-* Guardar una glucemia sin tocar el desplegable de contexto de comida produce un payload sin la clave
-  `mealContext`, no con `fasting` ni con cadena vacía.
-* Guardar una glucemia con un método y una unidad sin código LOINC falla de forma explícita, sin caer en
-  ningún código por defecto.
-* Un evento cuyo sobre no abre no rompe la pantalla: el resto del histórico se sigue mostrando y el fallo
-  se cuenta y se avisa.
-* Un contenido de más de 4092 bytes produce un mensaje comprensible al usuario, no una excepción genérica.
-* Guardar una insulina sin indicar producto ni zona de inyección produce un payload cuyo `data` no tiene las
-  claves `product` ni `site`, no con cadena vacía.
-* Guardar una insulina sin tipo o sin dosis falla con el mensaje correspondiente
-  (`Selecciona el tipo de insulina.` o `Introduce la dosis.`) sin escribir en la base de datos.
+* Save an event with non-zero microseconds, read it back through the same method and check that the canonical
+  associated data string is byte-for-byte identical. It is the mandatory test from ADR 0006 and without it the
+  failure shows up in production as corruption with no apparent cause.
+* For every combination of type and version there is a frozen test encrypted payload in the repository that
+  continuous integration decrypts and validates. None is ever deleted, even if the type evolves.
+* The event context is compared against its expected literal string in a test, not just against the result of
+  calling the same function again. A test that compares the function with itself does not detect a template
+  change.
+* `canonicalDate` truncates and does not round: an input with nine fraction digits produces the first six and
+  not a rounding. A string with no offset is rejected. `2026-02-30` is rejected instead of turning into March.
+* An envelope tampered with in any header byte (flag, key identifier, salt, nonce) fails to open. A valid
+  envelope moved to another date or another user fails too.
+* `EnvelopeValidator::isValid` accepts exactly 336, 1104 and 4176 bytes and rejects any other size, base64
+  padding, and a prefix other than `v1.`.
+* `storeEvent` rejects an invalid envelope and a non-canonical date without writing to the database, checked by
+  counting rows after the attempt.
+* `fetchEvents` respects the cap of 500 even when asked for more, and returns at least 1 even when asked for 0
+  or a negative number.
+* The name of the method the client calls matches the one the page exposes. A rename in PHP without its
+  counterpart in JavaScript leaves the screen saving against a method that does not exist, and no PHP test
+  catches it.
+* Saving a blood glucose reading without touching the meal context dropdown produces a payload with no
+  `mealContext` key, not one with `fasting` or with an empty string.
+* Saving a blood glucose reading with a method and a unit that have no LOINC code fails explicitly, without
+  falling back to any default code.
+* An event whose envelope fails to open does not break the screen: the rest of the history keeps being shown and
+  the failure is counted and reported.
+* Content larger than 4092 bytes produces a message the user can understand, not a generic exception.
+* Saving an insulin record without stating product or injection site produces a payload whose `data` has no
+  `product` or `site` keys, not ones with an empty string.
+* Saving an insulin record with no type or no dose fails with the corresponding message
+  (`Selecciona el tipo de insulina.` or `Introduce la dosis.`) without writing to the database.
 
-## 11. Preguntas abiertas
+## 11. Open questions
 
-1. `/min` o `{beats}/min` para la frecuencia cardiaca. El ADR 0005 declara `/min` y no es erróneo, es la
-   forma sin anotar; `{beats}/min` es la unidad de ejemplo del propio LOINC. Decidir uno y que el ADR, el
-   catálogo y esta spec digan lo mismo.
-2. Vocabulario ordinal de la tira de orina (sección 6.3), y si el código `25428-4` entra ya en el catálogo
-   o espera a que exista la pantalla.
-3. Qué escribe `origin` el día que exista una importación desde un aparato, y si esa importación reutiliza
-   estos mismos métodos de transporte o necesita los suyos. Mientras no exista, `origin` es `manual` en
-   todos los eventos y el campo no aporta nada, pero se guarda porque después no se recupera.
-4. Si la dosis de insulina debe validarse con el mismo guardarraíl que el resto de valores de medida
-   (`numericValue.js`, tope de dos decimales y coma normalizada a punto) en vez de con un campo de texto sin
-   más comprobación que "no vacío" (sección 9). Es el campo de mayor riesgo de toda la aplicación, una dosis
-   mal leída es una dosis mal puesta, y hoy es el único valor numérico del MVP sin ese guardarraíl.
+1. `/min` or `{beats}/min` for heart rate. ADR 0005 declares `/min` and that is not wrong, it is the unannotated
+   form; `{beats}/min` is LOINC's own example unit. Pick one and make the ADR, the catalog and this spec say the
+   same thing.
+2. The ordinal vocabulary of the urine test strip (section 6.3), and whether the code `25428-4` enters the
+   catalog now or waits until the screen exists.
+3. What `origin` writes the day an import from a device exists, and whether that import reuses these same
+   transport methods or needs its own. While it does not exist, `origin` is `manual` on every event and the
+   field adds nothing, but it is stored because it cannot be recovered afterwards.
+4. Whether the insulin dose should be validated with the same guardrail as every other measurement value
+   (`numericValue.js`, a two-decimal limit and the comma normalized to a dot) instead of with a text field
+   checked for nothing beyond "not empty" (section 9). It is the highest-risk field in the whole application, a
+   misread dose is a misgiven dose, and today it is the only numeric value in the MVP without that guardrail.

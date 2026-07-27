@@ -1,146 +1,137 @@
 # myphr
 
-Una historia de salud personal (PHR) cifrada de extremo a extremo.
+An end-to-end encrypted personal health record (PHR).
 
-## Qué es un PHR, y por qué no un EMR ni un EHR
+## What a PHR is, and why not an EMR or an EHR
 
-Los tres guardan datos de salud, pero se diferencian en quién manda. Un EMR es
-el registro de un centro concreto, y un EHR el que comparten varios
-profesionales. Un **PHR lo gestiona la propia persona**. La distinción está bien
-explicada en [Orion Health, "EMR vs EHR vs PHR"][orion-phr].
+All three store health data, but they differ in who is in charge. An EMR is the record of one specific
+facility, and an EHR is the one several professionals share. A **PHR is managed by the person themselves**.
+The distinction is well explained in [Orion Health, "EMR vs EHR vs PHR"][orion-phr].
 
 | | PHR |
 |---|---|
-| Propósito | Seguimiento de salud gestionado por el paciente |
-| Titularidad | Del paciente |
-| Alcance | Lo que el paciente decide incluir |
-| Compartición | La controla el paciente |
-| Mejor uso | Bienestar personal y poder explicar la propia salud |
+| Purpose | Patient-managed health tracking |
+| Ownership | The patient's |
+| Scope | Whatever the patient decides to include |
+| Sharing | Controlled by the patient |
+| Best use | Personal wellness and being able to explain your own health |
 
-Esas filas son la razón de las decisiones técnicas del proyecto, no una
-declaración de intenciones.
+Those rows are the reason for the project's technical decisions, not a statement of intent.
 
-Si los datos son del paciente, el servidor no tiene por qué poder leerlos. Por
-eso todo se cifra en el navegador con una clave que se deriva de la contraseña
-del usuario y que nunca llega al servidor: ni la contraseña, ni las claves, ni
-los datos en claro. La autenticación usa OPAQUE (RFC 9807), que permite
-autenticar sin enviar la contraseña. Ver [OPAQUE.md](OPAQUE.md).
+If the data belongs to the patient, the server has no business being able to read it. That is why everything
+is encrypted in the browser with a key derived from the user's password that never reaches the server:
+not the password, not the keys, not the plaintext data. Authentication uses OPAQUE (RFC 9807), which
+authenticates without sending the password. See [OPAQUE.md](OPAQUE.md).
 
-La compartición con profesionales **no está implementada todavía**, pero ya está
-diseñada en el
-[ADR 0011](adr/0011-shared-clipping-for-professionals.md): un recorte cifrado en
-el navegador, un enlace con la clave en el fragmento y un PIN corto que el
-servidor verifica en línea con contador de intentos. Con quién y qué se comparte
-son decisiones criptográficas y no permisos en una tabla, porque el servidor no
-puede conceder acceso a algo que no sabe leer.
+Sharing with professionals is **not implemented yet**, but it is already designed in
+[ADR 0011](adr/0011-shared-clipping-for-professionals.md): a clipping encrypted in the browser, a link
+with the key in the fragment, and a short PIN the server verifies online with an attempt counter. Who you
+share with and what you share are cryptographic decisions, not permissions in a table, because the server
+cannot grant access to something it cannot read.
 
-## Para qué sirve en la práctica
+## What it is for in practice
 
-El caso que perseguimos es el seguimiento que el médico pide y el paciente
-sostiene: tensión, glucosa, síntomas, adherencia a un tratamiento. El paciente
-lo recoge en su día a día y, en la consulta, lo enseña ya masticado: promedios,
-valores extremos y tendencias señaladas, para que la conversación empiece donde
-importa en lugar de gastarse en interpretar una lista de números.
+The case we are after is the tracking the doctor asks for and the patient keeps up: blood pressure, blood
+glucose, symptoms, sticking to a treatment. The patient collects it day to day and, at the appointment,
+shows it already chewed over: means, extremes and flagged trends, so the conversation starts where it
+matters instead of being spent interpreting a list of numbers.
 
-En la primera versión eso se enseña desde la pantalla del propio paciente. El
-envío de datos al profesional llegará después.
+In the first version this is shown from the patient's own screen. Sending data to the professional comes
+later.
 
-## Vocabulario clínico
+## Clinical vocabulary
 
-La interfaz usa etiquetas propias escritas para pacientes, en inglés primero y
-castellano después. Cada concepto lleva por debajo su código estándar: [LOINC][loinc]
-para lo que se mide (tensión, glucosa, peso) y [SNOMED CT][snomed-docs] para lo
-que se encuentra (síntomas, hallazgos), de forma que paciente y médico se
-refieran a lo mismo aunque usen palabras distintas. El [glosario
-oficial][snomed-glossary] define los términos del estándar, y la decisión con
-su análisis de licencias está en el
+The interface uses our own patient-facing labels, English first and Spanish second. Each
+concept carries its standard code underneath: [LOINC][loinc] for what is measured (blood pressure, blood
+glucose, weight) and [SNOMED CT][snomed-docs] for what is found (symptoms, findings), so that patient and
+doctor refer to the same thing even when they use different words. The [official glossary][snomed-glossary]
+defines the standard's terms, and the decision with its licensing analysis is in
 [ADR 0005](adr/0005-clinical-vocabulary-loinc-snomed.md).
 
-Todavía **no soportamos HL7 ni FHIR**. Son cosas distintas y compatibles: HL7 y
-FHIR definen cómo viajan los datos entre sistemas, los vocabularios definen qué
-significan ([Orion Health, "HL7 vs FHIR vs SNOMED CT"][orion-fhir]). Guardar
-los códigos desde el primer dato es lo que hará viable el transporte después.
+We **don't support HL7 or FHIR** yet. They are different things, and compatible ones: HL7 and FHIR define
+how data travels between systems, vocabularies define what it means ([Orion Health, "HL7 vs FHIR vs
+SNOMED CT"][orion-fhir]). Storing the codes from the very first record is what will make the transport
+viable later.
 
-## Cómo está montado
+## How it is put together
 
-Es una arquitectura invertida respecto a lo habitual, y entenderlo así aclara casi todo lo demás:
-**Livewire no es el dueño del estado, es un transporte.** El estado real vive en Alpine, en el
-navegador. El porqué de cada capa está en su ADR; aquí solo el mapa.
+The architecture is inverted compared to the usual one, and seeing it that way clears up almost everything
+else: **Livewire is not the owner of the state, it's a transport.** The real state lives in Alpine, in the
+browser. The why of each layer is in its ADR; here is just the map.
 
-**Filament** pone la carcasa: navegación, tema, modo oscuro y las pantallas de acceso. El buscador
-global está desactivado a propósito, porque resolvería en servidor sobre datos cifrados: no
-encontraría nada y solo enviaría al servidor lo que la persona teclea. Todo se configura en
-`PhrPanelProvider` (ADR [0001](adr/0001-ui-stack-livewire-filament-alpine.md)).
+**Filament** provides the shell: navigation, theme, dark mode and the login screens. Global search is
+disabled on purpose, because it would resolve on the server over encrypted data: it would find nothing and
+would only send the server what the person types. It is all configured in `PhrPanelProvider`
+(ADR [0001](adr/0001-ui-stack-livewire-filament-alpine.md)).
 
-**Livewire** solo transporta. El texto cifrado entra como argumento de un método y sale como valor de
-retorno, **nunca como propiedad del componente**: una propiedad pública acaba en el *snapshot*, que
-viaja al servidor y se queda allí. Hay un guardarraíl que lo intercepta y tests de arquitectura que
-fallan si alguien lo intenta (ADR [0002](adr/0002-encrypted-data-flow-livewire-alpine-filament.md)).
+**Livewire** only transports. Ciphertext goes in as a method argument and comes out as a return value,
+**never as a component property**: a public property ends up in the *snapshot*, which travels to the server
+and stays there. A guardrail intercepts it, and architecture tests fail if anyone tries
+(ADR [0002](adr/0002-encrypted-data-flow-livewire-alpine-filament.md)).
 
-**Alpine** es el dueño de todo lo que importa: guarda los eventos descifrados en memoria, cifra antes
-de subir, descifra al bajar y construye el DOM. Cada pantalla declara su componente en `x-data`, y
-todos se registran en `resources/js/app.js`. Si uno falta ahí, la pantalla se pinta y no responde,
-**sin ningún error visible**: es el fallo silencioso que más veces ha mordido a este proyecto.
+**Alpine** owns everything that matters: it keeps the decrypted events in memory, encrypts before
+uploading, decrypts on the way down and builds the DOM. Each screen declares its component in `x-data`, and
+they all register in `resources/js/app.js`. If one is missing there, the screen renders and doesn't respond,
+**with no visible error**: it's the silent failure that has bitten this project most often.
 
-**El servidor** hace tres cosas y ninguna implica leer datos clínicos: autentica, autoriza, y guarda
-y pagina sobres opacos. De un evento solo ve `user_id`, `occurred_at` e `id` (ADR
-[0006](adr/0006-encrypted-event-model.md)). De ahí salen dos consecuencias que explican media
-aplicación: **puede filtrar por fecha, y no puede filtrar por tipo**.
+**The server** does three things, and none of them involves reading clinical data: it authenticates, it
+authorizes, and it stores and paginates opaque envelopes. Of an event it only sees `user_id`, `occurred_at`
+and `id` (ADR [0006](adr/0006-encrypted-event-model.md)). Two consequences follow that explain half the
+application: **it can filter by date, and it cannot filter by type**.
 
-### La frontera entre Livewire y Alpine
+### The boundary between Livewire and Alpine
 
-Es la parte delicada. Livewire hace *morph* del DOM en cada petición, así que borraría lo que Alpine
-haya escrito. Hay dos defensas, y hacen falta las dos:
+This is the delicate part. Livewire *morphs* the DOM on every request, so it would wipe out whatever Alpine
+has written. There are two defenses, and you need both:
 
-- `wire:ignore` con un `wire:key` **estable** en las regiones que escribe Alpine.
-- Y la trampa: **un `@island` no basta**. El servidor lo reemite en cada petición y borra lo que
-  hubiera dentro. Por eso los lienzos de las gráficas viven *fuera* de los islands. Si algún día una
-  pantalla pierde su gráfica tras cargar, esto es lo primero que hay que mirar.
+- `wire:ignore` with a **stable** `wire:key` on the regions Alpine writes.
+- And the trap: **an `@island` is not enough**. The server re-emits it on every request and wipes whatever
+  was inside. That is why the chart canvases live *outside* the islands. If some day a screen loses its
+  chart after loading, this is the first thing to look at.
 
-### La clave maestra y la navegación
+### The master key and navigation
 
-`auth/keyring.js` se importa **el primero** en `app.js`, que se carga en el `<head>`. La clave vive en
-el ámbito de ese módulo. Filament navega como SPA con `wire:navigate`, que sustituye el `<body>` pero
-**no vuelve a evaluar los módulos ya cargados**: ese es el mecanismo entero por el que la clave
-sobrevive al cambiar de pantalla y muere al cerrar la pestaña (ADR
-[0003](adr/0003-master-key-survival-in-browser.md)).
+`auth/keyring.js` is imported **first** in `app.js`, which loads in the `<head>`. The key lives in that
+module's scope. Filament navigates like an SPA with `wire:navigate`, which replaces the `<body>` but
+**does not re-evaluate modules that are already loaded**: that is the whole mechanism by which the key
+survives a screen change and dies when the tab closes
+(ADR [0003](adr/0003-master-key-survival-in-browser.md)).
 
-El mismo mecanismo tiene una cara menos amable: `wire:navigate` tampoco actualiza los atributos del
-`<html>`, así que el idioma se leía una vez y se quedaba congelado. Ahora se relee en cada navegación
-de un marcador que va en el `<body>`.
+The same mechanism has a less friendly side: `wire:navigate` doesn't update the `<html>` attributes either,
+so the language was read once and stayed frozen. It is now re-read on every navigation from a marker that
+goes in the `<body>`.
 
-### Cuándo un método de Livewire y cuándo un endpoint propio
+### When a Livewire method and when a dedicated endpoint
 
-Es la pregunta que aparece al añadir cualquier funcionalidad, y la regla es:
+This is the question that shows up whenever you add any feature, and the rule is:
 
-> **Livewire para el plano de datos dentro de una pantalla autenticada. Endpoint propio para el
-> protocolo criptográfico, para lo que tenga semántica HTTP o límite de intentos propios, y para lo
-> que no tenga sesión.**
+> **Livewire for the data plane inside an authenticated screen. A dedicated endpoint for the cryptographic
+> protocol, for anything with HTTP semantics or its own attempt limit, and for anything with no session.**
 
-Con `$wire` van `storeEvent` y `fetchEvents`: el componente ya está montado, la sesión existe y la
-autorización se resolvió al entrar en la pantalla.
+`storeEvent` and `fetchEvents` go through `$wire`: the component is already mounted, the session exists and
+authorization was resolved on entering the screen.
 
-Con endpoint propio va todo lo demás, por cuatro motivos distintos. **Lo anterior a que haya sesión**,
-como OPAQUE, que además exige errores deliberadamente indistinguibles entre contraseña incorrecta,
-cuenta inexistente y handshake caducado. **Lo que necesita semántica HTTP**, como el guardado de
-ajustes, que usa `If-Match` y responde 412 o 428. **Lo que vive fuera del panel**, como la pantalla
-del profesional, que no tiene sesión ni cookies (ADR
-[0011](adr/0011-shared-clipping-for-professionals.md)). Y **lo que necesita limitar intentos por su
-cuenta**: todas las llamadas de Livewire pasan por un único endpoint, así que no se puede acotar el
-login sin acotar también el guardado de una glucemia.
+Everything else goes through a dedicated endpoint, for four different reasons. **What comes before there is
+a session**, like OPAQUE, which also requires deliberately indistinguishable errors between a wrong
+password, a nonexistent account and an expired handshake. **What needs HTTP semantics**, like saving
+settings, which uses `If-Match` and responds 412 or 428. **What lives outside the panel**, like the
+professional's screen, which has neither session nor cookies
+(ADR [0011](adr/0011-shared-clipping-for-professionals.md)). And **what needs its own rate limiting**: every
+Livewire call goes through a single endpoint, so you can't limit login without also limiting saving a blood
+glucose reading.
 
-Una consecuencia de esto: el enrutador SPA de Filament intentaría meter en el `<body>` la respuesta de
-cualquier URL del origen, y con un endpoint que devuelve JSON pintaría el JSON en pantalla. Por eso
-`PhrPanelProvider` declara excepciones explícitas para `/phr/auth/*`, `/phr/logout` y `/phr/settings`.
-La página de perfil no está en esa lista a propósito: sirve HTML y debe navegarse como el resto.
+One consequence of this: Filament's SPA router would try to put the response of any same-origin URL into the
+`<body>`, and with an endpoint that returns JSON it would paint the JSON on screen. That is why
+`PhrPanelProvider` declares explicit exceptions for `/phr/auth/*`, `/phr/logout` and `/phr/settings`. The
+profile page is not on that list on purpose: it serves HTML and should be navigated like the rest.
 
-## Documentación
+## Documentation
 
-- [OPAQUE.md](OPAQUE.md): autenticación por contraseña sin enviar la contraseña.
-- [adr/](adr/): decisiones de arquitectura, con su contexto y sus renuncias.
-- [specs/](specs/): el detalle de implementación de cada funcionalidad, apoyado en esos ADR. Ahí
-  vive el contrato criptográfico de la captura de eventos, que hay que respetar al pie de la letra
-  porque se congela con el primer dato real.
+- [OPAQUE.md](OPAQUE.md): password authentication without sending the password.
+- [adr/](adr/): architecture decisions, with their context and their trade-offs.
+- [specs/](specs/): the implementation detail of each feature, resting on those ADRs. That is where the
+  cryptographic contract for tracking event capture lives, and it has to be respected to the letter because
+  it is frozen with the first real record.
 
 [orion-phr]: https://orionhealth.com/us/blog/emr-vs-ehr-vs-phr-whats-the-difference-and-why-does-it-matter/
 [orion-fhir]: https://orionhealth.com/us/blog/hl7-vs-fhir-vs-snomed-ct/

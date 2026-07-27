@@ -1,236 +1,234 @@
-# Spec 0001: Alta de cuentas y arranque de sesión
+# Spec 0001: Account provisioning and session bootstrap
 
 * Related ADR(s): `docs/adr/0002-encrypted-data-flow-livewire-alpine-filament.md`,
   `docs/adr/0003-master-key-survival-in-browser.md`, `docs/adr/0004-client-crypto-and-data-format.md`,
   `docs/adr/0007-encrypted-user-configuration.md`, `docs/adr/0009-user-provisioning-and-session-lifecycle.md`,
   `docs/OPAQUE.md`
 
-Esta spec depende de los ADR anteriores y de `docs/OPAQUE.md` como lectura previa: no repite su
-justificación, solo la aplica. Si un punto de esta spec y un ADR no coinciden, el ADR manda y esta spec
-tiene un error que corregir.
+This spec depends on the previous ADRs and on `docs/OPAQUE.md` as prior reading: it does not repeat their
+rationale, it only applies it. If a point in this spec and an ADR disagree, the ADR wins and this spec has an
+error to fix.
 
-## 1. Alcance
+## 1. Scope
 
-Cubre todo lo que ocurre desde que un administrador ejecuta el comando de Artisan que emite un enlace
-hasta que la persona invitada está dentro del panel, con su clave maestra (User Master Key, UMK) en
-memoria y lista para cifrar y descifrar datos.
+It covers everything that happens from the moment an administrator runs the Artisan command that issues a link
+until the invited person is inside the panel, with their master key (User Master Key, UMK) in memory and ready
+to encrypt and decrypt data.
 
-Incluye: el arranque del servidor (`opaque:setup`), la emisión de enlaces de registro, el registro público
-sin invitación, el establecimiento de la contraseña inicial y nacimiento de la UMK, el login posterior, la
-recuperación de la UMK tras una recarga de página, el bloqueo por inactividad y el cierre de sesión.
+It includes: server setup (`opaque:setup`), issuing registration links, public sign-up without an invitation,
+setting the initial password and the birth of the UMK, later logins, recovering the UMK after a page reload, the
+idle lock and logout.
 
-Queda fuera, de forma explícita:
+Explicitly out of scope:
 
-* **Cambio de contraseña** de alguien que recuerda la actual. Existe y funciona (rutas `password/*` del
-  panel, controladores `Auth\Opaque\PasswordChange*`, `tests/Feature/PasswordChangeTest.php`); lo describe
-  el ADR 0009 y esta spec no lo desarrolla porque no forma parte del arranque de sesión. La reemisión del
-  enlace, con la pérdida de historial que implica, queda solo para una contraseña **olvidada**.
-* **Recuperación de cuenta** sin contraseña ni enlace nuevo. No hay escrow en esta fase (ADR 0002).
-* **Compartición** de datos con un profesional u otro usuario. El identificador de clave del ADR 0004
-  reserva el hueco, pero no hay mecanismo que lo use todavía.
-* El **patrón de pantalla con datos cifrados** una vez el usuario está dentro del panel (islands, lotes
-  con cursor, componentes Alpine de una vista concreta). Eso es una spec propia, que se escribe cuando
-  exista la primera pantalla real.
+* **Password change** by someone who remembers the current one. It exists and works (`password/*` routes of the
+  panel, `Auth\Opaque\PasswordChange*` controllers, `tests/Feature/PasswordChangeTest.php`); ADR 0009 describes
+  it and this spec does not develop it because it is not part of session bootstrap. Reissuing the link, with the
+  loss of history it implies, is only for a **forgotten** password.
+* **Account recovery** with no password and no new link. There is no escrow in this phase (ADR 0002).
+* **Sharing** data with a professional or another user. The key identifier in ADR 0004 reserves the slot, but
+  nothing uses it yet.
+* The **pattern for screens with encrypted data** once the user is inside the panel (islands, cursor-paged
+  batches, Alpine components of a specific view). That is a spec of its own, written when the first real screen
+  exists.
 
-## 2. Historias de usuario
+## 2. User stories
 
-**Administrador que arranca el sistema.** Antes de que exista ningún usuario, alguien con acceso al
-servidor ejecuta `php artisan opaque:setup` una sola vez. El comando genera el material criptográfico
-estático del servidor y lo imprime por pantalla; la persona lo copia a la configuración del entorno. Sin
-este paso no se puede registrar a nadie.
+**Administrator starting the system up.** Before any user exists, someone with access to the server runs
+`php artisan opaque:setup` once. The command generates the static server key material and prints it to the
+screen; the person copies it into the environment configuration. Without this step nobody can be registered.
 
-**Administrador que da de alta a otra persona.** Un usuario ya registrado (el primero se crea con un
-comando de consola, los siguientes desde el panel) introduce el nombre y el email de una persona nueva.
-El sistema crea la fila de usuario, sin contraseña ni clave, y genera un enlace de un solo uso. El enlace
-se muestra en pantalla una sola vez; la aplicación nunca lo envía por correo. El administrador se lo hace
-llegar a la persona por el canal que elija.
+**Administrator creating another person's account.** An already registered user (the first one is created with a
+console command, the rest from the panel) enters the name and email of a new person. The system creates the user
+row, with no password and no key, and generates a single-use link. The link is shown on screen once; the
+application never sends it by email. The administrator gets it to the person through whatever channel they
+choose.
 
-**Persona que establece su contraseña.** Abre el enlace en su navegador, escribe una contraseña y su
-confirmación. El navegador ejecuta el registro OPAQUE, genera su UMK aleatoria, la envuelve y sube el
-resultado al servidor en una única operación. Si todo va bien, queda autenticada y dentro del panel sin
-un segundo formulario de login.
+**Person setting their password.** They open the link in their browser, type a password and its confirmation.
+The browser runs the OPAQUE registration, generates their random UMK, wraps it and uploads the result to the
+server in a single operation. If all goes well, they end up authenticated and inside the panel with no second
+login form.
 
-**Persona que se registra sin invitación.** Llega a la pantalla de acceso, pulsa el enlace de alta y
-escribe su nombre, su correo y una contraseña, sin ningún código de invitación. El navegador ejecuta el
-mismo registro OPAQUE que la persona invitada, con la diferencia de que no hay enlace que consumir: el
-nombre y el correo los aporta ella misma. Si el correo ya tiene cuenta, ve un mensaje que se lo dice, con
-un enlace directo a iniciar sesión, en vez de un error genérico que la deje sin saber qué hacer.
+**Person signing up without an invitation.** They reach the login screen, click the sign-up link and type their
+name, their email and a password, with no invitation code at all. The browser runs the same OPAQUE registration
+as the invited person, with the difference that there is no link to consume: they supply the name and the email
+themselves. If the email already has an account, they see a message saying so, with a direct link to log in,
+instead of a generic error that leaves them not knowing what to do.
 
-**Persona que vuelve a entrar.** Escribe su login y contraseña en la pantalla de login. El navegador
-ejecuta el login OPAQUE completo, recupera su UMK ya existente y entra al panel.
+**Person logging back in.** They type their login and password on the login screen. The browser runs the full
+OPAQUE login, recovers their existing UMK and enters the panel.
 
-**Persona que recarga la página.** Un F5, un error 419 o un despliegue a mitad de sesión no le piden la
-contraseña de nuevo: el navegador recupera la UMK a partir de un secreto ligado a su sesión de servidor,
-sin volver a derivar nada de la contraseña.
+**Person reloading the page.** An F5, a 419 error or a deployment mid-session do not ask for the password again:
+the browser recovers the UMK from a secret tied to their server session, without deriving anything from the
+password again.
 
-**Puesto que se queda desatendido.** Pasados quince minutos sin actividad, la sesión se cierra por
-completo, en servidor y en cliente. La siguiente persona que toque el teclado ve la pantalla de login, no
-un panel con datos de otra persona.
+**Workstation left unattended.** After fifteen minutes with no activity, the session is closed completely, on
+the server and on the client. The next person to touch the keyboard sees the login screen, not a panel with
+somebody else's data.
 
-## 3. Esquema de datos
+## 3. Data schema
 
-Todo lo que sigue asume que la clave primaria de `users` es **UUID (UUIDv7)**, decidido antes de escribir
-la primera migración. Es una decisión de proyecto, no de esta funcionalidad en concreto, pero es
-bloqueante para ella: el `user_id` entra en el dato asociado del AEAD y en la respuesta de
-`registration/start`, así que cambiar el tipo de clave después de cifrar el primer sobre invalida el AAD
-de todo el histórico. La forma que entra en la derivación y en el AAD es siempre la representación textual
-canónica en minúsculas del UUID, nunca sus bytes crudos (ADR 0004).
+Everything that follows assumes that the primary key of `users` is a **UUID (UUIDv7)**, decided before writing
+the first migration. It is a project decision, not one specific to this feature, but it blocks it: the `user_id`
+goes into the AEAD associated data and into the `registration/start` response, so changing the key type after
+encrypting the first envelope invalidates the AAD of the whole history. The form that goes into the derivation
+and into the AAD is always the canonical lowercase text representation of the UUID, never its raw bytes
+(ADR 0004).
 
-### 3.1 Columnas nuevas de `users`
+### 3.1 New columns on `users`
 
-`id`, UUID (UUIDv7), clave primaria: sustituye el `bigint` autoincremental actual.
+`id`, UUID (UUIDv7), primary key: replaces the current autoincrement `bigint`.
 
-`password`, `string` nullable: no se usa para autenticar. Se mantiene nullable por compatibilidad de
-framework; ver la limitación de `AuthenticateSession` en la sección 9.
+`password`, `string` nullable: not used to authenticate. It stays nullable for framework compatibility; see the
+`AuthenticateSession` limitation in section 9.
 
-`opaque_credential_identifier`, binario de 32 bytes, único, nullable:
-`HMAC-SHA-256(ENUM_KEY, normalize(login))`, calculado en el registro y reutilizado siempre
-(OPAQUE.md sección 13.1).
+`opaque_credential_identifier`, 32-byte binary, unique, nullable:
+`HMAC-SHA-256(ENUM_KEY, normalize(login))`, computed at registration and reused from then on (OPAQUE.md section
+13.1).
 
-`opaque_registration_record`, binario de 192 bytes, nullable: `client_public_key || masking_key ||
-envelope`, tal cual llega del cliente.
+`opaque_registration_record`, 192-byte binary, nullable: `client_public_key || masking_key || envelope`, exactly
+as it arrives from the client.
 
-`opaque_profile`, `varchar(96)` nullable: nombre completo del perfil (incluye los parámetros del KSF,
-ver ADR 0004 y OPAQUE.md sección 2).
+`opaque_profile`, `varchar(96)` nullable: full profile name (it includes the KSF parameters, see ADR 0004 and
+OPAQUE.md section 2).
 
-`opaque_registered_at`, timestamp nullable: se rellena al completar `registration/finish`. `NULL` es
-indistinguible de "cuenta inexistente" para efectos de la rama falsa del login (OPAQUE.md sección 13.3).
+`opaque_registered_at`, nullable timestamp: filled in when `registration/finish` completes. `NULL` is
+indistinguishable from "account does not exist" for the purposes of the login fake branch (OPAQUE.md section
+13.3).
 
-`encrypted_settings`, `text`, nullable en el esquema pero nunca vacío tras el alta: sobre cifrado único
-de configuración (ADR 0007). Se escribe con contenido vacío `{"v":1}` en el mismo alta, para que ningún
-usuario sea distinguible de otro por tener o no configuración.
+`encrypted_settings`, `text`, nullable in the schema but never empty after account creation: the single
+encrypted configuration envelope (ADR 0007). It is written with empty content `{"v":1}` during that same account
+creation, so that no user is distinguishable from another by having configuration or not.
 
-No se añade `email_verified_at` en el alta: el enlace lo entrega un administrador por un canal que la
-aplicación no controla, así que nadie ha demostrado control del buzón. Una columna que afirmara lo
-contrario acabaría usándose como si fuera cierto.
+`email_verified_at` is not added at account creation: the link is delivered by an administrator through a
+channel the application does not control, so nobody has proved control of the mailbox. A column claiming
+otherwise would end up being used as if it were true.
 
-La columna `name`, ya presente en el esquema base de Laravel y no nueva, se guarda en claro, sin cifrar.
-El identificador de login ya está en claro por necesidad, así que cifrarlo añadiría poca privacidad real y
-rompería el menú de usuario, los breadcrumbs y el listado de administración de Filament, que lo resuelven
-en servidor. Es una excepción consciente y acotada a la regla general de cifrar (ADR 0009), y no se
-extiende a ningún otro campo.
+The `name` column, already present in the Laravel base schema and not new, is stored in the clear, unencrypted.
+The login identifier is already in the clear out of necessity, so encrypting the name would add little real
+privacy and would break the user menu, the breadcrumbs and Filament's administration listing, which all resolve
+it on the server. It is a deliberate, narrowly scoped exception to the general rule of encrypting (ADR 0009),
+and it does not extend to any other field.
 
-`SQLite`, el driver por defecto de este proyecto, no tiene un tipo `BINARY(n)` real: `->binary()` genera
-un `BLOB` sin longitud. Las longitudes exactas (32, 192 bytes) se validan siempre en la capa de
-aplicación, nunca se dan por garantizadas por el esquema.
+`SQLite`, this project's default driver, has no real `BINARY(n)` type: `->binary()` generates a `BLOB` with no
+length. The exact lengths (32, 192 bytes) are always validated in the application layer, never taken as
+guaranteed by the schema.
 
-### 3.2 Tablas de OPAQUE
+### 3.2 OPAQUE tables
 
-**`opaque_registrations`** (registro pendiente, OPAQUE.md sección 14.2):
+**`opaque_registrations`** (pending registration, OPAQUE.md section 14.2):
 
-| Columna | Tipo |
+| Column | Type |
 |---|---|
-| `id` | UUID, primaria |
+| `id` | UUID, primary key |
 | `user_id` | UUID, fk |
-| `invitation_ref` | UUID, referencia al enlace de registro que lo originó |
-| `credential_identifier` | binario, 32 bytes |
+| `invitation_ref` | UUID, reference to the registration link that originated it |
+| `credential_identifier` | binary, 32 bytes |
 | `profile` | `varchar(96)` |
 | `expires_at` | timestamp |
 | `created_at` | timestamp |
 
-**`opaque_login_handshakes`** (estado de login en curso, OPAQUE.md sección 14.3):
+**`opaque_login_handshakes`** (state of a login in progress, OPAQUE.md section 14.3):
 
-| Columna | Tipo |
+| Column | Type |
 |---|---|
-| `id` | UUID, primaria |
-| `user_id` | UUID, nullable (null en el flujo falso) |
-| `state_ciphertext` | `text`, `ServerLoginState` cifrado con `Crypt` de Laravel |
-| `expires_at` | timestamp, TTL de 180 segundos |
+| `id` | UUID, primary key |
+| `user_id` | UUID, nullable (null in the fake flow) |
+| `state_ciphertext` | `text`, `ServerLoginState` encrypted with Laravel's `Crypt` |
+| `expires_at` | timestamp, 180-second TTL |
 | `created_at` | timestamp |
 
-Ambas tablas necesitan purga programada de filas caducadas (`opaque:prune-handshakes` o equivalente): cada
-`login/start` sin autenticar crea una fila, así que sin purga el crecimiento lo dirige cualquiera desde
-fuera.
+Both tables need scheduled pruning of expired rows (`opaque:prune-handshakes` or equivalent): every
+unauthenticated `login/start` creates a row, so without pruning the growth is driven by anyone from outside.
 
-### 3.3 Enlaces de registro
+### 3.3 Registration links
 
 **`user_registration_links`**:
 
-| Columna | Tipo |
+| Column | Type |
 |---|---|
-| `id` | UUID, primaria |
+| `id` | UUID, primary key |
 | `user_id` | UUID, fk |
-| `token_hash` | binario, 32 bytes, único (`sha256` del token en claro) |
+| `token_hash` | binary, 32 bytes, unique (`sha256` of the plaintext token) |
 | `expires_at` | timestamp |
 | `consumed_at` | timestamp, nullable |
-| `created_by` | UUID, nullable, fk a `users` (quién lo emitió, para auditoría) |
+| `created_by` | UUID, nullable, fk to `users` (who issued it, for auditing) |
 | `created_at` | timestamp |
 
-El token en claro nunca se persiste, solo su hash. La TTL es de 24 horas, decisión ya tomada, pasada como
-parámetro explícito del comando y no como valor por defecto oculto (ADR 0009).
+The plaintext token is never persisted, only its hash. The TTL is 24 hours, a decision already taken, passed as
+an explicit parameter of the command and not as a hidden default (ADR 0009).
 
-### 3.4 Sobres de clave: la UMK es de solo añadir
+### 3.4 Key envelopes: the UMK is append-only
 
-El sobre que envuelve la UMK **no vive en una columna de `users`**. Vive en su propia tabla, de solo
-añadir, porque reemitir un enlace nunca puede sobrescribir el sobre que la contraseña anterior sabía
-abrir: si lo hiciera, una pérdida de contraseña que era recuperable para quien la recordase dejaría de
-serlo (ADR 0009).
+The envelope that wraps the UMK **does not live in a column of `users`**. It lives in its own append-only table,
+because reissuing a link can never overwrite the envelope the previous password knew how to open: if it did, a
+lost password that was recoverable for whoever remembered it would stop being recoverable (ADR 0009).
 
 **`user_master_key_envelopes`**:
 
-| Columna | Tipo |
+| Column | Type |
 |---|---|
-| `id` | UUID, primaria |
+| `id` | UUID, primary key |
 | `user_id` | UUID, fk |
-| `envelope` | `text`, sobre cifrado con prefijo `v1.` (ADR 0004) |
+| `envelope` | `text`, encrypted envelope with the `v1.` prefix (ADR 0004) |
 | `created_at` | timestamp |
 | `retired_at` | timestamp, nullable |
 
-Solo hay como mucho una fila con `retired_at IS NULL` por usuario: es el sobre vigente. Emitir un enlace
-sobre una cuenta que ya tiene un sobre vigente exige confirmación explícita (no un "Sí" genérico, sino
-teclear el email de la cuenta) y, al completarse el registro, inserta una fila nueva y marca la anterior
-con `retired_at`. Esa guardia vive en el servicio que emite enlaces (`RegistrationLinks`), no en el
-comando ni en la acción de Filament: si viviera en dos sitios, uno de los dos acabaría sin ella, y el flag
-`--no-interaction` del comando se saltaría cualquier confirmación puesta solo en la interfaz.
+There is at most one row with `retired_at IS NULL` per user: it is the current envelope. Issuing a link for an
+account that already has a current envelope requires explicit confirmation (not a generic "Yes", but typing the
+account's email) and, when the registration completes, inserts a new row and marks the previous one with
+`retired_at`. That guard lives in the service that issues links (`RegistrationLinks`), not in the command or in
+the Filament action: if it lived in two places, one of the two would end up without it, and the command's
+`--no-interaction` flag would skip any confirmation placed only in the interface.
 
-### 3.5 Secretos de sesión
+### 3.5 Session secrets
 
-El secreto de sesión del ADR 0003 vive dentro de la propia carga útil de la sesión de Laravel, sin tabla
-ni columna dedicada. Se acuña al iniciar sesión, se guarda como un valor más de la sesión y queda
-protegido por el mismo almacén de servidor (base de datos o Redis) que protege el resto de su contenido.
+The session secret from ADR 0003 lives inside the Laravel session payload itself, with no dedicated table and no
+dedicated column. It is minted at login, stored as one more session value and protected by the same server store
+(database or Redis) that protects the rest of its content.
 
-Bloquear y cerrar sesión lo destruyen sin ningún mecanismo adicional: destruir la sesión de Laravel destruye
-su carga útil y con ella el secreto (ADR 0003). Lo que se pierde frente a una tabla propia es poder
-inspeccionar o revocar de forma selectiva la sesión criptográfica de alguien sin deserializar su carga
-útil: no hay fila que listar ni borrar aparte de la sesión entera. Es una pérdida aceptada a cambio de no
-mantener un esquema propio para un único valor.
+Locking and logging out destroy it with no extra mechanism: destroying the Laravel session destroys its payload
+and with it the secret (ADR 0003). What is lost compared to a table of its own is being able to inspect or
+selectively revoke somebody's cryptographic session without deserializing their payload: there is no row to list
+or delete apart from the whole session. It is a loss accepted in exchange for not maintaining a schema of its
+own for a single value.
 
-### 3.6 Qué se decide antes del primer usuario
+### 3.6 What is decided before the first user
 
-Tres cosas de esta sección son bloqueantes y no se pueden corregir después sin invalidar datos ya
-cifrados: el tipo UUID de `id` en `users`, la forma canónica del identificador de usuario en el AAD
-(minúsculas, textual), y la TTL de 24 horas del enlace de registro, ya decidida. Las tres deben quedar
-cerradas antes de ejecutar `opaque:setup` en un entorno con datos reales.
+Three things in this section are blocking and cannot be fixed later without invalidating already encrypted data:
+the UUID type of `id` on `users`, the canonical form of the user identifier in the AAD (lowercase, textual), and
+the 24-hour TTL of the registration link, already decided. All three must be settled before running
+`opaque:setup` in an environment with real data.
 
-## 4. Contrato HTTP
+## 4. HTTP contract
 
-Todas las rutas se montan a través del panel de Filament, no de `routes/web.php`: el panel ya da sesión,
-CSRF y el prefijo `/phr`. Las cuatro rutas de OPAQUE (registro y login) van en `$panel->routes()`, que se
-ejecuta fuera del grupo de middleware de autenticación. Las dos rutas de sesión (`session-secret` y
-`lock`) van en `$panel->authenticatedRoutes()`, que sí exige sesión autenticada: verificado que
-`routes()` corre fuera del grupo `getAuthMiddleware()` y `authenticatedRoutes()` dentro.
+All routes are mounted through the Filament panel, not through `routes/web.php`: the panel already provides the
+session, CSRF and the `/phr` prefix. The four OPAQUE routes (registration and login) go in `$panel->routes()`,
+which runs outside the authentication middleware group. The two session routes (`session-secret` and `lock`) go
+in `$panel->authenticatedRoutes()`, which does require an authenticated session: verified that `routes()` runs
+outside the `getAuthMiddleware()` group and `authenticatedRoutes()` inside it.
 
-Esto diverge del path que describe `docs/OPAQUE.md` sección 15 (que hablaba de `routes/web.php`), pero
-cumple la sustancia del requisito: grupo `web`, sesión y CSRF disponibles. `OPAQUE.md` queda pendiente de
-corrección en ese punto.
+This diverges from the path described in `docs/OPAQUE.md` section 15 (which talked about `routes/web.php`), but
+it meets the substance of the requirement: `web` group, session and CSRF available. `OPAQUE.md` is still pending
+correction on that point.
 
-Todas las respuestas llevan `Cache-Control: no-store`. El JavaScript del navegador envía el token CSRF y
-usa `credentials: 'same-origin'` en cada petición.
+Every response carries `Cache-Control: no-store`. The browser JavaScript sends the CSRF token and uses
+`credentials: 'same-origin'` on every request.
 
 ### 4.1 `POST /phr/auth/opaque/registration/start`
 
-Sin autenticar. Petición:
+Unauthenticated. Request:
 
 ```json
-{ "registrationRequest": "<base64url 32B>", "registrationToken": "<token del enlace>" }
+{ "registrationRequest": "<base64url 32B>", "registrationToken": "<link token>" }
 ```
 
-El token llega aquí y no antes: no hay una ruta de validación previa que lo consuma. La página de
-establecimiento de contraseña se sirve genérica (sin path de token, ver sección 7) y el navegador lee el
-token del fragmento de la URL (`#<token>`), que nunca viaja al servidor salvo dentro del cuerpo de esta
-petición.
+The token arrives here and not earlier: there is no prior validation route that consumes it. The
+password-setting page is served generically (with no token in the path, see section 7) and the browser reads the
+token from the URL fragment (`#<token>`), which never travels to the server except inside the body of this
+request.
 
-Respuesta 200:
+Response 200:
 
 ```json
 {
@@ -242,56 +240,56 @@ Respuesta 200:
 }
 ```
 
-`userId` es necesario aquí, y no solo al final del flujo, porque el cliente lo necesita para construir el
-dato asociado del AEAD antes de cifrar la UMK y la configuración en el paso 4 del orden criptográfico
-(sección 5). `serverPublicKey` permite el pinning que describe la sección 5.
+`userId` is needed here, and not only at the end of the flow, because the client needs it to build the AEAD
+associated data before encrypting the UMK and the configuration in step 4 of the cryptographic order (section
+5). `serverPublicKey` enables the pinning described in section 5.
 
-Token inválido, caducado o ya consumido: error genérico, mismo formato para los tres casos (evita
-delatar cuál de las tres cosas ocurrió).
+Invalid, expired or already consumed token: a generic error, the same shape for all three cases (this avoids
+giving away which of the three happened).
 
-Rate limiting: por IP y por hash del token.
+Rate limiting: by IP and by token hash.
 
 ### 4.2 `POST /phr/auth/opaque/registration/finish`
 
-Sin autenticar. Petición:
+Unauthenticated. Request:
 
 ```json
 {
   "registrationId": "<uuid>",
   "registrationRecord": "<base64url 192B>",
-  "wrappedUserMasterKey": "<sobre v1.>",
-  "encryptedSettings": "<sobre v1.>"
+  "wrappedUserMasterKey": "<v1. envelope>",
+  "encryptedSettings": "<v1. envelope>"
 }
 ```
 
-Una única transacción de base de datos: consume el `opaque_registrations` pendiente, consume el
-`user_registration_links` correspondiente, inserta la fila vigente en `user_master_key_envelopes`,
-escribe `encrypted_settings` y actualiza las columnas OPAQUE del usuario. No abre el sobre de la UMK, no
-guarda la `RegistrationResponse`, no guarda contraseñas.
+A single database transaction: it consumes the pending `opaque_registrations`, consumes the matching
+`user_registration_links`, inserts the current row into `user_master_key_envelopes`, writes `encrypted_settings`
+and updates the user's OPAQUE columns. It does not open the UMK envelope, it does not store the
+`RegistrationResponse`, it does not store passwords.
 
-**Idempotente.** Si la respuesta se pierde en la red pero la transacción ya se ejecutó en servidor, un
-reintento con el mismo `registrationId` no debe fallar de forma confusa ni duplicar filas: se detecta que
-el pendiente ya no existe y, si el usuario ya quedó registrado con ese mismo `registrationRecord`,
-responde éxito de nuevo en vez de un error genérico de "registro no encontrado". Ver sección 7 para el
-detalle del modo de fallo que esto cubre.
+**Idempotent.** If the response is lost on the network but the transaction already ran on the server, a retry
+with the same `registrationId` must not fail confusingly or duplicate rows: it detects that the pending row is
+gone and, if the user already ended up registered with that same `registrationRecord`, it responds with success
+again instead of a generic "registration not found" error. See section 7 for the detail of the failure mode this
+covers.
 
-Rate limiting: por IP y por hash del `registrationId`. No comparte limitador con `registration/start`,
-porque esta ruta no recibe el token del enlace: la clave por token sería la del valor vacío para todo el
-mundo, es decir, un único cubo compartido que cualquiera agota desde una IP para dejar sin alta a toda la
-instalación.
+Rate limiting: by IP and by hash of the `registrationId`. It does not share a limiter with `registration/start`,
+because this route does not receive the link token: the per-token key would be the one for the empty value for
+everybody, that is, a single shared bucket that anyone can exhaust from one IP to block sign-up for the whole
+installation.
 
 ### 4.3 `POST /phr/auth/opaque/login/start`
 
-Sin autenticar. Petición:
+Unauthenticated. Request:
 
 ```json
 { "login": "user@example.com", "startLoginRequest": "<base64url 96B>" }
 ```
 
-`login` solo localiza la cuenta, nunca entra en la criptografía. Rama real o rama falsa según OPAQUE.md
-sección 13, idénticas en forma y coste. Siempre HTTP 200 para mensajes estructuralmente válidos.
+`login` only locates the account, it never enters the cryptography. Real branch or fake branch per OPAQUE.md
+section 13, identical in shape and cost. Always HTTP 200 for structurally valid messages.
 
-Respuesta:
+Response:
 
 ```json
 {
@@ -301,107 +299,107 @@ Respuesta:
 }
 ```
 
-Rate limiting: por IP, por hash del login normalizado, y por la combinación de ambos. Nunca el email en
-claro como clave de la limitación.
+Rate limiting: by IP, by hash of the normalized login, and by the combination of both. Never the plaintext email
+as the rate limiting key.
 
 ### 4.4 `POST /phr/auth/opaque/login/finish`
 
-Sin autenticar hasta que termina. Petición:
+Unauthenticated until it finishes. Request:
 
 ```json
 { "handshakeId": "<uuid>", "finishLoginRequest": "<base64url 64B>" }
 ```
 
-Consume el handshake **antes** de validar el MAC (invertir el orden abre un oráculo de reintento sobre el
-mismo handshake). Fallo, en cualquiera de sus formas (MAC inválido, handshake caducado, handshake
-reutilizado, usuario inexistente): un único error genérico, sin sesión creada.
+It consumes the handshake **before** validating the MAC (inverting the order opens a retry oracle over the same
+handshake). Failure, in any of its forms (invalid MAC, expired handshake, reused handshake, non-existent user):
+a single generic error, with no session created.
 
-Éxito con usuario real:
+Success with a real user:
 
 ```php
 Auth::guard('web')->login($user, remember: false);
 $request->session()->regenerate();
 ```
 
-seguido de la acuñación del secreto de sesión, después de regenerar el id de sesión, nunca antes (ver la
-tabla de la sección 5: hacerlo antes lo liga a un id de sesión que desaparece en la regeneración).
+followed by minting the session secret, after regenerating the session id, never before (see the table in
+section 5: doing it before ties it to a session id that disappears in the regeneration).
 
-Respuesta 200:
+Response 200:
 
 ```json
 {
-  "userId": "<uuid del usuario>",
-  "redirect": "<url intended o el panel>",
-  "csrf": "<token nuevo>",
+  "userId": "<user uuid>",
+  "redirect": "<intended url or the panel>",
+  "csrf": "<new token>",
   "sessionSecret": "<base64url 32B>",
-  "encryptedUserMasterKey": "<sobre v1. vigente>",
-  "encryptedSettings": "<sobre v1.>"
+  "encryptedUserMasterKey": "<current v1. envelope>",
+  "encryptedSettings": "<v1. envelope>"
 }
 ```
 
-`userId` es imprescindible, no informativo: entra en el dato asociado de los dos sobres que vienen en
-esta misma respuesta (paso 9 de la sección 5), así que sin él el cliente no puede abrirlos. La sección 4.1
-lo devuelve por la misma razón. No revela nada que quien recibe un 200 no sepa ya, porque la rama falsa
-nunca llega hasta aquí: responde con el error genérico de credenciales.
+`userId` is essential, not informative: it goes into the associated data of the two envelopes that come in this
+same response (step 9 of section 5), so without it the client cannot open them. Section 4.1 returns it for the
+same reason. It reveals nothing that whoever receives a 200 does not already know, because the fake branch never
+gets this far: it responds with the generic credentials error.
 
-`redirect` es `session()->pull('url.intended', $panelUrl)`, para no perder el destino que dejó
-`redirect()->guest()` cuando un middleware sacó a alguien de una URL profunda. La `session_key` de OPAQUE
-no se devuelve al navegador: el cliente ya tiene su copia y el servidor no la necesita después del
+`redirect` is `session()->pull('url.intended', $panelUrl)`, so as not to lose the destination that
+`redirect()->guest()` left when a middleware pulled someone out of a deep URL. The OPAQUE `session_key` is not
+returned to the browser: the client already has its own copy and the server does not need it after the
 handshake.
 
-Rate limiting: mismas tres claves que `login/start`.
+Rate limiting: the same three keys as `login/start`.
 
 ### 4.5 `POST /phr/auth/session-secret`
 
-Autenticada (cookie de sesión, dentro de `authenticatedRoutes()`). Sin cuerpo de petición.
+Authenticated (session cookie, inside `authenticatedRoutes()`). No request body.
 
-Es `POST`, no `GET`: un `GET` es cacheable por diseño y un intermediario cacheando esta respuesta
-escribiría el secreto en disco de terceros. Cabeceras: `Cache-Control: no-store`, `Vary: Cookie`.
+It is `POST`, not `GET`: a `GET` is cacheable by design and an intermediary caching this response would write
+the secret to somebody else's disk. Headers: `Cache-Control: no-store`, `Vary: Cookie`.
 
-Respuesta 200:
+Response 200:
 
 ```json
-{ "sessionSecret": "<base64url 32B>", "encryptedSettings": "<sobre v1.>" }
+{ "sessionSecret": "<base64url 32B>", "encryptedSettings": "<v1. envelope>" }
 ```
 
-Incluye `encryptedSettings` porque la configuración no viaja dentro del paquete de `sessionStorage`, solo
-la UMK envuelta lo hace: sin este campo aquí, cualquier pantalla que arranque por recuperación (sección 6,
-apartado de recarga) no tendría unidad de medida ni rango objetivo hasta el próximo login completo.
+It includes `encryptedSettings` because the configuration does not travel inside the `sessionStorage` package,
+only the wrapped UMK does: without this field here, any screen that starts up through recovery (section 6, the
+reload part) would have no unit of measure and no target range until the next full login.
 
-Respuestas de error: `401` si la sesión de Laravel no existe o caducó, `410` si el secreto fue destruido
-(bloqueo o logout, sección 8). Ambas llevan al cliente a la pantalla de login.
+Error responses: `401` if the Laravel session does not exist or expired, `410` if the secret was destroyed (idle
+lock or logout, section 8). Both take the client to the login screen.
 
 ### 4.6 `POST /phr/auth/lock`
 
-Autenticada. Sin cuerpo de petición relevante.
+Authenticated. No relevant request body.
 
-Destruye el secreto de sesión y la sesión de Laravel completa (sección 8), y responde 200. El cliente
-hace una recarga dura después de recibir la respuesta, nunca antes: si recarga antes de que el servidor
-confirme, una pérdida de red deja el secreto vivo en servidor con el cliente ya sin UMK en memoria, lo
-que en la práctica es un bloqueo que no bloqueó nada del lado servidor.
+It destroys the session secret and the whole Laravel session (section 8), and responds 200. The client does a
+hard reload after receiving the response, never before: if it reloads before the server confirms, a network
+failure leaves the secret alive on the server with the client already without the UMK in memory, which in
+practice is a lock that locked nothing on the server side.
 
 ### 4.7 `POST /phr/auth/opaque/registration/public/start`
 
-Sin autenticar. Es el equivalente de 4.1 para quien llega sin invitación: mismo paso 4 del orden
-criptográfico de la sección 5, con la fila de usuario creándose aquí en vez de venir ya creada por un
-enlace. Petición:
+Unauthenticated. It is the equivalent of 4.1 for someone arriving without an invitation: the same step 4 of the
+cryptographic order in section 5, with the user row being created here instead of arriving already created by a
+link. Request:
 
 ```json
-{ "name": "<nombre completo>", "login": "user@example.com", "registrationRequest": "<base64url 32B>" }
+{ "name": "<full name>", "login": "user@example.com", "registrationRequest": "<base64url 32B>" }
 ```
 
-El login se normaliza (`LoginNormalizer::normalize`) antes de comprobar su forma, igual que en
-`phr:issue-registration-link`: espacios exteriores y mayúsculas son variaciones válidas de un mismo login,
-no errores de formato.
+The login is normalized (`LoginNormalizer::normalize`) before its shape is checked, the same as in
+`phr:issue-registration-link`: outer spaces and uppercase are valid variations of the same login, not format
+errors.
 
-La fila de `users` se crea con `User::create(['name' => ..., 'email' => $login])` dentro del propio
-controlador (`RegistrationPublicStartController`), sin comprobación previa de unicidad por `SELECT`: la
-restricción `unique` de la columna decide, en el `INSERT`, cuál de dos altas simultáneas con el mismo
-correo gana. La que pierde no deja fila y recibe 409 `login_taken`. A partir de ahí, la derivación del
-`credential_identifier` y la creación del `OpaqueRegistration` pendiente (con `invitation_ref` a `null`,
-porque no hay enlace que referenciar) son las mismas que en 4.1.
+The `users` row is created with `User::create(['name' => ..., 'email' => $login])` inside the controller itself
+(`RegistrationPublicStartController`), with no prior uniqueness check by `SELECT`: the column's `unique`
+constraint decides, at `INSERT` time, which of two simultaneous sign-ups with the same email wins. The one that
+loses leaves no row and receives a 409 `login_taken`. From there on, the derivation of the
+`credential_identifier` and the creation of the pending `OpaqueRegistration` (with `invitation_ref` at `null`,
+because there is no link to reference) are the same as in 4.1.
 
-Respuesta 200:
+Response 200:
 
 ```json
 {
@@ -413,437 +411,423 @@ Respuesta 200:
 }
 ```
 
-Errores: `422 invalid_registration` para un mensaje OPAQUE mal formado o un login que no tiene forma de
-correo, el mismo error genérico que usa el resto del subsistema. `409 login_taken` cuando el correo ya
-tiene cuenta, a propósito distinto del genérico: quien lo recibe tiene que enterarse de que ya existe una
-cuenta con ese correo, no creer que su alta se ha perdido. La pantalla de registro (`register.blade.php`,
-`resources/js/auth/registerPage.js`) traduce este código a un mensaje con un enlace a iniciar sesión.
+Errors: `422 invalid_registration` for a malformed OPAQUE message or a login that is not shaped like an email,
+the same generic error the rest of the subsystem uses. `409 login_taken` when the email already has an account,
+deliberately different from the generic one: whoever receives it has to find out that an account with that email
+already exists, not believe their sign-up got lost. The sign-up screen (`register.blade.php`,
+`resources/js/auth/registerPage.js`) turns this code into a message with a link to log in.
 
-A partir de aquí, el flujo es idéntico al de 4.2 a 4.4: `registration/finish` con el mismo
-`registrationId`, seguido del login OPAQUE inmediato con la misma contraseña (sección 5, pasos 12 a 20).
-`registration/finish` distingue el origen del pendiente por `invitation_ref`: si es `null`, no intenta
-consumir ningún enlace.
+From here on, the flow is identical to 4.2 through 4.4: `registration/finish` with the same `registrationId`,
+followed by the immediate OPAQUE login with the same password (section 5, steps 12 to 20).
+`registration/finish` tells the origin of the pending row apart by `invitation_ref`: if it is `null`, it does not
+try to consume any link.
 
-Rate limiting: por IP únicamente (`opaque-registration-public`, 10/min), más estricto que el de 4.1 porque
-aquí no hay token de enlace que reparta el abuso entre varios cubos, y porque cada intento, además de
-consultar si el correo existe, escribe una fila de usuario.
+Rate limiting: by IP only (`opaque-registration-public`, 10/min), stricter than 4.1's because here there is no
+link token to spread the abuse across several buckets, and because every attempt, besides querying whether the
+email exists, writes a user row.
 
-La pantalla se sirve en `GET /phr/register` con el nombre `filament.phr.auth.register`, desde
-`RegisterPageController`, que responde la vista sin ninguna consulta a base de datos: igual que la de
-establecer contraseña, aquí todavía no hay nada que validar. El enlace de `login.blade.php` hacia ella
-comprueba con `Route::has()` antes de usar `route()`, una salvaguarda que se escribió cuando la ruta aún
-no existía y que se conserva porque no cuesta nada y evita que la pantalla de acceso reviente entera si
-alguien renombra la ruta.
+The screen is served at `GET /phr/register` under the name `filament.phr.auth.register`, from
+`RegisterPageController`, which responds with the view without any database query: just like the
+password-setting one, there is nothing to validate yet at this point. The link from `login.blade.php` to it
+checks with `Route::has()` before using `route()`, a safeguard written back when the route did not exist yet and
+kept because it costs nothing and stops the login screen from blowing up entirely if somebody renames the route.
 
-## 5. Orden criptográfico del establecimiento de contraseña
+## 5. Cryptographic order of setting the password
 
-Es la secuencia más delicada de todo el sistema: cualquier operación fuera de orden o cualquier paso
-partido en dos peticiones puede dejar una cuenta que se autentica pero no tiene clave utilizable, y sin
-recuperación posible en esta fase.
+It is the most delicate sequence in the whole system: any operation out of order or any step split into two
+requests can leave an account that authenticates but has no usable key, with no possible recovery in this phase.
 
 ```
  1 [N] await opaque.ready
  2 [N] password <- input.value ; input.value = ''
  3 [N] {clientRegistrationState, registrationRequest} = startRegistration({password})
-       sin keyStretching aquí
- 4 [S] valida el token del enlace (no lo consume todavía) ; evalúa OPRF ;
-       inserta el pendiente en opaque_registrations
+       no keyStretching here
+ 4 [S] validates the link token (does not consume it yet) ; evaluates OPRF ;
+       inserts the pending row into opaque_registrations
  5 [N] assert(profile === PROFILE_PINNED)
        assert(serverPublicKey === SERVER_PUBLIC_KEY_PINNED)
  6 [N] {registrationRecord, exportKey} = finishRegistration({..., identifiers: {server},
        keyStretching: KSF})
-       aquí corre Argon2id (t=3, m=64 MiB, p=4)
+       Argon2id runs here (t=3, m=64 MiB, p=4)
  7 [N] KEK = HKDF-SHA-512(exportKey, info = "myphr/kek/v1")
- 8 [N] UMK = getRandomValues(32)                       <- la clave maestra nace aquí
+ 8 [N] UMK = getRandomValues(32)                       <- the master key is born here
  9 [N] wrappedUMK        = seal(KEK, UMK, aad = ctx(userId, "umk"))
 10 [N] encryptedSettings = seal(deriveRecordKey(UMK, ctx(userId, "settings")), '{"v":1}')
 11 [N] zeroize(exportKey, KEK)
-12 [S] registration/finish: una transacción -> consume el pendiente + consume el enlace +
-       escribe la fila vigente en user_master_key_envelopes + escribe encrypted_settings
-       (idempotente, sección 4.2 y 7)
-13 [N] login OPAQUE completo con la misma password, que sigue en memoria
-14 [S] verifica el MAC -> Auth::login -> session()->regenerate() -> acuña sessionSecret
+12 [S] registration/finish: one transaction -> consume the pending row + consume the link +
+       write the current row in user_master_key_envelopes + write encrypted_settings
+       (idempotent, sections 4.2 and 7)
+13 [N] full OPAQUE login with the same password, still in memory
+14 [S] verifies the MAC -> Auth::login -> session()->regenerate() -> mints sessionSecret
 15 [N] KEK2 = HKDF(exportKey2) ; UMK' = open(KEK2, encryptedUserMasterKey)
-16 [N] assert(UMK' === UMK)                            <- verificación del alta
+16 [N] assert(UMK' === UMK)                            <- sign-up verification
 17 [N] zeroize(password, exportKey2, KEK2)
 18 [N] SK = HKDF(sessionSecret) ; sessionStorage['phr.rk'] = seal(SK, UMK) ;
        zeroize(SK, sessionSecret)
-19 [N] descifra encryptedSettings ; actualiza <meta name="csrf-token">
+19 [N] decrypts encryptedSettings ; updates <meta name="csrf-token">
 20 [N] Alpine.navigate(redirect)
 ```
 
-`[N]` es el navegador, `[S]` el servidor. Los pasos 13 a 20 son, deliberadamente, el mismo orden que un
-login normal (sección 6): en vez de crear la sesión directamente al final del paso 12, el cliente hace un
-login OPAQUE completo con la contraseña que acaba de fijar. Cuesta un Argon2id de más, pero descubre en el
-momento (cuando todavía no hay datos que perder) cualquier desajuste entre el KSF o el `identifiers.server`
-usados en el registro y los que usará todo login futuro, en vez de descubrirlo en el primer login real, ya
-con datos cifrados de por medio.
+`[N]` is the browser, `[S]` the server. Steps 13 to 20 are, deliberately, the same order as a normal login
+(section 6): instead of creating the session directly at the end of step 12, the client runs a full OPAQUE login
+with the password it has just set. It costs one extra Argon2id, but it uncovers right then (while there is still
+no data to lose) any mismatch between the KSF or the `identifiers.server` used at registration and the ones
+every future login will use, instead of uncovering it at the first real login, already with encrypted data in
+the way.
 
-**Variante del registro público (sección 4.7).** El paso 4 cambia: en vez de validar un token de enlace,
-el servidor crea la fila de `users` a partir del nombre y el login que llegan en la propia petición y
-comprueba la unicidad del correo en el `INSERT`. El paso 12 cambia en consecuencia: la transacción de
-`registration/finish` no consume ningún enlace, porque `invitation_ref` es `null` en el pendiente. El
-resto de la secuencia, del 1 al 20, es idéntico, incluida la UMK naciendo del CSPRNG en el paso 8 y no de
-la contraseña.
+**Public sign-up variant (section 4.7).** Step 4 changes: instead of validating a link token, the server creates
+the `users` row from the name and the login that arrive in the request itself and checks the email's uniqueness
+at `INSERT` time. Step 12 changes accordingly: the `registration/finish` transaction consumes no link, because
+`invitation_ref` is `null` in the pending row. The rest of the sequence, from 1 to 20, is identical, including
+the UMK being born from the CSPRNG in step 8 and not from the password.
 
-### Qué se rompe si se altera el orden
+### What breaks if the order is altered
 
-`keyStretching` en el paso 3 (`startRegistration`) en vez del 6 (`finishRegistration`): se ignora en
-silencio y se aplica el valor por defecto del paquete. El `registrationRecord` queda atado a un KSF
-distinto del configurado, y todo login futuro que sí pase el `KSF` correcto falla como "contraseña
-incorrecta".
+`keyStretching` in step 3 (`startRegistration`) instead of step 6 (`finishRegistration`): it is silently ignored
+and the package default is applied. The `registrationRecord` ends up tied to a KSF different from the configured
+one, and every future login that does pass the correct `KSF` fails as "wrong password".
 
-UMK generada antes del paso 6: no rompe la criptografía en sí, pero invita a la variante en que la UMK se
-deriva de la contraseña en vez de ser aleatoria, que es justo lo que el ADR 0009 descarta. Si el registro
-falla después, queda una clave huérfana que hay que zeroizar en el manejo de error.
+UMK generated before step 6: it does not break the cryptography as such, but it invites the variant where the
+UMK is derived from the password instead of being random, which is exactly what ADR 0009 rejects. If the
+registration fails afterwards, an orphan key is left that has to be zeroized in the error handling.
 
-Comparar `profile` y `serverPublicKey` (paso 5) después del paso 6 en vez de antes: en el registro no
-existe todavía `server_mac`, nada más autentica al servidor. Sin esta comparación antes de derivar la
-KEK, un servidor suplantado puede completar un registro entero sin que el cliente lo note.
+Comparing `profile` and `serverPublicKey` (step 5) after step 6 instead of before: at registration there is no
+`server_mac` yet, nothing else authenticates the server. Without this comparison before deriving the KEK, a
+spoofed server can complete a whole registration without the client noticing.
 
-Consumir el enlace en el paso 4 en vez de en el 12: un fallo de red durante el Argon2id del paso 6 deja a
-la persona sin enlace y sin cuenta usable, sin ninguna vía de recuperación salvo reemisión manual.
+Consuming the link in step 4 instead of step 12: a network failure during the Argon2id of step 6 leaves the
+person with no link and no usable account, with no way to recover other than a manual reissue.
 
-Separar el paso 12 en dos peticiones (`registrationRecord` primero, `wrappedUserMasterKey` después): un
-fallo a mitad deja una cuenta que se autentica pero no tiene clave maestra utilizable. El enlace ya está
-consumido, la cuenta queda rota de forma permanente. Es el peor modo de fallo del diseño completo, y es
-la razón de que el paso 12 sea una única petición transaccional.
+Splitting step 12 into two requests (`registrationRecord` first, `wrappedUserMasterKey` afterwards): a failure
+halfway leaves an account that authenticates but has no usable master key. The link is already consumed, the
+account is permanently broken. It is the worst failure mode of the whole design, and it is the reason step 12 is
+a single transactional request.
 
-Zeroizar la contraseña antes del paso 13: el login inmediato del paso 13 se vuelve imposible, y el enlace
-ya se consumió, así que no hay segunda oportunidad de escribir la contraseña sin reemitir el enlace.
+Zeroizing the password before step 13: the immediate login of step 13 becomes impossible, and the link is
+already consumed, so there is no second chance to set the password without reissuing the link.
 
-Saltar los pasos 15 y 16 y crear la sesión directamente en `registration/finish`: ahorra un Argon2id, pero
-abre una segunda ruta de creación de sesión que auditar aparte, y pierde la comprobación temprana de un
-desajuste de KSF o de identidad de servidor.
+Skipping steps 15 and 16 and creating the session directly in `registration/finish`: it saves one Argon2id, but
+it opens a second session-creation path to audit separately, and it loses the early check for a KSF or server
+identity mismatch.
 
-Escribir `sessionStorage` (paso 18) antes del 14: el paquete queda cifrado bajo un secreto de sesión que
-todavía no existe, material inútil que no abre nada.
+Writing `sessionStorage` (step 18) before step 14: the package ends up encrypted under a session secret that
+does not exist yet, useless material that opens nothing.
 
-Escribir `sessionStorage` (paso 18) antes del 16: se persiste una UMK que todavía no se ha verificado que
-el servidor sepa devolver correctamente.
+Writing `sessionStorage` (step 18) before step 16: it persists a UMK that has not yet been verified as one the
+server knows how to give back correctly.
 
-Acuñar `sessionSecret` (paso 14) antes de `session()->regenerate()`: el secreto queda ligado al id de
-sesión anterior y se pierde en la regeneración, sin ningún síntoma hasta el primer F5 de esa persona.
+Minting `sessionSecret` (step 14) before `session()->regenerate()`: the secret ends up tied to the previous
+session id and is lost in the regeneration, with no symptom until that person's first F5.
 
-Navegar (paso 20) antes del 19: `session()->regenerate()` también regeneró el token CSRF. El `<meta>` de
-la página quedó desactualizado y el siguiente POST autenticado responde 419 de forma intermitente.
+Navigating (step 20) before step 19: `session()->regenerate()` also regenerated the CSRF token. The page's
+`<meta>` is out of date and the next authenticated POST responds 419 intermittently.
 
-Navegar (paso 20) antes del 18: si esa navegación termina en una recarga dura (un asset con seguimiento
-de versión cambiado), la UMK muere sin haber quedado ningún respaldo en `sessionStorage`.
+Navigating (step 20) before step 18: if that navigation ends in a hard reload (a version-tracked asset that
+changed), the UMK dies with no backup left in `sessionStorage`.
 
-## 6. Orden criptográfico del login y de la recuperación tras recarga
+## 6. Cryptographic order of login and of recovery after a reload
 
-### 6.1 Login posterior
+### 6.1 Later logins
 
 ```
  1 [N] await opaque.ready
  2 [N] password <- input.value ; input.value = ''
- 3 [N] {clientLoginState, startLoginRequest} = startLogin({password})     sin keyStretching
- 4 [S] login/start: rama real o falsa, idénticas en forma y coste. 200 siempre.
+ 3 [N] {clientLoginState, startLoginRequest} = startLogin({password})     no keyStretching
+ 4 [S] login/start: real or fake branch, identical in shape and cost. Always 200.
  5 [N] result = finishLogin({..., identifiers: {server}, keyStretching: KSF})
-       if (!result)  -> error genérico            (undefined, nunca null)
-       catch (e)     -> error de configuración     (KSF inválido lanza excepción)
- 6 [S] login/finish: consume el handshake antes de validar el MAC ; hash_equals ;
-       Auth::login ; session()->regenerate() ; acuña sessionSecret ; zeroiza el estado
+       if (!result)  -> generic error                (undefined, never null)
+       catch (e)     -> configuration error          (an invalid KSF throws)
+ 6 [S] login/finish: consumes the handshake before validating the MAC ; hash_equals ;
+       Auth::login ; session()->regenerate() ; mints sessionSecret ; zeroizes the state
  7 [N] KEK = HKDF(exportKey) ; UMK = open(KEK, encryptedUserMasterKey)
-       fallo -> error visible, nunca ocultar el registro (ADR 0004)
+       failure -> visible error, never hide the record (ADR 0004)
  8 [N] zeroize(password, exportKey, KEK)
  9 [N] SK = HKDF(sessionSecret) ; sessionStorage['phr.rk'] = seal(SK, UMK) ;
        zeroize(SK, sessionSecret)
-10 [N] descifra encryptedSettings ; actualiza <meta name="csrf-token">
+10 [N] decrypts encryptedSettings ; updates <meta name="csrf-token">
 11 [N] Alpine.navigate(redirect)
 ```
 
-Dos riesgos de orden propios del login, además de los ya cubiertos en la sección 5:
+Two ordering risks specific to login, on top of the ones already covered in section 5:
 
-* Recorrer la rama real cuando `opaque_registration_record IS NULL` o el `opaque_profile` no coincide con
-  el perfil vigente delata, por forma o por tiempo de respuesta, a un usuario en migración. La rama falsa
-  se recorre siempre en esos dos casos, no solo cuando la cuenta no existe.
-* Un `redirect` fijo al panel, en vez de `session()->pull('url.intended', ...)`, pierde el destino que un
-  middleware de autorización dejó guardado al sacar a la persona de una URL profunda.
+* Taking the real branch when `opaque_registration_record IS NULL` or `opaque_profile` does not match the
+  current profile gives away, by shape or by response time, a user mid-migration. The fake branch is taken
+  always in those two cases, not only when the account does not exist.
+* A fixed `redirect` to the panel, instead of `session()->pull('url.intended', ...)`, loses the destination an
+  authorization middleware saved when it pulled the person out of a deep URL.
 
-### 6.2 Recuperación tras recarga (F5, 419, despliegue)
+### 6.2 Recovery after a reload (F5, 419, deployment)
 
 ```
-1 [N] keyring vacío -> lee sessionStorage['phr.rk'] ; si no hay -> a login
-2 [N] POST /phr/auth/session-secret   (cookie de sesión)
-      401 -> sesión muerta -> a login
-      410 -> secreto destruido por bloqueo o logout -> a login
-3 [N] SK = HKDF(sessionSecret) ; UMK = open(SK, paquete) ; zeroize(SK, sessionSecret)
-4 [N] descifra encryptedSettings ; continúa
+1 [N] empty keyring -> read sessionStorage['phr.rk'] ; if there is none -> to login
+2 [N] POST /phr/auth/session-secret   (session cookie)
+      401 -> session dead -> to login
+      410 -> secret destroyed by idle lock or logout -> to login
+3 [N] SK = HKDF(sessionSecret) ; UMK = open(SK, package) ; zeroize(SK, sessionSecret)
+4 [N] decrypts encryptedSettings ; continues
 ```
 
-Es el mismo orden reducido de la sección 6.1, y es el que ejecuta toda pantalla con datos cifrados antes
-de pedir su primer lote de datos. Perder la UMK en memoria es un estado normal y frecuente, no un error:
-la interfaz degrada a pedir autenticación, nunca a una pantalla rota (ADR 0003).
+It is the same reduced order as section 6.1, and it is what every screen with encrypted data runs before asking
+for its first batch of data. Losing the UMK from memory is a normal, frequent state, not an error: the interface
+degrades to asking for authentication, never to a broken screen (ADR 0003).
 
-## 7. Modos de fallo
+## 7. Failure modes
 
-**Respuesta perdida en `registration/finish`.** La transacción del servidor se ejecuta igual, pero la
-respuesta no llega al cliente por un corte de red. Sin idempotencia, un reintento automático fallaría con
-"pendiente no encontrado" y dejaría a la persona atascada creyendo que el registro no funcionó cuando en
-realidad sí se completó. Con el endpoint idempotente (sección 4.2), el cliente puede reintentar con el
-mismo `registrationId` y, si detecta que la cuenta ya quedó registrada con ese mismo
-`registrationRecord`, seguir el flujo como si hubiera tenido éxito la primera vez. Si el reintento nunca
-llega (la pestaña se cerró), la persona ve el enlace como consumido si vuelve a abrirlo, y la salida es la
-misma que para un enlace ya usado: pedirle a un administrador que reemita uno, con la confirmación
-explícita que exige un sobre de UMK ya existente.
+**Response lost in `registration/finish`.** The server transaction runs all the same, but the response does not
+reach the client because of a network cut. Without idempotency, an automatic retry would fail with "pending
+registration not found" and would leave the person stuck believing the registration did not work when in fact it
+did complete. With the endpoint idempotent (section 4.2), the client can retry with the same `registrationId`
+and, if it detects that the account already ended up registered with that same `registrationRecord`, carry on
+with the flow as if it had succeeded the first time. If the retry never arrives (the tab was closed), the person
+sees the link as consumed if they open it again, and the way out is the same as for an already used link: ask an
+administrator to reissue one, with the explicit confirmation an existing UMK envelope requires.
 
-**Enlace consumido.** Abrir un enlace ya usado, caducado o inexistente muestra siempre la misma pantalla
-genérica de "enlace no válido", sin distinguir el motivo (OPAQUE.md sección 13.3, aplicado también aquí
-por consistencia). La salida es pedir un enlace nuevo a un administrador.
+**Consumed link.** Opening a link that is already used, expired or non-existent always shows the same generic
+"invalid link" screen, without distinguishing the reason (OPAQUE.md section 13.3, applied here too for
+consistency). The way out is to ask an administrator for a new link.
 
-**Dos pestañas.** La UMK vive en el scope de un módulo ES por pestaña (ADR 0003), así que cada pestaña
-necesita su propio login o su propia recuperación; no hay memoria compartida entre pestañas. Dos pestañas
-completando un `registration/finish` para el mismo enlace en paralelo son el mismo caso que la
-idempotencia de más arriba: una gana la transacción, la otra recibe la respuesta idempotente si llega a
-tiempo, o ve el enlace como consumido si llega después.
+**Two tabs.** The UMK lives in the scope of an ES module per tab (ADR 0003), so each tab needs its own login or
+its own recovery; there is no memory shared between tabs. Two tabs completing a `registration/finish` for the
+same link in parallel are the same case as the idempotency above: one wins the transaction, the other gets the
+idempotent response if it arrives in time, or sees the link as consumed if it arrives later.
 
-**Desajuste de KSF o de perfil.** Si el KSF configurado en el cliente cambia sin que cambie el nombre del
-perfil, o si `opaque_profile` de una cuenta no coincide con el perfil vigente del servidor, el login de
-esa cuenta se comporta exactamente como una contraseña incorrecta: error genérico, sin ninguna pista de
-que el problema es de configuración y no de la persona. Es indistinguible por diseño (evita delatar
-cuentas en un estado especial), y por eso hace falta una métrica de servidor, no expuesta al cliente, que
-cuente cuántas veces se recorre la rama falsa por esta causa concreta (record y perfil presentes pero
-distintos del vigente) en vez de por ausencia de cuenta. Sin esa métrica, un cambio de KSF se manifiesta
-en producción como "a todo el mundo se le olvidó la contraseña", sin ninguna señal previa.
+**KSF or profile mismatch.** If the KSF configured on the client changes without the profile name changing, or
+if an account's `opaque_profile` does not match the server's current profile, that account's login behaves
+exactly like a wrong password: a generic error, with no hint that the problem is configuration and not the
+person. It is indistinguishable by design (it avoids giving away accounts in a special state), and that is why a
+server-side metric is needed, not exposed to the client, counting how many times the fake branch is taken for
+this specific cause (record and profile present but different from the current one) instead of because the
+account is absent. Without that metric, a KSF change shows up in production as "everybody forgot their
+password", with no prior signal.
 
-**Qué ve el usuario en cada caso.** El principio es el mismo en los cuatro casos: nunca una pantalla rota,
-nunca un error técnico, siempre una acción concreta a seguir (reintentar, pedir un enlace nuevo, volver a
-entrar). El detalle técnico de cada fallo se registra en servidor, sin contenido clínico, para que quien
-opera el sistema pueda diagnosticar lo que la persona nunca ve.
+**What the user sees in each case.** The principle is the same in all four cases: never a broken screen, never a
+technical error, always one concrete action to take (retry, ask for a new link, log in again). The technical
+detail of each failure is logged on the server, with no clinical content, so that whoever operates the system
+can diagnose what the person never sees.
 
-## 8. Bloqueo, cierre de sesión y caducidad
+## 8. Idle lock, logout and idle timeout
 
-Pasados quince minutos de inactividad (ADR 0009), un temporizador en el navegador dispara
-`POST /phr/auth/lock`. El bloqueo **cierra la sesión entera**, no solo el secreto: destruye el secreto de
-sesión y la sesión de Laravel en la misma operación de servidor. Dejar viva la sesión de Laravel
-mantendría a la persona dentro del panel, con acceso a datos en claro de otras personas y a acciones
-destructivas como reemitir un enlace, que es justo el riesgo del puesto compartido que motiva el bloqueo.
+After fifteen minutes of inactivity (ADR 0009), a timer in the browser fires `POST /phr/auth/lock`. The lock
+**closes the whole session**, not just the secret: it destroys the session secret and the Laravel session in the
+same server operation. Leaving the Laravel session alive would keep the person inside the panel, with access to
+other people's plaintext data and to destructive actions like reissuing a link, which is exactly the shared
+workstation risk that motivates the lock.
 
-Quien cuenta el tiempo es el **servidor**, sobre la última petición autenticada, no un temporizador en el
-navegador: un temporizador de cliente no se ejecuta en una pestaña que el sistema operativo descartó por
-memoria ni en una que nunca llegó a abrirse. El temporizador del navegador es solo lo que dispara la
-recarga dura una vez que el servidor ya cerró la sesión, no lo que decide si debe cerrarla.
+The one counting the time is the **server**, over the last authenticated request, not a timer in the browser: a
+client timer does not run in a tab the operating system discarded for memory, nor in one that was never opened.
+The browser timer is only what fires the hard reload once the server has already closed the session, not what
+decides whether it should close it.
 
-Ese conteo vive en el middleware `EnforceIdleTimeout`, dentro del grupo de `authMiddleware()` del panel y
-por detrás de `Authenticate`. Guarda la marca de la última petición autenticada en la propia carga útil de
-la sesión, sin ninguna columna nueva, y cuando se pasan los quince minutos hace lo mismo que la ruta de
-bloqueo: destruye el secreto, cierra la sesión de Laravel y rota el token CSRF. La respuesta es un 401 con
-cuerpo JSON cuando el cliente pide JSON, que es lo que la recuperación de la sección 6.2 ya sabe llevar a
-la pantalla de acceso, y una redirección al login en una navegación normal. La ruta de bloqueo queda exenta
-a propósito: es la que ya hace esa misma destrucción, y contestarle con un 401 dejaría al cliente
-reintentando su cierre en bucle.
+That counting lives in the `EnforceIdleTimeout` middleware, inside the panel's `authMiddleware()` group and
+behind `Authenticate`. It stores the mark of the last authenticated request in the session payload itself, with
+no new column, and when fifteen minutes pass it does the same as the lock route: destroys the secret, closes the
+Laravel session and rotates the CSRF token. The response is a 401 with a JSON body when the client asks for
+JSON, which is what the recovery in section 6.2 already knows how to take to the login screen, and a redirect to
+the login on a normal navigation. The lock route is exempt on purpose: it is the one that already performs that
+same destruction, and answering it with a 401 would leave the client retrying its own logout in a loop.
 
-Filament monta su propio `POST /logout` por defecto. Ese endpoint no sabe nada del secreto de sesión, así
-que el cierre de sesión normal (la persona pulsa "salir") tiene que pasar por el mismo camino de
-destrucción que usa el bloqueo, no confiar en que el logout de Filament lo haga.
+Filament mounts its own `POST /logout` by default. That endpoint knows nothing about the session secret, so
+normal logout (the person clicks "log out") has to go through the same destruction path the lock uses, not trust
+Filament's logout to do it.
 
-El cliente hace recarga dura después de cada uno de estos tres cierres (logout, bloqueo, aterrizar en
-login con la UMK todavía en memoria), nunca antes de que el servidor confirme, porque solo una recarga
-dura destruye el contexto de JavaScript y con él las instantáneas de DOM que Livewire retiene con datos
-descifrados (ADR 0003).
+The client does a hard reload after each of these three closes (logout, lock, landing on the login screen with
+the UMK still in memory), never before the server confirms, because only a hard reload destroys the JavaScript
+context and with it the DOM snapshots Livewire holds with decrypted data (ADR 0003).
 
-`sessionStorage['phr.rk']` no se borra explícitamente en ninguno de estos caminos: al morir el secreto de
-sesión en servidor, ese paquete queda cifrado bajo un secreto que ya no existe en ningún sitio, así que es
-inútil sin que nadie tenga que limpiarlo. `session.lifetime` de Laravel es un parámetro relacionado, no el
-mismo mecanismo: si es mayor que el bloqueo de quince minutos no pasa nada mientras el bloqueo siga
-destruyendo el secreto, pero ambos deben revisarse juntos y no cambiar uno sin mirar el otro (ADR 0009).
+`sessionStorage['phr.rk']` is not explicitly cleared on any of these paths: once the session secret dies on the
+server, that package is encrypted under a secret that no longer exists anywhere, so it is useless without anyone
+having to clean it up. Laravel's `session.lifetime` is a related parameter, not the same mechanism: if it is
+longer than the fifteen-minute lock nothing happens as long as the lock keeps destroying the secret, but both
+must be reviewed together and neither changed without looking at the other (ADR 0009).
 
-## 9. Guardarraíles y prohibiciones
+## 9. Guardrails and prohibitions
 
-**Interceptor de cliente.** Un interceptor sobre las peticiones de Livewire revisa lo que sale del
-navegador y aborta si encuentra un valor largo que no lleve el prefijo `v1.` del sobre cifrado (ADR 0002).
+**Client interceptor.** An interceptor over Livewire requests inspects what leaves the browser and aborts if it
+finds a long value that does not carry the `v1.` prefix of the encrypted envelope (ADR 0002).
 
-**Listener de servidor.** Un listener sobre la actualización de propiedades de Livewire rechaza lo mismo
-en el lado servidor, para cubrir el caso de que alguien ponga un `wire:model` sin pensarlo: el interceptor
-de cliente no protege contra ese descuido, porque el propio cliente es quien lo generó. Se acompaña de un
-test de snapshot que falla si alguna propiedad pública de un componente que maneja datos cifrados contiene
-algo que no sea metadato o sobre cifrado.
+**Server listener.** A listener over Livewire property updates rejects the same thing on the server side, to
+cover the case of somebody adding a `wire:model` without thinking: the client interceptor does not protect
+against that slip, because the client itself is what generated it. It comes with a snapshot test that fails if
+any public property of a component handling encrypted data contains something that is not metadata or an
+encrypted envelope.
 
-**Propiedades en URL.** `InteractsWithActions` trae de serie seis propiedades marcadas `#[Url]`
-(`$defaultAction`, `$defaultActionArguments`, `$defaultActionContext`, `$defaultTableAction`,
-`$defaultTableActionRecord`, `$defaultTableActionArguments`) que publican en la barra de direcciones la
-acción abierta de Filament y sus argumentos. Un identificador de evento ahí ya es metadato clínico. Toda
-página que maneje datos cifrados hereda de una página base propia que redeclara esas seis propiedades sin
-el atributo `#[Url]`, acompañada de un test de arquitectura que falla si alguna vuelve a aparecer con el
-atributo en cualquier página del panel.
+**Properties in the URL.** `InteractsWithActions` ships six properties marked `#[Url]` (`$defaultAction`,
+`$defaultActionArguments`, `$defaultActionContext`, `$defaultTableAction`, `$defaultTableActionRecord`,
+`$defaultTableActionArguments`) that publish the open Filament action and its arguments in the address bar. An
+event identifier there is already clinical metadata. Every page handling encrypted data extends a base page of
+our own that redeclares those six properties without the `#[Url]` attribute, together with an architecture test
+that fails if any of them shows up with the attribute again on any page of the panel.
 
-**Comandos de Filament prohibidos.** `make:filament-user` y `filament:user` quedan deshabilitados (con
-`Command::forget` o un override que aborte con un mensaje explicativo). Ambos piden `--password` y hacen
-`Hash::make()` en servidor, lo que en este proyecto produciría una cuenta que parece válida y no lo es:
-sin registro OPAQUE, sin UMK, imposible de usar para cifrar nada.
+**Forbidden Filament commands.** `make:filament-user` and `filament:user` are disabled (with `Command::forget`
+or an override that aborts with an explanatory message). Both ask for `--password` and do `Hash::make()` on the
+server, which in this project would produce an account that looks valid and is not: no OPAQUE registration, no
+UMK, impossible to use to encrypt anything.
 
-**Configuración obligatoria.** `session.driver` nunca puede ser `cookie`: con ese driver el contenido de
-la sesión viaja al navegador en cada petición, y el navegador pasaría a tener las dos mitades de la UMK a
-la vez (ADR 0003). Un test falla explícitamente si `config('session.driver') === 'cookie'`. `APP_DEBUG`
-queda desactivado en todo entorno con datos reales, incluida preproducción, porque un error 500 con debug
-activo abre el trace de Livewire en un diálogo sin recargar, y ese trace puede llevar datos clínicos en
-los argumentos de una llamada (ADR 0003). `.npmrc` lleva `save-exact=true`, además de `ignore-scripts` y
-`audit` que ya tenía: sin `save-exact`, instalar cualquiera de las dependencias criptográficas de cliente
-escribe un rango de versión y un cambio de valores por defecto en una versión menor puede invalidar todos
-los registros OPAQUE existentes (ADR 0004). Esa fijación exacta es propia de esas dependencias
-criptográficas de JavaScript; `filament/filament` se mantiene en el rango `^5.0`, sin fijar a versión
-exacta, y la mitigación del riesgo de expulsión por despliegue que describe el ADR 0003 es operativa:
-ventana de mantenimiento o aviso previo, nunca fijación de versión.
+**Mandatory configuration.** `session.driver` can never be `cookie`: with that driver the session content
+travels to the browser on every request, and the browser would then hold both halves of the UMK at once
+(ADR 0003). A test fails explicitly if `config('session.driver') === 'cookie'`. `APP_DEBUG` stays off in every
+environment with real data, staging included, because a 500 error with debug on opens the Livewire trace in a
+dialog without reloading, and that trace can carry clinical data in the arguments of a call (ADR 0003).
+`.npmrc` carries `save-exact=true`, on top of the `ignore-scripts` and `audit` it already had: without
+`save-exact`, installing any of the client cryptographic dependencies writes a version range, and a change of
+defaults in a minor version can invalidate every existing OPAQUE registration (ADR 0004). That exact pinning
+belongs to those JavaScript cryptographic dependencies; `filament/filament` stays on the `^5.0` range, not
+pinned to an exact version, and the mitigation for the deployment eviction risk described in ADR 0003 is
+operational: a maintenance window or advance notice, never version pinning.
 
-## 10. Inventario de piezas
+## 10. Parts inventory
 
-**Comandos de Artisan**
+**Artisan commands**
 
-* `opaque:setup`: genera y muestra por pantalla (nunca escribe `.env`) el material estático del servidor:
-  par de claves OPAQUE, `oprf_seed`, `OPAQUE_ENUMERATION_KEY`, `fake_registration_record`. Ejecutarlo dos
-  veces sin cuidado inutiliza todos los registros existentes, así que no autogenera nada en silencio.
-* `phr:issue-registration-link`: crea la fila de usuario si no existe y emite un enlace de un solo uso.
-  Aborta si `STDOUT` no es un terminal. Nunca acepta ni imprime contraseñas.
-* `opaque:prune-handshakes`: purga programada de `opaque_login_handshakes` y `opaque_registrations`
-  caducados.
+* `opaque:setup`: generates and prints to the screen (it never writes `.env`) the static server material: OPAQUE
+  key pair, `oprf_seed`, `OPAQUE_ENUMERATION_KEY`, `fake_registration_record`. Running it twice carelessly makes
+  every existing registration unusable, so it never autogenerates anything silently.
+* `phr:issue-registration-link`: creates the user row if it does not exist and issues a single-use link. It
+  aborts if `STDOUT` is not a terminal. It never accepts or prints passwords.
+* `opaque:prune-handshakes`: scheduled pruning of expired `opaque_login_handshakes` and `opaque_registrations`.
 
-**Migraciones**
+**Migrations**
 
-* Cambio de clave primaria de `users` a UUID, y columnas OPAQUE (`opaque_credential_identifier`,
-  `opaque_registration_record`, `opaque_profile`, `opaque_registered_at`, `encrypted_settings`),
-  `password` nullable.
+* Change of the `users` primary key to UUID, and OPAQUE columns (`opaque_credential_identifier`,
+  `opaque_registration_record`, `opaque_profile`, `opaque_registered_at`, `encrypted_settings`), `password`
+  nullable.
 * `user_registration_links`.
 * `opaque_registrations`, `opaque_login_handshakes`.
-* `user_master_key_envelopes`, de solo añadir.
+* `user_master_key_envelopes`, append-only.
 
-**Modelos**
+**Models**
 
-`User` (sin `password` en la lista de asignación masiva, sin cast `hashed`, `getAuthPassword()`
-sobrescrito, implementa `FilamentUser::canAccessPanel()`), `UserRegistrationLink`, `OpaqueRegistration`,
+`User` (with no `password` in the mass assignment list, no `hashed` cast, `getAuthPassword()` overridden,
+implements `FilamentUser::canAccessPanel()`), `UserRegistrationLink`, `OpaqueRegistration`,
 `OpaqueLoginHandshake`, `UserMasterKeyEnvelope`.
 
-**Servicios PHP**
+**PHP services**
 
-* `App\Opaque\*`: `Ristretto255`, `HkdfSha512`, `ExpandMessageXmdSha512`, `Oprf`, `LoginNormalizer` (única
-  fuente de `normalize(login)`), `CredentialIdentifier`, `ServerSetup`, `RegistrationFlow`, `LoginFlow`
-  (incluida la rama falsa obligatoria). Detallados en `docs/OPAQUE.md`.
-* `App\Provisioning\RegistrationLinks`: emite, valida y consume atómicamente enlaces; contiene la guardia
-  de "cuenta ya registrada" descrita en la sección 3.4.
-* `App\Auth\SessionSecrets`: acuña, entrega y destruye el secreto de sesión.
-* `App\Crypto\EnvelopeValidator`: valida prefijo `v1.`, base64url canónico y tamaño permitido de un sobre.
-  Nunca su contenido.
+* `App\Opaque\*`: `Ristretto255`, `HkdfSha512`, `ExpandMessageXmdSha512`, `Oprf`, `LoginNormalizer` (the single
+  source of `normalize(login)`), `CredentialIdentifier`, `ServerSetup`, `RegistrationFlow`, `LoginFlow`
+  (including the mandatory fake branch). Detailed in `docs/OPAQUE.md`.
+* `App\Provisioning\RegistrationLinks`: issues, validates and atomically consumes links; it holds the "account
+  already registered" guard described in section 3.4.
+* `App\Auth\SessionSecrets`: mints, delivers and destroys the session secret.
+* `App\Crypto\EnvelopeValidator`: validates the `v1.` prefix, canonical base64url and the allowed size of an
+  envelope. Never its content.
 
-**Controladores** (invocables planos, sin Livewire)
+**Controllers** (plain invokables, no Livewire)
 
-`LoginController`, `SetPasswordPageController` (sirve la página genérica; la validación real del token ocurre
-en `registration/start`), `InvitedRegistrationStartController`, `RegistrationPublicStartController` (sección
-4.7, alta sin invitación), `RegistrationFinishController`, `LoginStartController`, `LoginFinishController`,
+`LoginController`, `SetPasswordPageController` (serves the generic page; the real token validation happens in
+`registration/start`), `InvitedRegistrationStartController`, `RegistrationPublicStartController` (section 4.7,
+sign-up without an invitation), `RegistrationFinishController`, `LoginStartController`, `LoginFinishController`,
 `SessionSecretController`, `LockController`.
 
-**Vistas Blade**
+**Blade views**
 
-`resources/views/phr/auth/login.blade.php`, `set-password.blade.php`, `register.blade.php` (sección 4.7),
-`link-invalid.blade.php`. Las cuatro replican a mano la estructura de `fi-simple-page` de Filament con
-`<x-filament-panels::layout.simple>`, porque no hay componente Livewire detrás que resuelva
+`resources/views/phr/auth/login.blade.php`, `set-password.blade.php`, `register.blade.php` (section 4.7),
+`link-invalid.blade.php`. All four replicate by hand the structure of Filament's `fi-simple-page` with
+`<x-filament-panels::layout.simple>`, because there is no Livewire component behind them to resolve
 `$this->getHeading()`.
 
 **Filament**
 
-`PhrPanelProvider` (SPA sin prefetching, login propio, rutas propias, buscador global desactivado, módulo
-de cripto emitido en el `<head>` del panel), `UserResource` con su acción de creación (usuario + enlace en
-una transacción, modal informativo con la URL que nunca se envía por correo) y su acción de reemisión de
-enlace (exige teclear el email si ya hay un sobre vigente), `UserPolicy`, la página base que redeclara las
-propiedades `#[Url]` (sección 9).
+`PhrPanelProvider` (SPA with no prefetching, its own login, its own routes, global search disabled, crypto
+module emitted in the panel's `<head>`), `UserResource` with its creation action (user + link in one
+transaction, an informational modal with the URL that is never sent by email) and its link reissue action
+(requires typing the email if there is already a current envelope), `UserPolicy`, the base page that redeclares
+the `#[Url]` properties (section 9).
 
-**Módulos JS** (`resources/js/`)
+**JS modules** (`resources/js/`)
 
-`app.js` (entrada de Vite, importa el módulo de claves primero), `crypto/base64url.js`,
-`crypto/envelope.js`, `crypto/kdf.js`, `crypto/zeroize.js`, `crypto/canonicalDate.js`,
-`auth/opaqueClient.js` (único sitio que llama a `@serenity-kit/opaque`, con el KSF fijado como constante
-congelada), `auth/keyring.js` (dueño de la UMK en memoria, nunca la expone fuera de su propio módulo),
-`auth/recovery.js` (lee y escribe el paquete de `sessionStorage`, pide el secreto de sesión),
-`auth/setPasswordPage.js`, `auth/registerPage.js` (sección 4.7, calca `setPasswordPage.js` sin token de
-enlace), `auth/loginPage.js`, `auth/lock.js` (temporizador de inactividad, que avisa y dispara la recarga,
-pero no es quien decide la caducidad), `guards/livewirePayloadGuard.js` (interceptor de la sección 9).
+`app.js` (Vite entry point, imports the key module first), `crypto/base64url.js`, `crypto/envelope.js`,
+`crypto/kdf.js`, `crypto/zeroize.js`, `crypto/canonicalDate.js`, `auth/opaqueClient.js` (the only place that
+calls `@serenity-kit/opaque`, with the KSF fixed as a frozen constant), `auth/keyring.js` (owner of the UMK in
+memory, never exposes it outside its own module), `auth/recovery.js` (reads and writes the `sessionStorage`
+package, requests the session secret), `auth/setPasswordPage.js`, `auth/registerPage.js` (section 4.7, mirrors
+`setPasswordPage.js` without a link token), `auth/loginPage.js`, `auth/lock.js` (idle timer, which warns and
+fires the reload, but is not what decides the timeout), `guards/livewirePayloadGuard.js` (the section 9
+interceptor).
 
 **Middleware**
 
-`App\Http\Middleware\EnforceIdleTimeout` (caducidad por inactividad contada en servidor, sección 8),
-`NoStore`, `SetLocale`.
+`App\Http\Middleware\EnforceIdleTimeout` (idle timeout counted on the server, section 8), `NoStore`,
+`SetLocale`.
 
-## 11. Criterios de aceptación y pruebas
+## 11. Acceptance criteria and tests
 
-* Los vectores oficiales de RFC 9497 y RFC 9807 pasan (OPAQUE.md sección 20.1 y 20.2), y las categorías de
-  esa misma sección (aleatoriedad inyectable, fixtures de referencia, interoperabilidad con
-  `@serenity-kit/opaque`, casos negativos, fuzzing ligero, pruebas de enumeración) están cubiertas.
-* El vector fijo de regresión del KSF (OPAQUE.md sección 20.5) pasa en integración continua: un cambio del
-  KSF o de sus valores por defecto se detecta ahí, no en producción.
-* El sobre de la UMK es verificablemente de solo añadir: un test crea dos sobres para el mismo usuario y
-  comprueba que el primero queda con `retired_at` no nulo y que su contenido no cambió.
-* `registration/finish` es idempotente bajo un test que lo llama dos veces con el mismo `registrationId` y
-  comprueba que la segunda llamada no falla ni duplica filas.
-* El consumo de `opaque_login_handshakes` y de `opaque_registrations` es atómico bajo concurrencia real,
-  no solo bajo el caso secuencial (OPAQUE.md sección 20.6, la carrera de dos peticiones simultáneas de
-  `login/finish` con el mismo `handshakeId`).
-* Existe el test que falla si `config('session.driver') === 'cookie'`, y el que falla si alguna página del
-  panel expone una propiedad `#[Url]` (sección 9).
-* El test de snapshot que falla si una propiedad pública de un componente cifrado contiene algo que no sea
-  metadato o sobre cifrado (sección 9).
-* Un usuario inexistente y uno existente producen la misma forma, el mismo código HTTP y el mismo tamaño
-  de respuesta en `login/start` (OPAQUE.md sección 20.8), y esa igualdad se comprueba también antes y
-  después de registrar la cuenta, no solo en un instante fijo.
-* La rama falsa de login se recorre también cuando `opaque_registration_record` existe pero
-  `opaque_profile` no coincide con el perfil vigente, no solo cuando la cuenta no existe.
-* Existe purga programada de `opaque_login_handshakes` y `opaque_registrations` caducados, verificada con
-  un test que crea filas caducadas y comprueba que el comando las elimina.
-* El flujo completo de alta (secciones 5 y 6.1 encadenadas) se prueba de extremo a extremo: desde emitir
-  el enlace hasta comprobar que la UMK recuperada tras un login posterior es la misma que nació en el
-  registro.
-* El flujo de recuperación tras recarga (sección 6.2) se prueba simulando la pérdida de la UMK en memoria
-  y comprobando que se recupera sin pedir contraseña, y que un secreto de sesión destruido produce 410 y
-  lleva a la pantalla de login.
-* El bloqueo se prueba comprobando que, tras `POST /phr/auth/lock`, una petición posterior a
-  `session-secret` responde 410, y que la sesión de Laravel ya no está autenticada.
-* Una sesión autenticada cuya última petición fue hace más de quince minutos queda cerrada en la siguiente
-  petición, sin que el navegador haya llamado a `POST /phr/auth/lock`: la sesión deja de estar autenticada,
-  el secreto desaparece y la respuesta es 401 en JSON o redirección al login en una navegación.
-* Los formularios de login y de establecimiento de contraseña no declaran `method` ni `action`, y ningún
-  campo de contraseña declara `name`, de modo que un envío nativo del formulario (sin Alpine todavía
-  hidratado, o con el bundle sin cargar) no puede llevar la contraseña al servidor.
+* The official RFC 9497 and RFC 9807 vectors pass (OPAQUE.md sections 20.1 and 20.2), and the categories of that
+  same section (injectable randomness, reference fixtures, interoperability with `@serenity-kit/opaque`,
+  negative cases, light fuzzing, enumeration tests) are covered.
+* The fixed KSF regression vector (OPAQUE.md section 20.5) passes in continuous integration: a change to the KSF
+  or to its defaults is caught there, not in production.
+* The UMK envelope is verifiably append-only: a test creates two envelopes for the same user and checks that the
+  first ends up with a non-null `retired_at` and that its content did not change.
+* `registration/finish` is idempotent under a test that calls it twice with the same `registrationId` and checks
+  that the second call neither fails nor duplicates rows.
+* Consuming `opaque_login_handshakes` and `opaque_registrations` is atomic under real concurrency, not only in
+  the sequential case (OPAQUE.md section 20.6, the race between two simultaneous `login/finish` requests with
+  the same `handshakeId`).
+* The test that fails if `config('session.driver') === 'cookie'` exists, and so does the one that fails if any
+  page of the panel exposes a `#[Url]` property (section 9).
+* The snapshot test that fails if a public property of an encrypted component contains something that is not
+  metadata or an encrypted envelope (section 9).
+* A non-existent user and an existing one produce the same shape, the same HTTP code and the same response size
+  in `login/start` (OPAQUE.md section 20.8), and that sameness is checked before and after registering the
+  account too, not only at one fixed moment.
+* The login fake branch is also taken when `opaque_registration_record` exists but `opaque_profile` does not
+  match the current profile, not only when the account does not exist.
+* Scheduled pruning of expired `opaque_login_handshakes` and `opaque_registrations` exists, verified with a test
+  that creates expired rows and checks that the command deletes them.
+* The full sign-up flow (sections 5 and 6.1 chained) is tested end-to-end: from issuing the link to checking
+  that the UMK recovered after a later login is the same one that was born at registration.
+* The recovery-after-reload flow (section 6.2) is tested by simulating the loss of the UMK from memory and
+  checking that it is recovered without asking for the password, and that a destroyed session secret produces a
+  410 and leads to the login screen.
+* The lock is tested by checking that, after `POST /phr/auth/lock`, a later request to `session-secret` responds
+  410, and that the Laravel session is no longer authenticated.
+* An authenticated session whose last request was more than fifteen minutes ago is closed on the next request,
+  without the browser having called `POST /phr/auth/lock`: the session stops being authenticated, the secret
+  disappears and the response is a 401 in JSON or a redirect to the login on a navigation.
+* The login and password-setting forms declare no `method` and no `action`, and no password field declares a
+  `name`, so that a native form submission (with Alpine not yet hydrated, or with the bundle not loaded) cannot
+  carry the password to the server.
 
-## 12. Riesgos asumidos
+## 12. Accepted risks
 
-La TTL del enlace de registro (24 horas) ya está decidida y fijada en el ADR 0009 y en la sección 3.3; no
-queda como pregunta abierta.
+The registration link TTL (24 hours) is already decided and fixed in ADR 0009 and in section 3.3; it is not left
+as an open question.
 
-1. **Argon2id (t=3, m=64 MiB, p=4) sin medir en el dispositivo más lento del personal.** Decisión tomada:
-   los parámetros se mantienen y la medición se hace con usuarios y dispositivos reales, no antes de
-   producción. Riesgo asumido de forma explícita: bajarlos después obliga a que todo el mundo se registre
-   de nuevo, y con el orden de la sección 5 (login inmediato tras el registro) ese coste se paga dos veces
-   en el alta. Mitigación barata: el primer usuario, que arranca el sistema, puede medirlo en el
-   dispositivo más antiguo del que disponga antes de invitar a nadie más, y eso detecta el caso malo
-   cuando todavía no cuesta nada (ADR 0004).
-2. **Compartición con un profesional y escrow de recuperación siguen aplazados.** Es una decisión tomada y
-   revisada, no un olvido: se aplaza a propósito porque el identificador de clave que reserva el ADR 0004
-   hace barato el retraso, y porque el escrow se puede añadir a los usuarios existentes la próxima vez que
-   inicien sesión, que es cuando tienen la clave en memoria. Fuera de alcance de esta spec (sección 1).
+1. **Argon2id (t=3, m=64 MiB, p=4) not measured on the staff's slowest device.** Decision taken: the parameters
+   stay and the measurement is done with real users and real devices, not before production. Explicitly accepted
+   risk: lowering them later forces everybody to register again, and with the order in section 5 (immediate
+   login after registration) that cost is paid twice at sign-up. Cheap mitigation: the first user, the one who
+   starts the system up, can measure it on the oldest device they have available before inviting anyone else,
+   and that catches the bad case while it still costs nothing (ADR 0004).
+2. **Sharing with a professional and recovery escrow are still deferred.** It is a decision taken and reviewed,
+   not an oversight: it is deferred on purpose because the key identifier ADR 0004 reserves makes the delay
+   cheap, and because escrow can be added to existing users the next time they log in, which is when they have
+   the key in memory. Out of scope for this spec (section 1).
 
-Un punto del diseño de origen que no se ha incorporado a esta spec: la posibilidad de escribir el enlace
-de registro a un fichero con permisos restringidos (modo `0600`) como alternativa a imprimirlo solo por
-terminal. Se descarta porque hoy no hay ningún despliegue automatizado que lo necesite; si aparece, es un
-cambio pequeño y localizado en `phr:issue-registration-link`.
+One point of the original design that has not been carried into this spec: the option of writing the
+registration link to a file with restricted permissions (mode `0600`) as an alternative to printing it only to
+the terminal. We rejected it because there is no automated deployment that needs it today; if one appears, it is
+a small, localized change in `phr:issue-registration-link`.
 
-## 13. Historial
+## 13. History
 
-### 2026-07-26 — Se añade el registro público, sin invitación
-Antes: la única forma de crear una cuenta era abrir un enlace de invitación, emitido por otro usuario o
-por el comando de consola del primer usuario; secciones 1, 2 y 4 no contemplaban ninguna otra vía. Ahora
-existe `POST /phr/auth/opaque/registration/public/start` (sección 4.7), que crea la fila de usuario en el
-propio endpoint y responde 409 `login_taken` si el correo ya tiene cuenta, en vez de exigir un token.
-`registration/finish` (sección 4.2) queda sin cambios de contrato, pero deja de consumir un enlace cuando
-el pendiente tiene `invitation_ref` a `null` (ADR 0009).
+### 2026-07-26 — Public sign-up, without an invitation, is added
+Previously: the only way to create an account was to open an invitation link, issued by another user or by the
+first user's console command; sections 1, 2 and 4 contemplated no other route. Now
+`POST /phr/auth/opaque/registration/public/start` exists (section 4.7), which creates the user row in the
+endpoint itself and responds 409 `login_taken` if the email already has an account, instead of requiring a
+token. `registration/finish` (section 4.2) keeps its contract unchanged, but stops consuming a link when the
+pending row has `invitation_ref` at `null` (ADR 0009).
 
-### 2026-07-26 — La caducidad por inactividad pasa a contarse en el servidor
-Antes: la sección 8 ya exigía que contase el servidor, pero la única cuenta que existía era el
-`setTimeout` de `auth/lock.js`, así que una pestaña descartada por memoria, un portátil cerrado o una
-llamada de cierre que no llegaba a salir dejaban la sesión y el secreto vivos hasta el `session.lifetime`
-de Laravel, hoy 120 minutos. Ahora lo cuenta `EnforceIdleTimeout` y el temporizador del navegador solo
-avisa y dispara la recarga.
+### 2026-07-26 — The idle timeout moves to being counted on the server
+Previously: section 8 already required the server to count it, but the only counting that existed was the
+`setTimeout` in `auth/lock.js`, so a tab discarded for memory, a closed laptop or a lock call that never made it
+out left the session and the secret alive until Laravel's `session.lifetime`, today 120 minutes. Now
+`EnforceIdleTimeout` counts it and the browser timer only warns and fires the reload.
 
-### 2026-07-26 — `registration/finish` deja de compartir limitador con `registration/start`
-Antes: la sección 4.2 pedía limitar por IP, y la ruta iba montada sobre el limitador de
-`registration/start`, cuya segunda clave es el hash del `registrationToken`. Esa ruta no recibe ese campo,
-así que todas sus peticiones caían en el mismo cubo de 15 por minuto y cualquiera podía agotarlo para
-dejar sin alta a toda la instalación.
+### 2026-07-26 — `registration/finish` stops sharing a rate limiter with `registration/start`
+Previously: section 4.2 asked for limiting by IP, and the route was mounted on the `registration/start` limiter,
+whose second key is the hash of the `registrationToken`. That route does not receive that field, so all of its
+requests fell into the same bucket of 15 per minute and anyone could exhaust it to block sign-up for the whole
+installation.

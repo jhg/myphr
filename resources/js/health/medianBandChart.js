@@ -28,7 +28,7 @@ import Chart from 'chart.js/auto';
 
 import { formatChartDay, formatNumber, t } from '../i18n/index.js';
 import { legendElementFor, legendItems, renderLegend } from './chartLegend.js';
-import { chartColors } from './chartTheme.js';
+import { chartColors, CHART_FONTS } from './chartTheme.js';
 
 /**
  * Segunda codificación de cada serie, además del color (Do's #3): patrón de trazo y forma del punto.
@@ -40,12 +40,6 @@ const SERIES_SHAPES = Object.freeze([
     Object.freeze({ borderDash: [6, 4], pointStyle: 'triangle' }),
     Object.freeze({ borderDash: [2, 3], pointStyle: 'rect' }),
 ]);
-
-/** Familias de DESIGN.md § Typography: en un `<canvas>` la fuente se declara por nombre. */
-const CHART_FONTS = Object.freeze({
-    body: "'Open Sans', ui-sans-serif, system-ui, sans-serif",
-    mono: "'IBM Plex Mono', ui-monospace, monospace",
-});
 
 /**
  * Opacidad del relleno de la banda.

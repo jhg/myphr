@@ -78,6 +78,226 @@ const TONE_INK = Object.freeze({
 });
 
 /**
+ * Relleno de cada papel semántico cuando lo que se pinta es una **superficie** y no texto: el tramo
+ * de una barra, el cuadradito de una leyenda.
+ *
+ * Se usa la tinta (`success-ink`, `warning-ink`) y no el relleno suave (`*-surface`) porque un tramo
+ * de barra es un objeto gráfico y necesita 3:1 contra la tarjeta (WCAG 1.4.11): los rellenos suaves
+ * están pensados para llevar texto encima, no para leerse solos. Los dos papeles conmutan con el
+ * tema por sí mismos.
+ *
+ * @type {Record<string, string>}
+ */
+const TONE_FILL = Object.freeze({
+    neutral: 'bg-ink-secondary',
+    good: 'bg-success-ink',
+    warning: 'bg-warning-ink',
+});
+
+/** Alto y ancho del lienzo lógico de la minigráfica, en unidades de su `viewBox`. */
+const SPARKLINE_WIDTH = 100;
+const SPARKLINE_HEIGHT = 24;
+
+/** Margen vertical del trazo, para que un máximo o un mínimo no se corte contra el borde. */
+const SPARKLINE_PADDING = 2;
+
+/**
+ * Puntos mínimos para que una minigráfica se pinte.
+ *
+ * Dos puntos siempre forman una recta perfecta: dibujarla es afirmar una tendencia que no se ha
+ * observado. Con menos de tres no se pinta nada, y la tarjeta se queda con sus cifras, que sí son
+ * dato.
+ */
+export const SPARKLINE_MIN_POINTS = 3;
+
+/**
+ * Minigráfica de tendencia: una polilínea sin ejes, sin etiquetas y sin leyenda.
+ *
+ * **Por qué SVG a mano y no Chart.js.** Una tarjeta de estadísticas no lleva una gráfica, lleva un
+ * gesto. Chart.js pide un `<canvas>` con su ciclo de vida (instancia que hay que destruir al
+ * repintar, colores que hay que releer del tema al cambiar de modo, redibujado al redimensionar), y
+ * eso multiplicado por cada baldosa de cada método de cada tipo es un coste real por un trazo de
+ * cuatro líneas. Un SVG es un nodo más del fragmento: se tira con el resto cuando la vista se
+ * repinta, hereda el color del tema por `currentColor` sin releer nada, y escala solo.
+ *
+ * **Los huecos son huecos** (misma regla que `dailyBands.js`): un día sin lecturas no aporta punto y
+ * **parte el trazo**. Unir por encima del hueco dibujaría una pendiente que nadie ha medido, y
+ * rellenarlo con un cero dibujaría una caída que no ocurrió. Un tramo suelto entre dos huecos se
+ * marca con un punto, que es exactamente lo que se sabe de él.
+ *
+ * La posición horizontal es la del día dentro del periodo, no la del punto dentro de la lista: así
+ * un hueco de una semana se ve ancho y uno de un día, estrecho.
+ *
+ * Es decorativa (`aria-hidden`): todo lo que dice está también en las cifras de la baldosa, así que
+ * no hay nada que anunciar dos veces (DESIGN.md, Do's #3).
+ *
+ * @param {list<number|null>} points Un valor por día del periodo, `null` en los días sin lecturas.
+ * @returns {SVGElement|null} `null` si no hay tendencia que enseñar.
+ */
+export function createSparkline(points) {
+    const present = points
+        .map((value, index) => ({ value, index }))
+        .filter((point) => typeof point.value === 'number' && Number.isFinite(point.value));
+
+    if (present.length < SPARKLINE_MIN_POINTS || points.length < 2) {
+        return null;
+    }
+
+    const values = present.map((point) => point.value);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const span = max - min;
+    const usableHeight = SPARKLINE_HEIGHT - SPARKLINE_PADDING * 2;
+
+    const x = (index) => (index / (points.length - 1)) * SPARKLINE_WIDTH;
+    /** Una serie plana se dibuja centrada: no hay recorrido que escalar, y dividir por cero tampoco. */
+    const y = (value) => (span === 0
+        ? SPARKLINE_HEIGHT / 2
+        : SPARKLINE_PADDING + ((max - value) / span) * usableHeight);
+
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', `0 0 ${SPARKLINE_WIDTH} ${SPARKLINE_HEIGHT}`);
+    /**
+     * El trazo se estira con la baldosa, así que la relación de aspecto no se conserva; el grosor de
+     * la línea sí, con `vector-effect`, o saldría más gruesa en horizontal que en vertical.
+     */
+    svg.setAttribute('preserveAspectRatio', 'none');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('class', 'mt-2 h-6 w-full text-ink-secondary');
+
+    for (const run of consecutiveRuns(present)) {
+        const shape = run.length === 1
+            ? document.createElementNS('http://www.w3.org/2000/svg', 'circle')
+            : document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+
+        if (run.length === 1) {
+            shape.setAttribute('cx', String(round(x(run[0].index))));
+            shape.setAttribute('cy', String(round(y(run[0].value))));
+            shape.setAttribute('r', '1.5');
+            shape.setAttribute('fill', 'currentColor');
+        } else {
+            const coordinates = run.map((point) => `${round(x(point.index))},${round(y(point.value))}`);
+
+            shape.setAttribute('points', coordinates.join(' '));
+            shape.setAttribute('fill', 'none');
+            shape.setAttribute('stroke', 'currentColor');
+            shape.setAttribute('stroke-width', '1.5');
+            shape.setAttribute('stroke-linecap', 'round');
+            shape.setAttribute('stroke-linejoin', 'round');
+            shape.setAttribute('vector-effect', 'non-scaling-stroke');
+        }
+
+        svg.appendChild(shape);
+    }
+
+    return svg;
+}
+
+/**
+ * Parte una lista de puntos en tramos de días **consecutivos**: cada salto de índice es un día sin
+ * lecturas y abre un tramo nuevo.
+ *
+ * @param {list<{value: number, index: number}>} present
+ * @returns {list<list<{value: number, index: number}>>}
+ */
+function consecutiveRuns(present) {
+    const runs = [];
+
+    for (const point of present) {
+        const current = runs.at(-1);
+
+        if (current !== undefined && point.index === current.at(-1).index + 1) {
+            current.push(point);
+        } else {
+            runs.push([point]);
+        }
+    }
+
+    return runs;
+}
+
+/**
+ * Coordenada con dos decimales: más precisión solo engorda el atributo sin mover ningún píxel.
+ *
+ * @param {number} value
+ * @returns {number}
+ */
+function round(value) {
+    return Math.round(value * 100) / 100;
+}
+
+/**
+ * Barra horizontal por tramos, con su leyenda debajo.
+ *
+ * Es la forma estándar de leer un reparto en tres partes —por debajo, dentro, por encima— sin hacer
+ * ninguna cuenta. La proporción de cada tramo es su porcentaje, repartido con `flex-grow` para que
+ * la barra llene el ancho exacto sin costuras aunque los tres redondeos no sumen 100 clavado.
+ *
+ * **El color nunca va solo** (DESIGN.md, Do's #3): la barra es decorativa y quien informa es la
+ * leyenda, donde cada tramo lleva su etiqueta escrita y su porcentaje como número. En escala de
+ * grises, con el tema oscuro o con un lector de pantalla se lee igual.
+ *
+ * El estilo va por atributo y no por la propiedad `style` a propósito: estos módulos se prueban con
+ * un `document` mínimo (ver `tests/js`), y `setAttribute` es lo único que ese documento necesita
+ * saber hacer.
+ *
+ * @param {list<{label: string, percent: number, value: string, tone: 'neutral'|'good'|'warning'}>} segments
+ * @returns {HTMLDivElement}
+ */
+export function createSegmentedBar(segments) {
+    const wrapper = document.createElement('div');
+
+    const track = document.createElement('div');
+    track.className = 'flex h-3 w-full overflow-hidden rounded-full border border-border bg-background';
+    track.setAttribute('aria-hidden', 'true');
+
+    for (const segment of segments) {
+        if (segment.percent <= 0) {
+            continue;
+        }
+
+        const fill = document.createElement('div');
+        fill.className = TONE_FILL[segment.tone] ?? TONE_FILL.neutral;
+        fill.setAttribute('style', `flex-grow:${segment.percent}`);
+        track.appendChild(fill);
+    }
+
+    wrapper.appendChild(track);
+
+    const legend = document.createElement('ul');
+    legend.className = 'mt-2 flex flex-wrap gap-x-4 gap-y-1';
+
+    /**
+     * Un tramo vacío se queda en la leyenda con su «0 %». Es información: saber que no hubo ninguna
+     * lectura por debajo del rango no es lo mismo que no saber nada de ese tramo.
+     */
+    for (const segment of segments) {
+        const item = document.createElement('li');
+        item.className = 'flex items-center gap-2 text-caption text-ink-secondary';
+
+        const swatch = document.createElement('span');
+        swatch.className = `size-2 shrink-0 rounded-full ${TONE_FILL[segment.tone] ?? TONE_FILL.neutral}`;
+        swatch.setAttribute('aria-hidden', 'true');
+        item.appendChild(swatch);
+
+        const text = document.createElement('span');
+        text.textContent = segment.label;
+        item.appendChild(text);
+
+        const amount = document.createElement('span');
+        amount.className = 'font-mono font-semibold text-ink';
+        amount.textContent = segment.value;
+        item.appendChild(amount);
+
+        legend.appendChild(item);
+    }
+
+    wrapper.appendChild(legend);
+
+    return wrapper;
+}
+
+/**
  * Un valor con su etiqueta y su unidad, siempre juntos (Do's #2 y #7 de DESIGN.md: un número suelto
  * es un número que se malinterpreta). El valor va en IBM Plex Mono con contraste alto, nunca en gris
  * claro.
@@ -87,9 +307,12 @@ const TONE_INK = Object.freeze({
  * @param {string} params.value Ya formateado (`formatNumber` o la fecha).
  * @param {string} [params.unit]
  * @param {'neutral'|'good'|'warning'} [params.tone]
+ * @param {list<number|null>} [params.trend] Serie diaria para la minigráfica ({@see createSparkline}).
+ *        Opcional y sin efecto si no hay tendencia que enseñar: quien ya llamaba a esta función sin
+ *        ella sigue obteniendo exactamente la misma baldosa.
  * @returns {HTMLDivElement}
  */
-export function createStatTile({ label, value, unit, tone = 'neutral' }) {
+export function createStatTile({ label, value, unit, tone = 'neutral', trend }) {
     const tile = document.createElement('div');
     /**
      * `bg-background` y `border-border`: papeles de § Colors, que conmutan solos con el tema. Con
@@ -123,6 +346,18 @@ export function createStatTile({ label, value, unit, tone = 'neutral' }) {
     }
 
     tile.appendChild(valueLine);
+
+    /**
+     * La minigráfica va debajo de la cifra y nunca en su lugar: es contexto («¿va subiendo?»), no
+     * dato. Si no hay tendencia que enseñar, la baldosa se queda como estaba.
+     */
+    if (Array.isArray(trend)) {
+        const sparkline = createSparkline(trend);
+
+        if (sparkline !== null) {
+            tile.appendChild(sparkline);
+        }
+    }
 
     return tile;
 }

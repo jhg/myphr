@@ -52,6 +52,12 @@ export function legendItems(series) {
         color: entry.color,
         dash: [...(entry.borderDash ?? [])],
         shape: entry.pointStyle ?? 'circle',
+        /**
+         * Una serie que en la gráfica **no es una línea** —las marcas de comida y de insulina de la
+         * curva de glucemia, que son puntos sueltos sobre el eje temporal— tampoco la lleva en la
+         * leyenda: dibujarle un trazo diría que hay una serie continua donde solo hay sucesos.
+         */
+        line: entry.lineless !== true,
     }));
 }
 
@@ -114,19 +120,22 @@ function createSwatch(item) {
     svg.setAttribute('aria-hidden', 'true');
     svg.setAttribute('class', 'shrink-0');
 
-    const line = document.createElementNS(SVG_NAMESPACE, 'line');
-    line.setAttribute('x1', '0');
-    line.setAttribute('y1', String(SWATCH.middle));
-    line.setAttribute('x2', String(SWATCH.width));
-    line.setAttribute('y2', String(SWATCH.middle));
-    line.setAttribute('stroke', item.color);
-    line.setAttribute('stroke-width', '2');
+    if (item.line !== false) {
+        const line = document.createElementNS(SVG_NAMESPACE, 'line');
+        line.setAttribute('x1', '0');
+        line.setAttribute('y1', String(SWATCH.middle));
+        line.setAttribute('x2', String(SWATCH.width));
+        line.setAttribute('y2', String(SWATCH.middle));
+        line.setAttribute('stroke', item.color);
+        line.setAttribute('stroke-width', '2');
 
-    if (item.dash.length > 0) {
-        line.setAttribute('stroke-dasharray', item.dash.join(' '));
+        if (item.dash.length > 0) {
+            line.setAttribute('stroke-dasharray', item.dash.join(' '));
+        }
+
+        svg.appendChild(line);
     }
 
-    svg.appendChild(line);
     svg.appendChild(createShape(item.shape, item.color));
 
     return svg;

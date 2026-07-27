@@ -1,4 +1,4 @@
-# ADR 0006: Modelo de eventos cifrados
+# ADR 0006: Encrypted event model
 
 * **Status**: Accepted
 * **Date**: 2026-07-25
@@ -7,224 +7,218 @@
 
 ## Context
 
-El primer MVP registra el seguimiento de una persona diabética: glucemias varias veces al día, insulina
-inyectada con su tipo y dosis, tensión arterial de tensiómetro de brazo y comidas. Más adelante, sin
-rehacer el modelo, ritmo cardiaco, temperatura y notas del paciente sobre síntomas.
+The first MVP records the tracking of a person with diabetes: blood glucose several times a day, injected
+insulin with its type and dose, blood pressure from an arm monitor, and meals. Later, without redoing the
+model, heart rate, temperature, and patient notes about symptoms.
 
-Los ADR 0002 y 0005 dejaron a cada funcionalidad decidir qué se cifra. Esta es la primera que lo pide, y
-el problema no es el valor de una glucemia sino el metadato: si existe una tabla de lecturas de glucosa, o
-una columna de tipo en claro, el servidor sabe que esa persona es diabética sin descifrar nada. Y si
-registra seis veces al día, sabe más todavía.
+ADR 0002 and ADR 0005 left it to each feature to decide what gets encrypted. This is the first one that asks
+for it, and the problem is not the value of a blood glucose reading but the metadata: if there is a glucose
+readings table, or a plaintext type column, the server knows that person is diabetic without decrypting
+anything. And if they record six times a day, it knows even more.
 
-Los cuatro registros tampoco son independientes. El valor clínico está en su relación: comió, se puso seis
-unidades de rápida, dos horas después tenía 180. Es una secuencia de eventos en el tiempo, no cuatro
-listados paralelos.
+The four kinds of record are not independent either. The clinical value is in their relationship: they ate,
+took six units of rapid insulin, two hours later they were at 180. It's a sequence of events in time, not
+four parallel lists.
 
 ## Decision
 
-Una sola tabla de eventos, con el tipo cifrado junto al resto del contenido:
+A single events table, with the type encrypted alongside the rest of the content:
 
 ```
 events
   id           uuid       primary
   user_id      uuid       not null, fk
-  occurred_at  datetime   not null, precision 6, UTC    cuándo ocurrió de verdad
-  payload      text       not null                       sobre cifrado, prefijo v1.
-  created_at   datetime                                  cuándo se apuntó
+  occurred_at  datetime   not null, precision 6, UTC    when it actually happened
+  payload      text       not null                      encrypted envelope, v1. prefix
+  created_at   datetime                                 when it was recorded
   updated_at   datetime
   deleted_at   datetime   nullable
 
-  índice (user_id, occurred_at)
+  index (user_id, occurred_at)
 ```
 
-Cada columna en claro se gana el sitio demostrando que el servidor la necesita para consultar: `user_id`
-para autorizar y acotar, `occurred_at` para rango, orden y paginación, `id` como asa para editar o releer
-un evento. Nada más. Se acepta que el patrón temporal quede visible, que es el precio de poder paginar y
-limitar en servidor en lugar de descargarlo todo.
+Every plaintext column earns its place by proving the server needs it to query: `user_id` to authorize and
+narrow down, `occurred_at` for range, ordering, and pagination, `id` as a handle to edit or re-read an event.
+Nothing else. We accept that the time pattern stays visible, which is the price of paginating and limiting on
+the server instead of downloading everything.
 
-Las claves primarias son UUID en todas nuestras tablas, para evitar enumeración y por compatibilidad con
-el registro de actividad. Preferimos UUIDv7 por localidad de índice, salvo donde el momento de creación
-sea sensible.
+Primary keys are UUIDs in all our tables, to avoid enumeration and for compatibility with the activity log.
+We prefer UUIDv7 for index locality, except where the creation time is sensitive.
 
-El contenido descifrado es JSON con versión, tipo, desfase horario y datos:
+The decrypted content is JSON with version, type, time offset, and data:
 
 ```json
 {"v": 1, "type": "glucose", "tz": "+02:00", "origin": "manual", "recordedBy": "self",
  "data": {"value": "142", "unit": "mg/dL", "loinc": "41653-7", "method": "capillary"}}
 ```
 
-Los campos comunes a cualquier tipo van en el nivel superior, junto a `v`, `type` y `tz`; lo propio del
-tipo va dentro de `data`, y ahí el token del método es obligatorio en toda medición por el ADR 0008.
+Fields common to any type go at the top level, next to `v`, `type`, and `tz`; what belongs to the type goes
+inside `data`, and there the method token is mandatory for every measurement, by ADR 0008.
 
-No usamos una columna JSON de base de datos: el servidor no puede consultar lo que no puede descifrar, así
-que un tipo `json` no aporta nada sobre `text` y sí invita a que alguien intente indexarlo dentro de un
-año. El texto con prefijo `v1.` encaja además con el guardarraíl del ADR 0002, que comprueba ese prefijo.
+We don't use a database JSON column: the server can't query what it can't decrypt, so a `json` type adds
+nothing over `text` and does invite someone to try indexing it a year from now. Text with the `v1.` prefix
+also fits the ADR 0002 guardrail, which checks that prefix.
 
-El formato del sobre, el relleno a tamaños fijos, el identificador de clave, el versionado, los decimales
-como cadena, los tokens estables y el formato canónico de fecha son reglas generales del dato en reposo y
-viven en el ADR 0004 (`docs/adr/0004-client-crypto-and-data-format.md`). Aquí solo se fija lo propio de
-los eventos.
+The envelope format, padding to fixed sizes, the key identifier, versioning, decimals as strings, stable
+tokens, and the canonical date form are general rules for data at rest and live in ADR 0004
+(`docs/adr/0004-client-crypto-and-data-format.md`). Only what is specific to events is fixed here.
 
-Un evento no equivale a un recurso del formato destino: la tensión arterial, que aquí es un solo evento
-porque es lo que da el aparato y lo que vive el paciente, se exporta como dos observaciones separadas,
-porque el perfil de tensión no admite el pulso como componente. La asimetría la resuelve el exportador.
+An event is not the same thing as a resource in the target format: blood pressure, which here is a single
+event because that's what the device gives and what the patient lives through, is exported as two separate
+observations, because the blood pressure profile does not accept pulse as a component. The exporter resolves
+the asymmetry.
 
-Un evento es un solo sobre, no un sobre por campo: sus campos no tienen sentido por separado y cifrarlos
-uno a uno los multiplicaría sin ganar nada.
+An event is a single envelope, not one envelope per field: its fields make no sense separately, and
+encrypting them one by one would multiply them for nothing.
 
-Lo que identifica a un evento para el dato asociado del AEAD y para la derivación de su clave es
-`user_id` y `occurred_at`. Atan el sobre a su fila, de modo que mover un ciphertext a otra fecha o a otro
-usuario hace fallar el descifrado en lugar de mostrar un dato correcto atribuido al día equivocado.
-`user_id` es redundante hoy, porque la clave maestra por usuario ya impide leer sobres ajenos, pero cubre
-el día que existan claves compartidas. Se usa el instante y no el `id` de la fila porque es lo que define
-al evento y el cliente ya lo conoce antes de insertar.
+What identifies an event for the AEAD associated data and for deriving its key is `user_id` and
+`occurred_at`. They tie the envelope to its row, so that moving a ciphertext to another date or another user
+makes decryption fail instead of showing a correct value attributed to the wrong day. `user_id` is redundant
+today, because the per-user master key already prevents reading someone else's envelopes, but it covers the
+day shared keys exist. We use the instant and not the row `id` because that is what defines the event and the
+client already knows it before inserting.
 
-Consecuencia que conviene dejar escrita: el tipo clínico no puede entrar en el dato asociado, porque
-está cifrado dentro del propio sobre y no puede participar en su propia autenticación. Si alguien mete
-`glucose` ahí, rompe justo la propiedad que se buscaba.
+A consequence worth writing down: the clinical type can't go into the associated data, because it is
+encrypted inside the envelope itself and can't take part in its own authentication. If someone puts `glucose`
+there, they break exactly the property we were after.
 
-Los cinco tipos del MVP y su futuro inmediato: `glucose` (ver abajo), `insulin` (tipo `rapid|long|mixed`,
-dosis, y código del producto si procede, porque es una administración de medicación y no una observación),
-`bloodPressure` (un solo evento con sistólica, diastólica y pulso, como lo da el aparato), `meal`
-(`mealType` explícito más una lista de alimentos, cada uno con su texto libre, su cantidad y su unidad, con
-la forma que fija el ADR 0010, `docs/adr/0010-uncoded-food-entries.md`) y `note` (texto y hallazgos
-codificados opcionales).
+The five MVP types and their immediate future: `glucose` (see below), `insulin` (type `rapid|long|mixed`,
+dose, and the product code where applicable, because it is a medication administration and not an
+observation), `bloodPressure` (a single event with systolic, diastolic, and pulse, as the device gives it),
+`meal` (an explicit `mealType` plus a list of food items, each with its free text, its quantity, and its
+unit, in the shape fixed by ADR 0010, `docs/adr/0010-uncoded-food-entries.md`), and `note` (text and optional
+coded findings).
 
-La glucemia no es un solo tipo de medición: el sensor mide en líquido intersticial, el medidor capilar mide
-sangre y las tiras de orina dan una presencia, no un número. Cada una tiene su código y no son
-intercambiables. El método de medición como parte del dato, y sus consecuencias para las estadísticas, se
-deciden en el ADR 0008 (`docs/adr/0008-measurement-method.md`), porque afectan a toda magnitud y no solo a
-la glucemia.
+Blood glucose is not a single kind of measurement: the sensor measures in interstitial fluid, the capillary
+meter measures blood, and urine test strips give a presence, not a number. Each one has its own code and they
+are not interchangeable. The measurement method as part of the data, and its consequences for statistics, are
+decided in ADR 0008 (`docs/adr/0008-measurement-method.md`), because they affect every quantity and not just
+blood glucose.
 
-Sacar un recorte de estos eventos hacia un profesional sin cuenta lo decide el ADR 0011
-(`docs/adr/0011-shared-clipping-for-professionals.md`), que hereda la regla de aquí: ninguna columna en
-claro describe lo que contiene el recorte, ni sus tipos ni su rango. Su tabla es además la única del
-proyecto sin `deleted_at`, porque revocar tiene que borrar de verdad.
+Sharing a clipping of these events with a professional who has no account is decided by ADR 0011
+(`docs/adr/0011-shared-clipping-for-professionals.md`), which inherits the rule from here: no plaintext
+column describes what the clipping contains, neither its types nor its range. Its table is also the only one
+in the project without `deleted_at`, because revoking has to really delete.
 
-El servidor valida el formato del sobre, la codificación y el tamaño, que con el relleno a tamaños fijos
-solo puede ser uno de los valores permitidos más la cabecera del sobre. Nunca el contenido.
+The server validates the envelope format, the encoding, and the size, which with padding to fixed sizes can
+only be one of the allowed values plus the envelope header. Never the content.
 
-La unidad de medida es una preferencia del usuario, no una elección por registro: se fija una vez
-(mg/dL o mmol/L para la glucemia) y determina qué código LOINC se guarda, porque son códigos distintos
-según el ADR 0005. Vive en la configuración cifrada del usuario, que decide el ADR 0007
-(`docs/adr/0007-encrypted-user-configuration.md`), y el cliente la necesita antes de poder registrar el
-primer dato.
+The unit of measure is a user preference, not a per-record choice: it is set once (mg/dL or mmol/L for blood
+glucose) and determines which LOINC code is stored, because they are different codes under ADR 0005. It lives
+in the user's encrypted configuration, decided by ADR 0007 (`docs/adr/0007-encrypted-user-configuration.md`),
+and the client needs it before it can record the first data point.
 
-Campos que se capturan aunque hoy no se usen, porque el usuario o el aparato los conocen en ese momento y
-después son irrecuperables. Comunes a todo evento: si el dato es manual o viene de un aparato, el aparato
-si lo hay, si lo registra la propia persona o alguien que la cuida, y una nota libre opcional que sirve de
-válvula de escape para lo que no encaje. Por tipo: en la glucemia, el tipo de medición y el contexto
-respecto a la comida (ayunas, antes de comer, después de comer, al acostarse), que es el campo con más
-valor clínico de la lista y solo se sabe al registrarlo, pero es opcional y no viene preseleccionado, de
-modo que si la persona no lo indica el campo no entra en el contenido cifrado en lugar de guardarse vacío;
-en la insulina, el producto concreto en texto libre, porque rápida, lenta o mixta no es un código de
-medicamento y el destino exige uno, más la zona de inyección; en la tensión, el brazo y la postura, que
-juntos forman su método de medición según el ADR 0008 y no son dos metadatos accesorios; en las comidas, el
-orden de los alimentos y su cantidad con unidad (ADR 0010); y en las notas, inicio, duración y severidad.
+Fields we capture even though we don't use them today, because the user or the device knows them at that
+moment and afterwards they are unrecoverable. Common to every event: whether the data is manual or comes from
+a device, the device if there is one, whether the person records it themselves or someone caring for them
+does, and an optional free note that works as an escape valve for whatever doesn't fit. Per type: for blood
+glucose, the measurement method and the meal context (fasting, before meal, after meal, bedtime), which is
+the field with the most clinical value on the list and is only known at the moment of recording, but is
+optional and comes with no preselected value, so that if the person doesn't state it the field doesn't enter
+the encrypted content instead of being stored empty; for insulin, the specific product as free text, because
+rapid, long-acting, or mixed is not a medication code and the target format demands one, plus the injection
+site; for blood pressure, the arm and the posture, which together form its measurement method under ADR 0008
+and are not two incidental metadata; for meals, the order of the food items and their quantity with a unit
+(ADR 0010); and for notes, onset, duration, and severity.
 
-No se guarda el estado del registro: es obligatorio en el formato destino pero se deriva al exportar, y lo
-mismo con el sujeto, la categoría y los perfiles.
+We don't store the record status: it is mandatory in the target format but it is derived on export, and the
+same goes for the subject, the category, and the profiles.
 
 ## Rationale
 
-Descartamos una tabla por tipo y una columna de tipo en claro por el mismo motivo: el esquema revelaría la
-enfermedad sin descifrar nada, que es justo lo que el diseño quiere evitar.
+We rejected a table per type and a plaintext type column for the same reason: the schema would reveal the
+disease without decrypting anything, which is exactly what the design wants to avoid.
 
-Sobre los datos asociados, la primera propuesta fue atar el sobre al identificador de la fila, lo que
-obligaba a generar el UUID en el navegador para poder cifrar antes de insertar. `occurred_at` resultó
-mejor: es lo que define el evento, el cliente ya lo conoce antes de enviar, y el identificador vuelve a
-ser un accidente de almacenamiento que puede generar el servidor.
+On associated data, the first proposal was to tie the envelope to the row identifier, which forced generating
+the UUID in the browser to encrypt before inserting. `occurred_at` turned out better: it is what
+defines the event, the client already knows it before sending, and the identifier goes back to being a
+storage accident that the server can generate.
 
-En las comidas descartamos pedir los hidratos de carbono. Si el paciente no los sabe, pedirlos produce
-campos vacíos o números inventados, y un número inventado es peor que ninguno. El médico estima mejor a
-partir del alimento y la cantidad. Añadirlos después es un campo opcional, que por las reglas de
-versionado no rompe nada.
+For meals we rejected asking for carbohydrates. If the patient doesn't know them, asking produces empty
+fields or made-up numbers, and a made-up number is worse than none. The doctor estimates better from the food
+item and the quantity. Adding them later is an optional field, which under the versioning rules breaks
+nothing.
 
-Ese mismo argumento manda en el contexto respecto a la comida. Un desplegable que ya viene con "en ayunas"
-escrito convierte el descuido en un dato falso, y una glucemia mal etiquetada como de ayunas se lee peor
-que una sin etiquetar. Por eso el campo es opcional, sin opción preseleccionada, y ausente del contenido
-cuando no se responde.
+That same argument rules the meal context. A dropdown that already reads "fasting" turns carelessness into
+false data, and a blood glucose reading mislabeled as fasting reads worse than an unlabeled one. That's why
+the field is optional, with no preselected option, and absent from the content when it isn't answered.
 
-La cantidad de los alimentos tiene una sola forma posible porque dos ranuras obligaban a decidir después
-qué hacer con "un plato" o "un puñado", y esa decisión nunca llegaba. Ahora la unidad sale siempre de una
-lista cerrada codificada en UCUM, a costa de que quien no pesa la comida tenga que estimar. Qué unidades
-son y por qué los alimentos no se codifican lo decide el ADR 0010
-(`docs/adr/0010-uncoded-food-entries.md`), que también deja claro que entre esas unidades no hay
-conversión: un resumen que mezcle gramos y mililitros no suma.
+Food quantity has only one possible shape because two slots forced a later decision about what to do with "a
+plate" or "a handful", and that decision never came. Now the unit always comes from a closed list coded in
+UCUM, at the cost that whoever doesn't weigh their food has to estimate. Which units those are and why food
+items aren't coded is decided by ADR 0010 (`docs/adr/0010-uncoded-food-entries.md`), which also makes clear
+that there is no conversion between those units: a summary that mixes grams and milliliters doesn't add up.
 
-* **Pros**: el servidor no sabe qué registra el usuario, solo cuándo; el modelo admite tipos nuevos sin
-  tocar el esquema; el formato en reposo queda cerrado con margen para rotación de claves y cambios de
-  esquema; y las consultas que el servidor sí necesita (rango, orden, límite) están cubiertas por un solo
-  índice.
-* **Cons**: no existe filtrar por tipo en servidor, así que pintar tres meses de glucemias obliga a
-  descargar también las comidas y la insulina de ese rango; la paginación de servidor solo sirve para la
-  vista cronológica mezclada; y editar la fecha de un evento obliga a re-cifrar su sobre.
+* **Pros**: the server doesn't know what the user records, only when; the model takes new types without
+  touching the schema; the format at rest is closed with room for key rotation and schema changes; and the
+  queries the server does need (range, ordering, limit) are covered by a single index.
+* **Cons**: filtering by type on the server doesn't exist, so drawing three months of blood glucose forces
+  downloading the meals and the insulin from that range too; server pagination only works for the mixed
+  chronological view; and editing an event's date forces re-encrypting its envelope.
 
 ## Consequences
 
-Dos ajustes concretos, porque el formato por defecto de fechas de Laravel es `Y-m-d H:i:s` y trunca los
-microsegundos en cualquier motor, no solo en MySQL: el modelo declara
-`protected $dateFormat = 'Y-m-d H:i:s.u'` y la migración pide `dateTime('occurred_at', precision: 6)`. Sin
-ambos, el cliente cifra con una fecha y relee otra, y todos los sobres de esa fila quedan indescifrables.
+Two concrete adjustments, because Laravel's default date format is `Y-m-d H:i:s` and truncates microseconds
+on any engine, not just MySQL: the model declares `protected $dateFormat = 'Y-m-d H:i:s.u'` and the migration
+asks for `dateTime('occurred_at', precision: 6)`. Without both, the client encrypts with one date and reads
+back another, and every envelope in that row becomes undecryptable.
 
-De ahí sale un test obligatorio: guardar un evento con microsegundos distintos de cero, releerlo por la
-API y comprobar que la cadena canónica de datos asociados es idéntica byte a byte. Este fallo aparece en
-producción como corrupción de datos sin causa aparente.
+From that comes a mandatory test: store an event with nonzero microseconds, read it back through the API, and
+check that the canonical associated-data string is byte-for-byte identical. This failure shows up in
+production as data corruption with no apparent cause.
 
-El cliente mantiene un lector por cada combinación de tipo y versión que haya existido, y no se borra
-ninguno. Por cada una hay un payload cifrado de prueba congelado en el repositorio que integración
-continua descifra y valida, igual que el vector del `exportKey` del ADR 0004.
+The client keeps a reader for each combination of type and version that has ever existed, and none of them is
+deleted. For each one there is a frozen test encrypted payload in the repository that continuous integration
+decrypts and validates, just like the `exportKey` vector from ADR 0004.
 
-El volumen es asumible: del orden de 5.000 eventos al año, entre 2 y 3,5 MB, y descifrarlos son decenas de
-milisegundos. Lo que no es gratis es que sin persistencia en el navegador cada sesión vuelve a descargar
-el rango, así que las vistas por defecto llegan acotadas a un rango desde el primer día y la descarga va
-por lotes con cursor, fuera del snapshot de Livewire como fija el ADR 0002.
+The volume is manageable: on the order of 5,000 events a year, between 2 and 3.5 MB, and decrypting them
+takes tens of milliseconds. What isn't free is that without browser persistence every session downloads the
+range again, so the default views arrive narrowed to a range from day one and the download goes in
+cursor-paged batches, outside the Livewire snapshot as ADR 0002 requires.
 
-Queda un vector que este diseño no cubre y conviene no darlo por cubierto: restaurar una versión anterior
-del mismo sobre en la misma fila. Los datos asociados no protegen contra retroceder un registro a un
-estado previo.
+One vector this design does not cover, and it's better not to assume it does: restoring an earlier version of
+the same envelope into the same row. Associated data does not protect against rolling a record back to a
+previous state.
 
-Cuando llegue la funcionalidad sin conexión, `deleted_at` pasa a hacer de lápida para que el borrado se
-propague entre dispositivos, que es la razón de reservarlo ya aunque el MVP no sincronice.
+When offline support arrives, `deleted_at` becomes a tombstone so that deletions propagate between devices,
+which is the reason for reserving it now even though the MVP doesn't sync.
 
-El registro de actividad del servidor solo anota lo que el servidor ya ve. Alta y baja de registros,
-modificación de usuarios (sabiendo únicamente que hubo cambio, nunca qué cambió ni qué configuración
-tienen, porque va cifrada), inicio de sesión y cierre de sesión cuando se produce, sabiendo que mucha
-gente no cierra sesión y simplemente deja que caduque. Sirve para auditar el servidor y nada más: no anota
-contenido clínico, ni nada procedente de los sobres cifrados, ni actividad del cliente como abrir o
-consultar un registro. Un log de accesos detallado acabaría revelando más patrón de uso que la propia
-tabla de eventos, que es justo lo que el diseño evita. Hay que revisar la configuración por defecto del
-paquete que se use, porque suelen registrar de más.
+The server activity log only records what the server already sees. Records created and deleted, users
+modified (knowing only that there was a change, never what changed nor what configuration they have, because
+it's encrypted), log in and log out when it happens, knowing that many people never log out and simply let
+the session expire. It's for auditing the server and nothing else: it doesn't log clinical content, nor
+anything coming from the encrypted envelopes, nor client activity such as opening or reading a record. A
+detailed access log would end up revealing more of the usage pattern than the events table itself, which is
+exactly what the design avoids. We have to review the default configuration of whichever package we use,
+because they tend to log too much.
 
-Al añadir un tipo de evento hay que comprobar qué exige el formato de exportación, aunque la exportación
-no esté implementada, porque los campos que no se capturan en origen no se recuperan después: no hay
-migración posible sobre datos cifrados.
+When adding an event type we have to check what the export format demands, even though export isn't
+implemented, because fields that aren't captured at the source can't be recovered later: there is no possible
+migration over encrypted data.
 
-Hoy ningún formato es obligatorio para nosotros. El RGPD solo pide estructurado y legible por máquina,
-sin nombrar ninguno. El reglamento del Espacio Europeo de Datos Sanitarios obliga a los Estados y a los
-sistemas de historia clínica, no a una aplicación de bienestar como esta, cuya interoperabilidad declarada
-es voluntaria; y sus especificaciones técnicas ni siquiera existen todavía. El objetivo, por tanto, es
-formato propio en JSON documentado, diseñado para que el mapeo a FHIR R4 compatible con el resumen
-internacional de paciente sea mecánico el día que haga falta.
+No format is mandatory for us today. The GDPR only asks for structured and machine-readable, without naming
+any. The European Health Data Space regulation binds Member States and EHR systems, not a wellness
+application like this one, whose declared interoperability is voluntary; and its technical specifications
+don't even exist yet. The goal, then, is our own documented JSON format, designed so that mapping to FHIR R4
+compatible with the International Patient Summary is mechanical the day we need it.
 
-Hay una frontera que conviene no cruzar sin analizarla: si algún día la aplicación importa el resumen de
-paciente del sistema público, pasa a almacenar datos de categoría prioritaria y deja de estar claramente
-fuera de la definición de sistema de historia clínica del reglamento. Es una decisión de alcance de
-producto, no de campos.
+There is a boundary not to cross without analyzing it first: if one day the application imports the patient
+summary from the public health system, it starts storing priority category data and stops being clearly
+outside the regulation's definition of an EHR system. That's a product scope decision, not a field decision.
 
 ## Decision History
 
-### 2026-07-25: el contexto respecto a la comida pasa a opcional y sin valor preseleccionado
-Previously decided: el contexto se capturaba siempre y el desplegable llegaba con el primer caso del enum
-(`fasting`, en ayunas) marcado por el navegador, así que entraba en el contenido cifrado aunque nadie lo
-hubiera elegido.
-Changed because: es el mismo motivo por el que no pedimos los hidratos de carbono, un valor inventado es
-peor que ninguno. Cuando la persona no lo indica, el campo se omite del contenido en lugar de guardarse con
-un valor por defecto silencioso.
+### 2026-07-25: meal context becomes optional and has no preselected value
+Previously decided: the context was always captured and the dropdown arrived with the first enum case
+(`fasting`) selected by the browser, so it entered the encrypted content even though nobody had chosen it.
+Changed because: it's the same reason we don't ask for carbohydrates, a made-up value is worse than none.
+When the person doesn't state it, the field is omitted from the content instead of being stored with a silent
+default.
 
-### 2026-07-25: la cantidad de los alimentos deja de tener dos ranuras
-Previously decided: la cantidad se guardaba con dos ranuras, código de unidad cuando existiera y texto libre
-cuando la medida fuese doméstica.
-Changed because: la ranura de texto libre producía cantidades incomparables entre sí. Ahora la cantidad es
-un número y la unidad sale siempre de una lista cerrada, que enumera y justifica el ADR 0010
-(`docs/adr/0010-uncoded-food-entries.md`) junto con la decisión de no codificar el texto del alimento.
+### 2026-07-25: food quantity no longer has two slots
+Previously decided: quantity was stored with two slots, a unit code when one existed and free text when the
+measure was a household one.
+Changed because: the free-text slot produced quantities that couldn't be compared with each other. Now
+quantity is a number and the unit always comes from a closed list, which ADR 0010
+(`docs/adr/0010-uncoded-food-entries.md`) enumerates and justifies together with the decision not to code the
+food item text.

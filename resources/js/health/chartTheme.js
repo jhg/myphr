@@ -35,6 +35,18 @@ const FALLBACK = Object.freeze({
 });
 
 /**
+ * Familias de DESIGN.md § Typography.
+ *
+ * Viven aquí, junto a los colores, por el mismo motivo que ellos: en un `<canvas>` la fuente se
+ * declara por nombre y no la hereda de ninguna clase, así que si cada gráfica escribe la suya acaban
+ * divergiendo. Las tres gráficas del panel comparten esta.
+ */
+export const CHART_FONTS = Object.freeze({
+    body: "'Open Sans', ui-sans-serif, system-ui, sans-serif",
+    mono: "'IBM Plex Mono', ui-monospace, monospace",
+});
+
+/**
  * @param {CSSStyleDeclaration|null} styles
  * @param {string} name Nombre de la propiedad personalizada, con los dos guiones.
  * @param {string} fallback

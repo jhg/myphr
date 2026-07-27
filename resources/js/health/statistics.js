@@ -272,7 +272,8 @@ export function unitCount(events, type, valueKey = 'value') {
  * @returns {{
  *   byGroup: Record<string, {
  *     count: number, mean: number, median: number, min: number, max: number,
- *     last: {value: number, occurredAt: string}, inRangePercent?: number
+ *     last: {value: number, occurredAt: string},
+ *     inRangePercent?: number, belowRangePercent?: number, aboveRangePercent?: number
  *   }>,
  *   excludedByUnit: number,
  *   discarded: number,
@@ -332,8 +333,28 @@ export function summarizeMeasurementPeriod(events, { type, valueKey = 'value', g
         };
 
         if (hasTargetRange) {
-            const inRangeCount = values.filter((value) => value >= low && value <= high).length;
+            /**
+             * Los tres tramos, no solo el de dentro.
+             *
+             * «68 % en rango» no dice si el 32 % restante son hipoglucemias o hiperglucemias, y son
+             * dos situaciones clínicas opuestas. Con los tres porcentajes la vista puede pintar la
+             * barra segmentada que es la forma estándar de leer esto, y quien mira sabe hacia qué
+             * lado se va.
+             *
+             * El reparto es exhaustivo y sin solapes —los límites del rango cuentan como dentro—,
+             * así que cada lectura cae en uno y solo uno de los tres tramos.
+             *
+             * Los tres se redondean por separado con la precisión del módulo, de modo que la suma
+             * puede quedarse en 99,9 o llegar a 100,1. Es deliberado: cuadrar la suma a 100 exigiría
+             * inflar uno de los tres, y ese tramo dejaría de ser el porcentaje que se calculó.
+             */
+            const belowCount = values.filter((value) => value < low).length;
+            const aboveCount = values.filter((value) => value > high).length;
+            const inRangeCount = values.length - belowCount - aboveCount;
+
             summary.inRangePercent = round((inRangeCount / values.length) * 100, PERCENT_DECIMALS);
+            summary.belowRangePercent = round((belowCount / values.length) * 100, PERCENT_DECIMALS);
+            summary.aboveRangePercent = round((aboveCount / values.length) * 100, PERCENT_DECIMALS);
         }
 
         byGroup[group] = summary;
@@ -366,7 +387,8 @@ export function summarizeMeasurementPeriod(events, { type, valueKey = 'value', g
  * @returns {{
  *   byMethod: Record<string, {
  *     count: number, mean: number, median: number, min: number, max: number,
- *     last: {value: number, occurredAt: string}, inRangePercent?: number
+ *     last: {value: number, occurredAt: string},
+ *     inRangePercent?: number, belowRangePercent?: number, aboveRangePercent?: number
  *   }>,
  *   excludedByUnit: number,
  *   discarded: number,

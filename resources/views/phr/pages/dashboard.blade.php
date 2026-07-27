@@ -240,6 +240,54 @@
         </h2>
 
         <div wire:ignore wire:key="dashboard-charts-region" class="mt-4 space-y-8">
+            {{--
+                Las dos primeras gráficas no son de un tipo de evento, sino de una pregunta.
+
+                **La curva con marcas de comida e insulina va la primera** porque es la única que
+                enseña la relación entre comer, pincharse y lo que hace la glucosa después, que es
+                justo lo que se mira en consulta y lo que ninguna pantalla por tipo puede enseñar.
+                No cuesta ni una petición más: el servidor no puede filtrar por tipo (ADR 0006), así
+                que la petición que ya se hace baja los tres tipos del periodo.
+
+                **La segunda superpone todos los días del periodo sobre un eje de 24 horas**: es el
+                formato del perfil glucémico ambulatorio, el informe estándar de consulta, y enseña
+                el patrón que se repite cada día —la subida de madrugada, el pico posprandial— que
+                una serie cronológica disuelve.
+
+                Los identificadores son los que escribe `chartElementIds()` con estos mismos tokens
+                (`chartsView.js`): el bloque se busca por `id`, nunca por `x-ref`, por lo mismo que
+                los de abajo.
+            --}}
+            @foreach ([
+                'glucoseContext' => [
+                    'title' => __('Blood glucose with meals and insulin'),
+                    'aria' => __('Blood glucose over time, with a mark for every meal and every insulin injection'),
+                ],
+                'dayOverlay' => [
+                    'title' => __('24-hour profile'),
+                    'aria' => __('Every day of the period laid over a single 24-hour axis, with the hourly median'),
+                ],
+            ] as $token => $chart)
+                <div id="dashboard-chart-{{ $token }}" class="hidden">
+                    <h3 class="font-display text-body-sm font-semibold text-ink">
+                        {{ $chart['title'] }}
+                    </h3>
+
+                    <div class="mt-2 h-80">
+                        <canvas
+                            id="dashboard-chart-{{ $token }}-canvas"
+                            role="img"
+                            aria-label="{{ $chart['aria'] }}"
+                            aria-describedby="dashboard-chart-{{ $token }}-caption dashboard-chart-{{ $token }}-legend"
+                        ></canvas>
+                    </div>
+
+                    <ul id="dashboard-chart-{{ $token }}-legend" class="mt-3 flex flex-wrap gap-x-4 gap-y-1"></ul>
+
+                    <p id="dashboard-chart-{{ $token }}-caption" class="mt-2 text-caption text-ink-secondary"></p>
+                </div>
+            @endforeach
+
             @foreach ([
                 'glucose' => __('Blood glucose'),
                 'bloodPressure' => __('Blood pressure'),

@@ -1,4 +1,4 @@
-# ADR 0007: Configuración de usuario cifrada
+# ADR 0007: Encrypted user configuration
 
 * **Status**: Accepted
 * **Date**: 2026-07-25
@@ -7,139 +7,142 @@
 
 ## Context
 
-La aplicación necesita ajustes por usuario desde la primera pantalla. El más inmediato es la unidad de
-medida, que el ADR 0006 (`docs/adr/0006-encrypted-event-model.md`) estableció como preferencia y no como
-elección por registro, porque determina qué código LOINC se guarda (ADR 0005). El siguiente es el rango
-objetivo de glucemia, que permite mostrar qué porcentaje del tiempo se estuvo dentro de él.
+The application needs per-user settings from the very first screen. The most immediate one is the unit of
+measure, which ADR 0006 (`docs/adr/0006-encrypted-event-model.md`) established as a preference and not as a
+per-record choice, because it determines which LOINC code is stored (ADR 0005). The next one is the blood
+glucose target range, which lets us show what percentage of the time was spent inside it.
 
-Ese segundo caso tiene una carga que el primero no tiene. Un rango objetivo de glucemia es una indicación
-clínica: si la aplicación trae uno por defecto, está diciéndole al usuario qué valores debería tener, y eso
-es interpretación, no presentación. La normativa europea de productos sanitarios excluye el software de
-bienestar mientras se limite a registrar y mostrar, y el ADR 0006 ya sitúa la exportación y las
-estadísticas del lado descriptivo. Traer rangos por defecto cruzaría esa línea sin necesidad.
+That second case carries a weight the first one doesn't. A blood glucose target range is a clinical
+indication: if the application ships one by default, it is telling the user what values they should have, and
+that is interpreting, not presenting. The European medical devices regulation excludes wellness software as
+long as it limits itself to recording and displaying, and ADR 0006 already places export and statistics on
+the descriptive side. Shipping default ranges would cross that line for no reason.
 
-Además, la configuración es dato del usuario y el servidor no debe poder leerla: saber que alguien tiene
-configurado un rango de glucemia dice lo mismo que saber que registra glucemias.
+On top of that, the configuration is the user's data and the server must not be able to read it: knowing that
+someone has a blood glucose range configured says the same as knowing that they record blood glucose.
 
 ## Decision
 
-La configuración vive en una sola columna `text` de la fila del usuario, que guarda el sobre cifrado con
-las mismas reglas que cualquier otro dato en reposo (ADR 0004): prefijo de versión, relleno a tamaños
-fijos, identificador de clave y versión del contenido dentro del sobre. Al descifrarlo se obtiene un JSON,
-igual que en los eventos y por el mismo motivo: la columna no puede ser de tipo JSON porque el servidor no
-puede consultar lo que no puede descifrar.
+The configuration lives in a single `text` column on the user's row, which stores the encrypted envelope
+under the same rules as any other data at rest (ADR 0004): version prefix, padding to fixed sizes, key
+identifier, and content version inside the envelope. Decrypting it yields JSON, just like with events and for
+the same reason: the column can't be of type JSON because the server can't query what it can't decrypt.
 
-Lo que identifica a este sobre para el dato asociado del AEAD y para la derivación de su clave es el
-`user_id` y un discriminante fijo de la columna. Así, mover el sobre a otra columna, a otra tabla o a otro
-usuario hace fallar el descifrado, igual que en los eventos.
+What identifies this envelope for the AEAD associated data and for deriving its key is the `user_id` and a
+fixed column discriminator. That way, moving the envelope to another column, another table, or another user
+makes decryption fail, just as with events.
 
-**Ningún ajuste de contenido clínico trae valor por defecto de la aplicación.** El rango objetivo de
-glucemia empieza vacío, y mientras lo esté no se muestra el porcentaje en rango: la vista simplemente no
-ofrece esa estadística. Cuando el usuario lo configura, con el criterio que le haya dado su médico, la
-aplicación calcula y muestra, sin añadir juicio propio sobre si el resultado es bueno o malo.
+**No setting with clinical content ships with a default value from the application.** The blood glucose
+target range starts empty, and while it stays empty the percentage in range is not shown: the view simply
+doesn't offer that statistic. When the user configures it, with whatever criterion their doctor gave them,
+the application computes and displays, without adding any judgment of its own about whether the result is
+good or bad.
 
-Se distingue de los ajustes que no son clínicos, como el idioma o el formato de presentación, que sí
-pueden tener un valor razonable por defecto porque no dicen nada sobre la salud de nadie.
+This is distinct from settings that aren't clinical, such as the language or the display format, which can
+have a sensible default because they say nothing about anyone's health.
 
-**El idioma de la interfaz es la única excepción al sobre: vive en claro en `users.locale`.** La
-aplicación habla inglés, castellano y chino simplificado, con el inglés de serie, y el servidor tiene que
-saber cuál usar antes de que exista ninguna clave: Filament resuelve en servidor el menú de navegación, el
-menú de usuario, las migas, el título de la página y, sobre todo, la pantalla de acceso, que se pinta
-cuando la clave maestra todavía no ha nacido. Una preferencia guardada dentro del sobre no se podría leer
-nunca en el momento en que hace falta.
+**The interface language is the only exception to the envelope: it lives in the clear in `users.locale`.**
+The application speaks English, Spanish, and Simplified Chinese, with English as the default, and the server
+has to know which one to use before any key exists: Filament resolves the navigation menu, the user menu, the
+breadcrumbs, the page title and, above all, the login screen on the server, and that screen is painted when
+the master key has not been born yet. A preference stored inside the envelope could never be read at the
+moment it is needed.
 
-La columna es nullable y `NULL` significa «no lo he elegido»: entonces el idioma se negocia con la
-cabecera `Accept-Language`, restringida a los tres soportados, y el inglés es el último recurso. Cuando la
-persona elige uno en su perfil, manda su elección. `PUT /phr/settings` acepta ese campo `locale` junto al
-sobre cifrado, fuera de él, y lo escribe solo después de validar la envoltura y la precondición `If-Match`,
-que protege el sobre y no la columna: así un 412 no deja el idioma cambiado y los ajustes sin cambiar. La
-lista es cerrada porque el valor acaba en `App::setLocale()` y aceptar cualquier cadena sería dejar que el
-cliente elija fichero de traducción.
+The column is nullable and `NULL` means "I haven't chosen": the language is then negotiated using the
+`Accept-Language` header, restricted to the three supported ones, and English is the last resort. When the
+person picks one on their profile page, their choice wins. `PUT /phr/settings` accepts that `locale` field
+alongside the encrypted envelope, outside it, and writes it only after validating the envelope format and the
+`If-Match` precondition, which protects the envelope and not the column: that way a 412 doesn't leave the
+language changed and the settings unchanged. The list is closed because the value ends up in
+`App::setLocale()` and accepting any string would be letting the client pick a translation file.
 
-El coste está aceptado a sabiendas: el servidor aprende qué idioma prefiere una cuenta, y en un despliegue
-español elegir chino simplificado permite inferir origen o vínculo con China. Lo que lo hace asumible es
-que el navegador ya manda `Accept-Language` en todas las peticiones, así que esa inferencia está hoy
-disponible sin columna ninguna; guardarla añade persistencia, no revelación. Es la misma clase de excepción
-acotada que el ADR 0009 (`docs/adr/0009-user-provisioning-and-session-lifecycle.md`) hace con el nombre del
-usuario, y no se extiende a ningún otro ajuste: el idioma va en la columna y no en el sobre, porque
-guardarlo en los dos sitios acabaría con el menú en un idioma y el cuerpo de la página en otro.
+The cost is knowingly accepted: the server learns which language an account prefers, and in a Spanish
+deployment choosing Simplified Chinese allows inferring origin or ties to China. What makes it acceptable is
+that the browser already sends `Accept-Language` on every request, so that inference is available today with
+no column at all; storing it adds persistence, not revelation. It is the same kind of deliberate, narrowly
+scoped exception that ADR 0009 (`docs/adr/0009-user-provisioning-and-session-lifecycle.md`) makes with the
+user's name, and it doesn't extend to any other setting: the language goes in the column and not in the
+envelope, because storing it in both places would end with the menu in one language and the body of the page
+in another.
 
-El cálculo del porcentaje en rango, como el resto de estadísticas, ocurre en el navegador sobre los
-eventos ya descifrados, según fija el ADR 0002.
+The percentage in range calculation, like the rest of the statistics, happens in the browser over the already
+decrypted events, as ADR 0002 requires.
 
 ## Rationale
 
-Descartamos una tabla de ajustes con una fila por clave. Habría obligado a dejar en claro el nombre de
-cada ajuste para poder consultarlo, y el nombre ya filtra: una fila llamada `glucose_target_range` dice
-que esa persona controla su glucemia. Con un solo sobre, el servidor ve que hay configuración y nada más.
+We rejected a settings table with one row per key. It would have forced leaving the name of every setting in
+the clear to query it, and the name already leaks: a row called `glucose_target_range` says that
+person watches their blood glucose. With a single envelope, the server sees that there is configuration and
+nothing more.
 
-Descartamos también repartir los ajustes entre columnas en claro y cifradas según su sensibilidad. Es una
-frontera que hay que redibujar con cada ajuste nuevo, y la primera vez que alguien se equivoque el fallo
-será silencioso. Una sola columna cifrada no tiene ese modo de fallo.
+We also rejected splitting the settings between plaintext and encrypted columns according to their
+sensitivity. That's a boundary you have to redraw with every new setting, and the first time someone gets it
+wrong the failure will be silent. A single encrypted column doesn't have that failure mode.
 
-Sobre no traer valores por defecto, la alternativa era ofrecer los rangos habituales y dejar que el
-usuario los cambiase. Habría sido más cómodo, y es lo que hace casi cualquier aplicación del sector, pero
-convierte a la aplicación en fuente de criterio clínico justo en el punto donde queremos que sea un diario.
-La incomodidad de configurarlo una vez es pequeña comparada con el cambio de naturaleza del producto.
+On not shipping default values, the alternative was to offer the usual ranges and let the user change them.
+It would have been more convenient, and it's what almost every application in the sector does, but it turns
+the application into a source of clinical criteria at exactly the point where we want it to be a diary. The
+inconvenience of configuring it once is small compared to the change in the nature of the product.
 
-Para el idioma descartamos tres alternativas. Guardarlo solo en el cliente deja el marco de Filament en
-inglés y el cuerpo de las páginas traducido, una interfaz bilingüe permanente que es peor producto que no
-traducir. Guardarlo dentro del sobre y retraducir el marco en el navegador tras abrirlo obliga a reescribir
-el DOM que pinta Filament después de descifrar, que es justo lo que el `morph` de Livewire deshace según el
-ADR 0002, y deja fuera igualmente el acceso y el alta de contraseña, donde no hay clave. Y negociar solo con
-`Accept-Language`, sin preferencia guardada, no cuesta nada de privacidad pero impide elegir: quien tenga
-el sistema en chino no puede usar la aplicación en castellano.
+For the language we rejected three alternatives. Storing it only on the client leaves the Filament shell in
+English and the body of the pages translated, a permanently bilingual interface that is a worse product than
+not translating at all. Storing it inside the envelope and re-translating the shell in the browser after
+opening it forces rewriting the DOM that Filament paints after decrypting, which is exactly what Livewire's
+`morph` undoes under ADR 0002, and it leaves out the login screen and the initial password setup anyway,
+where there is no key. And negotiating with `Accept-Language` alone, with no stored preference, costs nothing in
+privacy but makes choosing impossible: someone with their system in Chinese can't use the application in
+Spanish.
 
-* **Pros**: el servidor no sabe qué tiene configurado nadie; añadir un ajuste no toca el esquema; la
-  estadística de porcentaje en rango es del usuario y no de la aplicación; y el modo de fallo por
-  descuido desaparece porque no hay frontera que redibujar.
-* **Cons**: no se puede consultar ni agregar ninguna configuración en servidor, ni siquiera para saber
-  cuántos usuarios tienen algo activado; la configuración hay que descifrarla antes de pintar la primera
-  pantalla útil; y el usuario tiene que configurar el rango objetivo antes de ver la estadística que
-  probablemente esperaba encontrar hecha.
+* **Pros**: the server doesn't know what anyone has configured; adding a setting doesn't touch the schema;
+  the percentage in range statistic belongs to the user and not to the application; and the failure mode from
+  carelessness disappears because there is no boundary to redraw.
+* **Cons**: no configuration can be queried or aggregated on the server, not even to know how many users have
+  something turned on; the configuration has to be decrypted before painting the first useful screen; and the
+  user has to configure the target range before seeing the statistic they probably expected to find already
+  done.
 
 ## Consequences
 
-La configuración se descifra en el arranque de la sesión, junto con la clave maestra.
+The configuration is decrypted at session startup, together with the master key.
 
-El sobre se escribe vacío en el alta, aunque no haya nada configurado, para que el servidor no pueda
-distinguir a quien tiene configuración de quien no.
+The envelope is written empty at sign-up, even when nothing is configured, so that the server can't tell
+apart who has configuration from who doesn't.
 
-La unidad de medida guardada aquí es la preferencia que fija el ADR 0006: se elige una vez y decide en qué
-unidad se registra y se muestra. Cada evento guarda además la suya, porque el código LOINC depende de
-ella, así que cambiar la preferencia deja un histórico con dos unidades mezcladas.
+The unit of measure stored here is the preference set by ADR 0006: it is chosen once and decides which unit
+data is recorded and displayed in. Each event stores its own as well, because the LOINC code depends on it,
+so changing the preference leaves a history with two units mixed together.
 
-De ahí sale una obligación para la capa de estadísticas: promediar mg/dL con mmol/L sin convertir da un
-número sin sentido. Y como convertir exige fijar precisión y redondeo, que es una decisión clínica que
-ningún ADR ha tomado, no se convierte: cada resumen se calcula en una sola unidad de presentación y los
-eventos en otra se cuentan aparte para poder decirlo en pantalla, en lugar de desaparecer sin más.
+From that comes an obligation for the statistics layer: averaging mg/dL with mmol/L without converting gives
+a meaningless number. And since converting requires fixing precision and rounding, which is a clinical
+decision no ADR has made, we don't convert: each summary is computed in a single display unit and events in
+another are counted separately so they can be stated on screen, instead of just disappearing.
 
-Cualquier ajuste que se añada más adelante entra en este sobre, y la pregunta a hacerse es siempre la
-misma: si tiene contenido clínico, empieza vacío y sin valor sugerido.
+Any setting added later goes into this envelope, and the question to ask is always the same: if it has
+clinical content, it starts empty and with no suggested value.
 
-El registro de actividad del servidor anota que un usuario fue modificado, sin saber qué cambió ni qué
-configuración tiene, según fija el ADR 0006.
+The server activity log records that a user was modified, without knowing what changed or what configuration
+they have, as ADR 0006 requires.
 
-La interfaz tiene que resolver con elegancia el estado en que aún no hay rango configurado, que será el de
-todos los usuarios nuevos. Es la parte de producto que más cuidado necesita, porque una pantalla que
-enseña un hueco donde debería haber una estadística invita a rellenarlo con cualquier número.
+The interface has to handle gracefully the state in which there is still no configured range, which will be
+the state of every new user. It's the part of the product that needs the most care, because a screen showing
+a gap where a statistic should be invites filling it with any number at all.
 
-Del idioma salen tres obligaciones. Las claves de traducción se escriben en inglés, que es el idioma de
-serie, para que una traducción que falte caiga en inglés y no en castellano; los catálogos viven en
-`lang/es.json` y `lang/zh_CN.json` y un test comprueba que tienen exactamente el mismo juego de claves,
-que es la única forma de que un hueco falle en integración continua y no delante del usuario. Las
-etiquetas al paciente de los enums de `app/Catalog` existen en los tres idiomas, y un idioma que no
-reconocemos cae al inglés en vez de lanzar una excepción, porque alguien con una preferencia obsoleta es
-alguien que no entiende la pantalla, no un error del que enterarse con un 500. El término oficial de la
-terminología no se traduce nunca, ni siquiera al chino: el ADR 0005 lo reserva para `coding.display` y
-LOINC no publica traducción china de esos términos, que es precisamente por lo que la etiqueta propia es la
-única capa que podemos ofrecer completa en los tres idiomas.
+Three obligations come out of the language. Translation keys are written in English, which is the default
+language, so that a missing translation falls back to English and not to Spanish; the catalogs live in
+`lang/es.json` and `lang/zh_CN.json` and a test checks that they have exactly the same set of keys, which is
+the only way for a gap to fail in continuous integration and not in front of the user. The patient-facing
+labels of the `app/Catalog` enums exist in all three languages, and a language we don't recognize falls back
+to English instead of throwing an exception, because someone with a stale preference is someone who doesn't
+understand the screen, not an error to find out about through a 500. The official term from the terminology
+is never translated, not even into Chinese: ADR 0005 reserves it for `coding.display` and LOINC publishes no
+Chinese translation of those terms, which is precisely why our own label is the only layer we can offer
+complete in all three languages.
 
 ## Decision History
 
-### 2026-07-26 — El idioma de la interfaz sale del sobre y pasa a una columna en claro
-Previously decided: toda la configuración de usuario vivía dentro del sobre cifrado, sin excepciones, y el
-idioma se citaba solo como ejemplo de ajuste no clínico que sí puede tener valor por defecto.
-Changed because: al añadir el chino simplificado hubo que resolver dónde vive la preferencia, y Filament
-pinta el menú, las migas y la pantalla de acceso en servidor, antes de que exista ninguna clave. Dentro del
-sobre esa preferencia no se puede leer cuando hace falta.
+### 2026-07-26 — The interface language leaves the envelope and moves to a plaintext column
+Previously decided: all user configuration lived inside the encrypted envelope, with no exceptions, and the
+language was mentioned only as an example of a non-clinical setting that can have a default value.
+Changed because: adding Simplified Chinese forced deciding where the preference lives, and Filament paints
+the menu, the breadcrumbs, and the login screen on the server, before any key exists. Inside the envelope
+that preference can't be read when it's needed.

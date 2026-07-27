@@ -222,6 +222,9 @@ export const ES = Object.freeze({
     'dashboard.stat.max': 'Máximo',
     'dashboard.stat.lastReading': 'Última lectura',
     'dashboard.stat.timeInRange': 'Tiempo en rango',
+    'dashboard.stat.belowRange': 'Por debajo',
+    'dashboard.stat.inRange': 'En rango',
+    'dashboard.stat.aboveRange': 'Por encima',
     'dashboard.stat.withMean': '{magnitude} · media',
     'dashboard.stat.withMedian': '{magnitude} · mediana',
     'dashboard.stat.withRange': '{magnitude} · rango',
@@ -335,6 +338,50 @@ export const ES = Object.freeze({
     'dashboard.chart.tooltip': '{label}: mediana {median} {unit} (de {min} a {max})',
     'dashboard.chart.tooltipSingle': '{label}: {value} {unit} (una sola lectura)',
     'dashboard.chart.ariaLabel': 'Mediana diaria y rango diario de {type}',
+
+    // --- Curva de glucemia con marcas de comida e insulina (`glucoseContext.js`) -----------------
+    'dashboard.chart.context.title': 'Glucemia con comidas e insulina',
+    'dashboard.chart.context.ariaLabel': 'Glucemia a lo largo del tiempo, con una marca por cada '
+        + 'comida y por cada inyección de insulina',
+    'dashboard.chart.context.caption': 'Cada lectura de glucemia en {unit}, en orden de tiempo, con '
+        + 'una marca en el eje temporal por cada comida y cada inyección de insulina. Incluye: '
+        + '{series}. Los tramos de más de {hours} horas sin ninguna lectura se dejan en blanco, '
+        + 'nunca unidos por una línea.',
+    'dashboard.chart.context.meals': 'Comidas',
+    'dashboard.chart.context.injections': 'Inyecciones de insulina',
+    'dashboard.chart.context.reading': '{label}: {value} {unit}',
+    'dashboard.chart.context.grouped': {
+        one: '{count} marca se dibuja junto a otra cercana, para que sigan siendo legibles.',
+        other: '{count} marcas se dibujan junto a otras cercanas, para que sigan siendo legibles.',
+    },
+    'dashboard.chart.context.moreGrouped': {
+        one: 'y {count} más en el mismo tramo.',
+        other: 'y {count} más en el mismo tramo.',
+    },
+    'dashboard.chart.context.groupedShort': '\u00d7{count}',
+    'dashboard.chart.context.omittedReadings': {
+        one: '{count} lectura más antigua del periodo no se dibuja, para que la gráfica siga siendo legible.',
+        other: 'Las {count} lecturas más antiguas del periodo no se dibujan, para que la gráfica siga siendo legible.',
+    },
+    'dashboard.chart.context.omittedMarkers': {
+        one: '{count} marca queda antes de la primera lectura dibujada y no se enseña.',
+        other: '{count} marcas quedan antes de la primera lectura dibujada y no se enseñan.',
+    },
+
+    // --- Superposición de días sobre 24 horas (`dayOverlay.js`) ---------------------------------
+    'dashboard.chart.overlay.title': 'Perfil de 24 horas',
+    'dashboard.chart.overlay.ariaLabel': 'Todos los días del periodo superpuestos en un solo eje de '
+        + '24 horas, con la mediana de cada hora',
+    'dashboard.chart.overlay.caption': 'Todas las lecturas del periodo en {unit} superpuestas en un '
+        + 'solo eje de 24 horas: una línea tenue por día y la mediana de cada hora en trazo grueso. '
+        + 'Incluye: {series}. Las horas sin lecturas se dejan en blanco.',
+    'dashboard.chart.overlay.days': {
+        one: 'Se superpone {count} día.',
+        other: 'Se superponen {count} días.',
+    },
+    'dashboard.chart.overlay.medianLabel': '{group} \u00b7 mediana por hora',
+    'dashboard.chart.overlay.tooltip': '{label}: {value} {unit}',
+    'dashboard.chart.overlay.targetRange': 'La banda de fondo es tu rango objetivo, {low}\u2013{high} {unit}.',
 
     // --- Recorte compartido: la vista que comparten el lector y la vista previa (ADR 0011) -------
     'clip.controls.title': 'Qué estás viendo',

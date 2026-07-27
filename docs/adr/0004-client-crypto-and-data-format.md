@@ -1,4 +1,4 @@
-# ADR 0004: Criptografía de cliente: dependencias y formato del dato cifrado
+# ADR 0004: Client-side cryptography: dependencies and encrypted data format
 
 * **Status**: Accepted
 * **Date**: 2026-07-25
@@ -7,163 +7,156 @@
 
 ## Context
 
-Los ADR 0002 y 0003 fijaron qué hace el cliente con la criptografía, pero no con qué. Toca elegir las
-dependencias de JavaScript, que son el único código de terceros con acceso a material de clave y por
-tanto lo que más conviene mantener pequeño y auditable.
+ADR 0002 and ADR 0003 fixed what the client does with cryptography, but not what it does it with. Time to choose the
+JavaScript dependencies, which are the only third-party code with access to key material and therefore what most needs
+to stay small and auditable.
 
-Hay un hallazgo que obliga a decidir ahora. `docs/OPAQUE.md` especifica derivar la KEK con HKDF-SHA-512
-usando `libsodium-wrappers`, y ese paquete **no expone esa función**: publica las constantes de HKDF pero
-no las operaciones, ni en su build estándar ni en el `sumo`. El build estándar tampoco trae SHA-512 ni
-HMAC-SHA-512. Comprobado ejecutándolo. La especificación no es implementable tal como está escrita.
+One finding forces the decision now. `docs/OPAQUE.md` specifies deriving the KEK with HKDF-SHA-512 using
+`libsodium-wrappers`, and that package **does not expose that function**: it publishes the HKDF constants but not the
+operations, neither in its standard build nor in the `sumo` one. The standard build does not ship SHA-512 or
+HMAC-SHA-512 either. Verified by running it. The specification is not implementable as written.
 
-Las restricciones que acotan la elección: sin Node en producción, funcionar en Safari e iPadOS porque el
-personal clínico usa iPads, interoperar con el servidor PHP donde haga falta, y no crear material de
-clave que quede persistido en el navegador sin que nadie lo limpie.
+The constraints that narrow the choice: no Node in production, working on Safari and iPadOS because clinical staff use
+iPads, interoperating with the PHP server where needed, and not creating key material that ends up persisted in the
+browser with nobody to clean it up.
 
 ## Decision
 
-Para el protocolo de login usamos `@serenity-kit/opaque` en la versión 1.1.0 exacta, que empaqueta
-`opaque-ke` 4.0.1 y por tanto RFC 9807 final. Es la única opción viva: el resto de clientes OPAQUE en npm
-siguen drafts de 2022, están abandonados o publican sin repositorio auditable. El parámetro del KSF se
-fija de forma explícita (Argon2id, tres iteraciones, 64 MiB, paralelismo cuatro) y se pasa en
-`finishRegistration` y `finishLogin`, nunca en las funciones `start`, donde se ignora en silencio pese a
-lo que dice su documentación.
+For the login protocol we use `@serenity-kit/opaque` pinned to version 1.1.0 exactly, which bundles `opaque-ke` 4.0.1
+and therefore final RFC 9807. It is the only live option: every other OPAQUE client on npm follows 2022 drafts, is
+abandoned, or publishes without an auditable repository. The KSF parameter is set explicitly (Argon2id, three
+iterations, 64 MiB, parallelism four) and passed to `finishRegistration` and `finishLogin`, never to the `start`
+functions, where it is silently ignored despite what its documentation says.
 
-Para el cifrado de datos usamos `@noble/ciphers` y `@noble/hashes`, ambos en la versión 2.2.0 exacta.
-Aportan XChaCha20-Poly1305-IETF y HKDF-SHA-512, no tienen ninguna dependencia transitiva, son JavaScript
-puro sin WebAssembly y pesan nueve kilobytes comprimidos frente a los ciento cincuenta de libsodium.
+For data encryption we use `@noble/ciphers` and `@noble/hashes`, both pinned to version 2.2.0 exactly. They provide
+XChaCha20-Poly1305-IETF and HKDF-SHA-512, have no transitive dependencies, are pure JavaScript with no WebAssembly, and
+weigh nine kilobytes compressed against libsodium's hundred and fifty.
 
-Mantenemos XChaCha20-Poly1305 para los campos clínicos y reservamos AES-256-GCM de WebCrypto para los
-trozos de adjuntos grandes, donde la aceleración por hardware multiplica por veinte el rendimiento y no
-añade un solo byte al bundle. Las claves de WebCrypto son efímeras y viven solo en memoria: no se
-persiste material de clave en ningún almacén del navegador.
+We keep XChaCha20-Poly1305 for clinical fields and reserve WebCrypto's AES-256-GCM for chunks of large attachments,
+where hardware acceleration multiplies throughput twentyfold and adds not a single byte to the bundle. WebCrypto keys
+are ephemeral and live only in memory: no key material is persisted in any browser store.
 
-El sobre cifrado es binario y versionado desde el primer registro: versión, identificador de algoritmo,
-identificador de KDF, banderas, **identificador de clave**, sal, nonce y ciphertext con su tag,
-transportado como `v1.` seguido de base64url. El identificador de clave se reserva aunque hoy no se use,
-porque la rotación y la compartición futuras exigirían si no re-cifrar todo el histórico, y eso es
-justamente lo que el servidor no puede hacer.
+The encrypted envelope is binary and versioned from the very first record: version, algorithm identifier, KDF
+identifier, flags, **key identifier**, salt, nonce, and ciphertext with its tag, transported as `v1.` followed by
+base64url. The key identifier is reserved even though it is unused today, because otherwise future rotation and sharing
+would require re-encrypting the whole history, and that is precisely what the server cannot do.
 
-Cada sobre se cifra con una clave derivada, y el `info` de esa derivación y el dato asociado del AEAD
-recogen el mismo contexto: quién es el usuario y qué identifica al registro dentro de su tabla. Qué
-identifica al registro depende de la funcionalidad y lo fija cada ADR: para los eventos de seguimiento es
-el instante en que ocurrieron (ADR 0006). El nombre del campo entra en ese contexto solo cuando se cifra
-campo a campo; cuando el sobre cubre un registro entero, no existe tal campo.
+Each envelope is encrypted with a derived key, and the `info` of that derivation and the AEAD associated data carry the
+same context: who the user is and what identifies the record within its table. What identifies the record depends on
+the feature and is fixed by each ADR: for tracking events it is the instant they occurred (ADR 0006). The field name
+enters that context only when encrypting field by field; when the envelope covers a whole record, there is no such
+field.
 
-Estas reglas del dato en reposo valen para cualquier funcionalidad que cifre, no solo para la primera:
+These data-at-rest rules apply to any feature that encrypts, not just the first one:
 
-**Relleno a tamaños fijos antes de cifrar** (256, 1024, 4096 bytes). La longitud del ciphertext delata el
-contenido: si un tipo de registro ocupa 120 bytes y otro 2.000, el servidor los clasifica sin descifrar
-nada y cifrar el tipo se queda en decoración. Rellenar cuesta unos bytes hoy; hacerlo después exigiría
-re-cifrar el histórico.
+**Padding to fixed sizes before encrypting** (256, 1024, 4096 bytes). Ciphertext length gives the content away: if one
+record type takes 120 bytes and another 2,000, the server classifies them without decrypting anything and encrypting
+the type is left as decoration. Padding costs a few bytes today; doing it later would require re-encrypting the
+history.
 
-Los tres tamaños valen para un registro suelto y no para un paquete grande. La compartición de un recorte
-con un profesional (ADR 0011, `docs/adr/0011-shared-clipping-for-professionals.md`) es la excepción y va
-con su propio formato: prefijo de transporte `s1.` en lugar de `v1.`, escalera propia de 64 KiB a 4 MiB,
-compresión antes de rellenar, validador propio en servidor y dato asociado sin `user_id`, porque ahí lo
-construye el lector. La escalera de aquí no se amplía: dejaría de acotar los eventos.
+The three sizes work for a single record and not for a large package. Sharing a clipping with a professional (ADR 0011,
+`docs/adr/0011-shared-clipping-for-professionals.md`) is the exception and goes with its own format: transport prefix
+`s1.` instead of `v1.`, its own ladder from 64 KiB to 4 MiB, compression before padding, its own validator on the
+server, and associated data without `user_id`, because there it is the reader that builds it. The ladder here is not
+widened: it would stop narrowing events down.
 
-**Versión dentro de cada sobre**, que no se quita nunca. Añadir un campo opcional no la sube; cambiar el
-significado de uno existente, sí. La migración es perezosa y en cliente al reescribir el registro: no
-existe el job de migración, porque el servidor no puede leer los datos. El cliente mantiene un lector por
-cada versión que haya existido y no se borra ninguno.
+**A version inside every envelope**, which is never removed. Adding an optional field does not bump it; changing the
+meaning of an existing one does. Migration is lazy and client-side, on rewriting the record: there is no migration job,
+because the server cannot read the data. The client keeps a reader for each version that has ever existed and none is
+ever deleted.
 
-**Decimales como cadena** (`"1.50"`), tratados como se trata el dinero: punto fijo en almacenamiento. En
-dosis de medicación no queremos la conversación sobre coma flotante.
+**Decimals as strings** (`"1.50"`), treated the way money is treated: fixed point in storage. In medication doses we do
+not want the floating-point conversation.
 
-**Tokens estables, nunca etiquetas visibles** dentro del sobre: `"breakfast"`, no `"Desayuno"`. Las
-etiquetas se traducen a los idiomas del ADR 0005; los tokens no.
+**Stable tokens, never visible labels** inside the envelope: `"breakfast"`, not `"Desayuno"`. Labels are translated
+into the languages of ADR 0005; tokens are not.
 
-**Formato canónico de fecha** cuando una fecha entre en el dato asociado o en la derivación:
-`YYYY-MM-DDTHH:MM:SS.ffffffZ`, siempre UTC, sufijo `Z`, seis dígitos siempre, rellenando con ceros si la
-fuente da menos precisión. El cliente canonicaliza al cifrar y al descifrar, sin fiarse del formato que
-llegue por la red. ISO 8601 a secas no basta: admite variantes que son bytes distintos, y las propias
-herramientas del proyecto producen tres formas incompatibles entre sí. Por el mismo motivo, cuando un
-identificador de usuario entre en el dato asociado, entra en su forma textual canónica en minúsculas y no
-como bytes.
+**Canonical date form** whenever a date enters the associated data or the derivation: `YYYY-MM-DDTHH:MM:SS.ffffffZ`,
+always UTC, `Z` suffix, always six digits, zero-padded if the source gives less precision. The client canonicalizes on
+encrypt and on decrypt, without trusting the format that arrives over the network. Plain ISO 8601 is not enough: it
+allows variants that are different bytes, and the project's own tools produce three mutually incompatible forms. For
+the same reason, when a user identifier enters the associated data, it enters in its canonical textual form in
+lowercase and not as bytes.
 
-**Fallo de descifrado**: si el dato asociado no cuadra, el cliente no puede distinguir manipulación de
-corrupción, pero en ambos casos debe tratarlo como error visible y nunca ocultar el registro en silencio.
-Un registro clínico que desaparece sin avisar es peor que uno que se muestra como ilegible.
+**Decryption failure**: if the associated data does not match, the client cannot tell tampering from corruption, but in
+both cases it must treat it as a visible error and never silently hide the record. A clinical record that disappears
+without warning is worse than one shown as unreadable.
 
-Escribimos a mano, en `resources/js/crypto/`, el códec base64url con la comprobación de canonicidad que
-exige el proyecto, el formato de sobre, el borrado de memoria y el troceado de adjuntos. Son unas ciento
-cincuenta líneas y ninguna biblioteca hace exactamente lo que necesitamos.
+We write by hand, in `resources/js/crypto/`, the base64url codec with the canonicity check the project requires, the
+envelope format, memory zeroization, and attachment chunking. That is about a hundred and fifty lines and no library
+does exactly what we need.
 
-El estado en el navegador queda inventariado y cerrado: la clave maestra en uso vive en memoria, su
-envoltura bajo el secreto de sesión vive en `sessionStorage`, y no hay nada más. Ni IndexedDB, ni
-`localStorage`, ni service worker, ni claves persistidas. El borrado de memoria solo aplica a los búferes
-de bytes propios, y aun ahí es a lo sumo un intento: una contraseña es una cadena inmutable de JavaScript
-y el WebAssembly de OPAQUE mantiene sus copias en su propia memoria mientras viva la pestaña.
+Browser state is inventoried and closed: the master key in use lives in memory, its wrapped package under the session
+secret lives in `sessionStorage`, and there is nothing else. No IndexedDB, no `localStorage`, no service worker,
+no persisted keys. Zeroization applies only to our own byte buffers, and even there it is at most an attempt: a
+password is an immutable JavaScript string and the OPAQUE WebAssembly keeps its copies in its own memory for as long
+as the tab lives.
 
-Fijamos las versiones sin rango, con `save-exact` e `ignore-scripts` en `.npmrc`, instalación con
-`npm ci`, y `npm audit signatures` como paso bloqueante de integración continua.
+We pin versions with no ranges, with `save-exact` and `ignore-scripts` in `.npmrc`, installation with `npm ci`, and
+`npm audit signatures` as a blocking continuous integration step.
 
 ## Rationale
 
-Descartamos `libsodium-wrappers` por tres motivos acumulativos, no por preferencia: no puede derivar la
-KEK, pesa diecisiete veces más, y no publica atestaciones de procedencia en npm. Su WebAssembly va
-incrustado en base64 y no se puede aprovechar parcialmente, así que usar una sola función cuesta el
-paquete entero, y obliga a esperar a que compile antes de descifrar la primera pantalla.
+We rejected `libsodium-wrappers` for three cumulative reasons, not out of preference: it cannot derive the KEK, it
+weighs seventeen times more, and it publishes no provenance attestations on npm. Its WebAssembly is embedded in base64
+and cannot be used partially, so using a single function costs the whole package, and it forces you to wait for it to
+compile before decrypting the first screen.
 
-Descartamos resolverlo solo con WebCrypto porque no implementa ChaCha en ningún navegador, y renunciar a
-XChaCha20 significa perder el nonce de 192 bits que permite generarlo al azar sin llevar contadores. Con
-un equipo pequeño, el diseño que tiene menos formas de romperse por descuido vale más que el que rinde
-mejor en un microbenchmark, y para campos de texto la diferencia de rendimiento entre las tres vías es
-irrelevante.
+We rejected solving it with WebCrypto alone because it implements ChaCha in no browser, and giving up XChaCha20 means
+losing the 192-bit nonce that lets you generate it at random without keeping counters. With a small team, the design
+with fewer ways to break by accident is worth more than the one that performs better in a microbenchmark, and for text
+fields the performance difference between the three routes is irrelevant.
 
-Descartamos copiar el código de las bibliotecas al repositorio. Parecía coherente con querer poco código
-de terceros, pero perderíamos la verificación automática de firmas y las alertas de seguridad, que es
-justo lo que hoy nos protege del compromiso de npm, y no defendería del vector más probable, que es el
-compromiso de nuestro propio servidor.
+We rejected vendoring the libraries' code into the repository. It seemed consistent with wanting little third-party
+code, but we would lose automatic signature verification and security alerts, which is exactly what protects us today
+from an npm compromise, and it would not defend against the most likely vector, which is a compromise of our own
+server.
 
-* **Pros**: el stack criptográfico completo pesa unos diez kilobytes comprimidos y no tiene dependencias
-  transitivas; no hay coste de arranque porque no hay WebAssembly que compilar antes del primer
-  descifrado; las dos bibliotecas tienen auditoría de Cure53 y procedencia verificable; el sobre
-  versionado permite migrar más adelante sin re-cifrar de golpe.
-* **Cons**: dependemos de dos proyectos con un único mantenedor publicador cada uno; el WebAssembly de
-  OPAQUE no es reproducible desde el fuente, así que su verificación se limita a la procedencia de la
-  compilación; y mantener dos algoritmos añade una ruta de código más que auditar.
+* **Pros**: the whole crypto stack weighs about ten kilobytes compressed and has no transitive dependencies; there is
+  no startup cost because there is no WebAssembly to compile before the first decryption; both libraries have a Cure53
+  audit and verifiable provenance; the versioned envelope allows migrating later without re-encrypting everything at
+  once.
+* **Cons**: we depend on two projects with a single publishing maintainer each; the OPAQUE WebAssembly is not
+  reproducible from source, so verifying it is limited to the provenance of the build; and maintaining two algorithms
+  adds one more code path to audit.
 
 ## Consequences
 
-`docs/OPAQUE.md` necesita reescribir la sección de cifrado en cliente, que hoy describe algo que no se
-puede implementar, y corregir que una contraseña incorrecta devuelve `undefined` y no `null`.
+`docs/OPAQUE.md` needs its client-side encryption section rewritten — it currently describes something that cannot be
+implemented — and a correction: a wrong password returns `undefined`, not `null`.
 
-El dato asociado del AEAD no es un adorno. Si el sobre no queda atado a su contexto, un servidor
-comprometido puede mover el ciphertext del campo de alergias de un paciente al campo de diagnóstico de
-otro, y el cliente lo descifrará sin ningún error. Atarlo al usuario, al registro y al campo, en el AEAD
-y en la derivación, hace que ese movimiento falle por partida doble.
+The AEAD associated data is not decoration. If the envelope is not tied to its context, a compromised server can move
+the ciphertext from one patient's allergies field into another patient's diagnosis field, and the client will decrypt
+it with no error at all. Tying it to the user, the record, and the field, in the AEAD and in the derivation, makes that
+move fail twice over.
 
-Integración continua incorpora tres comprobaciones bloqueantes: la verificación de firmas y atestaciones,
-un vector fijo de registro y login que debe seguir produciendo el mismo `exportKey`, y vectores cruzados
-del formato de sobre entre PHP y JavaScript aunque el servidor nunca descifre. Sin la segunda, un cambio
-del KSF se manifestaría en producción como pérdida de acceso a la clave maestra de todos los usuarios.
+Continuous integration gets three blocking checks: signature and attestation verification, a fixed registration and
+login vector that must keep producing the same `exportKey`, and cross-language test vectors of the envelope format
+between PHP and JavaScript even though the server never decrypts. Without the second, a change to the KSF would show up
+in production as every user losing access to their master key.
 
-Las actualizaciones de estas dependencias no se automatizan: cuarentena de catorce días y lectura del
-diff completo antes de subir versión. Son releases raros y pequeños, así que es viable.
+Updates to these dependencies are not automated: a fourteen-day quarantine and a read of the full diff before bumping a
+version. Releases are rare and small, so it is workable.
 
-Los parámetros de Argon2id (tres iteraciones, 64 MiB, paralelismo cuatro) se mantienen tal como están y no
-se miden antes de producción: la medición se hará con usuarios y dispositivos reales. Es un riesgo asumido
-de forma explícita: si resultan demasiado lentos en un dispositivo antiguo, cambiarlos después obliga a
-que todas las personas registradas vuelvan a registrarse desde cero. Hay una mitigación barata que no
-bloquea nada: el primer usuario, que es quien arranca el sistema, puede medirlo en el dispositivo más
-antiguo del que disponga antes de invitar a nadie más, y eso detecta el caso malo cuando todavía no cuesta
-nada.
+The Argon2id parameters (three iterations, 64 MiB, parallelism four) stay as they are and are not measured before
+production: measurement will happen with real users and real devices. This is an explicitly accepted risk: if they turn
+out too slow on an old device, changing them afterwards forces every registered person to register again from scratch.
+There is a cheap mitigation that blocks nothing: the first user, who is the one bootstrapping the system, can measure
+it on the oldest device they have available before inviting anyone else, and that catches the bad case while it still
+costs nothing.
 
-Queda una cosa por decidir antes de escribir el primer dato en producción: si conviene un ensayo con la
-clave maestra viviendo como objeto no extraíble de WebCrypto, que no persiste nada y sacaría los bytes del
-heap de JavaScript.
+One thing is left to decide before the first data is written in production: whether a trial is worth it with the master
+key living as a non-extractable WebCrypto object, which persists nothing and would take the bytes out of the JavaScript
+heap.
 
-La primera aplicación de estas reglas es el registro de eventos de seguimiento, en el ADR 0006
-(`docs/adr/0006-encrypted-event-model.md`), que fija además qué identifica a un evento dentro de su tabla
-y cómo queda el reparto entre columnas en claro y contenido cifrado.
+The first application of these rules is tracking event capture, in ADR 0006
+(`docs/adr/0006-encrypted-event-model.md`), which also fixes what identifies an event within its table and how the
+split between plaintext columns and encrypted content ends up.
 
 ## Decision History
 
-### 2026-07-27 — El relleno a tres tamaños fijos deja de ser universal
-Previamente decidido: los tamaños 256, 1024 y 4096 bytes se aplicaban a cualquier funcionalidad que
-cifrase, sin excepciones.
-Cambió porque: un paquete de compartición no cabe ahí ni de lejos, y ampliar la escalera común habría
-dejado de acotar los eventos sueltos. El ADR 0011 define un formato hermano con su propia escalera, su
-propio prefijo y su propio validador; el resto de reglas del dato en reposo le siguen aplicando igual.
+### 2026-07-27 — Padding to three fixed sizes stops being universal
+Previously decided: the 256, 1024, and 4096 byte sizes applied to any feature that encrypted, with no exceptions.
+Changed because: a sharing package does not fit there by a long way, and widening the common ladder would have stopped
+narrowing single events down. ADR 0011 defines a sibling format with its own ladder, its own prefix, and its own
+validator; the rest of the data-at-rest rules still apply to it the same way.

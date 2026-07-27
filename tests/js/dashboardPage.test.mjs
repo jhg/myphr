@@ -35,6 +35,12 @@ import {
     formatNumber,
 } from '../../resources/js/health/eventLabels.js';
 import {
+    createSegmentedBar,
+    createSparkline,
+    createStatTile,
+    SPARKLINE_MIN_POINTS,
+} from '../../resources/js/health/eventVisuals.js';
+import {
     flattenDecryptedEvent,
     needsAnotherPage,
     rangeStartMs,
@@ -488,6 +494,154 @@ test('renderGlucoseSection: no quedan cabeceras de «última semana» ni «últi
     assert.doesNotMatch(fragment.text, /Último mes/);
 });
 
+// --- Tiempo en rango como barra segmentada -------------------------------------------------------
+
+/** Los tres tramos tal como los devuelve `summarizeGlucosePeriod` con rango objetivo configurado. */
+const GLUCOSE_WITH_RANGE = Object.freeze({
+    ...GLUCOSE_METHOD_SUMMARY,
+    inRangePercent: 68,
+    belowRangePercent: 12,
+    aboveRangePercent: 20,
+});
+
+/**
+ * Lo que la barra tiene que dejar leído sin mirar ningún color (DESIGN.md, Do's #3): las tres
+ * etiquetas escritas y los tres porcentajes como número.
+ */
+test('renderGlucoseSection: el tiempo en rango se pinta en tres tramos, cada uno con su cifra', () => {
+    const summary = { byMethod: { capillary: { ...GLUCOSE_WITH_RANGE } }, excludedByUnit: 0 };
+    const targetRange = { low: 80, high: 130, unit: 'mg/dL' };
+
+    const fragment = renderGlucoseSection(summary, 'mg/dL', targetRange, false);
+
+    assert.match(fragment.text, /Tiempo en rango/);
+    assert.match(fragment.text, /Por debajo/);
+    assert.match(fragment.text, /En rango/);
+    assert.match(fragment.text, /Por encima/);
+    assert.match(fragment.text, /12 %/);
+    assert.match(fragment.text, /68 %/);
+    assert.match(fragment.text, /20 %/);
+});
+
+/** Un tramo vacío sigue en la leyenda: «ninguna lectura por debajo» es información, no un hueco. */
+test('renderGlucoseSection: un tramo al 0 % se declara igualmente', () => {
+    const summary = {
+        byMethod: {
+            capillary: { ...GLUCOSE_WITH_RANGE, belowRangePercent: 0, inRangePercent: 80, aboveRangePercent: 20 },
+        },
+        excludedByUnit: 0,
+    };
+
+    const fragment = renderGlucoseSection(summary, 'mg/dL', { low: 80, high: 130, unit: 'mg/dL' }, false);
+
+    assert.match(fragment.text, /Por debajo/);
+    assert.match(fragment.text, /0 %/);
+});
+
+/**
+ * Sin rango objetivo no hay barra que pintar, y lo que ocupa su sitio es la invitación a
+ * configurarlo, que es lo único que la persona puede hacer al respecto (ADR 0007).
+ */
+test('renderGlucoseSection: sin rango objetivo no hay barra, y la invitación se conserva', () => {
+    const summary = { byMethod: { capillary: { ...GLUCOSE_METHOD_SUMMARY } }, excludedByUnit: 0 };
+
+    const fragment = renderGlucoseSection(summary, 'mg/dL', undefined, false);
+
+    assert.doesNotMatch(fragment.text, /Tiempo en rango/);
+    assert.doesNotMatch(fragment.text, /Por debajo/);
+    assert.match(fragment.text, /Configura tu rango objetivo/);
+});
+
+/**
+ * Rango guardado en otra unidad: no se convierte (ADR 0007), así que no hay porcentajes y por tanto
+ * tampoco barra. El aviso propio de ese caso es lo que no se puede perder.
+ */
+test('renderGlucoseSection: con el rango en otra unidad no hay barra y el aviso sigue estando', () => {
+    const summary = { byMethod: { capillary: { ...GLUCOSE_METHOD_SUMMARY } }, excludedByUnit: 0 };
+
+    const fragment = renderGlucoseSection(summary, 'mg/dL', undefined, true);
+
+    assert.match(fragment.text, /otra unidad/);
+    assert.doesNotMatch(fragment.text, /Por debajo/);
+    assert.doesNotMatch(fragment.text, /Configura tu rango objetivo/);
+});
+
+/** Las proporciones se reparten con `flex-grow`, y el tramo vacío no pinta ninguna franja. */
+test('createSegmentedBar: solo pinta franja de los tramos con porcentaje', () => {
+    const bar = createSegmentedBar([
+        { label: 'Por debajo', percent: 0, value: '0 %', tone: 'warning' },
+        { label: 'En rango', percent: 80, value: '80 %', tone: 'good' },
+        { label: 'Por encima', percent: 20, value: '20 %', tone: 'warning' },
+    ]);
+
+    const [track, legend] = bar.children;
+
+    assert.equal(track.children.length, 2);
+    assert.deepEqual(track.children.map((fill) => fill.attributes.style), ['flex-grow:80', 'flex-grow:20']);
+    assert.equal(legend.children.length, 3);
+});
+
+// --- Minigráficas de tendencia -------------------------------------------------------------------
+
+/**
+ * Dos puntos siempre forman una recta perfecta: dibujarla sería afirmar una tendencia que no se ha
+ * observado. Los días sin lecturas no cuentan como punto, así que una serie larga de huecos con dos
+ * lecturas tampoco pinta nada.
+ */
+test('createSparkline: con menos de tres lecturas no dibuja ninguna tendencia', () => {
+    assert.equal(SPARKLINE_MIN_POINTS, 3);
+    assert.equal(createSparkline([100, 110]), null);
+    assert.equal(createSparkline([100, null, null, null, 110]), null);
+    assert.equal(createSparkline([]), null);
+});
+
+test('createSparkline: con tres lecturas seguidas dibuja un único trazo de tres puntos', () => {
+    const svg = createSparkline([100, 120, 110]);
+
+    assert.notEqual(svg, null);
+    assert.equal(svg.attributes['aria-hidden'], 'true');
+    assert.equal(svg.children.length, 1);
+    assert.equal(svg.children[0].tagName, 'polyline');
+    assert.equal(svg.children[0].attributes.points.split(' ').length, 3);
+});
+
+/**
+ * Un día sin lecturas es un hueco, nunca un cero: el trazo se parte ahí en vez de cruzarlo, porque
+ * unir por encima del hueco dibujaría una pendiente que nadie ha medido.
+ */
+test('createSparkline: un día sin lecturas parte el trazo en vez de cruzarlo', () => {
+    const svg = createSparkline([100, 120, null, 110, 105]);
+
+    assert.equal(svg.children.length, 2);
+    assert.deepEqual(svg.children.map((shape) => shape.tagName), ['polyline', 'polyline']);
+    assert.equal(svg.children[0].attributes.points.split(' ').length, 2);
+});
+
+/** Un día suelto entre dos huecos no es un trazo: es un punto, y eso es exactamente lo que se sabe. */
+test('createSparkline: una lectura aislada entre huecos se marca como punto', () => {
+    const svg = createSparkline([100, null, 120, null, 110, 118]);
+
+    assert.deepEqual(svg.children.map((shape) => shape.tagName), ['circle', 'circle', 'polyline']);
+});
+
+/** Una serie plana no tiene recorrido que escalar: se centra, y no se divide por cero. */
+test('createSparkline: una serie sin variación se dibuja centrada, sin NaN', () => {
+    const svg = createSparkline([90, 90, 90]);
+
+    assert.doesNotMatch(svg.children[0].attributes.points, /NaN/);
+});
+
+/** La baldosa sin serie es exactamente la que ya era: quien la llama hoy no cambia. */
+test('createStatTile: sin tendencia, o con una que no llega a serlo, la baldosa no crece', () => {
+    const plain = createStatTile({ label: 'Mediana', value: '110', unit: 'mg/dL' });
+    const short = createStatTile({ label: 'Mediana', value: '110', unit: 'mg/dL', trend: [100, 110] });
+    const drawn = createStatTile({ label: 'Mediana', value: '110', unit: 'mg/dL', trend: [100, 120, 110] });
+
+    assert.equal(plain.children.length, 2);
+    assert.equal(short.children.length, 2);
+    assert.equal(drawn.children.length, 3);
+});
+
 test('renderBloodPressureSection: un único estado vacío cuando el periodo no trae nada', () => {
     const fragment = renderBloodPressureSection({ byMethod: {} });
 
@@ -566,6 +720,31 @@ test('renderStatsSections: solo pinta las tarjetas de los tipos marcados', () =>
     assert.match(fragment.text, /Peso corporal/);
     assert.doesNotMatch(fragment.text, /Tensión arterial/);
     assert.doesNotMatch(fragment.text, /Temperatura/);
+});
+
+/**
+ * La minigráfica llega hasta la baldosa por el camino real, no fabricada en el test: eventos
+ * descifrados → `dailyTrends` (que reusa `buildDailyBands`, con el día en la zona horaria del propio
+ * evento y los días sin lecturas como hueco) → la baldosa de la mediana.
+ *
+ * Dos días de lecturas no dan tendencia y tres sí, que es la misma regla en la tarjeta que en el
+ * módulo.
+ */
+test('renderStatsSections: la minigráfica de la mediana aparece cuando hay días suficientes', () => {
+    const params = { selectedTypes: { glucose: true }, unit: 'mg/dL', targetRange: undefined, unitMismatch: false };
+    const glucose = (day, value) => statsEvent(
+        'glucose',
+        `2026-07-${day}T09:00:00.000000Z`,
+        { value, unit: 'mg/dL', method: 'capillary' },
+    );
+
+    const svgsOf = (fragment) => JSON.stringify(fragment).match(/"tagName":"(polyline|circle)"/g) ?? [];
+
+    assert.equal(svgsOf(renderStatsSections([glucose('23', '112'), glucose('24', '128')], params)).length, 0);
+    assert.equal(
+        svgsOf(renderStatsSections([glucose('23', '112'), glucose('24', '128'), glucose('25', '104')], params)).length,
+        1,
+    );
 });
 
 /**

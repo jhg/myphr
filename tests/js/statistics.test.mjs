@@ -150,6 +150,71 @@ test('summarizeGlucosePeriod: con rango objetivo, calcula el porcentaje en rango
     assert.equal(byMethod.capillary.inRangePercent, 50);
 });
 
+test('summarizeGlucosePeriod: sin rango objetivo tampoco hay tramos de por debajo ni de por encima', () => {
+    const events = [glucoseEvent({ occurredAt: 't1', value: '100' })];
+
+    const { byMethod } = summarizeGlucosePeriod(events, { unit: 'mg/dL' });
+
+    assert.equal('belowRangePercent' in byMethod.capillary, false);
+    assert.equal('aboveRangePercent' in byMethod.capillary, false);
+});
+
+/**
+ * «68 % en rango» no dice si el 32 % restante son hipoglucemias o hiperglucemias, que son
+ * situaciones clínicas opuestas. Los tres tramos reparten todas las lecturas y por eso se calculan
+ * juntos, no por diferencia.
+ */
+test('summarizeGlucosePeriod: reparte las lecturas en los tres tramos del rango objetivo', () => {
+    const events = [
+        glucoseEvent({ occurredAt: 't1', value: '60' }), // por debajo
+        glucoseEvent({ occurredAt: 't2', value: '79' }), // por debajo
+        glucoseEvent({ occurredAt: 't3', value: '100' }), // dentro
+        glucoseEvent({ occurredAt: 't4', value: '200' }), // por encima
+    ];
+
+    const { byMethod } = summarizeGlucosePeriod(events, {
+        unit: 'mg/dL',
+        targetRange: { low: '80', high: '130' },
+    });
+
+    assert.equal(byMethod.capillary.belowRangePercent, 50);
+    assert.equal(byMethod.capillary.inRangePercent, 25);
+    assert.equal(byMethod.capillary.aboveRangePercent, 25);
+});
+
+/** Los dos límites son parte del rango: una lectura clavada en el límite no está fuera. */
+test('summarizeGlucosePeriod: los límites del rango cuentan como dentro, no como fuera', () => {
+    const events = [
+        glucoseEvent({ occurredAt: 't1', value: '80' }),
+        glucoseEvent({ occurredAt: 't2', value: '130' }),
+    ];
+
+    const { byMethod } = summarizeGlucosePeriod(events, {
+        unit: 'mg/dL',
+        targetRange: { low: '80', high: '130' },
+    });
+
+    assert.equal(byMethod.capillary.inRangePercent, 100);
+    assert.equal(byMethod.capillary.belowRangePercent, 0);
+    assert.equal(byMethod.capillary.aboveRangePercent, 0);
+});
+
+/**
+ * Un rango en otra unidad no llega hasta aquí: `resolveGlucoseTargetRange` lo descarta antes
+ * (ADR 0007, no se convierte). Lo que este test fija es la consecuencia, que es lo que la vista
+ * necesita para saber que no hay barra que pintar: ninguna de las tres claves existe.
+ */
+test('summarizeGlucosePeriod: sin rango aplicable no hay ningún tramo que pintar', () => {
+    const events = [glucoseEvent({ occurredAt: 't1', value: '100' })];
+
+    const { byMethod } = summarizeGlucosePeriod(events, { unit: 'mg/dL', targetRange: undefined });
+
+    assert.deepEqual(
+        ['inRangePercent', 'belowRangePercent', 'aboveRangePercent'].filter((key) => key in byMethod.capillary),
+        [],
+    );
+});
+
 test('summarizeGlucosePeriod: descarta los resultados cualitativos (ADR 0008) sin tumbar el resumen', () => {
     const events = [
         glucoseEvent({ occurredAt: 't1', value: '100' }),

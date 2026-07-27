@@ -38,7 +38,14 @@
  */
 
 import { formatDateTime, joinList, t } from '../i18n/index.js';
-import { chartElementIds, CHART_SECTIONS, destroyCharts, renderCharts } from '../health/chartsView.js';
+import {
+    chartBlockAriaLabel,
+    chartBlockTitle,
+    chartElementIds,
+    CHART_BLOCKS,
+    destroyCharts,
+    renderCharts,
+} from '../health/chartsView.js';
 import { observeColorSchemeChange } from '../health/chartTheme.js';
 import { customRange, DateRangeError, presetRange } from '../health/dateRange.js';
 import { typeLabel } from '../health/eventLabels.js';
@@ -569,7 +576,10 @@ function renderClinicalRow(row) {
 }
 
 /**
- * Los bloques de gráfica, uno por tipo con magnitud que promediar.
+ * Los bloques de gráfica: los dos que cruzan tipos —la curva de glucemia con marcas de comida e
+ * insulina, y la superposición de días sobre 24 horas— y después uno por tipo con magnitud que
+ * promediar. La lista y los títulos salen de `chartsView.js`, para que el profesional vea
+ * exactamente las mismas gráficas que el paciente en su panel.
  *
  * Los pinta este módulo y no una plantilla, al revés que en el panel del paciente: allí el marcado
  * lo emite Blade porque el morph de Livewire borraría cualquier lienzo escrito por JavaScript
@@ -583,21 +593,20 @@ function renderClinicalRow(row) {
 function renderChartBlocks(prefix) {
     const container = element('div', 'space-y-8');
 
-    for (const section of CHART_SECTIONS) {
-        const ids = chartElementIds(section.type, prefix);
-        const label = typeLabel(section.type);
+    for (const type of CHART_BLOCKS) {
+        const ids = chartElementIds(type, prefix);
 
         /** Oculto de salida: lo descubre `renderCharts()` si hay algo que dibujar. */
         const block = element('div', 'hidden');
         block.id = ids.block;
 
-        block.appendChild(element('h3', 'font-display text-body-sm font-semibold text-ink', label));
+        block.appendChild(element('h3', 'font-display text-body-sm font-semibold text-ink', chartBlockTitle(type)));
 
         const frame = element('div', 'mt-2 h-80');
         const canvas = document.createElement('canvas');
         canvas.id = ids.canvas;
         canvas.setAttribute('role', 'img');
-        canvas.setAttribute('aria-label', t('dashboard.chart.ariaLabel', { type: label }));
+        canvas.setAttribute('aria-label', chartBlockAriaLabel(type));
         canvas.setAttribute('aria-describedby', `${ids.caption} ${ids.legend}`);
         frame.appendChild(canvas);
         block.appendChild(frame);
