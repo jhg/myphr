@@ -28,6 +28,7 @@ import {
     clippingTypes,
     flattenClippingEvents,
     narrowToClipping,
+    renderClippingExplorer,
     viewingText,
 } from '../../resources/js/reader/clippingExplorer.js';
 
@@ -469,6 +470,169 @@ test('clippingTypes: sin tipos declarados se ofrecen los que hay en los eventos'
     assert.deepEqual(clippingTypes(body), ['glucose', 'insulin']);
     assert.deepEqual(clippingTypes({ includedTypes: [], events: [] }), []);
 });
+
+// --- Montaje entero ------------------------------------------------------------------------------
+
+/**
+ * `document` mínimo, el mismo patrón que `dashboardPage.test.mjs`: lo justo que tocan los módulos de
+ * pintado. Aquí sirve para lo que ningún test de función pura cubre —que la pantalla **entera** se
+ * monte y se repinte sin reventar— y para leer lo que acaba diciendo, que es de lo que va la mitad
+ * de esta lista de arreglos.
+ */
+class MountElement {
+    constructor(tagName, namespace = null) {
+        this.tagName = tagName;
+        this.namespace = namespace;
+        this.attributes = {};
+        this.children = [];
+        this.className = '';
+        this.textContent = '';
+        this.hidden = false;
+        this.value = '';
+        this.classList = { add: (...names) => { this.className = `${this.className} ${names.join(' ')}`.trim(); } };
+    }
+
+    setAttribute(name, value) {
+        this.attributes[name] = String(value);
+    }
+
+    appendChild(child) {
+        this.children.push(child);
+
+        return child;
+    }
+
+    replaceChildren(...children) {
+        this.children = children;
+    }
+
+    addEventListener() {}
+
+    get text() {
+        return [this.textContent, ...this.children.map((child) => child.text)].join(' ').trim();
+    }
+}
+
+/**
+ * Monta la pantalla y espera al primer `repaint()`, que es asíncrono porque el origen de datos lo es.
+ *
+ * @param {object} body
+ * @returns {Promise<{container: MountElement, explorer: object}>}
+ */
+async function mount(body) {
+    globalThis.document = {
+        createElement: (tagName) => new MountElement(tagName),
+        createElementNS: (namespace, tagName) => new MountElement(tagName, namespace),
+        createDocumentFragment: () => new MountElement('#fragment'),
+        getElementById: () => null,
+    };
+    globalThis.window = { matchMedia: () => ({ addEventListener() {}, removeEventListener() {} }) };
+
+    const container = new MountElement('div');
+    const explorer = renderClippingExplorer(container, { body, resolved: {}, chartPrefix: 'test' });
+
+    await explorer.repaint();
+
+    return { container, explorer };
+}
+
+afterEach(() => {
+    delete globalThis.document;
+    delete globalThis.window;
+});
+
+/**
+ * La línea de estado efectivo se repinta con cada cambio; la cabecera del recorte no. Sin ella, el
+ * papel que acaba en una historia clínica declaraba el recorte entero sobre una tabla filtrada, y los
+ * controles no se imprimen para desmentirlo.
+ */
+test('la línea de estado efectivo se repinta al acotar; la cabecera del recorte se queda', async () => {
+    const { container, explorer } = await mount(clipping());
+
+    const headerBefore = container.children[0].text;
+    const viewing = container.children[2];
+
+    assert.match(viewing.text, /You are viewing/);
+    assert.match(viewing.text, /every record type in the extract/);
+    /** Con extremos declarados, «todo el recorte» son sus fechas, dichas: 20/6 a 20/7. */
+    assert.match(viewing.text, /6\/20\/2026/);
+
+    /** Se acota al último día del recorte, como haría el desplegable. */
+    const controls = container.children[1];
+    findByTag(controls, 'select')[0].value = 'day';
+    await explorer.repaint();
+
+    assert.match(viewing.text, /from .+ to /);
+    /** Ya no empieza el 20 de junio: el atajo cuenta desde el final del recorte. */
+    assert.doesNotMatch(viewing.text, /6\/20\/2026/);
+    assert.match(viewing.text, /7\/19\/2026|7\/20\/2026/);
+    /** La cabecera sigue describiendo el paquete entero: es la referencia, no el estado. */
+    assert.equal(container.children[0].text, headerBefore);
+
+    /** Y el buscador aparece en la línea en cuanto hay algo tecleado. */
+    findByTag(controls, 'input').at(-1).value = 'noche';
+    await explorer.repaint();
+
+    assert.match(viewing.text, /noche/);
+
+    explorer.destroy();
+    assert.deepEqual(container.children, []);
+});
+
+/**
+ * Un recorte con un tipo que no declara: el evento no es ilegible y no tiene casilla, así que sin su
+ * propio cubo desaparecía de todo. Tiene que quedar contado y dicho.
+ */
+test('un tipo no declarado se anuncia y no desaparece de la pantalla', async () => {
+    const { container } = await mount(clipping({
+        events: [
+            ...clipping().events,
+            {
+                occurredAt: '2026-07-18T08:00:00.000000Z',
+                content: { v: 1, type: 'oxygenSaturation', data: { value: '97', unit: '%' } },
+            },
+        ],
+    }));
+
+    assert.match(container.text, /a type this extract does not declare/);
+    /** Y el recuento total los suma: 3 del recorte más el no declarado. */
+    assert.match(container.text, /of the 4 in this extract/);
+});
+
+/**
+ * Las glucemias en dos unidades merecen un aviso por encima de la tarjeta, no una nota al pie con
+ * menos peso visual que el número al que desmiente.
+ */
+test('dos unidades de glucemia se advierten arriba, con la mayoritaria como unidad del recorte', async () => {
+    const base = clipping();
+    const { container } = await mount(clipping({
+        events: [
+            ...base.events,
+            {
+                occurredAt: '2026-07-19T23:00:00.000000Z',
+                content: { v: 1, type: 'glucose', data: { value: '7.4', unit: 'mmol/L' } },
+            },
+        ],
+    }));
+
+    assert.match(container.text, /recorded in more than one unit/);
+    assert.match(container.text, /mg\/dL readings only/);
+});
+
+/**
+ * @param {MountElement} node
+ * @param {string} tagName
+ * @returns {list<MountElement>} Los nodos del subárbol con esa etiqueta, en orden de documento.
+ */
+function findByTag(node, tagName) {
+    const found = node.tagName === tagName ? [node] : [];
+
+    for (const child of node.children) {
+        found.push(...findByTag(child, tagName));
+    }
+
+    return found;
+}
 
 // --- El perímetro del paquete del lector ---------------------------------------------------------
 

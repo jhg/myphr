@@ -818,8 +818,8 @@ export function renderClippingExplorer(container, { body, resolved, chartPrefix 
     const mixedGlucoseUnits = clippingHasMixedGlucoseUnits(allEvents);
 
     /** El recorte trae eventos pero no dice de qué tipos son: se ofrecen los que hay y se declara. */
-    const undeclaredTypes = types.length > 0
-        && !EVENT_TYPES.some((type) => (body?.includedTypes ?? []).includes(type));
+    const declaredTypes = Array.isArray(body?.includedTypes) ? body.includedTypes : [];
+    const undeclaredTypes = types.length > 0 && !EVENT_TYPES.some((type) => declaredTypes.includes(type));
 
     /**
      * Emparejamiento entre el evento aplanado que ven las vistas y el evento del paquete que lee la
