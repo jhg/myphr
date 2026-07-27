@@ -42,7 +42,7 @@ a meal looks like this:
 ```json
 {"v": 1, "type": "meal", "tz": "+02:00", "origin": "manual", "recordedBy": "self",
  "data": {"mealType": "lunch",
-          "foods": [{"name": "lentejas con chorizo", "quantity": "250", "unit": "g"}]}}
+          "foods": [{"name": "lentils with chorizo", "quantity": "250", "unit": "g"}]}}
 ```
 
 The order of the food items that ADR 0006 asks to capture is the order of `foods`, with no separate field: a

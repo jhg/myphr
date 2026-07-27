@@ -18,6 +18,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { afterEach, test } from 'node:test';
 
+import { CHART_BLOCKS, chartElementIds } from '../../resources/js/health/chartsView.js';
 import { DEFAULT_LOCALE, setLocale } from '../../resources/js/i18n/index.js';
 import {
     clippingBounds,
@@ -618,6 +619,57 @@ test('dos unidades de glucemia se advierten arriba, con la mayoritaria como unid
     assert.match(container.text, /recorded in more than one unit/);
     assert.match(container.text, /mg\/dL readings only/);
 });
+
+/**
+ * El lector emite un bloque por cada gráfica de `CHART_BLOCKS`, con los cuatro identificadores que
+ * `chartElementIds()` escribe bajo su propio prefijo.
+ *
+ * Es lo que sostiene la extracción: las dos gráficas que cruzan tipos —la curva de glucemia con
+ * marcas de comida e insulina y la superposición de 24 horas— no se declaran aquí, se leen de la
+ * lista compartida. Por eso aparecen a la vez en el panel del paciente, en la vista del profesional
+ * y en la vista previa de compartir, que monta este mismo módulo. Si alguien añadiera una gráfica
+ * solo al panel, este test seguiría verde y el de la plantilla también: lo que este fija es que
+ * quien itera la lista no se deja ninguna.
+ */
+test('el lector emite el bloque de cada gráfica de la lista compartida, con sus cuatro ids', async () => {
+    const { container } = await mount(clipping());
+
+    for (const type of CHART_BLOCKS) {
+        const ids = chartElementIds(type, 'test');
+
+        assert.ok(findById(container, ids.block) !== null, `falta el bloque de ${type}`);
+        assert.ok(findById(container, ids.canvas) !== null, `falta el lienzo de ${type}`);
+        assert.ok(findById(container, ids.caption) !== null, `falta el pie de ${type}`);
+        assert.ok(findById(container, ids.legend) !== null, `falta la leyenda de ${type}`);
+    }
+
+    /** Y el lienzo lleva nombre accesible: sin él es un objeto gráfico sin texto (Do's #3). */
+    const canvas = findById(container, chartElementIds('glucoseContext', 'test').canvas);
+
+    assert.equal(canvas.attributes.role, 'img');
+    assert.ok(canvas.attributes['aria-label'].length > 0);
+});
+
+/**
+ * @param {MountElement} node
+ * @param {string} id
+ * @returns {MountElement|null}
+ */
+function findById(node, id) {
+    if (node.id === id) {
+        return node;
+    }
+
+    for (const child of node.children) {
+        const found = findById(child, id);
+
+        if (found !== null) {
+            return found;
+        }
+    }
+
+    return null;
+}
 
 /**
  * @param {MountElement} node

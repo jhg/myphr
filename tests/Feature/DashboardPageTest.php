@@ -335,6 +335,28 @@ it('cada tipo con gráfica trae en la plantilla los cuatro identificadores que b
 });
 
 /**
+ * Las dos gráficas que no son de un tipo de evento —la curva de glucemia con marcas de comida e
+ * insulina, y la superposición de los días del periodo sobre 24 horas— salen de un `@foreach`
+ * distinto al de los tipos, así que el test de arriba no las cubre: sus tokens son los que
+ * `chartsView.js` exporta en `CHART_BLOCKS` y sus identificadores los que escribe
+ * `chartElementIds()`. Se comprueba sobre el HTML ya renderizado, que es lo que de verdad recibe el
+ * navegador: un token mal escrito en la plantilla deja la gráfica sin dibujar y sin ningún error.
+ */
+it('el panel emite los cuatro identificadores de las dos gráficas que cruzan tipos', function (): void {
+    $user = User::factory()->registered()->create();
+
+    $this->actingAs($user);
+
+    $page = Livewire::test(Dashboard::class);
+
+    foreach (['glucoseContext', 'dayOverlay'] as $token) {
+        foreach (['', '-canvas', '-caption', '-legend'] as $suffix) {
+            $page->assertSeeHtml('id="dashboard-chart-'.$token.$suffix.'"');
+        }
+    }
+});
+
+/**
  * El lienzo es un objeto gráfico sin texto: sin nombre accesible y sin un pie que diga en texto qué
  * series incluye, la tendencia solo llegaría por el color de las líneas (DESIGN.md Do's #3).
  */
