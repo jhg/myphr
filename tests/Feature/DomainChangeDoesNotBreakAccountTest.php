@@ -18,9 +18,10 @@ use Tests\Support\OpaqueTestClient;
 uses(RefreshDatabase::class);
 
 /**
- * `server_identity` no puede depender del dominio: es un identificador de despliegue fijo (ver
- * `tests/Feature/OpaqueServerIdentityIsDomainIndependentTest.php`). Por eso este test usa la
- * `TEST_SERVER_IDENTITY` compartida de `tests/Pest.php` y no la recalcula al cambiar `app.url`.
+ * `server_identity` cannot depend on the domain: it is a fixed deployment identifier (see
+ * `tests/Feature/OpaqueServerIdentityIsDomainIndependentTest.php`). That is why this test uses the
+ * shared `TEST_SERVER_IDENTITY` from `tests/Pest.php` and does not recompute it when `app.url`
+ * changes.
  */
 const DC_PASSWORD = 'CorrectHorseBatteryStaple';
 const DC_EMAIL = 'Alicia@Example.COM';
@@ -30,8 +31,8 @@ beforeEach(function (): void {
 
     config(['opaque' => opaqueEndpointConfig()]);
 
-    // Dominio de partida: lo cambiaremos a mitad del test, y `server_identity` de arriba no debe
-    // moverse cuando eso pase.
+    // Starting domain: we will change it halfway through the test, and the `server_identity` above
+    // must not move when that happens.
     config(['app.url' => 'http://localhost:8888']);
 });
 
@@ -62,7 +63,7 @@ function dcSeal(string $key, string $plaintext, string $associatedData): string
     return 'v1.'.Base64Url::encode($header.$sealed);
 }
 
-/** Espejo en PHP de `open()`: lo que hace de verdad el navegador al recuperar un sobre. */
+/** PHP mirror of `open()`: what the browser really does when recovering an envelope. */
 function dcOpen(string $key, string $envelope, string $associatedData): string
 {
     $binary = Base64Url::decode(substr($envelope, 3), 'envelope');
@@ -78,7 +79,7 @@ function dcOpen(string $key, string $envelope, string $associatedData): string
     );
 
     if ($padded === false) {
-        throw new RuntimeException('El sobre no abre con esa clave.');
+        throw new RuntimeException('The envelope does not open with that key.');
     }
 
     /** @var array{1: int} $length */
@@ -87,13 +88,13 @@ function dcOpen(string $key, string $envelope, string $associatedData): string
     return substr($padded, 4, $length[1]);
 }
 
-/** `eventContext()` de `resources/js/auth/context.js`: solo `user_id` y la fecha canónica. */
+/** `eventContext()` from `resources/js/auth/context.js`: only `user_id` and the canonical date. */
 function dcEventContext(string $userId, string $occurredAt): string
 {
     return strtolower($userId).'/event/'.$occurredAt;
 }
 
-/** Login completo por los endpoints reales. */
+/** Full login through the real endpoints. */
 function dcLogin(): TestResponse
 {
     $started = OpaqueTestClient::startLogin(DC_PASSWORD);
@@ -119,15 +120,15 @@ function dcLogin(): TestResponse
 }
 
 /**
- * Cambiar `APP_URL` de dominio a mitad de vida de una cuenta no puede tirar nada: ni el login, ni
- * el sobre de la clave maestra, ni el histórico cifrado ya guardado. Recorre el flujo real —enlace,
- * alta con contraseña, evento cifrado— antes del cambio de dominio, y todo lo que depende de la
- * cuenta después.
+ * Changing `APP_URL` to another domain halfway through an account's life must break nothing: not
+ * login, not the master key envelope, not the encrypted history already stored. It walks the real
+ * flow —link, signup with a password, encrypted event— before the domain change, and everything that
+ * depends on the account afterwards.
  */
-it('cambiar el dominio de la app no rompe el login, el sobre de la clave maestra ni el histórico cifrado', function (): void {
+it('changing the app domain breaks neither login, nor the master key envelope, nor the encrypted history', function (): void {
     expect(config('app.url'))->toBe('http://localhost:8888');
 
-    // Alta por el comando y registro completo, igual que hace una persona real.
+    // Signup through the command and full registration, just like a real person does.
     Artisan::call('phr:issue-registration-link', ['email' => DC_EMAIL, '--name' => 'Alicia']);
     $url = collect(explode("\n", Artisan::output()))
         ->map(fn (string $l): string => trim($l))
@@ -165,13 +166,13 @@ it('cambiar el dominio de la app no rompe el login, el sobre de la clave maestra
         ),
     ])->assertOk();
 
-    // Login inmediato del registro, en el dominio de partida.
+    // Immediate post-registration login, on the starting domain.
     expect(dcLogin()->status())->toBe(200);
     expect(auth()->id())->toBe($user->id);
     expect(test()->get('/phr')->status())->toBe(200);
 
-    // Un evento cifrado guardado ANTES del cambio de dominio, bajo `KDF_LABELS.RECORD` y el
-    // contexto de `eventContext()` (`user_id` + fecha canónica, nunca el tipo clínico).
+    // An encrypted event stored BEFORE the domain change, under `KDF_LABELS.RECORD` and the
+    // `eventContext()` context (`user_id` + canonical date, never the clinical type).
     $occurredAt = canonicalOccurredAtNow();
     $eventContext = dcEventContext((string) $user->id, $occurredAt);
     $eventPlaintext = '{"type":"meal","grams":120}';
@@ -191,8 +192,8 @@ it('cambiar el dominio de la app no rompe el login, el sobre de la clave maestra
         'payload' => $eventCiphertext,
     ]);
 
-    // Cierre de sesión y CAMBIO DE DOMINIO: de `localhost` a un dominio de producción distinto.
-    // Nada de lo anterior debe depender de este valor.
+    // Logout and DOMAIN CHANGE: from `localhost` to a different production domain.
+    // None of the above may depend on this value.
     test()->post('/phr/logout');
     test()->flushSession();
     auth()->forgetGuards();
@@ -200,9 +201,9 @@ it('cambiar el dominio de la app no rompe el login, el sobre de la clave maestra
     config(['app.url' => 'https://phr.ejemplo.org']);
     expect(config('app.url'))->toBe('https://phr.ejemplo.org');
 
-    // El login, con la MISMA contraseña, sigue funcionando en el dominio nuevo. Se repite el
-    // intercambio OPAQUE aquí en lugar de usar `dcLogin()` porque hace falta el `exportKey` local
-    // para derivar la KEK y abrir el sobre, y ese valor no viaja por la red ni sale de la función.
+    // The login, with the SAME password, still works on the new domain. The OPAQUE exchange is
+    // repeated here instead of using `dcLogin()` because the local `exportKey` is needed to derive
+    // the KEK and open the envelope, and that value never travels the network or leaves the function.
     $startedAfter = OpaqueTestClient::startLogin(DC_PASSWORD);
     $startAfter = test()->postJson(route('filament.phr.auth.opaque.login.start'), [
         'login' => DC_EMAIL,
@@ -227,7 +228,7 @@ it('cambiar el dominio de la app no rompe el login, el sobre de la clave maestra
         ->and(auth()->id())->toBe($user->id)
         ->and($sessionAfter->json('userId'))->toBe($user->id);
 
-    // El sobre de la clave maestra sigue abriendo la MISMA clave.
+    // The master key envelope still opens the SAME key.
     $recoveredMasterKey = dcOpen(
         dcDeriveKey($finishedAfter['exportKey'], 'myphr/kek/v1'),
         (string) $sessionAfter->json('encryptedUserMasterKey'),
@@ -236,8 +237,8 @@ it('cambiar el dominio de la app no rompe el login, el sobre de la clave maestra
 
     expect($recoveredMasterKey)->toBe($userMasterKey);
 
-    // Y el evento cifrado guardado ANTES del cambio de dominio sigue siendo legible con la MISMA
-    // clave maestra recuperada DESPUÉS del cambio.
+    // And the encrypted event stored BEFORE the domain change is still readable with the SAME
+    // master key recovered AFTER the change.
     $recoveredEvent = dcOpen(
         dcDeriveKey($recoveredMasterKey, 'myphr/record/v1', $eventContext),
         $eventCiphertext,
@@ -246,9 +247,9 @@ it('cambiar el dominio de la app no rompe el login, el sobre de la clave maestra
 
     expect($recoveredEvent)->toBe($eventPlaintext);
 
-    // Y el panel sigue accesible: para la persona, «he entrado», en el dominio nuevo.
+    // And the panel is still reachable: for the person, "I am in", on the new domain.
     expect(test()->get('/phr')->status())->toBe(200);
 
-    // Guardarraíl explícito: la identidad del servidor no se movió con el dominio.
+    // Explicit guardrail: the server identity did not move with the domain.
     expect(config('opaque.server_identity'))->toBe(TEST_SERVER_IDENTITY);
 });

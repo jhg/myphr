@@ -33,7 +33,7 @@ use Livewire\ComponentHook;
  */
 final class EncryptedPayloadGuardHook extends ComponentHook
 {
-    /** Igual que `MAX_PLAINTEXT_LENGTH` en `resources/js/guards/livewirePayloadGuard.js`. */
+    /** The same as `MAX_PLAINTEXT_LENGTH` in `resources/js/guards/livewirePayloadGuard.js`. */
     private const int MAX_PLAINTEXT_LENGTH = 256;
 
     public function update(string $propertyName, string $fullPath, mixed $newValue): void

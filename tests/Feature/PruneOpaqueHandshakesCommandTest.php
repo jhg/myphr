@@ -15,7 +15,7 @@ uses(RefreshDatabase::class);
 /**
  * `php artisan opaque:prune-handshakes` (Spec 0001 §3.2, §9, §11).
  */
-it('purga handshakes de login caducados y conserva los vigentes', function (): void {
+it('prunes expired login handshakes and keeps the current ones', function (): void {
     $expired = OpaqueLoginHandshake::create([
         'user_id' => null,
         'state_ciphertext' => 'cifrado',
@@ -34,7 +34,7 @@ it('purga handshakes de login caducados y conserva los vigentes', function (): v
         ->and(OpaqueLoginHandshake::query()->find($valid->id))->not->toBeNull();
 });
 
-it('purga registros OPAQUE pendientes caducados y conserva los vigentes', function (): void {
+it('prunes expired pending OPAQUE registrations and keeps the current ones', function (): void {
     $user = User::factory()->create();
     $link = UserRegistrationLink::create([
         'user_id' => $user->id,
@@ -64,11 +64,11 @@ it('purga registros OPAQUE pendientes caducados y conserva los vigentes', functi
         ->and(OpaqueRegistration::query()->find($valid->id))->not->toBeNull();
 });
 
-it('purga enlaces de registro consumidos o caducados con antigüedad suficiente, y conserva el resto', function (): void {
+it('prunes consumed or expired registration links that are old enough, and keeps the rest', function (): void {
     $user = User::factory()->create();
     $now = Carbon::now();
 
-    // Consumido hace más de 30 días: se purga.
+    // Consumed more than 30 days ago: pruned.
     $oldConsumed = UserRegistrationLink::create([
         'user_id' => $user->id,
         'token_hash' => random_bytes(32),
@@ -76,14 +76,14 @@ it('purga enlaces de registro consumidos o caducados con antigüedad suficiente,
         'consumed_at' => $now->clone()->subDays(31),
     ])->fresh();
 
-    // Caducado hace más de 30 días, nunca consumido: se purga.
+    // Expired more than 30 days ago, never consumed: pruned.
     $oldExpiredUnconsumed = UserRegistrationLink::create([
         'user_id' => $user->id,
         'token_hash' => random_bytes(32),
         'expires_at' => $now->clone()->subDays(31),
     ])->fresh();
 
-    // Consumido recientemente (menos de 30 días): se conserva.
+    // Consumed recently (less than 30 days ago): kept.
     $recentConsumed = UserRegistrationLink::create([
         'user_id' => $user->id,
         'token_hash' => random_bytes(32),
@@ -91,14 +91,14 @@ it('purga enlaces de registro consumidos o caducados con antigüedad suficiente,
         'consumed_at' => $now->clone()->subDays(5),
     ])->fresh();
 
-    // Caducado recientemente, nunca consumido: se conserva.
+    // Expired recently, never consumed: kept.
     $recentExpiredUnconsumed = UserRegistrationLink::create([
         'user_id' => $user->id,
         'token_hash' => random_bytes(32),
         'expires_at' => $now->clone()->subDay(),
     ])->fresh();
 
-    // Vigente, nunca consumido: se conserva.
+    // Current, never consumed: kept.
     $active = UserRegistrationLink::create([
         'user_id' => $user->id,
         'token_hash' => random_bytes(32),
@@ -114,7 +114,7 @@ it('purga enlaces de registro consumidos o caducados con antigüedad suficiente,
         ->and(UserRegistrationLink::query()->find($active->id))->not->toBeNull();
 });
 
-it('informa cuántas filas purgó de cada tabla', function (): void {
+it('reports how many rows it pruned from each table', function (): void {
     OpaqueLoginHandshake::create([
         'user_id' => null,
         'state_ciphertext' => 'cifrado',

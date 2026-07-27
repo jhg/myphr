@@ -14,7 +14,7 @@ use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
 
-/** Módulo Alpine de la pantalla, fuente del contrato con el servidor y con el DOM. */
+/** The screen's Alpine module, the source of the contract with the server and with the DOM. */
 function mealsModuleSource(): string
 {
     return file_get_contents(base_path('resources/js/health/mealsPage.js'));
@@ -26,13 +26,13 @@ function mealsViewSource(): string
 }
 
 /**
- * Tests del transporte de la pantalla de comidas (ADR 0002, ADR 0004, ADR 0006).
+ * Transport tests for the meals screen (ADR 0002, ADR 0004, ADR 0006).
  *
- * `envelopeCipherText()` y `canonicalOccurredAtNow()` son globales y viven en `tests/Pest.php`:
- * los necesitan las cuatro pantallas de eventos, y declararlos en dos ficheros de `Feature` rompe
- * la suite entera con «cannot redeclare function».
+ * `envelopeCipherText()` and `canonicalOccurredAtNow()` are global and live in `tests/Pest.php`: the
+ * four event screens need them, and declaring them in two `Feature` files breaks the whole suite
+ * with "cannot redeclare function".
  */
-it('guarda un evento con un sobre bien formado y una fecha canónica', function (): void {
+it('stores an event with a well formed envelope and a canonical date', function (): void {
     $user = User::factory()->registered()->create();
     $envelope = envelopeCipherText();
     $occurredAt = canonicalOccurredAtNow();
@@ -53,20 +53,20 @@ it('guarda un evento con un sobre bien formado y una fecha canónica', function 
     ]);
 });
 
-it('rechaza un payload mal formado y no crea ninguna fila', function (): void {
+it('rejects a malformed payload and creates no row', function (): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user);
 
     expect(fn () => Livewire::test(Meals::class)
         ->instance()
-        ->storeEvent('esto no es un sobre cifrado', canonicalOccurredAtNow()))
+        ->storeEvent('this is not an encrypted envelope', canonicalOccurredAtNow()))
         ->toThrow(ValidationException::class);
 
     expect(Event::query()->count())->toBe(0);
 });
 
-it('rechaza una fecha que no está en la forma canónica del ADR 0004', function (): void {
+it('rejects a date that is not in the canonical ADR 0004 form', function (): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user);
@@ -79,7 +79,7 @@ it('rechaza una fecha que no está en la forma canónica del ADR 0004', function
     expect(Event::query()->count())->toBe(0);
 });
 
-it('fetchEvents solo devuelve los eventos del usuario autenticado', function (): void {
+it('fetchEvents only returns the events of the authenticated user', function (): void {
     $user = User::factory()->registered()->create();
     $otherUser = User::factory()->registered()->create();
 
@@ -97,10 +97,10 @@ it('fetchEvents solo devuelve los eventos del usuario autenticado', function ():
 });
 
 /**
- * Un usuario nuevo no tiene ningún evento: `fetchEvents` devuelve una lista vacía sin fallar, y es
- * el cliente quien pinta el estado «todavía no hay comidas registradas» en vez de una tarjeta vacía.
+ * A new user has no events: `fetchEvents` returns an empty list without failing, and it is the
+ * client that paints the "no meals recorded yet" state instead of an empty card.
  */
-it('fetchEvents devuelve una lista vacía para un usuario recién registrado', function (): void {
+it('fetchEvents returns an empty list for a freshly registered user', function (): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user);
@@ -109,10 +109,10 @@ it('fetchEvents devuelve una lista vacía para un usuario recién registrado', f
 });
 
 /**
- * El test que exige el ADR 0002: el ciphertext baja como valor de retorno y sube como parámetro,
- * nunca por una propiedad pública, así que el snapshot del componente no puede contenerlo.
+ * The test ADR 0002 requires: the ciphertext comes down as a return value and goes up as a
+ * parameter, never through a public property, so the component snapshot cannot contain it.
  */
-it('el snapshot del componente no contiene ningún sobre cifrado', function (): void {
+it('the component snapshot contains no encrypted envelope', function (): void {
     $user = User::factory()->registered()->create();
     $envelope = envelopeCipherText();
 
@@ -121,9 +121,9 @@ it('el snapshot del componente no contiene ningún sobre cifrado', function (): 
     $this->actingAs($user);
 
     /**
-     * Las llamadas van por `call()` y no por `instance()`: invocar el método sobre la instancia se
-     * salta el ciclo de hidratación y deshidratación de Livewire, y entonces el snapshot que se
-     * inspecciona es el de antes de la llamada.
+     * The calls go through `call()` and not `instance()`: invoking the method on the instance skips
+     * Livewire's hydration and dehydration cycle, and then the snapshot being inspected is the one
+     * from before the call.
      */
     $test = Livewire::test(Meals::class)
         ->call('storeEvent', $envelope, canonicalOccurredAtNow())
@@ -136,11 +136,11 @@ it('el snapshot del componente no contiene ningún sobre cifrado', function (): 
 });
 
 /**
- * Contrato con el servidor. En producción apareció un `MethodNotFoundException` porque el módulo
- * seguía llamando a `storeBloodPressureEvent` después de que el transporte se unificara en
- * `HealthEventPage::storeEvent()`. Nada comprobaba que el nombre existiera de verdad: esto lo hace.
+ * Contract with the server. A `MethodNotFoundException` showed up in production because the module
+ * was still calling `storeBloodPressureEvent` after the transport was unified into
+ * `HealthEventPage::storeEvent()`. Nothing checked that the name really existed: this does.
  */
-it('cada $wire.<metodo> del modulo existe como metodo publico de la pagina', function (): void {
+it('every $wire.<method> in the module exists as a public method of the page', function (): void {
     preg_match_all('/\$wire\.([A-Za-z_][A-Za-z0-9_]*)\s*\(/', mealsModuleSource(), $matches);
 
     $calledMethods = array_unique($matches[1]);
@@ -157,18 +157,18 @@ it('cada $wire.<metodo> del modulo existe como metodo publico de la pagina', fun
 });
 
 /**
- * El número de argumentos también es parte del contrato: `storeEvent($payload, $occurredAt)` con un
- * solo argumento revienta igual de tarde que un nombre equivocado.
+ * The number of arguments is part of the contract too: `storeEvent($payload, $occurredAt)` with a
+ * single argument blows up just as late as a wrong name.
  */
-it('las llamadas a storeEvent y fetchEvents pasan los argumentos que la pagina espera', function (): void {
+it('the storeEvent and fetchEvents calls pass the arguments the page expects', function (): void {
     $source = mealsModuleSource();
 
     expect($source)->toContain('$wire.storeEvent(payload, occurredAt)');
 
     /**
-     * El historial se pide con el rango de fechas que haya elegido la persona (ver
-     * `resources/js/health/dateRange.js`). Los cuatro argumentos van por posición, así que el
-     * cursor y el límite se pasan explícitamente aunque valgan lo de siempre.
+     * The history is requested with whatever date range the person chose (see
+     * `resources/js/health/dateRange.js`). The four arguments go by position, so the cursor and the
+     * limit are passed explicitly even when they hold their usual values.
      */
     expect($source)->toContain('$wire.fetchEvents(null, HISTORY_FETCH_LIMIT, range.from, range.to)');
 
@@ -178,16 +178,16 @@ it('las llamadas a storeEvent y fetchEvents pasan los argumentos que la pagina e
     expect($storeEvent->getParameters()[1]->getName())->toBe('occurredAt');
 
     /**
-     * `fetchEvents` se llama con cuatro argumentos y ninguno es obligatorio: el panel de inicio
-     * sigue llamándolo con dos y las pruebas de la clase base, con ninguno.
+     * `fetchEvents` is called with four arguments and none is required: the home dashboard still
+     * calls it with two and the base class tests with none.
      */
     $fetchEvents = new ReflectionMethod(HealthEventPage::class, 'fetchEvents');
     expect($fetchEvents->getNumberOfRequiredParameters())->toBe(0);
     expect($fetchEvents->getNumberOfParameters())->toBe(4);
 });
 
-/** Los campos que el cliente lee de cada evento devuelto tienen que existir en la respuesta. */
-it('fetchEvents devuelve exactamente las claves que lee el modulo', function (): void {
+/** The fields the client reads from every returned event have to exist in the response. */
+it('fetchEvents returns exactly the keys the module reads', function (): void {
     $user = User::factory()->registered()->create();
     Event::factory()->for($user)->create();
 
@@ -199,10 +199,10 @@ it('fetchEvents devuelve exactamente las claves que lee el modulo', function ():
 });
 
 /**
- * Contrato del DOM. Un `this.$refs.X` sin su `x-ref="X"` es `undefined` y revienta al pulsar, sin
- * aviso previo; un `x-ref` declarado y no usado sobra y confunde a quien venga después.
+ * DOM contract. A `this.$refs.X` without its `x-ref="X"` is `undefined` and blows up on click, with
+ * no warning; a declared and unused `x-ref` is dead weight and confuses whoever comes next.
  */
-it('los $refs del modulo y los x-ref de la plantilla son exactamente los mismos', function (): void {
+it('the module $refs and the template x-refs are exactly the same', function (): void {
     preg_match_all('/\$refs\.([A-Za-z_][A-Za-z0-9_]*)/', mealsModuleSource(), $usedMatches);
     preg_match_all('/x-ref="([^"]+)"/', mealsViewSource(), $declaredMatches);
 
@@ -215,8 +215,8 @@ it('los $refs del modulo y los x-ref de la plantilla son exactamente los mismos'
     expect($used)->toBe($declared);
 });
 
-/** Los `data-*` de la fila de alimento son la otra mitad del contrato del DOM. */
-it('los data-* de la fila de alimento existen en la plantilla', function (): void {
+/** The `data-*` attributes of the food row are the other half of the DOM contract. */
+it('the data-* attributes of the food row exist in the template', function (): void {
     $view = mealsViewSource();
 
     foreach (['data-food-row', 'data-food-name', 'data-food-quantity', 'data-food-unit', 'data-food-remove'] as $hook) {
@@ -225,38 +225,38 @@ it('los data-* de la fila de alimento existen en la plantilla', function (): voi
 });
 
 /**
- * Reglas del ADR 0002 que la plantilla no puede perder: nada de `wire:model`, la región descifrada
- * dentro del island con `wire:ignore` y `wire:key` estable, y la página envuelta en el componente de
- * página de Filament (sin él, la primera tarjeta queda pegada a la barra superior).
+ * ADR 0002 rules the template cannot lose: no `wire:model`, the decrypted region inside the island
+ * with `wire:ignore` and a stable `wire:key`, and the page wrapped in the Filament page component
+ * (without it the first card sticks to the top bar).
  */
-it('la plantilla cumple el ADR 0002 y va envuelta en el componente de pagina de Filament', function (): void {
+it('the template honours ADR 0002 and is wrapped in the Filament page component', function (): void {
     $view = mealsViewSource();
 
-    /** `wire:model=` y no `wire:model` a secas: el comentario de cabecera nombra la regla. */
+    /** `wire:model=` and not a bare `wire:model`: the header comment names the rule. */
     expect($view)->not->toContain('wire:model=');
     expect($view)->toContain('<x-filament-panels::page>');
     expect($view)->toContain('</x-filament-panels::page>');
     expect($view)->toContain("@island(name: 'meals-list')");
     expect($view)->toContain('wire:ignore x-ref="list" wire:key="meals-list-region"');
 
-    /** La acción que dispara la petición va FUERA del island: el island solo envuelve la lista. */
+    /** The action that fires the request goes OUTSIDE the island: the island only wraps the list. */
     $islandStart = strpos($view, "@island(name: 'meals-list')");
     expect(strpos($view, '@submit.prevent="submit"'))->toBeLessThan($islandStart);
 });
 
 /**
- * Convención de campo numérico clínico (`.ai/guidelines/ai.md`): la cantidad de cada alimento es un
- * valor de medida, así que nunca `type="text"`.
+ * Clinical numeric field convention (`.ai/guidelines/ai.md`): the amount of each food is a measured
+ * value, so never `type="text"`.
  */
-it('la cantidad de alimento es un campo numerico con min 0 y step any', function (): void {
+it('the food amount is a numeric field with min 0 and step any', function (): void {
     $view = mealsViewSource();
 
     expect($view)->toMatch('/type="number"\s+min="0"\s+step="any"\s+inputmode="decimal"\s+data-food-quantity/');
     expect(mealsModuleSource())->toContain('parseNumericValue');
 });
 
-/** ADR 0002: los `<option>` los emite el servidor, nunca Alpine (el morph los borraría). */
-it('los option de los catalogos los renderiza Blade y no Alpine', function (): void {
+/** ADR 0002: the `<option>`s are emitted by the server, never by Alpine (the morph would wipe them). */
+it('the catalog options are rendered by Blade and not Alpine', function (): void {
     $user = User::factory()->registered()->create();
     $this->actingAs($user);
 
@@ -270,13 +270,13 @@ it('los option de los catalogos los renderiza Blade y no Alpine', function (): v
         expect($html)->toContain('<option value="'.e($unit->value).'">');
     }
 
-    /** El módulo no fabrica ningún `<option>` ni toca la colección `options` de un `<select>`. */
+    /** The module builds no `<option>` and never touches the `options` collection of a `<select>`. */
     expect(mealsModuleSource())->not->toContain("createElement('option')");
     expect(mealsModuleSource())->not->toContain('innerHTML');
 });
 
-/** El catálogo es dato público en claro: mismas claves que espera el módulo (ADR 0005). */
-it('el catalogo publica los tres bloques que el modulo necesita', function (): void {
+/** The catalog is public plaintext data: the same keys the module expects (ADR 0005). */
+it('the catalog publishes the three blocks the module needs', function (): void {
     $catalog = (new Meals)->catalog();
 
     expect(array_keys($catalog))->toEqualCanonicalizing(['mealTypes', 'units', 'recordedByRoles']);
@@ -284,6 +284,6 @@ it('el catalogo publica los tres bloques que el modulo necesita', function (): v
     expect($catalog['units'][0])->toHaveKeys(['code', 'label']);
     expect($catalog['recordedByRoles'][0])->toHaveKeys(['token', 'label']);
 
-    /** El origen del dato no se publica: no hay nada que elegir, siempre es `manual`. */
+    /** The data origin is not published: there is nothing to choose, it is always `manual`. */
     expect($catalog)->not->toHaveKey('dataOrigins');
 });

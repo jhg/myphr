@@ -102,7 +102,7 @@ final class OpaqueSetupCommand extends Command
     }
 
     /**
-     * Advertencia previa exigida por §12.1, puntos 7 y 8.
+     * Up-front warning required by §12.1, points 7 and 8.
      */
     private function warnAboutDestruction(): void
     {

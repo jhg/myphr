@@ -5,8 +5,8 @@ declare(strict_types=1);
 use App\Security\Opaque\OpaqueProfile;
 
 /**
- * Constantes del perfil `OPAQUE-R255-SHA512-A2ID-m65536-t3-p4-ctx0-v1`
- * (`docs/OPAQUE.md` §2 y §6).
+ * Constants of the `OPAQUE-R255-SHA512-A2ID-m65536-t3-p4-ctx0-v1` profile
+ * (`docs/OPAQUE.md` §2 and §6).
  */
 it('names the single supported profile', function (): void {
     expect(OpaqueProfile::NAME)->toBe('OPAQUE-R255-SHA512-A2ID-m65536-t3-p4-ctx0-v1');

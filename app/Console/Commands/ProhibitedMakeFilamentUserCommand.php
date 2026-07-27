@@ -33,7 +33,7 @@ final class ProhibitedMakeFilamentUserCommand extends Command
     ];
 
     /**
-     * @return int Siempre fallo: no se crea ninguna cuenta.
+     * @return int Always failure: no account is created.
      */
     public function handle(): int
     {

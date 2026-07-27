@@ -1,15 +1,15 @@
 /**
- * Comprobaciones de `health/dayOverlay.js`: la superposición de días sobre un eje de 24 horas
- * (ADR 0004, ADR 0006, ADR 0007, ADR 0008).
+ * Checks of `health/dayOverlay.js`: the overlay of days on a 24-hour axis (ADR 0004, ADR 0006,
+ * ADR 0007, ADR 0008).
  *
- * Lógica pura, sin DOM ni Chart.js:
+ * Pure logic, with no DOM and no Chart.js:
  *
  *     npm test
  *
- * Lo que se vigila aquí es lo que haría falsa esta gráfica: una hora sin lecturas con una mediana
- * inventada, una capilar y una intersticial promediadas en la misma línea gruesa, lecturas de otra
- * unidad coladas en la nube, la hora del día resuelta con la zona del navegador —que desplazaría el
- * patrón diario entero— y días recortados sin decirlo.
+ * What is watched here is what would make this chart false: an hour with no readings and an
+ * invented median, a capillary and an interstitial averaged into the same thick line, readings of
+ * another unit slipped into the cloud, the hour of the day resolved with the browser zone —which
+ * would shift the whole daily pattern— and days clipped without saying so.
  */
 
 import assert from 'node:assert/strict';
@@ -26,7 +26,7 @@ function glucose({ occurredAt, value, unit = 'mg/dL', method = 'capillary', tz =
 }
 
 /**
- * Mediana de una hora concreta de un grupo, o `null` si esa hora no tiene ninguna.
+ * Median of one particular hour of a group, or `null` if that hour has none.
  *
  * @param {object} group
  * @param {number} hour
@@ -36,9 +36,9 @@ function medianAt(group, hour) {
     return group.median[hour].y;
 }
 
-// --- Sin datos y con un solo dato ---------------------------------------------------------------
+// --- No data and a single datum ------------------------------------------------------------------
 
-test('sin lecturas no hay ningún grupo ni ningún día superpuesto', () => {
+test('with no readings there is no group and no overlaid day', () => {
     const overlay = buildDayOverlay([], { unit: 'mg/dL' });
 
     assert.deepEqual(overlay.groups, []);
@@ -46,7 +46,7 @@ test('sin lecturas no hay ningún grupo ni ningún día superpuesto', () => {
     assert.equal(overlay.omittedDays, 0);
 });
 
-test('una sola lectura da un día con un punto y una única hora con mediana', () => {
+test('a single reading gives one day with one point and one single hour with a median', () => {
     const overlay = buildDayOverlay([
         glucose({ occurredAt: '2026-07-04T08:30:00.000000Z', value: '112' }),
     ], { unit: 'mg/dL' });
@@ -59,9 +59,9 @@ test('una sola lectura da un día con un punto y una única hora con mediana', (
     assert.equal(medianAt(group, 8), 112);
 });
 
-// --- Las horas sin lecturas son huecos, jamás ceros ----------------------------------------------
+// --- Hours with no readings are gaps, never zeros ------------------------------------------------
 
-test('la mediana horaria tiene las 24 franjas y las vacías van a hueco, nunca a cero', () => {
+test('the hourly median has the 24 slots and the empty ones go to a gap, never to a zero', () => {
     const overlay = buildDayOverlay([
         glucose({ occurredAt: '2026-07-04T08:30:00.000000Z', value: '112' }),
     ], { unit: 'mg/dL' });
@@ -69,12 +69,12 @@ test('la mediana horaria tiene las 24 franjas y las vacías van a hueco, nunca a
     const [group] = overlay.groups;
 
     assert.equal(group.median.length, 24);
-    /** Un cero en glucemia es una hipoglucemia mortal: no se dibuja donde no se midió. */
+    /** A zero in glucose is a lethal hypoglycaemia: it is not drawn where nothing was measured. */
     assert.equal(medianAt(group, 3), null);
     assert.equal(group.median.filter((point) => point.y !== null).length, 1);
 });
 
-test('la mediana de una hora es la de todas las lecturas de esa hora en todos los días', () => {
+test('the median of an hour is that of every reading of that hour on every day', () => {
     const overlay = buildDayOverlay([
         glucose({ occurredAt: '2026-07-04T08:10:00.000000Z', value: '100' }),
         glucose({ occurredAt: '2026-07-05T08:40:00.000000Z', value: '140' }),
@@ -85,7 +85,7 @@ test('la mediana de una hora es la de todas las lecturas de esa hora en todos lo
     assert.equal(overlay.dayCount, 3);
 });
 
-test('el punto de la mediana se coloca en el centro de su franja, no en el comienzo', () => {
+test('the median point is placed at the centre of its slot, not at the start', () => {
     const overlay = buildDayOverlay([
         glucose({ occurredAt: '2026-07-04T08:10:00.000000Z', value: '100' }),
     ], { unit: 'mg/dL' });
@@ -93,9 +93,9 @@ test('el punto de la mediana se coloca en el centro de su franja, no en el comie
     assert.equal(overlay.groups[0].median[8].x, 8.5);
 });
 
-// --- Una serie por método de medición (ADR 0008) ------------------------------------------------
+// --- One series per measurement method (ADR 0008) ------------------------------------------------
 
-test('cada método tiene sus días y su propia mediana horaria', () => {
+test('each method has its own days and its own hourly median', () => {
     const overlay = buildDayOverlay([
         glucose({ occurredAt: '2026-07-04T08:10:00.000000Z', value: '100', method: 'capillary' }),
         glucose({ occurredAt: '2026-07-04T08:20:00.000000Z', value: '200', method: 'interstitial' }),
@@ -106,9 +106,9 @@ test('cada método tiene sus días y su propia mediana horaria', () => {
     assert.equal(medianAt(overlay.groups[1], 8), 200);
 });
 
-// --- No se convierte entre unidades (ADR 0007) --------------------------------------------------
+// --- Nothing is converted between units (ADR 0007) -----------------------------------------------
 
-test('lo que está en otra unidad se excluye y se cuenta', () => {
+test('whatever is in another unit is excluded and counted', () => {
     const overlay = buildDayOverlay([
         glucose({ occurredAt: '2026-07-04T08:10:00.000000Z', value: '112' }),
         glucose({ occurredAt: '2026-07-04T09:10:00.000000Z', value: '6.2', unit: 'mmol/L' }),
@@ -118,11 +118,11 @@ test('lo que está en otra unidad se excluye y se cuenta', () => {
     assert.equal(medianAt(overlay.groups[0], 9), null);
 });
 
-// --- La hora del día es la de quien registró ----------------------------------------------------
+// --- The hour of the day is the one of whoever recorded ------------------------------------------
 
-test('la hora del día sale del desfase del propio evento, no del navegador', () => {
+test('the hour of the day comes from the offset of the event itself, not from the browser', () => {
     const overlay = buildDayOverlay([
-        /** Las 23:30 del día 4 en Madrid, registradas como 21:30 UTC. */
+        /** 23:30 on the 4th in Madrid, recorded as 21:30 UTC. */
         glucose({ occurredAt: '2026-07-04T21:30:00.000000Z', value: '140', tz: '+02:00' }),
     ], { unit: 'mg/dL' });
 
@@ -133,16 +133,16 @@ test('la hora del día sale del desfase del propio evento, no del navegador', ()
     assert.equal(medianAt(group, 23), 140);
 });
 
-test('hourOfDay no se sale nunca del rango de un día', () => {
+test('hourOfDay never goes outside the range of a day', () => {
     assert.equal(hourOfDay(Date.parse('2026-07-04T00:00:00.000Z')), 0);
     assert.equal(hourOfDay(Date.parse('2026-07-04T23:45:00.000Z')), 23.75);
-    /** Un instante anterior a la época sigue dando una hora del día, no un número negativo. */
+    /** An instant before the epoch still gives an hour of the day, not a negative number. */
     assert.equal(hourOfDay(-3_600_000), 23);
 });
 
-// --- Nada se recorta en silencio ----------------------------------------------------------------
+// --- Nothing is clipped in silence ----------------------------------------------------------------
 
-test('se conservan los días más recientes y se dice cuántos quedaron fuera', () => {
+test('the most recent days are kept and how many were left out is stated', () => {
     const events = Array.from({ length: 5 }, (unused, index) => glucose({
         occurredAt: `2026-07-0${index + 1}T08:00:00.000000Z`,
         value: String(100 + index),
@@ -153,11 +153,11 @@ test('se conservan los días más recientes y se dice cuántos quedaron fuera', 
     assert.deepEqual(overlay.groups[0].days.map((day) => day.day), ['2026-07-03', '2026-07-04', '2026-07-05']);
     assert.equal(overlay.dayCount, 3);
     assert.equal(overlay.omittedDays, 2);
-    /** La mediana describe la nube que se ve, no una que incluya días que no se dibujan. */
+    /** The median describes the cloud that is seen, not one including days that are not drawn. */
     assert.equal(medianAt(overlay.groups[0], 8), 103);
 });
 
-test('un evento sin valor legible se descarta y se cuenta, no se cuela como cero', () => {
+test('an event with no readable value is discarded and counted, it does not slip in as a zero', () => {
     const overlay = buildDayOverlay([
         glucose({ occurredAt: '2026-07-04T08:00:00.000000Z', value: '112' }),
         glucose({ occurredAt: '2026-07-04T09:00:00.000000Z', value: '' }),
@@ -167,7 +167,7 @@ test('un evento sin valor legible se descarta y se cuenta, no se cuela como cero
     assert.equal(medianAt(overlay.groups[0], 9), null);
 });
 
-test('los días de un grupo llegan ordenados y sus puntos también, por hora del día', () => {
+test('the days of a group arrive sorted and so do their points, by hour of the day', () => {
     const overlay = buildDayOverlay([
         glucose({ occurredAt: '2026-07-05T20:00:00.000000Z', value: '150' }),
         glucose({ occurredAt: '2026-07-04T07:00:00.000000Z', value: '90' }),

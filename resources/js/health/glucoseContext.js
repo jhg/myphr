@@ -30,6 +30,7 @@ import { eventWallClockMs } from './dailyBands.js';
 import { catalogLabel, formatMeasuredValue, INSULIN_TYPE_KEYS, MEAL_TYPE_KEYS } from './eventLabels.js';
 import { t } from '../i18n/index.js';
 import { toFiniteNumber } from './statistics.js';
+import { splitOnGaps } from './timeAxis.js';
 
 /**
  * Cap on drawn readings.
@@ -159,31 +160,6 @@ function foldMarkers(byKind) {
 }
 
 /**
- * Splits a sorted series wherever the gap between two readings goes over {@see MAX_READING_GAP_MS}.
- *
- * The cut is made with a point of value `null` in the middle, which is what Chart.js draws as a
- * break with `spanGaps` false.
- *
- * @param {list<{x: number, y: number}>} points
- * @returns {list<{x: number, y: number|null}>}
- */
-function splitOnGaps(points) {
-    const withGaps = [];
-
-    for (const [index, point] of points.entries()) {
-        const previous = points[index - 1];
-
-        if (previous !== undefined && point.x - previous.x > MAX_READING_GAP_MS) {
-            withGaps.push({ x: (previous.x + point.x) / 2, y: null });
-        }
-
-        withGaps.push(point);
-    }
-
-    return withGaps;
-}
-
-/**
  * Builds the glucose curve of the period and the meal and insulin markers that go with it.
  *
  * @param {list<{type: string, tz?: string, occurredAt: string, data: object}>} events Already
@@ -288,7 +264,7 @@ export function buildGlucoseContext(events, { unit, maxReadings = MAX_CONTEXT_RE
 
     /** Stable order by token, as in `dailyBands.js`: the colour of a method cannot dance around. */
     const series = [...byGroup.keys()].sort((a, b) => a.localeCompare(b))
-        .map((group) => ({ group, points: splitOnGaps(byGroup.get(group)) }));
+        .map((group) => ({ group, points: splitOnGaps(byGroup.get(group), MAX_READING_GAP_MS) }));
 
     const { markers, grouped } = foldMarkers(byKind);
 

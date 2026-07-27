@@ -1,14 +1,14 @@
 /**
- * La pantalla de un recorte compartido (`resources/js/reader/clippingExplorer.js`, ADR 0011).
+ * The screen of a shared clipping (`resources/js/reader/clippingExplorer.js`, ADR 0011).
  *
- * Es el módulo que ven las dos puntas de la compartición: el profesional que abre el enlace y el
- * paciente que previsualiza antes de enviarlo. Aquí se comprueban dos cosas distintas:
+ * It is the module both ends of the sharing see: the professional who opens the link and the
+ * patient who previews before sending it. Two different things are checked here:
  *
- * 1. **La lógica pura**: qué periodo se aplica, cómo se aplana el paquete y qué tipos se ofrecen.
- * 2. **Los invariantes de seguridad**, que no son un detalle de implementación sino la razón de que
- *    esta pantalla pueda existir sin cuenta y sin sesión. Se comprueban leyendo el propio código
- *    fuente del lector: no hay forma de escribir una aserción de comportamiento para «no existe
- *    ninguna vía para pedir un evento más», porque lo que hay que demostrar es una **ausencia**.
+ * 1. **The pure logic**: which period is applied, how the package is flattened and which types are offered.
+ * 2. **The security invariants**, which are not an implementation detail but the reason this
+ *    screen can exist with no account and no session. They are checked by reading the source code
+ *    of the reader itself: there is no way to write a behaviour assertion for "there is no way to
+ *    ask for one more event", because what has to be shown is an **absence**.
  *
  *     npm test
  */
@@ -37,12 +37,12 @@ afterEach(() => {
     setLocale(DEFAULT_LOCALE);
 });
 
-/** Manifiesto de Vite. Solo existe tras `npm run build`, y no está en el repositorio. */
+/** Vite manifest. It only exists after `npm run build`, and it is not in the repository. */
 const MANIFEST_PATH = new URL('../../public/build/manifest.json', import.meta.url);
 
 /**
- * Un recorte como el que arma `buildSharePackageBody()`: eventos con `occurredAt` y `content`, el
- * rango declarado, el recuento y las dos listas de tipos.
+ * A clipping like the one `buildSharePackageBody()` builds: events with `occurredAt` and
+ * `content`, the declared range, the count and the two type lists.
  *
  * @param {object} [overrides]
  * @returns {object}
@@ -73,13 +73,13 @@ function clipping(overrides = {}) {
     };
 }
 
-// --- Acotar, jamás ampliar -----------------------------------------------------------------------
+// --- Narrow, never widen ---------------------------------------------------------------------------
 
 /**
- * El invariante central del lector: el profesional puede estrechar lo que mira dentro del recorte,
- * y no hay forma de que pida un solo día más de historial del que el paciente decidió compartir.
+ * The central invariant of the reader: the professional can narrow what they look at inside the
+ * clipping, and cannot ask for a single day more than the patient chose to share.
  */
-test('narrowToClipping: un periodo más ancho que el recorte se corta a los extremos del recorte', () => {
+test('narrowToClipping: a period wider than the clipping is cut to the ends of the clipping', () => {
     const bounds = clippingBounds(clipping());
 
     const widened = narrowToClipping(
@@ -90,13 +90,13 @@ test('narrowToClipping: un periodo más ancho que el recorte se corta a los extr
     assert.deepEqual(widened, bounds);
 });
 
-test('narrowToClipping: un periodo abierto por los dos lados se queda en el recorte entero', () => {
+test('narrowToClipping: a period open on both sides stays as the whole clipping', () => {
     const bounds = clippingBounds(clipping());
 
     assert.deepEqual(narrowToClipping({ from: null, to: null }, bounds), bounds);
 });
 
-test('narrowToClipping: un periodo más estrecho sí se respeta, que es para lo que existe', () => {
+test('narrowToClipping: a narrower period is respected, which is what it exists for', () => {
     const bounds = clippingBounds(clipping());
     const inner = { from: '2026-07-01T00:00:00.000000Z', to: '2026-07-10T00:00:00.000000Z' };
 
@@ -104,35 +104,35 @@ test('narrowToClipping: un periodo más estrecho sí se respeta, que es para lo 
 });
 
 /**
- * Con un recorte sin extremos declarados no hay nada que cortar, y tampoco hace falta: el origen de
- * datos es la lista que ya está en memoria, así que un rango abierto no amplía nada.
+ * With a clipping with no declared ends there is nothing to cut, and none is needed: the data
+ * source is the list already in memory, so an open range widens nothing.
  */
-test('narrowToClipping: sin extremos declarados, lo pedido pasa tal cual', () => {
+test('narrowToClipping: with no declared ends, what is asked for passes through as is', () => {
     const asked = { from: '2026-01-01T00:00:00.000000Z', to: null };
 
     assert.deepEqual(narrowToClipping(asked, { from: null, to: null }), asked);
 });
 
 /**
- * Los atajos cuentan desde el final del recorte y no desde el reloj de hoy. Con «hoy», un recorte
- * generado la semana pasada saldría vacío al pulsar «último día», y una pantalla vacía en consulta
- * se lee como «este paciente no tiene registros».
+ * The shortcuts count from the end of the clipping and not from today's clock. With "today", a
+ * clipping generated last week would come out empty on pressing "last day", and an empty screen in
+ * an appointment reads as "this patient has no records".
  */
-test('clippingEnd: el final del recorte es el declarado, no el instante actual', () => {
+test('clippingEnd: the end of the clipping is the declared one, not the current instant', () => {
     const body = clipping();
 
     assert.equal(clippingEnd(clippingBounds(body), []).toISOString(), '2026-07-20T00:00:00.000Z');
 });
 
-test('clippingEnd: sin extremo declarado, el registro más reciente del propio recorte', () => {
+test('clippingEnd: with no declared end, the most recent record of the clipping itself', () => {
     const body = clipping({ range: { from: null, to: null } });
     const { events } = flattenClippingEvents(body);
 
-    /** El `+1` deja dentro al propio evento, que es el que se quiere ver. */
+    /** The `+1` keeps the event itself inside, which is the one we want to see. */
     assert.equal(clippingEnd(clippingBounds(body), events).toISOString(), '2026-07-19T22:00:00.001Z');
 });
 
-test('clippingSubrange: «último día» se cuenta desde el final del recorte y sale dentro de él', () => {
+test('clippingSubrange: "last day" is counted from the end of the clipping and comes out inside it', () => {
     const body = clipping();
     const { events } = flattenClippingEvents(body);
 
@@ -140,16 +140,16 @@ test('clippingSubrange: «último día» se cuenta desde el final del recorte y 
 
     assert.equal(error, '');
     assert.equal(range.from, '2026-07-19T00:00:00.000000Z');
-    /** La punta superior la pone el recorte: el atajo la deja abierta y aquí no puede estarlo. */
+    /** The upper end is set by the clipping: the shortcut leaves it open and here it cannot be. */
     assert.equal(range.to, '2026-07-20T00:00:00.000000Z');
 });
 
 /**
- * Un rango a medida que se sale del recorte se acepta y se recorta, en vez de rechazarse: quien lo
- * teclea está pidiendo «todo lo que haya por aquí», y darle el recorte entero es la respuesta
- * honesta. Lo que no puede pasar es que se enseñe algo de fuera, porque no hay nada de fuera.
+ * A custom range going outside the clipping is accepted and clipped, instead of being rejected:
+ * whoever types it is asking for "everything around here", and giving them the whole clipping is
+ * the honest answer. What cannot happen is showing anything from outside, because there is nothing outside.
  */
-test('clippingSubrange: un rango a medida que desborda el recorte se recorta a él', () => {
+test('clippingSubrange: a custom range overflowing the clipping is clipped to it', () => {
     const body = clipping();
     const bounds = clippingBounds(body);
 
@@ -166,11 +166,11 @@ test('clippingSubrange: un rango a medida que desborda el recorte se recorta a �
 });
 
 /**
- * Un rango mal tecleado no deja la pantalla en blanco: se devuelve el recorte entero y el porqué,
- * que quien llama pinta como aviso. En una consulta, una pantalla vacía sin explicación es peor que
- * un periodo más ancho del que se pidió.
+ * A badly typed range does not leave the screen blank: the whole clipping is returned along with
+ * the reason, which the caller paints as a warning. In an appointment, an empty screen with no
+ * explanation is worse than a period wider than the one asked for.
  */
-test('clippingSubrange: un rango incompleto devuelve el recorte entero y un motivo', () => {
+test('clippingSubrange: an incomplete range returns the whole clipping and a reason', () => {
     const bounds = clippingBounds(clipping());
 
     const { range, error } = clippingSubrange({ preset: 'custom', fromDay: '2026-07-01', toDay: '', bounds, events: [] });
@@ -179,9 +179,9 @@ test('clippingSubrange: un rango incompleto devuelve el recorte entero y un moti
     assert.notEqual(error, '');
 });
 
-// --- Aplanado del paquete ------------------------------------------------------------------------
+// --- Flattening the package --------------------------------------------------------------------
 
-test('flattenClippingEvents: el contenido y la fecha quedan al mismo nivel, como espera statistics.js', () => {
+test('flattenClippingEvents: the content and the date end up at the same level, as statistics.js expects', () => {
     const { events, unreadable } = flattenClippingEvents(clipping());
 
     assert.equal(events.length, 3);
@@ -192,11 +192,11 @@ test('flattenClippingEvents: el contenido y la fecha quedan al mismo nivel, como
 });
 
 /**
- * ADR 0004: un registro que no se puede leer se cuenta y se enseña, nunca se traga. En un recorte
- * que va a leer otra persona, un registro que falta es indistinguible de un registro que no existió,
- * y esa diferencia es clínica.
+ * ADR 0004: a record that cannot be read is counted and shown, never swallowed. In a clipping
+ * somebody else is going to read, a missing record is indistinguishable from a record that never
+ * existed, and that difference is clinical.
  */
-test('flattenClippingEvents: un evento sin contenido legible se aparta, no desaparece', () => {
+test('flattenClippingEvents: an event with no readable content is set apart, it does not disappear', () => {
     const body = clipping();
     body.events.push({ occurredAt: '2026-07-19T23:00:00.000000Z', content: null });
     body.events.push({ occurredAt: '2026-07-19T23:30:00.000000Z', content: { v: 1, data: {} } });
@@ -207,22 +207,22 @@ test('flattenClippingEvents: un evento sin contenido legible se aparta, no desap
     assert.equal(unreadable.length, 2);
 });
 
-// --- Tipos y unidades ----------------------------------------------------------------------------
+// --- Types and units -----------------------------------------------------------------------------
 
 /**
- * Solo se ofrecen las casillas de los tipos que el recorte incluye. Ofrecer «Comidas» en un recorte
- * donde el paciente decidió no compartirlas invitaría a marcarla y a concluir, del silencio, que no
- * come. Lo que se dejó fuera se dice en la cabecera, con esas palabras.
+ * Only the checkboxes of the types the clipping includes are offered. Offering "Meals" in a
+ * clipping where the patient chose not to share them would invite ticking it and concluding, from
+ * the silence, that they do not eat. What was left out is said in the header, in those words.
  */
-test('clippingTypes: solo los tipos incluidos, en el orden del catálogo', () => {
+test('clippingTypes: only the included types, in catalog order', () => {
     assert.deepEqual(clippingTypes(clipping()), ['glucose', 'insulin']);
 });
 
 /**
- * La unidad de presentación del paciente es configuración cifrada suya (ADR 0007) y no viaja en el
- * recorte, así que la unidad sale de las propias lecturas: si midió en mmol/L, en mmol/L se lee.
+ * The display unit of the patient is their own encrypted configuration (ADR 0007) and does not
+ * travel in the clipping: the unit comes from the readings. If they measured in mmol/L, it reads so.
  */
-test('clippingGlucoseUnit: la unidad sale de las lecturas del recorte, no de ningún ajuste', () => {
+test('clippingGlucoseUnit: the unit comes from the readings of the clipping, not from any setting', () => {
     const body = clipping();
     body.events[1].content.data.unit = 'mmol/L';
     body.events[0].content.data.unit = 'mmol/L';
@@ -230,11 +230,11 @@ test('clippingGlucoseUnit: la unidad sale de las lecturas del recorte, no de nin
     assert.equal(clippingGlucoseUnit(flattenClippingEvents(body).events), 'mmol/L');
 });
 
-test('clippingGlucoseUnit: sin ninguna glucemia, mg/dL', () => {
+test('clippingGlucoseUnit: with no glucose reading, mg/dL', () => {
     assert.equal(clippingGlucoseUnit([]), 'mg/dL');
 });
 
-// --- Invariantes de seguridad, comprobados sobre el propio código ---------------------------------
+// --- Security invariants, checked over the code itself ----------------------------------------------
 
 /**
  * @param {string} relativePath
@@ -245,11 +245,11 @@ function sourceOf(relativePath) {
 }
 
 /**
- * El código de un módulo **sin sus comentarios**.
+ * The code of a module **without its comments**.
  *
- * Hace falta porque estos ficheros documentan sus propias prohibiciones con las mismas palabras
- * («no se escribe en `localStorage`»), y un buscador ingenuo daría por infringida justo la regla que
- * el comentario está prometiendo cumplir.
+ * It is needed because these files document their own prohibitions in the same words ("nothing is
+ * written to `localStorage`"), and a naive search would take as broken the very rule the comment
+ * is promising to keep.
  *
  * @param {string} relativePath
  * @returns {string}
@@ -261,8 +261,8 @@ function codeOf(relativePath) {
 }
 
 /**
- * Los tres ficheros que componen la pantalla del profesional. Si algún día aparece un cuarto, tiene
- * que entrar en esta lista: es el perímetro que estas comprobaciones vigilan.
+ * The three files that make up the professional's screen. If a fourth ever appears, it has to go
+ * into this list: it is the perimeter these checks watch.
  */
 const READER_SOURCES = Object.freeze([
     'reader.js',
@@ -272,15 +272,15 @@ const READER_SOURCES = Object.freeze([
 ]);
 
 /**
- * **El paquete descifrado vive solo en memoria.** Cerrar la pestaña lo borra, igual que la clave
- * maestra del paciente (ADR 0003). Escribirlo en `localStorage` o en IndexedDB lo dejaría en el disco
- * de un ordenador de consulta que usan varias personas y que nadie de esta conversación controla, y
- * ahí sobreviviría a la caducidad del enlace, que es lo único que este diseño puede prometer.
+ * **The decrypted package lives only in memory.** Closing the tab wipes it, just like the master
+ * key of the patient (ADR 0003). Writing it to `localStorage` or to IndexedDB would leave it on the
+ * disk of a clinic computer several people use and nobody in this conversation controls, and there
+ * it would outlive the expiry of the link, which is the only thing this design can promise.
  *
- * Se comprueba también sobre la búsqueda y el subperiodo: guardar «lo último que buscaste» sería el
- * mismo rastro clínico por otra puerta.
+ * It is checked over the search and the sub-period too: storing "the last thing you searched for"
+ * would be the same clinical trace through another door.
  */
-test('el lector no escribe nada en el dispositivo: ni almacenamiento, ni cookies', () => {
+test('the reader writes nothing on the device: no storage, no cookies', () => {
     for (const path of READER_SOURCES) {
         const code = codeOf(path);
 
@@ -295,11 +295,11 @@ test('el lector no escribe nada en el dispositivo: ni almacenamiento, ni cookies
 });
 
 /**
- * **El médico solo puede acotar, jamás ampliar.** No hay ninguna vía para pedir un evento más: el
- * único endpoint que sirve datos clínicos es el que ya está tras el PIN (`open`, en `readerPage.js`),
- * y entrega el paquete entero de una vez. La pantalla que pinta el recorte no habla con nadie.
+ * **The doctor can only narrow, never widen.** There is no way to ask for one more event: the only
+ * endpoint serving clinical data is the one already behind the PIN (`open`, in `readerPage.js`),
+ * and it delivers the whole package at once. The screen that paints the clipping talks to nobody.
  */
-test('la pantalla del recorte no tiene ninguna vía para pedir datos', () => {
+test('the clipping screen has no way of asking for data', () => {
     const code = codeOf('reader/clippingExplorer.js');
 
     for (const forbidden of ['fetch(', 'XMLHttpRequest', 'WebSocket', 'new EventSource', 'sendBeacon', '$wire']) {
@@ -313,11 +313,11 @@ test('la pantalla del recorte no tiene ninguna vía para pedir datos', () => {
 });
 
 /**
- * Las dos únicas peticiones del lector son las dos rutas del PIN. Cualquier tercera sería una vía
- * nueva por la que pedir datos, y además un segundo momento en el que este navegador se ata a este
- * enlace ante quien mire el tráfico.
+ * The only two requests of the reader are the two PIN routes. Any third one would be a new way of
+ * asking for data, and also a second moment at which this browser ties itself to this link in front
+ * of whoever watches the traffic.
  */
-test('el lector solo llama a los dos endpoints del PIN', () => {
+test('the reader only calls the two PIN endpoints', () => {
     const source = sourceOf('reader/readerPage.js');
     const calls = [...source.matchAll(/\bfetch\(/g)];
 
@@ -327,11 +327,11 @@ test('el lector solo llama a los dos endpoints del PIN', () => {
 });
 
 /**
- * **La búsqueda nunca sale del navegador.** Corre sobre los eventos ya descifrados, y en el lector no
- * hay ni siquiera un servidor al que pudiera mandarse: lo que alguien teclea buscando en un historial
- * —«hipoglucemia», el nombre de un fármaco— es un dato clínico por sí mismo.
+ * **The search never leaves the browser.** It runs over the already decrypted events, and in the
+ * reader there is not even a server it could be sent to: what somebody types searching a history
+ * —"hypoglycaemia", a drug name— is a clinical datum in itself.
  */
-test('la búsqueda del recorte es la misma del panel y corre en memoria', () => {
+test('the clipping search is the same as the panel one and runs in memory', () => {
     const source = sourceOf('reader/clippingExplorer.js');
 
     assert.match(source, /import \{ searchEvents \} from '\.\.\/health\/eventSearch\.js'/);
@@ -340,14 +340,14 @@ test('la búsqueda del recorte es la misma del panel y corre en memoria', () => 
 });
 
 /**
- * La página del lector sigue fuera del panel: extraer las vistas compartidas no puede haber colado
- * Livewire, Alpine ni Filament en un documento que se abre en un dispositivo ajeno y sin sesión.
+ * The reader page is still outside the panel: extracting the shared views cannot have slipped
+ * Livewire, Alpine or Filament into a document opened on somebody else's device and with no session.
  */
-test('el lector no arrastra nada del panel', () => {
+test('the reader drags nothing of the panel', () => {
     for (const path of READER_SOURCES) {
         const code = codeOf(path);
 
-        /** Lo que importa es de qué depende el módulo, y eso son sus `import`. */
+        /** What matters is what the module depends on, and that is its `import`s. */
         for (const specifier of [...code.matchAll(/from '([^']+)'/g)].map((match) => match[1])) {
             assert.doesNotMatch(
                 specifier,
@@ -361,14 +361,14 @@ test('el lector no arrastra nada del panel', () => {
 });
 
 
-// --- Lo que la pantalla afirma -------------------------------------------------------------------
+// --- What the screen states -----------------------------------------------------------------------
 
 /**
- * La cabecera del recorte describe el paquete entero y no se repinta; esta línea describe lo que hay
- * debajo **ahora**. Sin ella, acotar a siete días dejaba en papel —los controles no se imprimen— un
- * encabezado de seis meses sobre una tabla de siete días, sin ninguna huella del filtro.
+ * The clipping header describes the whole package and is not repainted; this line describes what
+ * is below **now**. Without it, narrowing to seven days left on paper —the controls are not
+ * printed— a six-month heading over a seven-day table, with no trace of the filter.
  */
-test('viewingText: declara el rango aplicado, los tipos marcados y lo buscado', () => {
+test('viewingText: it states the applied range, the ticked types and what was searched', () => {
     const line = viewingText(
         { from: '2026-07-13T00:00:00.000000Z', to: '2026-07-20T00:00:00.000000Z' },
         ['glucose', 'insulin'],
@@ -382,7 +382,7 @@ test('viewingText: declara el rango aplicado, los tipos marcados y lo buscado', 
     assert.match(line, /\u201cnoche\u201d/);
 });
 
-test('viewingText: sin filtros dice el recorte entero y todos los tipos, y no menciona búsqueda', () => {
+test('viewingText: with no filters it says the whole clipping and every type, and mentions no search', () => {
     const line = viewingText({ from: null, to: null }, ['glucose'], { glucose: true }, '   ');
 
     assert.match(line, /the whole extract/);
@@ -391,10 +391,10 @@ test('viewingText: sin filtros dice el recorte entero y todos los tipos, y no me
 });
 
 /**
- * Un periodo a medida fuera del recorte producía un intervalo vacío: seis tarjetas en blanco, «0
- * registros» y ninguna explicación de una causa que se arregla en dos clics.
+ * A custom period outside the clipping produced an empty interval: six blank cards, "0 records"
+ * and no explanation of a cause fixable in two clicks.
  */
-test('clippingSubrange: un periodo que no solapa con el recorte lo dice y enseña el recorte entero', () => {
+test('clippingSubrange: a period that does not overlap the clipping says so and shows the whole clipping', () => {
     const body = clipping();
     const { range, error } = clippingSubrange({
         preset: 'custom',
@@ -410,11 +410,11 @@ test('clippingSubrange: un periodo que no solapa con el recorte lo dice y enseñ
 });
 
 /**
- * La unidad de glucemia del recorte es la de la **mayoría**, no la de la lectura más reciente: dos
- * lecturas nuevas en otra unidad no pueden mandar a doscientas a una nota al pie y dejar la tarjeta
- * resumiendo dos registros como si resumiera el recorte.
+ * The glucose unit of the clipping is that of the **majority**, not of the most recent reading:
+ * two new readings in another unit cannot send two hundred to a footnote and leave the card
+ * summarizing two records as if it summarized the clipping.
  */
-test('clippingGlucoseUnit: manda la unidad mayoritaria, no la más reciente', () => {
+test('clippingGlucoseUnit: the majority unit rules, not the most recent one', () => {
     const events = [
         ...Array.from({ length: 10 }, (unused, index) => ({
             type: 'glucose',
@@ -434,11 +434,11 @@ test('clippingGlucoseUnit: manda la unidad mayoritaria, no la más reciente', ()
 });
 
 /**
- * Un evento de un séptimo tipo —recorte hecho por una versión más nueva del panel— tiene contenido
- * legible, así que no es «ilegible», y no está entre los tipos ofrecidos, así que no pasa ningún
- * filtro. Sin un cubo propio desaparecía de todo, tabla clínica incluida.
+ * An event of a seventh type —a clipping made by a newer version of the panel— has readable
+ * content, so it is not "unreadable", and it is not among the offered types, so it passes no
+ * filter. Without a bucket of its own it disappeared from everything, clinical table included.
  */
-test('flattenClippingEvents: un tipo no declarado no desaparece, va a su propio cubo', () => {
+test('flattenClippingEvents: an undeclared type does not disappear, it goes to its own bucket', () => {
     const body = clipping({
         events: [
             {
@@ -462,23 +462,23 @@ test('flattenClippingEvents: un tipo no declarado no desaparece, va a su propio 
 });
 
 /**
- * Un recorte que no declara tipos no puede dejar la pantalla diciendo «marca al menos uno» sobre un
- * panel sin ninguna casilla que marcar: se ofrecen los tipos que de verdad hay dentro.
+ * A clipping declaring no types cannot leave the screen saying "tick at least one" over a panel
+ * with no checkbox to tick: the types actually inside are offered.
  */
-test('clippingTypes: sin tipos declarados se ofrecen los que hay en los eventos', () => {
+test('clippingTypes: with no declared types the ones present in the events are offered', () => {
     const body = clipping({ includedTypes: [] });
 
     assert.deepEqual(clippingTypes(body), ['glucose', 'insulin']);
     assert.deepEqual(clippingTypes({ includedTypes: [], events: [] }), []);
 });
 
-// --- Montaje entero ------------------------------------------------------------------------------
+// --- Whole mount -----------------------------------------------------------------------------------
 
 /**
- * `document` mínimo, el mismo patrón que `dashboardPage.test.mjs`: lo justo que tocan los módulos de
- * pintado. Aquí sirve para lo que ningún test de función pura cubre —que la pantalla **entera** se
- * monte y se repinte sin reventar— y para leer lo que acaba diciendo, que es de lo que va la mitad
- * de esta lista de arreglos.
+ * Minimal `document`, the same pattern as `dashboardPage.test.mjs`: exactly what the painting
+ * modules touch. Here it serves for what no pure-function test covers —that the **whole** screen
+ * mounts and repaints without blowing up— and to read what it ends up saying, which is what half
+ * of this list of fixes is about.
  */
 class MountElement {
     constructor(tagName, namespace = null) {
@@ -515,7 +515,7 @@ class MountElement {
 }
 
 /**
- * Monta la pantalla y espera al primer `repaint()`, que es asíncrono porque el origen de datos lo es.
+ * Mounts the screen and waits for the first `repaint()`, which is async because the data source is.
  *
  * @param {object} body
  * @returns {Promise<{container: MountElement, explorer: object}>}
@@ -543,11 +543,11 @@ afterEach(() => {
 });
 
 /**
- * La línea de estado efectivo se repinta con cada cambio; la cabecera del recorte no. Sin ella, el
- * papel que acaba en una historia clínica declaraba el recorte entero sobre una tabla filtrada, y los
- * controles no se imprimen para desmentirlo.
+ * The effective-state line is repainted with every change; the clipping header is not. Without it,
+ * the paper that ends up in a health record declared the whole clipping over a filtered table, and
+ * the controls are not printed to contradict it.
  */
-test('la línea de estado efectivo se repinta al acotar; la cabecera del recorte se queda', async () => {
+test('the effective-state line is repainted on narrowing; the clipping header stays', async () => {
     const { container, explorer } = await mount(clipping());
 
     const headerBefore = container.children[0].text;
@@ -555,22 +555,22 @@ test('la línea de estado efectivo se repinta al acotar; la cabecera del recorte
 
     assert.match(viewing.text, /You are viewing/);
     assert.match(viewing.text, /every record type in the extract/);
-    /** Con extremos declarados, «todo el recorte» son sus fechas, dichas: 20/6 a 20/7. */
+    /** With declared ends, "the whole clipping" is its dates, said out loud: 20/6 to 20/7. */
     assert.match(viewing.text, /6\/20\/2026/);
 
-    /** Se acota al último día del recorte, como haría el desplegable. */
+    /** It narrows to the last day of the clipping, as the dropdown would. */
     const controls = container.children[1];
     findByTag(controls, 'select')[0].value = 'day';
     await explorer.repaint();
 
     assert.match(viewing.text, /from .+ to /);
-    /** Ya no empieza el 20 de junio: el atajo cuenta desde el final del recorte. */
+    /** It no longer starts on 20 June: the shortcut counts from the end of the clipping. */
     assert.doesNotMatch(viewing.text, /6\/20\/2026/);
     assert.match(viewing.text, /7\/19\/2026|7\/20\/2026/);
-    /** La cabecera sigue describiendo el paquete entero: es la referencia, no el estado. */
+    /** The header still describes the whole package: it is the reference, not the state. */
     assert.equal(container.children[0].text, headerBefore);
 
-    /** Y el buscador aparece en la línea en cuanto hay algo tecleado. */
+    /** And the search box appears in the line as soon as something is typed. */
     findByTag(controls, 'input').at(-1).value = 'noche';
     await explorer.repaint();
 
@@ -581,10 +581,10 @@ test('la línea de estado efectivo se repinta al acotar; la cabecera del recorte
 });
 
 /**
- * Un recorte con un tipo que no declara: el evento no es ilegible y no tiene casilla, así que sin su
- * propio cubo desaparecía de todo. Tiene que quedar contado y dicho.
+ * A clipping with a type it does not declare: the event is not unreadable and has no checkbox, so
+ * without its own bucket it disappeared from everything. It has to be counted and said.
  */
-test('un tipo no declarado se anuncia y no desaparece de la pantalla', async () => {
+test('an undeclared type is announced and does not disappear from the screen', async () => {
     const { container } = await mount(clipping({
         events: [
             ...clipping().events,
@@ -596,15 +596,15 @@ test('un tipo no declarado se anuncia y no desaparece de la pantalla', async () 
     }));
 
     assert.match(container.text, /a type this extract does not declare/);
-    /** Y el recuento total los suma: 3 del recorte más el no declarado. */
+    /** And the total count adds them up: 3 of the clipping plus the undeclared one. */
     assert.match(container.text, /of the 4 in this extract/);
 });
 
 /**
- * Las glucemias en dos unidades merecen un aviso por encima de la tarjeta, no una nota al pie con
- * menos peso visual que el número al que desmiente.
+ * Glucose readings in two units deserve a warning above the card, not a footnote with less visual
+ * weight than the number it contradicts.
  */
-test('dos unidades de glucemia se advierten arriba, con la mayoritaria como unidad del recorte', async () => {
+test('two glucose units are warned about at the top, with the majority one as the clipping unit', async () => {
     const base = clipping();
     const { container } = await mount(clipping({
         events: [
@@ -621,17 +621,17 @@ test('dos unidades de glucemia se advierten arriba, con la mayoritaria como unid
 });
 
 /**
- * El lector emite un bloque por cada gráfica de `CHART_BLOCKS`, con los cuatro identificadores que
- * `chartElementIds()` escribe bajo su propio prefijo.
+ * The reader emits one block per chart of `CHART_BLOCKS`, with the four identifiers
+ * `chartElementIds()` writes under its own prefix.
  *
- * Es lo que sostiene la extracción: las dos gráficas que cruzan tipos —la curva de glucemia con
- * marcas de comida e insulina y la superposición de 24 horas— no se declaran aquí, se leen de la
- * lista compartida. Por eso aparecen a la vez en el panel del paciente, en la vista del profesional
- * y en la vista previa de compartir, que monta este mismo módulo. Si alguien añadiera una gráfica
- * solo al panel, este test seguiría verde y el de la plantilla también: lo que este fija es que
- * quien itera la lista no se deja ninguna.
+ * It is what holds the extraction up: the two charts that cross types —the glucose curve with meal
+ * and insulin markers and the 24-hour overlay— are not declared here, they are read from the
+ * shared list. That is why they appear at once in the patient panel, in the professional's view
+ * and in the share preview, which mounts this same module. If somebody added a chart to the panel
+ * only, this test would stay green and so would the template one: what this fixes is that whoever
+ * iterates the list leaves none out.
  */
-test('el lector emite el bloque de cada gráfica de la lista compartida, con sus cuatro ids', async () => {
+test('the reader emits the block of each chart of the shared list, with its four ids', async () => {
     const { container } = await mount(clipping());
 
     for (const type of CHART_BLOCKS) {
@@ -643,7 +643,7 @@ test('el lector emite el bloque de cada gráfica de la lista compartida, con sus
         assert.ok(findById(container, ids.legend) !== null, `falta la leyenda de ${type}`);
     }
 
-    /** Y el lienzo lleva nombre accesible: sin él es un objeto gráfico sin texto (Do's #3). */
+    /** And the canvas carries an accessible name: without it it is a graphical object with no text (Do's #3). */
     const canvas = findById(container, chartElementIds('glucoseContext', 'test').canvas);
 
     assert.equal(canvas.attributes.role, 'img');
@@ -674,7 +674,7 @@ function findById(node, id) {
 /**
  * @param {MountElement} node
  * @param {string} tagName
- * @returns {list<MountElement>} Los nodos del subárbol con esa etiqueta, en orden de documento.
+ * @returns {list<MountElement>} The nodes of the subtree with that tag, in document order.
  */
 function findByTag(node, tagName) {
     const found = node.tagName === tagName ? [node] : [];
@@ -686,25 +686,25 @@ function findByTag(node, tagName) {
     return found;
 }
 
-// --- El perímetro del paquete del lector ---------------------------------------------------------
+// --- The perimeter of the reader bundle ------------------------------------------------------------
 
 /**
- * Recorre el grafo de importaciones **transitivo** desde una entrada de Vite.
+ * Walks the **transitive** import graph from a Vite entry point.
  *
- * Es la parte que faltaba. Los tres tests de arriba miran los `import` **directos** de cuatro
- * ficheros, y eso no vigila un perímetro que Vite decide por alcanzabilidad: basta con que uno de
- * esos cuatro importe un módulo que a su vez importe otro para que Rollup meta la cadena entera en
- * el trozo que descarga el lector. Pasó de verdad: `health/eventSource.js` importaba
- * `health/eventEnvelope.js` → `auth/keyring.js`, y el navegador de una consulta ajena acababa
- * ejecutando el módulo que guarda la clave maestra en `sessionStorage`, con los tests en verde.
+ * It is the part that was missing. The three tests above look at the **direct** `import`s of four
+ * files, and that does not watch a perimeter Vite decides by reachability: it is enough for one of
+ * those four to import a module that in turn imports another for Rollup to put the whole chain in
+ * the chunk the reader downloads. It really happened: `health/eventSource.js` imported
+ * `health/eventEnvelope.js` → `auth/keyring.js`, and the browser of somebody else's clinic ended
+ * up running the module that stores the master key in `sessionStorage`, with the tests green.
  *
- * Se recorre el fuente y no el `manifest.json` a propósito: el fuente está siempre ahí, y el
- * artefacto solo existe después de `npm run build`. Un guardarraíl que se salta solo cuando falta un
- * fichero es exactamente el falso verde que esto viene a cerrar. Y el grafo del fuente es lo que
- * Rollup usa para trocear, así que lo que no es alcanzable aquí no puede estar allí.
+ * The source is walked and not the `manifest.json` on purpose: the source is always there, and the
+ * artefact only exists after `npm run build`. A guard rail that skips itself exactly when a file is
+ * missing is precisely the false green this comes to close. And the source graph is what Rollup
+ * uses to chunk, so what is unreachable here cannot be there.
  *
- * @param {string} entry Ruta relativa a `resources/js/`.
- * @returns {list<string>} Todos los módulos alcanzables, incluida la entrada.
+ * @param {string} entry Path relative to `resources/js/`.
+ * @returns {list<string>} Every reachable module, entry point included.
  */
 function reachableModules(entry) {
     const root = new URL('../../resources/js/', import.meta.url);
@@ -723,7 +723,7 @@ function reachableModules(entry) {
         const code = readFileSync(new URL(current, root), 'utf8');
 
         for (const match of code.matchAll(/(?:from|import)\s*\(?\s*'(\.[^']+)'/g)) {
-            /** Se resuelve contra el módulo actual, que es lo que hace el resolvedor de Vite. */
+            /** It is resolved against the current module, which is what the Vite resolver does. */
             const resolved = new URL(match[1], new URL(current, root)).href.slice(root.href.length);
 
             pending.push(resolved);
@@ -734,15 +734,15 @@ function reachableModules(entry) {
 }
 
 /**
- * **El lector no descarga el llavero de la clave maestra, ni Livewire, ni Alpine.**
+ * **The reader does not download the master key ring, or Livewire, or Alpine.**
  *
- * La página se abre en el ordenador de una consulta que nadie de esta conversación controla. Que el
- * código que sabe guardar y abrir la clave maestra del paciente no llegue siquiera a descargarse no
- * es teatro: mientras esté en el trozo compartido, el invariante «el lector no arrastra nada del
- * panel» es cierto solo por convención, y una pestaña duplicada del panel —`sessionStorage` se
- * copia— pondría el envoltorio de la clave y el código capaz de abrirlo en el mismo documento.
+ * The page opens on the computer of a clinic nobody in this conversation controls. That the code
+ * that knows how to store and open the patient's master key does not even get downloaded is not
+ * theatre: while it is in the shared chunk, the invariant "the reader drags nothing of the panel"
+ * is true only by convention, and a duplicated panel tab —`sessionStorage` is copied— would put
+ * the wrapper of the key and the code able to open it in the same document.
  */
-test('el paquete del lector no alcanza el llavero, ni Livewire, ni Alpine', () => {
+test('the reader bundle does not reach the key ring, or Livewire, or Alpine', () => {
     const reachable = reachableModules('reader.js');
 
     for (const module of reachable) {
@@ -767,11 +767,11 @@ test('el paquete del lector no alcanza el llavero, ni Livewire, ni Alpine', () =
 });
 
 /**
- * El mismo perímetro, comprobado sobre el **artefacto** cuando existe. No sustituye al test de
- * arriba —`public/build` no está en el repositorio—, lo confirma: es la única forma de ver lo que de
- * verdad descarga el navegador después de que Rollup haya troceado.
+ * The same perimeter, checked over the **artefact** when it exists. It does not replace the test
+ * above —`public/build` is not in the repository—, it confirms it: it is the only way to see what
+ * the browser really downloads after Rollup has chunked.
  */
-test('si hay build, el trozo del lector tampoco trae el llavero', { skip: !existsSync(MANIFEST_PATH) }, () => {
+test('if there is a build, the reader chunk does not bring the key ring either', { skip: !existsSync(MANIFEST_PATH) }, () => {
     const manifest = JSON.parse(readFileSync(MANIFEST_PATH, 'utf8'));
     const entry = manifest['resources/js/reader.js'];
 

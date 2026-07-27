@@ -3,9 +3,9 @@
 declare(strict_types=1);
 
 /**
- * La raíz del sitio ya no sirve la página de bienvenida de fábrica de Laravel (inglés sin `__()` y
- * peldaños de rampa que DESIGN.md prohíbe): redirige al panel, que es toda la aplicación. Ver el
- * comentario de `routes/web.php`.
+ * The site root no longer serves Laravel's stock welcome page (English without `__()` and ramp steps
+ * DESIGN.md forbids): it redirects to the panel, which is the whole application. See the comment in
+ * `routes/web.php`.
  */
 test('the site root redirects to the panel', function () {
     $this->get('/')->assertRedirect('/phr');

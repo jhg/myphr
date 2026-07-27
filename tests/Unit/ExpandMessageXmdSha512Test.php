@@ -91,7 +91,7 @@ it('reproduces the RFC 9380 appendix K.3 expand_message_xmd(SHA-512) vectors', f
 })->with(RFC9380_K3_VECTORS);
 
 it('checks the msg_prime encoding of the first K.3 vector', function (): void {
-    // msg_prime del primer vector de RFC 9380 §K.3 (msg = "", len_in_bytes = 0x20).
+    // msg_prime of the first RFC 9380 §K.3 vector (msg = "", len_in_bytes = 0x20).
     $expectedMsgPrime = str_repeat('00', 128)
         .'0020'
         .'00'
@@ -104,7 +104,7 @@ it('checks the msg_prime encoding of the first K.3 vector', function (): void {
         .RFC9380_K3_DST.chr(strlen(RFC9380_K3_DST));
 
     expect(bin2hex($msgPrime))->toBe($expectedMsgPrime)
-        // DST_prime tal como aparece en el vector oficial.
+        // DST_prime exactly as it appears in the official vector.
         ->and(bin2hex(RFC9380_K3_DST).'26')
         ->toBe('515555582d5630312d435330322d776974682d657870616e6465722d5348413531322d32353626');
 });

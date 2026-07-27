@@ -1,27 +1,27 @@
 /**
- * Gráfica genérica de mediana diaria con banda de mínimo y máximo.
+ * Generic chart of daily median with a minimum and maximum band.
  *
- * **Por qué existe.** La glucemia y la tensión ya tenían gráfica, pero cada una dentro de su propia
- * pantalla y atada a su forma de agrupar. El panel de inicio pinta hasta cinco tipos a la vez y
- * cambia cuáles según el filtro, así que necesita una pieza que **reciba una serie y la pinte**, sin
- * saber si viene de una glucemia capilar, de un peso o de una temperatura timpánica. Esa es toda la
- * responsabilidad de este módulo: le entra lo que construye `health/dailyBands.js` y le sale un
- * lienzo dibujado y su leyenda.
+ * **Why it exists.** Glucose and blood pressure already had a chart, but each inside its own
+ * screen and tied to its own way of grouping. The home dashboard paints up to five types at once
+ * and changes which ones depending on the filter, so it needs a piece that **takes a series and
+ * paints it**, without knowing whether it comes from a capillary glucose reading, a weight or a
+ * tympanic temperature. That is this module's whole responsibility: what `health/dailyBands.js`
+ * builds goes in and a drawn canvas plus its legend comes out.
  *
- * Lo que **no** hace, a propósito: no calcula nada (ni medianas ni extremos: ese cálculo vive una
- * sola vez, en `statistics.js` y `dailyBands.js`), no decide unidades ni etiquetas (se las dan
- * hechas y traducidas), y no toca los eventos descifrados.
+ * What it does **not** do, on purpose: it computes nothing (no medians and no extremes: that
+ * computation lives once, in `statistics.js` and `dailyBands.js`), it decides no units and no
+ * labels (they arrive ready and translated), and it does not touch the decrypted events.
  *
- * Reutiliza las dos piezas que ya resolvían lo suyo en las pantallas por tipo: `chartTheme.js` para
- * leer los colores del tema en el momento de dibujar —DESIGN.md § Charts — Dark exige que no haya
- * ni un color literal en el módulo— y `chartLegend.js` para pintar la leyenda en HTML fuera del
- * `<canvas>`, con su patrón de trazo y su marca, que es la segunda codificación que pide Do's #3.
+ * It reuses the two pieces that already solved their part in the per-type screens: `chartTheme.js`
+ * to read the theme colours at draw time —DESIGN.md § Charts — Dark demands not one literal colour
+ * in the module— and `chartLegend.js` to paint the legend in HTML outside the `<canvas>`, with its
+ * dash pattern and its marker, which is the second encoding Do's #3 asks for.
  *
- * **La banda es relleno, no línea.** Se dibuja con dos series auxiliares —el máximo y el mínimo del
- * día— rellenando el hueco entre ellas, y las dos van sin borde ni puntos: la única línea con
- * marcadores es la mediana, que es el dato que se lee. Las auxiliares tampoco aparecen en la
- * leyenda; qué es la banda lo dice el pie en texto, que es donde tiene que estar para quien no ve la
- * gráfica.
+ * **The band is a fill, not a line.** It is drawn with two auxiliary series —the maximum and the
+ * minimum of the day— filling the space between them, and both go without border and without
+ * points: the only line with markers is the median, which is the datum being read. The auxiliary
+ * ones do not appear in the legend either; what the band is is stated by the caption in text,
+ * which is where it has to be for whoever does not see the chart.
  */
 
 import Chart from 'chart.js/auto';
@@ -31,9 +31,9 @@ import { legendElementFor, legendItems, renderLegend } from './chartLegend.js';
 import { chartColors, CHART_FONTS } from './chartTheme.js';
 
 /**
- * Segunda codificación de cada serie, además del color (Do's #3): patrón de trazo y forma del punto.
- * Es la misma tabla que usan las pantallas de glucemia y tensión, para que una capilar se dibuje
- * igual aquí que allí.
+ * Second encoding of each series, besides the colour (Do's #3): dash pattern and point shape.
+ * It is the same table the glucose and blood pressure screens use, so a capillary reading is drawn
+ * the same here as there.
  */
 const SERIES_SHAPES = Object.freeze([
     Object.freeze({ borderDash: [], pointStyle: 'circle' }),
@@ -42,11 +42,11 @@ const SERIES_SHAPES = Object.freeze([
 ]);
 
 /**
- * Opacidad del relleno de la banda.
+ * Opacity of the band fill.
  *
- * La banda es contexto, no el dato: tiene que dejar leer la mediana que pasa por dentro y las líneas
- * de otras series que la cruzan. Con un relleno opaco, dos métodos con recorridos solapados se
- * taparían el uno al otro y la gráfica diría menos que la tabla de al lado.
+ * The band is context, not the datum: it has to let the median passing through it be read, and the
+ * lines of other series crossing it. With an opaque fill, two methods with overlapping ranges
+ * would cover each other and the chart would say less than the table next to it.
  */
 const BAND_ALPHA = 0.16;
 
@@ -54,11 +54,11 @@ Chart.defaults.font.family = CHART_FONTS.body;
 Chart.defaults.font.size = 13;
 
 /**
- * El mismo color con transparencia, para el relleno de la banda.
+ * The same colour with transparency, for the band fill.
  *
- * Los tokens de tema son hexadecimales (`theme.css`, § Charts), que es el caso que se resuelve. Un
- * formato que no se sepa descomponer se devuelve **tal cual**: una banda opaca es fea, pero inventar
- * un color derivado sería salirse de la paleta de DESIGN.md, que es peor.
+ * The theme tokens are hex values (`theme.css`, § Charts), which is the case being handled. A
+ * format that cannot be decomposed is returned **as is**: an opaque band is ugly, but inventing a
+ * derived colour would step outside the DESIGN.md palette, which is worse.
  *
  * @param {string} color
  * @param {number} alpha
@@ -81,15 +81,15 @@ export function withAlpha(color, alpha) {
 }
 
 /**
- * Conjuntos de datos de Chart.js para una serie: la banda (dos series auxiliares que se rellenan
- * entre sí) y la línea de medianas encima.
+ * Chart.js datasets for one series: the band (two auxiliary series filled between each other) and
+ * the median line on top.
  *
- * El orden importa y no es cosmético: `fill: '-1'` rellena hasta el conjunto **anterior**, así que
- * el mínimo tiene que ir justo antes del máximo. La mediana va después para quedar dibujada por
- * encima del relleno.
+ * The order matters and is not cosmetic: `fill: '-1'` fills up to the **previous** dataset, so the
+ * minimum has to come right before the maximum. The median comes afterwards so it is drawn on top
+ * of the fill.
  *
- * `spanGaps` se queda en falso —el valor de fábrica— en los tres: un día sin lecturas es un hueco, y
- * unir por encima de él dibujaría una línea que afirma algo que nadie midió.
+ * `spanGaps` stays false —the factory value— in all three: a day with no readings is a gap, and
+ * joining over it would draw a line asserting something nobody measured.
  *
  * @param {{label: string, color: string, borderDash: list<number>, pointStyle: string}} series
  * @param {list<{median: number, min: number, max: number}|null>} points
@@ -103,9 +103,9 @@ export function bandDatasets(series, points, colors) {
         pointHitRadius: 0,
         backgroundColor: withAlpha(series.color, BAND_ALPHA),
         /**
-         * Marca para que el tooltip las descarte ({@see renderMedianBandChart}): sus dos números ya
-         * salen en la línea de la mediana, y repetirlos como dos entradas sueltas de «máximo» y
-         * «mínimo» sin decir de qué serie son es ruido que se lee mal.
+         * Marked so the tooltip discards them ({@see renderMedianBandChart}): their two numbers
+         * already come out on the median line, and repeating them as two loose "maximum" and
+         * "minimum" entries without saying which series they belong to is noise that reads badly.
          */
         isBand: true,
     };
@@ -128,9 +128,9 @@ export function bandDatasets(series, points, colors) {
             pointStyle: series.pointStyle,
             tension: 0.3,
             /**
-             * Los tres números del día viajan con el conjunto para que el tooltip los diga juntos
-             * ({@see tooltipLine}). Leer la mediana sin sus extremos es leer media verdad: en un día
-             * con seis lecturas, la banda es lo que dice si fue un día estable o uno de sobresaltos.
+             * The three numbers of the day travel with the dataset so the tooltip says them
+             * together ({@see tooltipLine}). Reading the median without its extremes is reading half
+             * a truth: on a day with six readings, the band says whether it was steady or jumpy.
              */
             bandPoints: points,
         },
@@ -138,9 +138,9 @@ export function bandDatasets(series, points, colors) {
 }
 
 /**
- * Línea del tooltip de un punto de mediana: la serie, la mediana con su unidad, y el recorrido del
- * día. Un día de una sola lectura lo dice con esas palabras, en vez de enseñar un «min 112, max 112»
- * que parece un fallo de la gráfica.
+ * Tooltip line of a median point: the series, the median with its unit, and the range of the day.
+ * A day with a single reading says so in those words, instead of showing a "min 112, max 112" that
+ * looks like a chart bug.
  *
  * @param {{dataset: {label: string, bandPoints?: list<object|null>}, dataIndex: number}} item
  * @param {string} unit
@@ -172,12 +172,12 @@ export function tooltipLine(item, unit) {
 }
 
 /**
- * Descriptores de serie: la etiqueta que llega, más el color y la forma que le tocan por posición.
+ * Series descriptors: the label that arrives, plus the colour and the shape it gets by position.
  *
- * Son a la vez lo que consume Chart.js y lo que pinta la leyenda, igual que en las pantallas por
- * tipo: una sola fuente, para que la leyenda no pueda quedarse con un color distinto del de la
- * línea. Los colores se reparten en ciclo cuando hay más series que colores define DESIGN.md;
- * el patrón de trazo y la forma del punto siguen distinguiéndolas.
+ * They are at once what Chart.js consumes and what the legend paints, as in the per-type screens:
+ * one single source, so the legend cannot end up with a colour different from the line's. The
+ * colours are handed out cyclically when there are more series than colours DESIGN.md defines;
+ * the dash pattern and the point shape still tell them apart.
  *
  * @param {list<string>} labels
  * @param {{series: list<string>}} colors
@@ -192,19 +192,19 @@ export function describeSeries(labels, colors) {
 }
 
 /**
- * Pinta la gráfica en el lienzo dado y devuelve la instancia de Chart.js, o `null` si no hay ninguna
- * serie con datos.
+ * Paints the chart on the given canvas and returns the Chart.js instance, or `null` if no series
+ * has data.
  *
- * Con cero series no se dibuja un lienzo de ejes vacíos: parece un fallo, no un estado vacío. La
- * leyenda se vacía en ese caso, porque describiría líneas que no están.
+ * With zero series no canvas of empty axes is drawn: it looks like a bug, not an empty state. The
+ * legend is emptied in that case, because it would describe lines that are not there.
  *
  * @param {HTMLCanvasElement} canvas
  * @param {object} params
- * @param {list<string>} params.days Claves `YYYY-MM-DD` del eje, en orden ascendente.
- * @param {list<{label: string, points: list<object|null>}>} params.series Ya etiquetadas y traducidas.
- * @param {string} params.unit Código UCUM de la magnitud, para el título del eje vertical (ADR 0005:
- *        no se traduce).
- * @param {string} params.legendId Identificador del `<ul>` de la leyenda.
+ * @param {list<string>} params.days `YYYY-MM-DD` keys of the axis, in ascending order.
+ * @param {list<{label: string, points: list<object|null>}>} params.series Already labelled and translated.
+ * @param {string} params.unit UCUM code of the quantity, for the vertical axis title (ADR 0005:
+ *        not translated).
+ * @param {string} params.legendId Identifier of the legend `<ul>`.
  * @returns {Chart|null}
  */
 export function renderMedianBandChart(canvas, { days, series, unit, legendId }) {
@@ -221,16 +221,25 @@ export function renderMedianBandChart(canvas, { days, series, unit, legendId }) 
 
     return new Chart(canvas, {
         type: 'line',
-        /** El eje es de categoría: no hay adaptador de fechas de Chart.js instalado (ver glucosePage). */
         data: { labels: days.map((day) => formatChartDay(`${day}T00:00:00`)), datasets },
         options: {
             maintainAspectRatio: false,
             color: colors.tick,
             scales: {
                 x: {
+                    /**
+                     * A category axis, and here it is not the mistake it would be on a chart of
+                     * readings: one category is one calendar day and `buildDailyBands` already
+                     * fills the whole stretch, gaps included, so equal widths are proportional to
+                     * time and a week with nothing recorded is seven wide. The charts that do place
+                     * each reading at its own instant use the linear axis of `timeAxis.js`.
+                     *
+                     * `autoSkip` is left as it comes: Chart.js writes the day labels that fit and
+                     * drops the rest, which is what keeps 180 days readable.
+                     */
                     type: 'category',
                     grid: { color: colors.grid },
-                    /** La línea de eje va en el tono de los rótulos, no en el de la rejilla (Don'ts #10). */
+                    /** The axis line goes in the tick shade, not the grid one (Don'ts #10). */
                     border: { color: colors.tick },
                     ticks: { color: colors.tick, font: { family: CHART_FONTS.mono, size: 12 } },
                 },
@@ -242,16 +251,16 @@ export function renderMedianBandChart(canvas, { days, series, unit, legendId }) 
                         display: true,
                         text: unit,
                         color: colors.tick,
-                        /** Peso 400: de IBM Plex Mono solo se empaqueta ese (§ Typography · Code). */
+                        /** Weight 400: only that one of IBM Plex Mono is bundled (§ Typography · Code). */
                         font: { family: CHART_FONTS.mono, size: 13, weight: 400 },
                     },
                 },
             },
             plugins: {
-                /** La leyenda vive fuera del lienzo, en HTML (ver `chartLegend.js`). */
+                /** The legend lives outside the canvas, in HTML (see `chartLegend.js`). */
                 legend: { display: false },
                 tooltip: {
-                    /** Las dos series auxiliares de la banda no hablan por su cuenta (ver `bandDatasets`). */
+                    /** The two auxiliary band series do not speak for themselves (see `bandDatasets`). */
                     filter: (item) => item.dataset.isBand !== true,
                     callbacks: { label: (item) => tooltipLine(item, unit) },
                     backgroundColor: colors.tooltipSurface,

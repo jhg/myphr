@@ -55,10 +55,10 @@ function pcSeal(string $key, string $plaintext, string $associatedData): string
 }
 
 /**
- * Espejo en PHP de `open()`: es lo que hace de verdad el navegador al recuperar la clave maestra.
+ * PHP mirror of `open()`: it is what the browser really does when recovering the master key.
  *
- * Sin esta función el test más importante —que el sobre nuevo abre la MISMA clave maestra— no se
- * podría escribir, porque el servidor no puede abrir ningún sobre.
+ * Without this function the most important test —that the new envelope opens the SAME master key—
+ * could not be written, because the server cannot open any envelope.
  */
 function pcOpen(string $key, string $envelope, string $associatedData): string
 {
@@ -75,7 +75,7 @@ function pcOpen(string $key, string $envelope, string $associatedData): string
     );
 
     if ($padded === false) {
-        throw new RuntimeException('El sobre no abre con esa clave.');
+        throw new RuntimeException('The envelope does not open with that key.');
     }
 
     /** @var array{1: int} $length */
@@ -84,7 +84,7 @@ function pcOpen(string $key, string $envelope, string $associatedData): string
     return substr($padded, 4, $length[1]);
 }
 
-/** Da de alta la cuenta por el camino real y devuelve la clave maestra en claro. */
+/** Creates the account through the real path and returns the master key in the clear. */
 function pcRegister(): string
 {
     Artisan::call('phr:issue-registration-link', ['email' => PC_EMAIL, '--name' => 'Alicia']);
@@ -130,7 +130,7 @@ function pcRegister(): string
     return $userMasterKey;
 }
 
-/** Login completo por los endpoints reales. */
+/** Full login through the real endpoints. */
 function pcLogin(string $password): TestResponse
 {
     $started = OpaqueTestClient::startLogin($password);
@@ -150,7 +150,7 @@ function pcLogin(string $password): TestResponse
             TEST_SERVER_IDENTITY,
         );
     } catch (RuntimeException) {
-        /** El cliente real traduce esto a «contraseña incorrecta» y no llega a llamar a `finish`. */
+        /** The real client turns this into "wrong password" and never gets to call `finish`. */
         return new TestResponse(response()->json(['error' => 'authentication_failed'], 401));
     }
 
@@ -161,11 +161,12 @@ function pcLogin(string $password): TestResponse
 }
 
 /**
- * Recorre las fases A y B del cambio de contraseña —hasta justo antes de mandar `password/change`,
- * paso 20— y deja preparado el cuerpo de esa petición final sin enviarla.
+ * Walks phases A and B of the password change —up to just before sending `password/change`, step
+ * 20— and leaves the body of that final request ready without sending it.
  *
- * Es el punto exacto en el que "se cierra el navegador demasiado pronto": todo lo anterior (reauth y
- * segundo Argon2id) ya ocurrió, pero el servidor no ha recibido ni tocado nada de la fase C.
+ * It is the exact point at which "the browser is closed too early": everything before it (reauth and
+ * the second Argon2id) already happened, but the server has neither received nor touched anything
+ * from phase C.
  *
  * @return array{
  *     error: false,
@@ -189,7 +190,7 @@ function pcPrepareChangePassword(string $oldPassword, string $newPassword): arra
         return ['error' => true, 'status' => $reauthStart->status(), 'body' => $reauthStart->json(), 'stage' => 'reauth-start'];
     }
 
-    /** Paso 6: primer Argon2id (identidad en el cliente de pruebas). */
+    /** Step 6: the first Argon2id (identity in the test client). */
     try {
         $reauthenticated = OpaqueTestClient::finishLogin(
             $oldPassword,
@@ -198,7 +199,7 @@ function pcPrepareChangePassword(string $oldPassword, string $newPassword): arra
             TEST_SERVER_IDENTITY,
         );
     } catch (RuntimeException) {
-        /** El navegador ni siquiera llega a llamar a `finish`: la contraseña actual no cuadra. */
+        /** The browser does not even get to call `finish`: the current password does not match. */
         return ['error' => true, 'status' => 401, 'body' => ['error' => 'authentication_failed'], 'stage' => 'reauth-client'];
     }
 
@@ -216,7 +217,7 @@ function pcPrepareChangePassword(string $oldPassword, string $newPassword): arra
     $umkContext = strtolower($userId).'/umk';
     $ticket = (string) $reauthFinish->json('ticket');
 
-    /** Pasos 8 y 9: la KEK vieja abre el sobre vigente y sale la clave maestra de siempre. */
+    /** Steps 8 and 9: the old KEK opens the current envelope and out comes the same old master key. */
     $userMasterKey = pcOpen(
         pcDeriveKey($reauthenticated['exportKey'], 'myphr/kek/v1'),
         (string) $reauthFinish->json('encryptedUserMasterKey'),
@@ -248,7 +249,7 @@ function pcPrepareChangePassword(string $oldPassword, string $newPassword): arra
         TEST_SERVER_IDENTITY,
     );
 
-    /** Pasos 16 a 18: la MISMA clave maestra, reenvuelta bajo la KEK nueva y verificada en local. */
+    /** Steps 16 to 18: the SAME master key, rewrapped under the new KEK and verified locally. */
     $newKek = pcDeriveKey($registered['exportKey'], 'myphr/kek/v1');
     $wrapped = pcSeal($newKek, $userMasterKey, $umkContext);
 
@@ -264,7 +265,7 @@ function pcPrepareChangePassword(string $oldPassword, string $newPassword): arra
     ];
 }
 
-/** Envía la petición final, paso 20, con el cuerpo que dejó preparado {@see pcPrepareChangePassword()}. */
+/** Sends the final request, step 20, with the body {@see pcPrepareChangePassword()} left ready. */
 function pcSendChangeRequest(array $prepared): TestResponse
 {
     return test()->postJson(route('filament.phr.auth.password.change'), [
@@ -276,8 +277,8 @@ function pcSendChangeRequest(array $prepared): TestResponse
 }
 
 /**
- * Recorre el cambio de contraseña completo por los cuatro endpoints reales, tal y como lo hace
- * `resources/js/auth/changePasswordPage.js`.
+ * Walks the full password change through the four real endpoints, exactly as
+ * `resources/js/auth/changePasswordPage.js` does.
  *
  * @return array{status: int, body: array<string, mixed>|null, stage: string}
  */
@@ -294,7 +295,7 @@ function pcChangePassword(string $oldPassword, string $newPassword): array
     return ['status' => $change->status(), 'body' => $change->json(), 'stage' => 'change'];
 }
 
-it('cambia la contraseña y deja el historial legible con la nueva', function (): void {
+it('changes the password and leaves the history readable with the new one', function (): void {
     $userMasterKey = pcRegister();
 
     expect(pcLogin(PC_OLD_PASSWORD)->status())->toBe(200);
@@ -311,15 +312,15 @@ it('cambia la contraseña y deja el historial legible con la nueva', function ()
         ->and($result['body']['sessionSecret'])->toBeString()
         ->and($result['body']['csrf'])->toBeString();
 
-    /** El registro OPAQUE se rehízo: son valores aleatorios frescos (RFC 9807 §8). */
+    /** The OPAQUE registration was redone: they are fresh random values (RFC 9807 §8). */
     $user->refresh();
     expect($user->opaque_registration_record)->not->toBe($oldRecord);
 
-    /** El `credential_identifier` NO cambia (`docs/OPAQUE.md` §13.1). */
+    /** The `credential_identifier` does NOT change (`docs/OPAQUE.md` §13.1). */
     $fresh = User::query()->sole();
     expect($fresh->opaque_credential_identifier)->toBe($user->opaque_credential_identifier);
 
-    /** Sobre anterior retirado con su fecha, y no borrado: la tabla es de solo añadir. */
+    /** The previous envelope retired with its date, and not deleted: the table is append-only. */
     $retired = UserMasterKeyEnvelope::query()->whereKey($oldEnvelope->id)->first();
 
     expect($retired)->not->toBeNull()
@@ -327,7 +328,7 @@ it('cambia la contraseña y deja el historial legible con la nueva', function ()
         ->and($retired->envelope)->toBe($oldEnvelope->envelope)
         ->and(UserMasterKeyEnvelope::query()->where('user_id', $user->id)->count())->toBe(2);
 
-    /** Y ahora lo que de verdad importa: la contraseña NUEVA abre la MISMA clave maestra. */
+    /** And now what really matters: the NEW password opens the SAME master key. */
     test()->post('/phr/logout');
     test()->flushSession();
     auth()->forgetGuards();
@@ -358,11 +359,11 @@ it('cambia la contraseña y deja el historial legible con la nueva', function ()
 
     expect($recovered)->toBe($userMasterKey);
 
-    /** Y el panel sigue accesible: para la persona, «he entrado». */
+    /** And the panel is still reachable: for the person, "I am in". */
     expect(test()->get('/phr')->status())->toBe(200);
 });
 
-it('deja de admitir la contraseña vieja despues del cambio', function (): void {
+it('stops accepting the old password after the change', function (): void {
     pcRegister();
     pcLogin(PC_OLD_PASSWORD);
 
@@ -378,7 +379,7 @@ it('deja de admitir la contraseña vieja despues del cambio', function (): void 
     expect(pcLogin(PC_NEW_PASSWORD)->status())->toBe(200);
 });
 
-it('no cambia nada si la contraseña actual es incorrecta', function (): void {
+it('changes nothing if the current password is wrong', function (): void {
     $userMasterKey = pcRegister();
     pcLogin(PC_OLD_PASSWORD);
 
@@ -390,7 +391,7 @@ it('no cambia nada si la contraseña actual es incorrecta', function (): void {
 
     expect($result['status'])->toBe(401);
 
-    /** Ni registro nuevo, ni sobre nuevo, ni sobre retirado. */
+    /** No new registration, no new envelope, no retired envelope. */
     $user->refresh();
 
     expect($user->opaque_registration_record)->toBe($record)
@@ -398,7 +399,7 @@ it('no cambia nada si la contraseña actual es incorrecta', function (): void {
         ->and($user->currentMasterKeyEnvelope->retired_at)->toBeNull()
         ->and(UserMasterKeyEnvelope::query()->where('user_id', $user->id)->count())->toBe(1);
 
-    /** Y la contraseña de siempre sigue entrando y abriendo la misma clave maestra. */
+    /** And the same old password still logs in and opens the same master key. */
     test()->post('/phr/logout');
     test()->flushSession();
     auth()->forgetGuards();
@@ -410,13 +411,13 @@ it('no cambia nada si la contraseña actual es incorrecta', function (): void {
     $started = OpaqueTestClient::startLogin(PC_OLD_PASSWORD);
     expect($started)->toBeArray();
 
-    /** El sobre vigente sigue siendo el de siempre y sigue guardando la misma clave. */
+    /** The current envelope is still the same one and still holds the same key. */
     expect($session->json('encryptedUserMasterKey'))
         ->toBe(UserMasterKeyEnvelope::query()->whereKey($envelopeId)->sole()->envelope)
         ->and(strlen($userMasterKey))->toBe(32);
 });
 
-it('rechaza la reautenticacion sin sesion', function (): void {
+it('rejects the reauthentication without a session', function (): void {
     pcRegister();
 
     $started = OpaqueTestClient::startLogin(PC_OLD_PASSWORD);
@@ -426,11 +427,11 @@ it('rechaza la reautenticacion sin sesion', function (): void {
     ])->assertUnauthorized();
 });
 
-it('no acepta un ticket de otra sesion ni un handshake de login normal', function (): void {
+it('accepts neither a ticket from another session nor an ordinary login handshake', function (): void {
     pcRegister();
     pcLogin(PC_OLD_PASSWORD);
 
-    /** Un handshake nacido en `login/start` no se canjea por un ticket de cambio de contraseña. */
+    /** A handshake born in `login/start` is not traded for a password change ticket. */
     $started = OpaqueTestClient::startLogin(PC_OLD_PASSWORD);
     $loginStart = test()->postJson(route('filament.phr.auth.opaque.login.start'), [
         'login' => PC_EMAIL,
@@ -449,7 +450,7 @@ it('no acepta un ticket de otra sesion ni un handshake de login normal', functio
         'finishLoginRequest' => $finished['finishLoginRequest'],
     ])->assertStatus(401);
 
-    /** Y un ticket inventado no abre el re-registro. */
+    /** And a made-up ticket does not open the re-registration. */
     $registration = OpaqueTestClient::startRegistration(PC_NEW_PASSWORD);
 
     test()->postJson(route('filament.phr.auth.password.registration.start'), [
@@ -459,14 +460,14 @@ it('no acepta un ticket de otra sesion ni un handshake de login normal', functio
         ->assertJson(['error' => 'password_change_expired']);
 });
 
-it('rechaza un sobre mal formado sin tocar nada', function (): void {
+it('rejects a malformed envelope without touching anything', function (): void {
     pcRegister();
     pcLogin(PC_OLD_PASSWORD);
 
     $user = User::query()->sole();
     $record = $user->opaque_registration_record;
 
-    /** Fase A completa, para llegar con ticket bueno hasta el commit. */
+    /** Phase A complete, so we arrive at the commit with a good ticket. */
     $started = OpaqueTestClient::startLogin(PC_OLD_PASSWORD);
     $reauthStart = test()->postJson(route('filament.phr.auth.password.reauth.start'), [
         'startLoginRequest' => $started['startLoginRequest'],
@@ -510,7 +511,7 @@ it('rechaza un sobre mal formado sin tocar nada', function (): void {
         ->and(UserMasterKeyEnvelope::query()->where('user_id', $user->id)->count())->toBe(1);
 });
 
-it('si el navegador se cierra antes de la peticion final, todo sigue funcionando con la contraseña vieja', function (): void {
+it('if the browser closes before the final request, everything still works with the old password', function (): void {
     pcRegister();
     pcLogin(PC_OLD_PASSWORD);
 
@@ -518,12 +519,12 @@ it('si el navegador se cierra antes de la peticion final, todo sigue funcionando
     $record = $user->opaque_registration_record;
     $envelope = $user->currentMasterKeyEnvelope;
 
-    /** Fases A y B completas —reauth y segundo Argon2id—, pero el navegador se cierra aquí. */
+    /** Phases A and B complete —reauth and the second Argon2id— but the browser closes here. */
     $prepared = pcPrepareChangePassword(PC_OLD_PASSWORD, PC_NEW_PASSWORD);
 
     expect($prepared['error'])->toBeFalse();
 
-    /** El servidor no ha recibido nada de la fase C: ni registro nuevo, ni sobre nuevo. */
+    /** The server has received nothing from phase C: no new registration, no new envelope. */
     $user->refresh();
 
     expect($user->opaque_registration_record)->toBe($record)
@@ -532,14 +533,14 @@ it('si el navegador se cierra antes de la peticion final, todo sigue funcionando
         ->and($user->currentMasterKeyEnvelope->retired_at)->toBeNull()
         ->and(UserMasterKeyEnvelope::query()->where('user_id', $user->id)->count())->toBe(1);
 
-    /** La contraseña vieja sigue entrando. */
+    /** The old password still logs in. */
     test()->post('/phr/logout');
     test()->flushSession();
     auth()->forgetGuards();
 
     expect(pcLogin(PC_OLD_PASSWORD)->status())->toBe(200);
 
-    /** Y la nueva, que nunca llegó a confirmarse, no. */
+    /** And the new one, which was never confirmed, does not. */
     test()->post('/phr/logout');
     test()->flushSession();
     auth()->forgetGuards();
@@ -548,14 +549,14 @@ it('si el navegador se cierra antes de la peticion final, todo sigue funcionando
         ->and(auth()->check())->toBeFalse();
 });
 
-it('si el navegador se cierra justo al recibir la confirmacion, todo sigue funcionando con la nueva y el historial sigue legible', function (): void {
+it('if the browser closes just as the confirmation arrives, everything still works with the new one and the history stays readable', function (): void {
     $userMasterKey = pcRegister();
     pcLogin(PC_OLD_PASSWORD);
 
     $user = User::query()->sole();
     $eventsContext = strtolower((string) $user->id).'/events/1';
 
-    /** Un evento cifrado que ya existía antes del cambio, bajo una clave derivada de la clave maestra. */
+    /** An encrypted event that already existed before the change, under a key derived from the master key. */
     $eventPlaintext = '{"tipo":"nota","texto":"visita 2026-01-01"}';
     $eventCiphertext = pcSeal(
         pcDeriveKey($userMasterKey, 'myphr/settings/v1', $eventsContext),
@@ -563,14 +564,14 @@ it('si el navegador se cierra justo al recibir la confirmacion, todo sigue funci
         $eventsContext,
     );
 
-    /** El cambio se completa del todo; el navegador se cierra justo al recibir la respuesta 200, que
-     *  aquí simplemente se ignora: lo único que importa es que el servidor ya confirmó. */
+    /** The change completes in full; the browser closes just as the 200 response arrives, which is
+     *  simply ignored here: all that matters is that the server already confirmed. */
     $result = pcChangePassword(PC_OLD_PASSWORD, PC_NEW_PASSWORD);
 
     expect($result['status'])->toBe(200)
         ->and($result['body']['changed'])->toBeTrue();
 
-    /** La contraseña nueva entra, la vieja ya no. */
+    /** The new password logs in, the old one no longer does. */
     test()->post('/phr/logout');
     test()->flushSession();
     auth()->forgetGuards();
@@ -603,8 +604,8 @@ it('si el navegador se cierra justo al recibir la confirmacion, todo sigue funci
 
     expect($recoveredMasterKey)->toBe($userMasterKey);
 
-    /** Lo que de verdad importa: el evento cifrado ANTES del cambio sigue siendo legible con la
-     *  clave maestra recuperada bajo la contraseña NUEVA, porque es la misma de siempre. */
+    /** What really matters: the event encrypted BEFORE the change is still readable with the master
+     *  key recovered under the NEW password, because it is the same one as always. */
     $recoveredEvent = pcOpen(
         pcDeriveKey($recoveredMasterKey, 'myphr/settings/v1', $eventsContext),
         $eventCiphertext,
@@ -614,14 +615,14 @@ it('si el navegador se cierra justo al recibir la confirmacion, todo sigue funci
     expect($recoveredEvent)->toBe($eventPlaintext);
 });
 
-it('reintentar la misma peticion de cambio ya confirmada responde exito idempotente sin duplicar el sobre', function (): void {
+it('retrying the same already confirmed change request answers idempotent success without duplicating the envelope', function (): void {
     pcRegister();
     pcLogin(PC_OLD_PASSWORD);
 
     $prepared = pcPrepareChangePassword(PC_OLD_PASSWORD, PC_NEW_PASSWORD);
     expect($prepared['error'])->toBeFalse();
 
-    /** Primer envío: el que de verdad confirma el cambio. */
+    /** First send: the one that really confirms the change. */
     $first = pcSendChangeRequest($prepared);
     $first->assertOk();
     expect($first->json('changed'))->toBeTrue();
@@ -632,7 +633,7 @@ it('reintentar la misma peticion de cambio ya confirmada responde exito idempote
 
     expect(UserMasterKeyEnvelope::query()->where('user_id', $user->id)->count())->toBe(2);
 
-    /** Reintento: mismo `registrationId`, mismo cuerpo, como quien recarga tras un corte de red. */
+    /** Retry: same `registrationId`, same body, like somebody reloading after a network drop. */
     $retry = pcSendChangeRequest($prepared);
 
     $retry->assertOk();
@@ -640,14 +641,14 @@ it('reintentar la misma peticion de cambio ya confirmada responde exito idempote
         ->and($retry->json('userId'))->toBe($user->id)
         ->and($retry->json())->not->toHaveKey('error');
 
-    /** Ni segundo registro OPAQUE, ni segundo sobre: la rama idempotente no vuelve a escribir nada. */
+    /** No second OPAQUE registration and no second envelope: the idempotent branch writes nothing again. */
     $user->refresh();
 
     expect($user->opaque_registration_record)->toBe($recordAfterFirst)
         ->and($user->currentMasterKeyEnvelope->id)->toBe($envelopeIdAfterFirst)
         ->and(UserMasterKeyEnvelope::query()->where('user_id', $user->id)->count())->toBe(2);
 
-    /** Y la cuenta sigue funcionando con la contraseña nueva. */
+    /** And the account keeps working with the new password. */
     test()->post('/phr/logout');
     test()->flushSession();
     auth()->forgetGuards();
@@ -657,14 +658,14 @@ it('reintentar la misma peticion de cambio ya confirmada responde exito idempote
 });
 
 /**
- * Este es el test que da valor a todos los anteriores: demuestra que la escritura partida —registro
- * OPAQUE nuevo con sobre vigente todavía viejo, o al revés— no es posible, forzando un fallo real
- * *dentro* de la misma transacción que la envuelve, después de la primera escritura (el sobre) y antes
- * de la segunda (el registro OPAQUE del usuario). Si la transacción no fuese atómica de verdad, el
- * sobre nuevo quedaría persistido con el registro viejo: justo la escritura partida que el diseño dice
- * evitar.
+ * This is the test that gives value to all the previous ones: it shows that a split write —a new
+ * OPAQUE registration with a still-old current envelope, or the other way round— is impossible, by
+ * forcing a real failure *inside* the same transaction that wraps it, after the first write (the
+ * envelope) and before the second (the user's OPAQUE registration). If the transaction were not
+ * genuinely atomic, the new envelope would stay persisted with the old registration: exactly the
+ * split write the design says to avoid.
  */
-it('una escritura partida es imposible: si falla justo despues de crear el sobre nuevo, no persiste ni el sobre ni el registro', function (): void {
+it('a split write is impossible: if it fails right after creating the new envelope, neither the envelope nor the registration persists', function (): void {
     $userMasterKey = pcRegister();
     pcLogin(PC_OLD_PASSWORD);
 
@@ -678,15 +679,15 @@ it('una escritura partida es imposible: si falla justo despues de crear el sobre
     $pendingBefore = OpaqueRegistration::query()->whereKey($prepared['registrationId'])->sole();
 
     /**
-     * Fallo forzado dentro de la transacción: justo cuando el controlador intenta guardar el
-     * registro OPAQUE nuevo (`$user->forceFill([...])->save()`, línea posterior a la creación del
-     * sobre nuevo), lanzamos una excepción real. `DB::transaction()` no la atrapa —solo reintenta
-     * en caso de deadlock— así que se propaga y deshace toda la transacción: el `delete()` del
-     * pendiente, el `retire()` del sobre viejo y el `create()` del sobre nuevo.
+     * A failure forced inside the transaction: right when the controller tries to store the new
+     * OPAQUE registration (`$user->forceFill([...])->save()`, the line after creating the new
+     * envelope), we throw a real exception. `DB::transaction()` does not catch it —it only retries
+     * on deadlock— so it propagates and rolls the whole transaction back: the `delete()` of the
+     * pending row, the `retire()` of the old envelope and the `create()` of the new one.
      */
     User::saving(function (User $model): void {
         if ($model->isDirty('opaque_registration_record')) {
-            throw new RuntimeException('interrupción simulada dentro de la transacción');
+            throw new RuntimeException('simulated interruption inside the transaction');
         }
     });
 
@@ -694,20 +695,19 @@ it('una escritura partida es imposible: si falla justo despues de crear el sobre
 
     $user->refresh();
 
-    /** Ni el registro OPAQUE cambió, ni el sobre nuevo quedó persistido: nunca los dos a la vez, ni
-     *  siquiera uno de los dos. */
+    /** Neither the OPAQUE registration changed, nor the new envelope stayed persisted: never both at
+     *  once, and not even one of the two. */
     expect($user->opaque_registration_record)->toBe($record)
         ->and($user->currentMasterKeyEnvelope->id)->toBe($envelope->id)
         ->and($user->currentMasterKeyEnvelope->envelope)->toBe($envelope->envelope)
         ->and($user->currentMasterKeyEnvelope->retired_at)->toBeNull()
         ->and(UserMasterKeyEnvelope::query()->where('user_id', $user->id)->count())->toBe(1);
 
-    /** El `delete()` del pendiente también se deshizo: la transacción es una unidad, no dos. */
+    /** The `delete()` of the pending row was rolled back too: the transaction is one unit, not two. */
     expect(OpaqueRegistration::query()->whereKey($prepared['registrationId'])->first())
         ->not->toBeNull();
 
-    /** Y la cuenta sigue funcionando con la contraseña vieja, como si la fase C nunca hubiera
-     *  ocurrido. */
+    /** And the account keeps working with the old password, as if phase C had never happened. */
     test()->post('/phr/logout');
     test()->flushSession();
     auth()->forgetGuards();

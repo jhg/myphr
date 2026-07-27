@@ -1,8 +1,8 @@
 /**
- * Comprobaciones de `health/eventCommonFields.js` (ADR 0006, "Campos que se capturan aunque hoy no
- * se usen").
+ * Checks of `health/eventCommonFields.js` (ADR 0006, "Fields captured even if unused
+ * today").
  *
- * Corredor incorporado de Node, como el resto de `tests/js` (ver `crypto.test.mjs`).
+ * Node's built-in runner, like the rest of `tests/js` (see `crypto.test.mjs`).
  *
  *     npm test
  */
@@ -16,7 +16,7 @@ import {
     DEFAULT_RECORDED_BY,
 } from '../../resources/js/health/eventCommonFields.js';
 
-test('buildCommonEventFields: omite device y note cuando están vacíos, no los guarda como cadena vacía', () => {
+test('buildCommonEventFields: leaves out device and note when empty, it does not store them as an empty string', () => {
     const fields = buildCommonEventFields({ origin: 'manual', device: '', recordedBy: 'self', note: '   ' });
 
     assert.deepEqual(fields, { origin: 'manual', recordedBy: 'self' });
@@ -24,7 +24,7 @@ test('buildCommonEventFields: omite device y note cuando están vacíos, no los 
     assert.equal('note' in fields, false);
 });
 
-test('buildCommonEventFields: incluye device y note recortados cuando tienen valor', () => {
+test('buildCommonEventFields: includes trimmed device and note when they have a value', () => {
     const fields = buildCommonEventFields({
         origin: 'device',
         device: '  Freestyle Libre 3  ',
@@ -40,13 +40,13 @@ test('buildCommonEventFields: incluye device y note recortados cuando tienen val
     });
 });
 
-test('buildCommonEventFields: sin argumentos, cae en los valores por defecto razonables', () => {
+test('buildCommonEventFields: with no arguments, it falls back to sensible defaults', () => {
     const fields = buildCommonEventFields();
 
     assert.deepEqual(fields, { origin: DEFAULT_ORIGIN, recordedBy: DEFAULT_RECORDED_BY });
 });
 
-test('buildCommonEventFields: origin y recordedBy vacíos también caen en el valor por defecto', () => {
+test('buildCommonEventFields: empty origin and recordedBy also fall back to the default', () => {
     const fields = buildCommonEventFields({ origin: '', device: '', recordedBy: '', note: '' });
 
     assert.deepEqual(fields, { origin: DEFAULT_ORIGIN, recordedBy: DEFAULT_RECORDED_BY });

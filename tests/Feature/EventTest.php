@@ -13,11 +13,11 @@ use Illuminate\Support\Facades\Schema;
 uses(RefreshDatabase::class);
 
 /**
- * ADR 0006 (Consequences): test obligatorio. Si el servidor trunca los microsegundos de
- * `occurred_at` al releerla, el dato asociado del AEAD ya no coincide con el usado al cifrar y el
- * sobre queda indescifrable.
+ * ADR 0006 (Consequences): a mandatory test. If the server truncates the microseconds of
+ * `occurred_at` when reading it back, the AEAD associated data no longer matches the one used when
+ * encrypting and the envelope becomes undecryptable.
  */
-it('conserva los microsegundos de occurred_at byte a byte al releer', function (): void {
+it('keeps the microseconds of occurred_at byte for byte when reading back', function (): void {
     $user = User::factory()->create();
     $payload = 'v1.'.rtrim(strtr(base64_encode(random_bytes(64 + 16 + 256)), '+/', '-_'), '=');
 
@@ -38,8 +38,8 @@ it('conserva los microsegundos de occurred_at byte a byte al releer', function (
     expect($canonical($reloaded->occurred_at))->toBe($canonical($original));
 });
 
-/** ADR 0006: el servidor valida el formato del sobre, nunca su contenido. */
-it('rechaza guardar un payload sin forma de sobre válido', function (string $payload): void {
+/** ADR 0006: the server validates the envelope format, never its content. */
+it('refuses to store a payload without a valid envelope shape', function (string $payload): void {
     $user = User::factory()->create();
 
     expect(fn () => Event::create([
@@ -49,12 +49,12 @@ it('rechaza guardar un payload sin forma de sobre válido', function (string $pa
     ]))->toThrow(LogicException::class);
 })->with([
     'texto plano' => ['basura'],
-    'base64url inválido' => ['v1.no-base64!!'],
-    'tamaño incorrecto' => ['v1.'.rtrim(strtr(base64_encode(random_bytes(10)), '+/', '-_'), '=')],
+    'invalid base64url' => ['v1.no-base64!!'],
+    'wrong size' => ['v1.'.rtrim(strtr(base64_encode(random_bytes(10)), '+/', '-_'), '=')],
 ]);
 
-/** ADR 0006: solo el dueño ve, edita o borra sus propios eventos. */
-it('solo autoriza al dueño del evento', function (): void {
+/** ADR 0006: only the owner sees, edits or deletes their own events. */
+it('only authorizes the owner of the event', function (): void {
     $owner = User::factory()->registered()->create();
     $stranger = User::factory()->registered()->create();
     $event = Event::factory()->for($owner)->create();
@@ -67,8 +67,8 @@ it('solo autoriza al dueño del evento', function (): void {
         ->and(Gate::forUser($stranger)->allows('delete', $event))->toBeFalse();
 });
 
-/** ADR 0006: las columnas en claro son solo las que el servidor necesita para autorizar y paginar. */
-it('tiene las columnas del esquema y el índice compuesto', function (): void {
+/** ADR 0006: the plaintext columns are only the ones the server needs to authorize and paginate. */
+it('has the schema columns and the composite index', function (): void {
     expect(Schema::hasColumns('events', [
         'id', 'user_id', 'occurred_at', 'payload', 'created_at', 'updated_at', 'deleted_at',
     ]))->toBeTrue();
@@ -81,8 +81,8 @@ it('tiene las columnas del esquema y el índice compuesto', function (): void {
     expect($hasCompositeIndex)->toBeTrue();
 });
 
-/** ADR 0006: relación con el usuario y borrado en cascada. */
-it('pertenece a un usuario y se borra en cascada con él', function (): void {
+/** ADR 0006: relationship with the user and cascade delete. */
+it('belongs to a user and is deleted in cascade with them', function (): void {
     $user = User::factory()->create();
     $event = Event::factory()->for($user)->create();
 
@@ -94,8 +94,8 @@ it('pertenece a un usuario y se borra en cascada con él', function (): void {
     expect(Event::query()->find($event->id))->toBeNull();
 });
 
-/** ADR 0006 §EnvelopeValidator: la fábrica produce sobres con forma válida por defecto. */
-it('la fábrica genera un payload con forma de sobre válida', function (): void {
+/** ADR 0006 §EnvelopeValidator: the factory produces envelopes with a valid shape by default. */
+it('the factory generates a payload with a valid envelope shape', function (): void {
     $event = Event::factory()->create();
 
     expect(EnvelopeValidator::isValid($event->payload))->toBeTrue();

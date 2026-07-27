@@ -1,29 +1,29 @@
 /**
- * Las gráficas del periodo: qué se dibuja, con qué nombre y en qué bloque.
+ * The charts of the period: what is drawn, under which name and in which block.
  *
- * Son tres familias, y las tres se pintan a la vez en las tres pantallas que consumen este módulo
- * —el panel del paciente, el lector del profesional y la vista previa de compartir—:
+ * There are three families, and all three are painted at once in the three screens that consume
+ * this module —the patient panel, the professional's reader and the share preview—:
  *
- * 1. **La curva de glucemia con las marcas de comida e insulina** ({@see GLUCOSE_CONTEXT_TYPE}), que
- *    es la que enseña la relación entre comer, pincharse y lo que hace la glucosa después.
- * 2. **La superposición de días sobre 24 horas** ({@see DAY_OVERLAY_TYPE}), el perfil glucémico
- *    ambulatorio, que enseña el patrón que se repite cada día.
- * 3. **Una por tipo de evento** ({@see CHART_SECTIONS}): mediana de cada día con una banda del
- *    mínimo al máximo de ese día.
+ * 1. **The glucose curve with the meal and insulin markers** ({@see GLUCOSE_CONTEXT_TYPE}), which
+ *    is the one that shows the relation between eating, injecting and what the glucose does after.
+ * 2. **The overlay of days over 24 hours** ({@see DAY_OVERLAY_TYPE}), the ambulatory glucose
+ *    profile, which shows the pattern that repeats every day.
+ * 3. **One per event type** ({@see CHART_SECTIONS}): median of each day with a band from the
+ *    minimum to the maximum of that day.
  *
- * **Por qué es un módulo propio.** El cálculo ya vivía fuera (`dailyBands.js`) y el dibujo también
- * (`medianBandChart.js`); lo que seguía atado al panel del paciente era la tabla de qué se dibuja de
- * cada tipo, cómo se nombra cada serie y cómo se enciende o apaga cada bloque. Sacarlo es lo que
- * permite que el lector del profesional dibuje las mismas gráficas sin sesión y sin Livewire: aquí
- * no hay `$wire`, ni `x-ref`, ni nada del panel; solo eventos descifrados, unos identificadores de
- * elementos y Chart.js.
+ * **Why it is a module of its own.** The computation already lived outside (`dailyBands.js`) and so
+ * did the drawing (`medianBandChart.js`); what was still tied to the patient panel was the table of
+ * what is drawn of each type, how each series is named and how each block is switched on or off.
+ * Taking it out is what lets the professional's reader draw the same charts with no session and no
+ * Livewire: there is no `$wire` here, no `x-ref`, nothing of the panel; only decrypted events, a
+ * few element identifiers and Chart.js.
  *
- * **Los bloques los emite la plantilla y este módulo solo los rellena.** Se buscan por `id`, nunca
- * por `x-ref`: un `<canvas>` dentro de un `@island` desaparece tras cualquier petición de Livewire
- * —el servidor reemite el island y se lleva por delante lo que Alpine dibujó, la lección cara de las
- * pantallas de glucemia, tensión e insulina—, así que el bloque tiene que poder quedarse fuera de
- * los islands, con `wire:ignore` y `wire:key` estable. Con `id` el módulo encuentra su lienzo esté
- * donde esté (ver `resources/views/phr/pages/dashboard.blade.php`).
+ * **The blocks are emitted by the template and this module only fills them.** They are looked up by
+ * `id`, never by `x-ref`: a `<canvas>` inside an `@island` disappears after any Livewire request
+ * —the server re-emits the island and takes down whatever Alpine drew, the expensive lesson of the
+ * glucose, blood pressure and insulin screens—, so the block has to be able to stay outside the
+ * islands, with `wire:ignore` and a stable `wire:key`. With `id` the module finds its canvas
+ * wherever it is (see `resources/views/phr/pages/dashboard.blade.php`).
  */
 
 import { formatNumber, joinList, t } from '../i18n/index.js';
@@ -44,23 +44,23 @@ import { describeExcludedByUnit } from './statsView.js';
 import { dominantUnit } from './statistics.js';
 
 /**
- * Prefijo de los identificadores del bloque de cada tipo. Cada pantalla que dibuje gráficas usa el
- * suyo, para que dos pantallas montadas a la vez nunca se peleen por el mismo `<canvas>`.
+ * Prefix of the block identifiers of each type. Every screen that draws charts uses its own, so two
+ * screens mounted at once never fight over the same `<canvas>`.
  */
 export const DASHBOARD_CHART_PREFIX = 'dashboard';
 
 /**
- * Qué se dibuja de cada tipo: el campo (o los campos) con la magnitud, el que dice cómo se midió y
- * con qué claves se traduce ese grupo. Es la misma tabla que gobierna las tarjetas de estadísticas
- * (`MEASUREMENT_SECTIONS` de `statsView.js`), ampliada con glucemia y tensión, para que la gráfica y
- * la tarjeta del mismo tipo no puedan estar agrupando de formas distintas.
+ * What is drawn of each type: the field (or fields) with the quantity, the one that says how it was
+ * measured and with which keys that group is translated. It is the same table that governs the
+ * statistics cards (`MEASUREMENT_SECTIONS` of `statsView.js`), extended with glucose and blood
+ * pressure, so the chart and the card of the same type cannot be grouping in different ways.
  *
- * **Las comidas no tienen gráfica**, por lo mismo que no tienen tarjeta: no hay magnitud que
- * promediar.
+ * **Meals have no chart**, for the same reason they have no card: there is no quantity to
+ * average.
  *
- * La tensión pide dos magnitudes del mismo evento (sistólica y diastólica) y sale con dos series por
- * método. El pulso no entra: en la misma gráfica compartiría eje vertical con la presión y son dos
- * magnitudes distintas —lpm y mmHg—, así que un eje serviría para leer mal las dos.
+ * Blood pressure asks for two quantities of the same event (systolic and diastolic) and comes out
+ * with two series per method. The pulse does not go in: it would share the vertical axis with the
+ * pressure and they are two quantities —bpm and mmHg—, so one axis would serve to misread both.
  *
  * @type {Readonly<list<object>>}
  */
@@ -81,22 +81,22 @@ export const CHART_SECTIONS = Object.freeze([
 ]);
 
 /**
- * Las dos gráficas que **no** son de un tipo de evento, sino de una pregunta clínica.
+ * The two charts that are **not** of an event type, but of a clinical question.
  *
- * `glucoseContext` cruza tres tipos —glucemia, comidas e insulina— sobre el mismo eje temporal, que
- * es lo que se mira en consulta y lo que ninguna pantalla por tipo puede enseñar. `dayOverlay`
- * superpone todos los días del periodo sobre 24 horas: el formato del perfil glucémico ambulatorio,
- * que revela el patrón que se repite cada día y que una serie cronológica disuelve.
+ * `glucoseContext` crosses three types —glucose, meals and insulin— on the same time axis, which
+ * is what is looked at in an appointment and what no per-type screen can show. `dayOverlay`
+ * overlays every day of the period on 24 hours: the format of the ambulatory glucose profile,
+ * which reveals the pattern that repeats every day and that a chronological series dissolves.
  *
- * Sus identificadores de bloque salen de {@see chartElementIds} igual que los de un tipo: para la
- * plantilla y para el lector son un bloque más.
+ * Their block identifiers come from {@see chartElementIds} just like those of a type: for the
+ * template and for the reader they are one more block.
  */
 export const GLUCOSE_CONTEXT_TYPE = 'glucoseContext';
 export const DAY_OVERLAY_TYPE = 'dayOverlay';
 
 /**
- * Todos los bloques de gráfica que emite una pantalla, en el orden en que se leen: primero las dos
- * que responden una pregunta, después una por tipo de evento.
+ * Every chart block a screen emits, in the order they are read: first the two that answer a
+ * question, then one per event type.
  *
  * @type {Readonly<list<string>>}
  */
@@ -106,16 +106,16 @@ export const CHART_BLOCKS = Object.freeze([
     ...CHART_SECTIONS.map((section) => section.type),
 ]);
 
-/** Claves de los textos propios de las dos gráficas que no son de un tipo. */
+/** Keys of the texts specific to the two charts that are not of a type. */
 const BLOCK_KEYS = Object.freeze({
     [GLUCOSE_CONTEXT_TYPE]: { title: 'dashboard.chart.context.title', aria: 'dashboard.chart.context.ariaLabel' },
     [DAY_OVERLAY_TYPE]: { title: 'dashboard.chart.overlay.title', aria: 'dashboard.chart.overlay.ariaLabel' },
 });
 
 /**
- * Encabezado del bloque de una gráfica.
+ * Heading of the block of a chart.
  *
- * @param {string} type Uno de {@see CHART_BLOCKS}.
+ * @param {string} type One of {@see CHART_BLOCKS}.
  * @returns {string}
  */
 export function chartBlockTitle(type) {
@@ -123,8 +123,8 @@ export function chartBlockTitle(type) {
 }
 
 /**
- * Nombre accesible del lienzo: un `<canvas>` es un objeto gráfico sin texto y sin esto no tiene
- * nombre ninguno (Do's #3).
+ * Accessible name of the canvas: a `<canvas>` is a graphical object with no text and without this
+ * it has no name at all (Do's #3).
  *
  * @param {string} type
  * @returns {string}
@@ -136,12 +136,12 @@ export function chartBlockAriaLabel(type) {
 }
 
 /**
- * Etiqueta del grupo de una serie: el método de medición, el sitio o el tipo de insulina.
+ * Group label of a series: the measurement method, the site or the insulin type.
  *
- * Un tipo que no agrupa (el peso, que se mide de una sola forma) llega con el grupo vacío y toma el
- * nombre del tipo: la leyenda nunca se queda con una entrada sin nombre.
+ * A type that does not group (weight, measured one single way) arrives with an empty group and
+ * takes the name of the type: the legend is never left with an unnamed entry.
  *
- * @param {object} section Una entrada de {@see CHART_SECTIONS}.
+ * @param {object} section One entry of {@see CHART_SECTIONS}.
  * @param {string} group
  * @returns {string}
  */
@@ -154,14 +154,14 @@ export function chartGroupLabel(section, group) {
         return catalogLabel(section.groupKeys, group);
     }
 
-    /** Glucemia y tensión: sus tokens son los del ADR 0008, que ya traduce `formatMethodLabel`. */
+    /** Glucose and blood pressure: their tokens are the ADR 0008 ones, which `formatMethodLabel` already translates. */
     return formatMethodLabel(group);
 }
 
 /**
- * Etiqueta completa de una serie. Con una sola magnitud es la del grupo; con varias lleva además
- * cuál es, porque «Brazo izquierdo, sentado» a secas no dice si la línea es la sistólica o la
- * diastólica, y esas dos no se pueden confundir.
+ * Full label of a series. With a single quantity it is the group one; with several it also carries
+ * which one it is, because a plain "Left arm, sitting" does not say whether the line is the
+ * systolic or the diastolic, and those two cannot be confused.
  *
  * @param {object} section
  * @param {{group: string, valueKey: string}} series
@@ -179,10 +179,10 @@ export function chartSeriesLabel(section, series) {
 }
 
 /**
- * Pie de la gráfica: qué series incluye, en qué unidad, y qué se ha quedado fuera.
+ * Chart caption: which series it includes, in which unit, and what was left out.
  *
- * No es decoración: el lienzo es un objeto gráfico sin texto y este párrafo es su `aria-describedby`
- * (Do's #3), la única forma de que la banda y sus exclusiones lleguen a quien no ve la gráfica.
+ * It is not decoration: the canvas is a graphical object with no text and this paragraph is its
+ * `aria-describedby` (Do's #3), the only way the band and its exclusions reach whoever does not see the chart.
  *
  * @param {object} params
  * @param {list<string>} params.seriesLabels
@@ -212,15 +212,15 @@ export function chartCaptionText({ seriesLabels, unit, excludedByUnit, omittedDa
 }
 
 /**
- * Unidad con la que se dibuja un tipo.
+ * Unit a type is drawn in.
  *
- * La glucemia toma la de presentación del perfil (ADR 0007, la misma que las tarjetas); los demás,
- * la del registro más reciente ({@see dominantUnit}), porque no hay ajuste que elegir. `null`
- * significa que no hay ninguna lectura de ese tipo con unidad, y entonces no hay nada que dibujar.
+ * Glucose takes the display one from the profile (ADR 0007, the same as the cards); the others,
+ * the one of the most recent record ({@see dominantUnit}), because there is no setting to choose.
+ * `null` means there is no reading of that type with a unit, and then there is nothing to draw.
  *
  * @param {object} section
  * @param {list<object>} events
- * @param {string} glucoseUnit Unidad de presentación de glucemia.
+ * @param {string} glucoseUnit Glucose display unit.
  * @returns {string|null}
  */
 export function chartUnit(section, events, glucoseUnit) {
@@ -232,7 +232,7 @@ export function chartUnit(section, events, glucoseUnit) {
 }
 
 /**
- * Identificadores del bloque de gráfica de un tipo, tal como los escribe la plantilla.
+ * Identifiers of the chart block of a type, exactly as the template writes them.
  *
  * @param {string} type
  * @param {string} [prefix]
@@ -246,8 +246,8 @@ export function chartElementIds(type, prefix = DASHBOARD_CHART_PREFIX) {
 
 /**
  * @param {string} id
- * @returns {HTMLElement|null} `null` también cuando no hay un documento de verdad (los tests de
- *          `tests/js` montan un DOM mínimo y no traen los bloques de gráfica).
+ * @returns {HTMLElement|null} `null` also when there is no real document (the `tests/js` tests
+ *          mount a minimal DOM and do not bring the chart blocks).
  */
 function elementById(id) {
     if (typeof document?.getElementById !== 'function') {
@@ -258,10 +258,10 @@ function elementById(id) {
 }
 
 /**
- * Destruye la gráfica de un tipo, si la había. Repintar sin destruir dejaría la instancia anterior
- * atada al mismo lienzo, con las dos respondiendo al ratón.
+ * Destroys the chart of a type, if there was one. Repainting without destroying would leave the
+ * previous instance tied to the same canvas, with both responding to the mouse.
  *
- * @param {Record<string, object>} charts Instancias vivas, indexadas por tipo. Se modifica.
+ * @param {Record<string, object>} charts Live instances, indexed by type. It is modified.
  * @param {string} type
  */
 export function destroyChart(charts, type) {
@@ -273,8 +273,8 @@ export function destroyChart(charts, type) {
 }
 
 /**
- * Oculta y destruye todas las gráficas: sin datos que dibujar no queda ninguna en pie (es lo que
- * ocurre al bloquearse la sesión, porque dibujan valores en claro).
+ * Hides and destroys every chart: with no data to draw none is left standing (that is what happens
+ * when the session locks, because they draw values in the clear).
  *
  * @param {Record<string, object>} charts
  * @param {string} [prefix]
@@ -287,20 +287,20 @@ export function destroyCharts(charts, prefix = DASHBOARD_CHART_PREFIX) {
 }
 
 /**
- * Plumbing común de un bloque de gráfica: encontrarlo, destruir la anterior, decidir si hay algo que
- * dibujar, escribir el pie y dibujar.
+ * Common plumbing of a chart block: find it, destroy the previous one, decide whether there is
+ * anything to draw, write the caption and draw.
  *
- * El bloque se descubre **antes** de construir la gráfica: Chart.js mide el ancho del contenedor al
- * crearse y dentro de un elemento oculto ese ancho es cero, así que el lienzo saldría de un píxel y
- * no se recuperaría al mostrarlo.
+ * The block is revealed **before** building the chart: Chart.js measures the container width when
+ * it is created and inside a hidden element that width is zero, so the canvas would come out one
+ * pixel wide and would not recover when shown.
  *
  * @param {object} params
  * @param {string} params.type
  * @param {string} params.prefix
  * @param {Record<string, object>} params.charts Se modifica.
  * @param {() => {caption: string, draw: (canvas: HTMLCanvasElement, ids: object) => object|null}|null} params.plan
- *        Devuelve `null` cuando no hay nada que dibujar y el bloque tiene que quedarse oculto: un
- *        lienzo con los ejes vacíos parece un fallo, no un estado vacío.
+ *        Returns `null` when there is nothing to draw and the block has to stay hidden: a canvas
+ *        with empty axes looks like a bug, not an empty state.
  */
 function paintChartBlock({ type, prefix, charts, plan }) {
     const ids = chartElementIds(type, prefix);
@@ -333,10 +333,10 @@ function paintChartBlock({ type, prefix, charts, plan }) {
 }
 
 /**
- * Pie de la curva de glucemia con marcas: qué series lleva, qué se agrupó y qué se quedó fuera.
+ * Caption of the glucose curve with markers: which series it carries, what was grouped and what was left out.
  *
- * Todo lo que no se ve se dice con un número. Una marca agrupada en silencio es una comida que el
- * ojo da por no ocurrida, y una lectura recortada sin avisar se lee como «antes no había nada».
+ * Everything that is not seen is stated with a number. A marker grouped in silence is a meal the
+ * eye takes as not having happened, and a reading clipped without warning reads as "there was nothing before".
  *
  * @param {object} params
  * @returns {string}
@@ -377,8 +377,8 @@ export function contextCaptionText({
 }
 
 /**
- * Pie de la superposición de 24 horas: qué series lleva, cuántos días se superponen, qué banda de
- * fondo hay y qué se quedó fuera.
+ * Caption of the 24-hour overlay: which series it carries, how many days are overlaid, what
+ * background band there is and what was left out.
  *
  * @param {object} params
  * @returns {string}
@@ -411,22 +411,22 @@ export function overlayCaptionText({ seriesLabels, unit, dayCount, omittedDays, 
 }
 
 /**
- * Dibuja una gráfica por cada tipo incluido que tenga algo que dibujar.
+ * Draws one chart for each included type that has anything to draw.
  *
- * Un tipo excluido, o sin lecturas en el periodo, queda oculto: un lienzo con los ejes vacíos parece
- * un fallo, y lo que sí hay que decir —que no hay registros de ese tipo en el periodo— ya lo dice su
- * tarjeta de estadísticas, en texto.
+ * An excluded type, or one with no readings in the period, stays hidden: a canvas with empty axes
+ * looks like a bug, and what does have to be said —that there are no records of that type in the
+ * period— is already said by its statistics card, in text.
  *
- * @param {list<object>} events Eventos del periodo, ya descifrados y filtrados por tipo.
+ * @param {list<object>} events Events of the period, already decrypted and filtered by type.
  * @param {object} params
- * @param {string} params.glucoseUnit Unidad de presentación de glucemia (ADR 0007).
- * @param {Record<string, object>} params.charts Instancias vivas indexadas por tipo. Se modifica.
- * @param {(type: string) => boolean} [params.includesType] Qué tipos están marcados.
+ * @param {string} params.glucoseUnit Glucose display unit (ADR 0007).
+ * @param {Record<string, object>} params.charts Live instances indexed by type. It is modified.
+ * @param {(type: string) => boolean} [params.includesType] Which types are ticked.
  * @param {string} [params.prefix]
- * @param {{low: number, high: number, unit: string}} [params.targetRange] Rango objetivo de glucemia
- *        ya resuelto y ya comprobado en la misma unidad (ADR 0007: no se convierte). Sin él, la
- *        superposición de 24 horas se dibuja sin banda de fondo, que es lo correcto: una banda con
- *        números de otra unidad sería una referencia falsa.
+ * @param {{low: number, high: number, unit: string}} [params.targetRange] Glucose target range,
+ *        already resolved and already checked to be in the same unit (ADR 0007: nothing is
+ *        converted). Without it, the 24-hour overlay is drawn with no background band, which is
+ *        right: a band with numbers of another unit would be a false reference.
  */
 export function renderCharts(events, {
     glucoseUnit,
@@ -468,9 +468,9 @@ export function renderCharts(events, {
         }
 
         /**
-         * Se descubre el bloque **antes** de construir la gráfica: Chart.js mide el ancho del
-         * contenedor al crearse, y dentro de un elemento oculto ese ancho es cero, así que el lienzo
-         * saldría de un píxel y no se recuperaría al mostrarlo.
+         * The block is revealed **before** building the chart: Chart.js measures the container
+         * width when it is created, and inside a hidden element that width is zero, so the canvas
+         * would come out one pixel wide and would not recover when shown.
          */
         block.classList.remove('hidden');
 
@@ -499,12 +499,12 @@ export function renderCharts(events, {
 }
 
 /**
- * La curva de glucemia con las marcas de comida e insulina encima.
+ * The glucose curve with the meal and insulin markers on top.
  *
- * **Solo depende de que la glucemia esté marcada**, no de las comidas ni de la insulina: la gráfica
- * es la glucemia, y las marcas son el contexto que la explica. Si el filtro deja fuera las comidas,
- * los eventos de comida ya no llegan aquí —quien llama filtra antes— y la curva se dibuja sin ellas,
- * que es exactamente lo que se ha pedido.
+ * **It depends only on glucose being ticked**, not on meals or insulin: the chart is the glucose,
+ * and the markers are the context that explains it. If the filter leaves meals out, the meal events
+ * no longer arrive here —the caller filters first— and the curve is drawn without them, which is
+ * exactly what was asked for.
  *
  * @param {list<object>} events
  * @param {object} params
@@ -546,7 +546,7 @@ function renderGlucoseContextBlock(events, { glucoseUnit, charts, includesType, 
 }
 
 /**
- * La superposición de todos los días del periodo sobre un eje de 24 horas.
+ * The overlay of every day of the period on a 24-hour axis.
  *
  * @param {list<object>} events
  * @param {object} params

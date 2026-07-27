@@ -1,13 +1,13 @@
 /**
- * Comprobaciones de los módulos de autenticación que no necesitan DOM.
+ * Checks of the authentication modules that need no DOM.
  *
- * Vitest no está instalado y añadir dependencias necesita aprobación, así que esto usa el corredor
- * incorporado de Node, igual que `crypto.test.mjs`.
+ * Vitest is not installed and adding dependencies needs approval, so this uses Node's built-in
+ * runner, like `crypto.test.mjs`.
  *
  *     npm test
  *
- * `lock.js` y `app.js` quedan fuera: dependen de `document`, `window` y `sessionStorage`, que no
- * existen aquí, y montarles un DOM falso a mano probaría el falso, no el módulo.
+ * `lock.js` and `app.js` stay out: they depend on `document`, `window` and `sessionStorage`, which
+ * do not exist here, and hand-building a fake DOM for them would test the fake, not the module.
  */
 
 import assert from 'node:assert/strict';
@@ -47,8 +47,8 @@ test('the guard reads the snapshot data whether it arrives parsed or encoded', (
 });
 
 /**
- * El `memo` y el `checksum` son metadatos del propio Livewire: bloquearlos rompería el marco sin
- * proteger nada (§9).
+ * The `memo` and the `checksum` are Livewire's own metadata: blocking them would break the
+ * framework while protecting nothing (§9).
  */
 test('the guard ignores Livewire metadata', () => {
     assert.equal(
@@ -97,8 +97,8 @@ test('resetting the progress bar removes the transition so it does not animate b
 });
 
 /**
- * Vector de regresión del KSF (`docs/OPAQUE.md` §20.5): si estos números cambian sin cambiar el
- * nombre del perfil, el login de todo el mundo se comporta como una contraseña incorrecta.
+ * KSF regression vector (`docs/OPAQUE.md` §20.5): if these numbers change without changing the
+ * profile name, everyone's login behaves like a wrong password.
  */
 test('the key stretching function stays frozen on the ADR 0004 parameters', () => {
     assert.deepEqual(KEY_STRETCHING, {

@@ -24,7 +24,7 @@ it('trims, applies NFKC and lowercases', function (string $raw, string $expected
 ]);
 
 /** The result is idempotent: normalizing twice changes nothing. */
-it('es idempotente', function (): void {
+it('is idempotent', function (): void {
     $once = LoginNormalizer::normalize('  ÁLVARO@Example.COM ');
 
     expect(LoginNormalizer::normalize($once))->toBe($once);

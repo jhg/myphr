@@ -1,11 +1,11 @@
 /**
- * Comprobaciones de la construcción de claves del enlace (ADR 0011).
+ * Checks of the link key construction (ADR 0011).
  *
- * Casi todo se prueba sin pasar por Argon2id, alimentando un `stretched`
- * determinista: el perfil real cuesta más de un segundo por llamada y no aporta
- * nada a los tests de las ramas HKDF. Solo un test lo ejecuta de verdad, y es
- * el que comprueba que la variante asíncrona con progreso da lo mismo que la
- * síncrona.
+ * Almost everything is tested without going through Argon2id, feeding a deterministic
+ * `stretched`: the real profile costs more than a second per call and adds
+ * nothing to the tests of the HKDF branches. Only one test really runs it, and it is
+ * the one checking that the async variant with progress gives the same as the
+ * synchronous one.
  *
  *     npm test
  */
@@ -38,24 +38,24 @@ afterEach(() => {
     globalThis.crypto.getRandomValues = realGetRandomValues;
 });
 
-/** @returns {Uint8Array} Salida de Argon2id simulada, determinista. */
+/** @returns {Uint8Array} Simulated Argon2id output, deterministic. */
 function stretched(seed = 3) {
     return new Uint8Array(ARGON2_PARAMS.dkLen).map((_, index) => (index * 7 + seed) & 0xff);
 }
 
-/** @returns {Uint8Array} Sal del enlace, determinista. */
+/** @returns {Uint8Array} Link salt, deterministic. */
 function pinSalt(seed = 1) {
     return new Uint8Array(PIN_SALT_LENGTH).map((_, index) => (index + seed) & 0xff);
 }
 
-/** @returns {Uint8Array} `S`, determinista. */
+/** @returns {Uint8Array} `S`, deterministic. */
 function sendKey(seed = 11) {
     return new Uint8Array(SEND_KEY_LENGTH).map((_, index) => (index * 3 + seed) & 0xff);
 }
 
 /**
- * Sustituye el CSPRNG por una lista de valores de 32 bits, para poder mirar el
- * muestreo por rechazo en vez de creérselo.
+ * Replaces the CSPRNG with a list of 32-bit values, so the rejection sampling can be
+ * watched instead of taken on trust.
  *
  * @param {number[]} values
  * @returns {{calls: number}}
@@ -75,17 +75,17 @@ function stubRandomUint32(values) {
     return state;
 }
 
-test('generatePin: seis dígitos, con los ceros a la izquierda', () => {
+test('generatePin: six digits, with leading zeros', () => {
     for (let index = 0; index < 200; index += 1) {
         assert.match(generatePin(), /^[0-9]{6}$/);
     }
 });
 
-test('generatePin: descarta los valores que introducirían sesgo de módulo', () => {
+test('generatePin: discards the values that would introduce modulo bias', () => {
     /*
-     * 4.294.967.296 = 4.294 x 1.000.000 + 967.296, así que el último múltiplo
-     * completo es 4.294.000.000. Los tres primeros valores caen por encima y se
-     * tienen que descartar; el cuarto es el que decide el PIN.
+     * 4,294,967,296 = 4,294 x 1,000,000 + 967,296, so the last complete multiple
+     * is 4,294,000,000. The first three values fall above it and have to be
+     * discarded; the fourth is the one that decides the PIN.
      */
     const state = stubRandomUint32([4294967295, 4294000000, 4294500123, 42]);
 
@@ -93,13 +93,13 @@ test('generatePin: descarta los valores que introducirían sesgo de módulo', ()
     assert.equal(state.calls, 4);
 });
 
-test('generatePin: el mayor valor aceptado sigue dando un PIN válido', () => {
+test('generatePin: the largest accepted value still gives a valid PIN', () => {
     stubRandomUint32([4293999999]);
 
     assert.equal(generatePin(), '999999');
 });
 
-test('generatePin: la distribución no se apelmaza en ningún dígito final', () => {
+test('generatePin: the distribution does not clump on any final digit', () => {
     const buckets = new Array(10).fill(0);
     const draws = 20000;
 
@@ -108,33 +108,33 @@ test('generatePin: la distribución no se apelmaza en ningún dígito final', ()
     }
 
     /*
-     * Cota holgada a propósito: esto detecta un sesgo estructural (un dígito
-     * que no sale nunca, o que sale el doble), no una desviación estadística
-     * normal, que haría el test intermitente.
+     * Deliberately loose bound: this detects a structural bias (a digit that
+     * never comes out, or comes out twice as often), not a normal statistical
+     * deviation, which would make the test flaky.
      */
     for (const count of buckets) {
         assert.ok(count > draws / 20, `un dígito final salió solo ${count} veces de ${draws}`);
     }
 });
 
-test('generatePinSalt y generateSendKey miden lo que dice el ADR', () => {
+test('generatePinSalt and generateSendKey are the length the ADR states', () => {
     assert.equal(generatePinSalt().length, 16);
     assert.equal(generateSendKey().length, 32);
     assert.notDeepEqual(generateSendKey(), generateSendKey());
 });
 
-test('normalizePin: los dígitos de ancho completo del IME se pliegan a ASCII', () => {
+test('normalizePin: the full-width digits of the IME fold to ASCII', () => {
     assert.equal(normalizePin('１２３４５６'), '123456');
     assert.equal(normalizePin('  042042 '), '042042');
 });
 
-test('normalizePin: rechaza lo que no son seis dígitos', () => {
+test('normalizePin: rejects anything that is not six digits', () => {
     assert.throws(() => normalizePin('12345'), ShareKeyError);
     assert.throws(() => normalizePin('12345a'), ShareKeyError);
     assert.throws(() => normalizePin(123456), ShareKeyError);
 });
 
-test('derivePinTag y deriveWrapKey no producen el mismo valor', () => {
+test('derivePinTag and deriveWrapKey do not produce the same value', () => {
     const salt = pinSalt();
     const pinTag = derivePinTag({ stretched: stretched(), pinSalt: salt, linkId: LINK_ID });
     const wrapKey = deriveWrapKey({
@@ -150,21 +150,21 @@ test('derivePinTag y deriveWrapKey no producen el mismo valor', () => {
     assert.notDeepEqual(pinTag, wrapKey);
 });
 
-test('las dos ramas son deterministas: mismas entradas, mismas salidas', () => {
+test('both branches are deterministic: same inputs, same outputs', () => {
     assert.deepEqual(
         derivePinTag({ stretched: stretched(), pinSalt: pinSalt(), linkId: LINK_ID }),
         derivePinTag({ stretched: stretched(), pinSalt: pinSalt(), linkId: LINK_ID })
     );
 });
 
-test('el identificador del enlace se normaliza a minúsculas', () => {
+test('the link identifier is normalized to lowercase', () => {
     assert.deepEqual(
         derivePinTag({ stretched: stretched(), pinSalt: pinSalt(), linkId: LINK_ID }),
         derivePinTag({ stretched: stretched(), pinSalt: pinSalt(), linkId: LINK_ID.toUpperCase() })
     );
 });
 
-test('cambiar el enlace cambia las dos ramas', () => {
+test('changing the link changes both branches', () => {
     assert.notDeepEqual(
         derivePinTag({ stretched: stretched(), pinSalt: pinSalt(), linkId: LINK_ID }),
         derivePinTag({ stretched: stretched(), pinSalt: pinSalt(), linkId: OTHER_LINK_ID })
@@ -188,7 +188,7 @@ test('cambiar el enlace cambia las dos ramas', () => {
     );
 });
 
-test('cambiar la caducidad cambia la clave de envoltura', () => {
+test('changing the expiry changes the wrap key', () => {
     assert.notDeepEqual(
         deriveWrapKey({
             stretched: stretched(),
@@ -207,7 +207,7 @@ test('cambiar la caducidad cambia la clave de envoltura', () => {
     );
 });
 
-test('la misma caducidad escrita de otra forma deriva la misma clave', () => {
+test('the same expiry written another way derives the same key', () => {
     assert.deepEqual(
         deriveWrapKey({
             stretched: stretched(),
@@ -226,7 +226,7 @@ test('la misma caducidad escrita de otra forma deriva la misma clave', () => {
     );
 });
 
-test('cambiar S o la sal cambia la clave de envoltura', () => {
+test('changing S or the salt changes the wrap key', () => {
     const base = deriveWrapKey({
         stretched: stretched(),
         sendKey: sendKey(),
@@ -258,7 +258,7 @@ test('cambiar S o la sal cambia la clave de envoltura', () => {
     );
 });
 
-test('las longitudes de las entradas se comprueban', () => {
+test('the input lengths are checked', () => {
     assert.throws(() => derivePinTag({ stretched: new Uint8Array(16), pinSalt: pinSalt(), linkId: LINK_ID }), ShareKeyError);
     assert.throws(() => derivePinTag({ stretched: stretched(), pinSalt: new Uint8Array(8), linkId: LINK_ID }), ShareKeyError);
     assert.throws(
@@ -273,7 +273,7 @@ test('las longitudes de las entradas se comprueban', () => {
     );
 });
 
-test('stretchPinAsync da lo mismo que stretchPin y va informando del progreso', async () => {
+test('stretchPinAsync gives the same as stretchPin and reports progress along the way', async () => {
     const salt = pinSalt();
     const progress = [];
     const asynchronous = await stretchPinAsync({

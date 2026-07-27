@@ -3,14 +3,14 @@
 declare(strict_types=1);
 
 /**
- * Guardarraíl: `server_identity` es un identificador de despliegue fijo, no una URL. Si en algún
- * momento alguien lo hiciera depender de `APP_URL` (o del host de la petición), cambiar de dominio
- * —de `localhost` a `127.0.0.1`, o de entorno de pruebas a producción— rompería el preámbulo del
- * handshake OPAQUE para todas las cuentas ya registradas: el cliente seguiría enviando la identidad
- * antigua, el servidor calcularía una distinta, y el login dejaría de funcionar sin ningún error
- * visible que lo explique. Este test ata esa propiedad al código en vez de dejarla en un comentario.
+ * Guardrail: `server_identity` is a fixed deployment identifier, not a URL. If anyone ever made it
+ * depend on `APP_URL` (or on the request host), changing domain —from `localhost` to `127.0.0.1`, or
+ * from a test environment to production— would break the OPAQUE handshake preamble for every already
+ * registered account: the client would keep sending the old identity, the server would compute a
+ * different one, and login would stop working with no visible error to explain it. This test ties
+ * that property to the code instead of leaving it in a comment.
  */
-it('la identidad del servidor OPAQUE no depende del dominio de la aplicación', function (): void {
+it('the OPAQUE server identity does not depend on the application domain', function (): void {
     config(['app.url' => 'http://localhost:8888']);
     config(['opaque.server_identity' => 'myphr/opaque-v1']);
 
@@ -27,12 +27,12 @@ it('la identidad del servidor OPAQUE no depende del dominio de la aplicación', 
 });
 
 /**
- * Mismo guardarraíl pero desde el fichero de configuración real: `config/opaque.php` no debe leer
- * `app.url`, `APP_URL` ni el host de la petición al construir `server_identity`. Se comprueba
- * inspeccionando el fichero, porque el valor en tiempo de ejecución sale directo de `env()` y no
- * dejaría ver una dependencia introducida a través de un valor por defecto.
+ * The same guardrail but from the real configuration file: `config/opaque.php` must not read
+ * `app.url`, `APP_URL` or the request host when building `server_identity`. It is checked by
+ * inspecting the file, because the runtime value comes straight from `env()` and would not reveal a
+ * dependency introduced through a default value.
  */
-it('config/opaque.php no lee app.url ni el host al definir server_identity', function (): void {
+it('config/opaque.php reads neither app.url nor the host when defining server_identity', function (): void {
     $config = file_get_contents(config_path('opaque.php'));
 
     expect($config)->not->toBeFalse();

@@ -15,7 +15,7 @@ use Illuminate\Support\Str;
 uses(RefreshDatabase::class);
 
 /** Spec 0001 §3.2 y §3.3 */
-it('tiene las columnas de cada tabla', function (string $table, array $columns): void {
+it('has the columns of every table', function (string $table, array $columns): void {
     expect(Schema::hasColumns($table, $columns))->toBeTrue()
         ->and(Schema::hasColumn($table, 'updated_at'))->toBeFalse();
 })->with([
@@ -24,8 +24,8 @@ it('tiene las columnas de cada tabla', function (string $table, array $columns):
     ['opaque_login_handshakes', ['id', 'user_id', 'state_ciphertext', 'expires_at', 'created_at']],
 ]);
 
-/** Spec 0001 §3.3: solo se persiste el hash de 32 bytes del token. */
-it('guarda el enlace de registro con el hash del token', function (): void {
+/** Spec 0001 §3.3: only the 32-byte hash of the token is persisted. */
+it('stores the registration link with the token hash', function (): void {
     $issuer = User::factory()->registered()->create();
     $user = User::factory()->create();
     $token = Str::random(43);
@@ -52,7 +52,7 @@ it('guarda el enlace de registro con el hash del token', function (): void {
 });
 
 /** Spec 0001 §3.2 / OPAQUE.md §14.2 */
-it('guarda un registro OPAQUE pendiente ligado a su enlace', function (): void {
+it('stores a pending OPAQUE registration tied to its link', function (): void {
     $user = User::factory()->create();
     $link = UserRegistrationLink::create([
         'user_id' => $user->id,
@@ -80,8 +80,8 @@ it('guarda un registro OPAQUE pendiente ligado a su enlace', function (): void {
         ->and($fresh->registrationLink->is($link))->toBeTrue();
 });
 
-/** Spec 0001 §3.2 / OPAQUE.md §14.3: `user_id` es nulo en la rama falsa. */
-it('guarda un handshake sin usuario para la rama falsa', function (): void {
+/** Spec 0001 §3.2 / OPAQUE.md §14.3: `user_id` is null on the fake branch. */
+it('stores a handshake with no user for the fake branch', function (): void {
     $handshake = OpaqueLoginHandshake::create([
         'user_id' => null,
         'state_ciphertext' => 'cifrado',

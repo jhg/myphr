@@ -24,10 +24,10 @@ use Tests\Support\OpaqueTestClient;
 uses(RefreshDatabase::class);
 
 /**
- * Contrato HTTP de OPAQUE (Spec 0001 §4, §5 y §6; `docs/OPAQUE.md` §13, §15 y §20.8).
+ * OPAQUE HTTP contract (Spec 0001 §4, §5 and §6; `docs/OPAQUE.md` §13, §15 and §20.8).
  *
- * Los flujos se recorren de extremo a extremo contra el servidor real, con un cliente OPAQUE de
- * pruebas ({@see OpaqueTestClient}): nada de fixtures grabados ni de respuestas simuladas.
+ * The flows are walked end to end against the real server, with a test OPAQUE client
+ * ({@see OpaqueTestClient}): no recorded fixtures and no simulated responses.
  */
 const TEST_PASSWORD = 'CorrectHorseBatteryStaple';
 
@@ -36,24 +36,24 @@ beforeEach(function (): void {
 });
 
 /**
- * Sobre cifrado del ADR 0004 con un tamaño válido. El servidor no lo abre nunca, así que su
- * contenido es indiferente: lo que se prueba es que acepta la envoltura y la devuelve intacta.
+ * An ADR 0004 encrypted envelope with a valid size. The server never opens it, so its content does
+ * not matter: what is tested is that it accepts the wrapper and returns it intact.
  */
 function fakeEnvelope(): string
 {
     return 'v1.'.Base64Url::encode(random_bytes(64 + 16 + 256));
 }
 
-/** URL de una ruta del panel por su nombre. */
+/** URL of a panel route by its name. */
 function phrRoute(string $name): string
 {
     return route('filament.phr.'.$name);
 }
 
 /**
- * Emite un enlace de registro para una cuenta nueva.
+ * Issues a registration link for a new account.
  *
- * @return array{0: User, 1: string} La cuenta y el token en claro.
+ * @return array{0: User, 1: string} The account and the plaintext token.
  */
 function issuedRegistrationToken(?User $user = null): array
 {
@@ -64,7 +64,7 @@ function issuedRegistrationToken(?User $user = null): array
 }
 
 /**
- * Recorre el alta completa (Spec 0001 §5) y devuelve lo necesario para seguir con el login.
+ * Walks the full signup (Spec 0001 §5) and returns what is needed to continue with the login.
  *
  * @return array{user: User, envelope: string, settings: string}
  */
@@ -102,7 +102,7 @@ function completeRegistration(?User $user = null, string $password = TEST_PASSWO
 }
 
 /**
- * Recorre el login completo (Spec 0001 §6.1) y devuelve la respuesta de `login/finish`.
+ * Walks the full login (Spec 0001 §6.1) and returns the `login/finish` response.
  */
 function completeLogin(User $user, string $password = TEST_PASSWORD): TestResponse
 {
@@ -128,8 +128,8 @@ function completeLogin(User $user, string $password = TEST_PASSWORD): TestRespon
     ]);
 }
 
-/** Spec 0001 §4: las rutas cuelgan del panel y viven fuera y dentro del middleware de autenticación. */
-it('monta las rutas bajo el prefijo del panel', function (string $name, string $uri, string $method): void {
+/** Spec 0001 §4: the routes hang off the panel and live both outside and inside the auth middleware. */
+it('mounts the routes under the panel prefix', function (string $name, string $uri, string $method): void {
     $route = Route::getRoutes()->getByName('filament.phr.'.$name);
 
     expect($route)->not->toBeNull()
@@ -145,8 +145,8 @@ it('monta las rutas bajo el prefijo del panel', function (string $name, string $
     ['auth.lock', 'phr/auth/lock', 'POST'],
 ]);
 
-/** §4.5: `session-secret` y `lock` exigen sesión autenticada. */
-it('deja las rutas de sesión detrás del middleware de autenticación y las de OPAQUE fuera', function (): void {
+/** §4.5: `session-secret` and `lock` require an authenticated session. */
+it('leaves the session routes behind the authentication middleware and the OPAQUE ones outside', function (): void {
     $authenticated = Route::getRoutes()->getByName('filament.phr.auth.session-secret')->gatherMiddleware();
     $unauthenticated = Route::getRoutes()->getByName('filament.phr.auth.opaque.login.start')->gatherMiddleware();
 
@@ -154,8 +154,8 @@ it('deja las rutas de sesión detrás del middleware de autenticación y las de 
         ->and($unauthenticated)->not->toContain(Authenticate::class);
 });
 
-/** Spec 0001 §5, pasos 4 y 12: el alta completa, en dos peticiones y con el enlace consumido al final. */
-it('completa el alta de una cuenta y deja el enlace consumido y el sobre vigente', function (): void {
+/** Spec 0001 §5, steps 4 and 12: the full signup, in two requests and with the link consumed at the end. */
+it('completes an account signup and leaves the link consumed and the envelope current', function (): void {
     $result = completeRegistration();
     $user = $result['user'];
 
@@ -169,16 +169,16 @@ it('completa el alta de una cuenta y deja el enlace consumido y el sobre vigente
         ->and(UserRegistrationLink::query()->whereNull('consumed_at')->count())->toBe(0);
 });
 
-/** §13.1: el identificador es el HMAC del login normalizado, no un valor aleatorio por registro. */
-it('deriva el identificador de credencial del login normalizado', function (): void {
+/** §13.1: the identifier is the HMAC of the normalized login, not a random value per registration. */
+it('derives the credential identifier from the normalized login', function (): void {
     $user = completeRegistration()['user'];
 
     expect($user->opaque_credential_identifier)
         ->toBe(app(CredentialIdentifier::class)->for((string) $user->email));
 });
 
-/** §4.1: el cliente necesita `userId` antes de cifrar, y `serverPublicKey` para el pinning del §5. */
-it('devuelve userId, perfil y clave pública del servidor en registration/start', function (): void {
+/** §4.1: the client needs `userId` before encrypting, and `serverPublicKey` for the §5 pinning. */
+it('returns userId, profile and server public key in registration/start', function (): void {
     [, $token] = issuedRegistrationToken();
     $started = OpaqueTestClient::startRegistration(TEST_PASSWORD);
 
@@ -197,7 +197,7 @@ it('devuelve userId, perfil y clave pública del servidor en registration/start'
 });
 
 /** §4.1 y §7: token inexistente, caducado y consumido comparten error. */
-it('responde con el mismo error genérico para cualquier token no utilizable', function (string $case): void {
+it('answers with the same generic error for any unusable token', function (string $case): void {
     $token = match ($case) {
         'inexistente' => Str::random(43),
         'caducado' => (function (): string {
@@ -222,8 +222,8 @@ it('responde con el mismo error genérico para cualquier token no utilizable', f
     ])->assertStatus(422)->assertExactJson(['error' => 'invalid_registration']);
 })->with(['inexistente', 'caducado', 'consumido']);
 
-/** §4.2 y §7: reintentar tras perder la respuesta no falla ni duplica filas. */
-it('es idempotente en registration/finish', function (): void {
+/** §4.2 and §7: retrying after losing the response neither fails nor duplicates rows. */
+it('is idempotent in registration/finish', function (): void {
     [$user, $token] = issuedRegistrationToken();
     $started = OpaqueTestClient::startRegistration(TEST_PASSWORD);
 
@@ -254,8 +254,8 @@ it('es idempotente en registration/finish', function (): void {
         ->and($user->refresh()->encrypted_settings)->toBe($payload['encryptedSettings']);
 });
 
-/** §4.2: un sobre que no cumple la envoltura del ADR 0004 no se almacena. */
-it('rechaza un sobre sin prefijo v1. o con un tamaño que no es de los permitidos', function (string $envelope): void {
+/** §4.2: an envelope that does not satisfy the ADR 0004 wrapper is not stored. */
+it('rejects an envelope without the v1. prefix or with a size that is not allowed', function (string $envelope): void {
     [, $token] = issuedRegistrationToken();
     $started = OpaqueTestClient::startRegistration(TEST_PASSWORD);
 
@@ -281,12 +281,12 @@ it('rechaza un sobre sin prefijo v1. o con un tamaño que no es de los permitido
     expect(UserMasterKeyEnvelope::query()->count())->toBe(0);
 })->with([
     'sin prefijo' => [fn (): string => Base64Url::encode(random_bytes(336))],
-    'tamaño no permitido' => [fn (): string => 'v1.'.Base64Url::encode(random_bytes(337))],
-    'base64url no canónico' => [fn (): string => 'v1.'.str_repeat('A', 447).'='],
+    'size not allowed' => [fn (): string => 'v1.'.Base64Url::encode(random_bytes(337))],
+    'non-canonical base64url' => [fn (): string => 'v1.'.str_repeat('A', 447).'='],
 ]);
 
-/** Spec 0001 §5 y §6.1 encadenadas: alta y login posterior contra el servidor real. */
-it('completa el login de una cuenta recién dada de alta', function (): void {
+/** Spec 0001 §5 and §6.1 chained: signup and the login that follows, against the real server. */
+it('completes the login of a freshly created account', function (): void {
     $result = completeRegistration();
 
     $response = completeLogin($result['user']);
@@ -303,8 +303,8 @@ it('completa el login de una cuenta recién dada de alta', function (): void {
         ->and(OpaqueLoginHandshake::query()->count())->toBe(0);
 });
 
-/** §4.4: el destino guardado por `redirect()->guest()` no se pierde. */
-it('devuelve el destino guardado en url.intended', function (): void {
+/** §4.4: the destination stored by `redirect()->guest()` is not lost. */
+it('returns the destination stored in url.intended', function (): void {
     $result = completeRegistration();
 
     test()->withSession(['url.intended' => 'http://localhost/phr/algo-profundo']);
@@ -314,8 +314,8 @@ it('devuelve el destino guardado en url.intended', function (): void {
         ->assertJsonPath('redirect', 'http://localhost/phr/algo-profundo');
 });
 
-/** §4.4: contraseña incorrecta produce el error genérico y ninguna sesión. */
-it('rechaza una contraseña incorrecta con el error genérico', function (): void {
+/** §4.4: a wrong password produces the generic error and no session. */
+it('rejects a wrong password with the generic error', function (): void {
     $result = completeRegistration();
 
     $started = OpaqueTestClient::startLogin('otra-contraseña');
@@ -325,7 +325,7 @@ it('rechaza una contraseña incorrecta con el error genérico', function (): voi
         'startLoginRequest' => $started['startLoginRequest'],
     ])->assertOk();
 
-    /** El cliente real ni siquiera llega a `login/finish`: `server_mac` no verifica. */
+    /** The real client does not even reach `login/finish`: `server_mac` does not verify. */
     expect(fn () => OpaqueTestClient::finishLogin(
         'otra-contraseña',
         $started,
@@ -341,8 +341,8 @@ it('rechaza una contraseña incorrecta con el error genérico', function (): voi
     expect(auth()->check())->toBeFalse();
 });
 
-/** §4.4 y `docs/OPAQUE.md` §14.3: el handshake se consume antes de validar el MAC y es de un solo uso. */
-it('consume el handshake de un solo uso, incluso cuando el MAC no cuadra', function (): void {
+/** §4.4 and `docs/OPAQUE.md` §14.3: the handshake is consumed before validating the MAC and is single use. */
+it('consumes the single-use handshake, even when the MAC does not match', function (): void {
     $result = completeRegistration();
     $started = OpaqueTestClient::startLogin(TEST_PASSWORD);
 
@@ -367,7 +367,7 @@ it('consume el handshake de un solo uso, incluso cuando el MAC no cuadra', funct
         TEST_SERVER_IDENTITY,
     );
 
-    /** El MAC correcto ya no sirve: el handshake se consumió en el intento anterior. */
+    /** The correct MAC is no longer enough: the handshake was consumed in the previous attempt. */
     test()->postJson(phrRoute('auth.opaque.login.finish'), [
         'handshakeId' => $handshakeId,
         'finishLoginRequest' => $finished['finishLoginRequest'],
@@ -376,8 +376,8 @@ it('consume el handshake de un solo uso, incluso cuando el MAC no cuadra', funct
     expect(auth()->check())->toBeFalse();
 });
 
-/** §4.4: un handshake correcto tampoco vale dos veces. */
-it('no acepta el mismo handshake dos veces con el MAC correcto', function (): void {
+/** §4.4: a correct handshake is not good twice either. */
+it('does not accept the same handshake twice with the correct MAC', function (): void {
     $result = completeRegistration();
     $started = OpaqueTestClient::startLogin(TEST_PASSWORD);
 
@@ -402,8 +402,8 @@ it('no acepta el mismo handshake dos veces con el MAC correcto', function (): vo
     test()->postJson(phrRoute('auth.opaque.login.finish'), $payload)->assertStatus(401);
 });
 
-/** §13.3: cuenta inexistente y cuenta real dan la misma forma, el mismo código y el mismo tamaño. */
-it('responde a un usuario inexistente con una respuesta estructuralmente idéntica', function (): void {
+/** §13.3: a non-existent account and a real one give the same shape, the same status and the same size. */
+it('answers a non-existent user with a structurally identical response', function (): void {
     $result = completeRegistration();
 
     $real = test()->postJson(phrRoute('auth.opaque.login.start'), [
@@ -423,20 +423,20 @@ it('responde a un usuario inexistente con una respuesta estructuralmente idénti
         ->and($fake->json('profile'))->toBe($real->json('profile'))
         ->and(strlen($fake->content()))->toBe(strlen($real->content()));
 
-    /** La rama falsa deja su fila de handshake, sin `user_id`, igual que la real. */
+    /** The fake branch leaves its handshake row, with no `user_id`, just like the real one. */
     expect(OpaqueLoginHandshake::query()->whereNull('user_id')->count())->toBe(1)
         ->and(OpaqueLoginHandshake::query()->whereNotNull('user_id')->count())->toBe(1);
 });
 
 /**
- * `docs/OPAQUE.md` §20.8: con el mismo mensaje cegado y el mismo login, la respuesta debe ser
- * indistinguible antes y después de registrar la cuenta.
+ * `docs/OPAQUE.md` §20.8: with the same blinded message and the same login, the answer must be
+ * indistinguishable before and after registering the account.
  *
- * La igualdad byte a byte se comprueba sobre el `evaluated_message`, que es la parte determinista:
- * es exactamente lo que RFC 9807 §10.9 señala como el oráculo a cerrar. El resto de `KE2` lleva
- * nonces frescos y no puede repetirse, así que de él se comprueban forma y tamaño.
+ * Byte-for-byte equality is checked on the `evaluated_message`, which is the deterministic part: it
+ * is exactly what RFC 9807 §10.9 points at as the oracle to close. The rest of `KE2` carries fresh
+ * nonces and cannot repeat, so only its shape and size are checked.
  */
-it('devuelve el mismo evaluated_message para el mismo punto cegado antes y después del alta', function (): void {
+it('returns the same evaluated_message for the same blinded point before and after signup', function (): void {
     $user = User::factory()->create();
     $started = OpaqueTestClient::startLogin(TEST_PASSWORD);
 
@@ -460,8 +460,8 @@ it('devuelve el mismo evaluated_message para el mismo punto cegado antes y despu
         ->and(strlen($after->content()))->toBe(strlen($before->content()));
 });
 
-/** §13.3: la rama falsa se recorre también con el registro presente pero el perfil desajustado. */
-it('recorre la rama falsa cuando el perfil almacenado no es el vigente', function (): void {
+/** §13.3: the fake branch is also taken with the record present but the profile mismatched. */
+it('takes the fake branch when the stored profile is not the current one', function (): void {
     $result = completeRegistration();
 
     $result['user']->forceFill(['opaque_profile' => 'OPAQUE-R255-SHA512-A2ID-m16384-t1-p1-ctx0-v0'])->save();
@@ -475,7 +475,7 @@ it('recorre la rama falsa cuando el perfil almacenado no es el vigente', functio
 
     expect(OpaqueLoginHandshake::query()->whereNull('user_id')->count())->toBe(1);
 
-    /** El cliente no puede terminar: el envelope enmascarado no es el suyo. */
+    /** The client cannot finish: the masked envelope is not its own. */
     expect(fn () => OpaqueTestClient::finishLogin(
         TEST_PASSWORD,
         $started,
@@ -484,8 +484,8 @@ it('recorre la rama falsa cuando el perfil almacenado no es el vigente', functio
     ))->toThrow(RuntimeException::class);
 });
 
-/** §13.3: sin registro OPAQUE, la cuenta es indistinguible de una inexistente. */
-it('recorre la rama falsa cuando la cuenta existe pero no tiene registro OPAQUE', function (): void {
+/** §13.3: with no OPAQUE registration, the account is indistinguishable from a non-existent one. */
+it('takes the fake branch when the account exists but has no OPAQUE registration', function (): void {
     $user = User::factory()->create();
 
     test()->postJson(phrRoute('auth.opaque.login.start'), [
@@ -496,8 +496,8 @@ it('recorre la rama falsa cuando la cuenta existe pero no tiene registro OPAQUE'
     expect(OpaqueLoginHandshake::query()->whereNull('user_id')->count())->toBe(1);
 });
 
-/** §6.2: la recuperación tras recarga no vuelve a pedir la contraseña. */
-it('devuelve el mismo secreto de sesión y la configuración cifrada en session-secret', function (): void {
+/** §6.2: recovery after a reload does not ask for the password again. */
+it('returns the same session secret and the encrypted settings in session-secret', function (): void {
     $result = completeRegistration();
     $login = completeLogin($result['user'])->assertOk();
 
@@ -510,13 +510,13 @@ it('devuelve el mismo secreto de sesión y la configuración cifrada en session-
     expect($response->headers->get('Vary'))->toContain('Cookie');
 });
 
-/** §4.5: sin sesión no hay secreto, y la ruta ni siquiera llega al controlador. */
-it('no entrega el secreto de sesión sin sesión autenticada', function (): void {
+/** §4.5: no session, no secret, and the route does not even reach the controller. */
+it('does not hand out the session secret without an authenticated session', function (): void {
     test()->postJson(phrRoute('auth.session-secret'))->assertStatus(401);
 });
 
-/** §4.5: sesión viva cuyo secreto ya no está. */
-it('responde 410 cuando la sesión sigue viva pero el secreto ya no está', function (): void {
+/** §4.5: a live session whose secret is gone. */
+it('answers 410 when the session is still alive but the secret is gone', function (): void {
     $result = completeRegistration();
     completeLogin($result['user'])->assertOk();
 
@@ -529,8 +529,8 @@ it('responde 410 cuando la sesión sigue viva pero el secreto ya no está', func
         ->assertExactJson(['error' => 'session_secret_unavailable']);
 });
 
-/** §8: el bloqueo cierra la sesión entera, no solo el secreto. */
-it('cierra la sesión completa al bloquear', function (): void {
+/** §8: locking closes the whole session, not just the secret. */
+it('closes the whole session on lock', function (): void {
     $result = completeRegistration();
     completeLogin($result['user'])->assertOk();
 
@@ -540,16 +540,15 @@ it('cierra la sesión completa al bloquear', function (): void {
         ->and(session(SessionSecrets::SESSION_KEY))->toBeNull();
 
     /**
-     * Divergencia con la Spec 0001 §11: la spec espera 410 aquí, pero `session-secret` vive en
-     * `authenticatedRoutes()` y el bloqueo destruye la sesión, así que el middleware de
-     * autenticación corta antes con 401. Las dos respuestas llevan al mismo sitio: la pantalla de
-     * login.
+     * A divergence from Spec 0001 §11: the spec expects 410 here, but `session-secret` lives in
+     * `authenticatedRoutes()` and locking destroys the session, so the authentication middleware
+     * cuts in first with 401. Both responses lead to the same place: the login screen.
      */
     test()->postJson(phrRoute('auth.session-secret'))->assertStatus(401);
 });
 
-/** §4: ninguna respuesta de este grupo puede quedar en una caché. */
-it('marca todas las respuestas como no almacenables', function (string $name, string $method): void {
+/** §4: no response in this group may end up in a cache. */
+it('marks every response as non-storable', function (string $name, string $method): void {
     $response = test()->json($method, phrRoute($name), []);
 
     expect($response->headers->get('Cache-Control'))->toContain('no-store');
@@ -563,15 +562,15 @@ it('marca todas las respuestas como no almacenables', function (string $name, st
     ['auth.lock', 'POST'],
 ]);
 
-/** §4.1 y §7: la página del enlace se sirve genérica, sin token en el path y sin consultar nada. */
-it('sirve la página de establecimiento de contraseña sin validar ningún token', function (): void {
+/** §4.1 and §7: the link page is served generic, with no token in the path and querying nothing. */
+it('serves the set-password page without validating any token', function (): void {
     test()->get(phrRoute('auth.set-password'))->assertOk()->assertSee('set-password', escape: false);
 
     expect(phrRoute('auth.set-password'))->toBe(url(RegistrationLinks::SET_PASSWORD_PATH));
 });
 
-/** §4.3: un mensaje estructuralmente inválido no llega a la criptografía. */
-it('rechaza un KE1 mal formado sin crear handshake', function (): void {
+/** §4.3: a structurally invalid message never reaches the cryptography. */
+it('rejects a malformed KE1 without creating a handshake', function (): void {
     test()->postJson(phrRoute('auth.opaque.login.start'), [
         'login' => 'quien@example.test',
         'startLoginRequest' => Base64Url::encode(random_bytes(95)),
@@ -581,12 +580,13 @@ it('rechaza un KE1 mal formado sin crear handshake', function (): void {
 });
 
 /**
- * Spec 0001 §3.4: reemitir un enlace sobre una cuenta con acceso no sobrescribe el sobre anterior.
+ * Spec 0001 §3.4: reissuing a link on an account with access does not overwrite the previous
+ * envelope.
  *
- * El sobre viejo queda retirado con su contenido intacto, para que una contraseña que alguien
- * todavía recuerde siga abriendo lo que abría.
+ * The old envelope is retired with its content intact, so a password somebody still remembers keeps
+ * opening what it used to open.
  */
-it('añade un sobre nuevo y retira el anterior al registrarse otra vez', function (): void {
+it('adds a new envelope and retires the previous one when registering again', function (): void {
     $first = completeRegistration();
     $user = $first['user'];
 
@@ -625,19 +625,20 @@ it('añade un sobre nuevo y retira el anterior al registrarse otra vez', functio
         ->and($current?->retired_at)->toBeNull()
         ->and($user->refresh()->currentMasterKeyEnvelope?->envelope)->toBe($secondEnvelope);
 
-    /** El identificador de credencial se reutiliza, no se regenera (§13.1). */
+    /** The credential identifier is reused, not regenerated (§13.1). */
     expect($user->opaque_credential_identifier)
         ->toBe($first['user']->opaque_credential_identifier);
 });
 
 /**
- * Rastro de actividad del ciclo de vida de una cuenta.
+ * Activity trail of an account's lifecycle.
  *
- * Vive aquí y no en `ActivityLogTest` porque el alta y el login exigen recorrer el protocolo OPAQUE
- * entero, y los ayudantes que lo hacen son los de este fichero. Lo que se comprueba es la secuencia
- * y que ninguna fila lleve propiedades: el servidor anota el verbo y la fecha, nunca el contenido.
+ * It lives here and not in `ActivityLogTest` because signup and login require walking the whole
+ * OPAQUE protocol, and the helpers that do so are the ones in this file. What is checked is the
+ * sequence and that no row carries properties: the server records the verb and the date, never the
+ * content.
  */
-it('deja un rastro del alta y del login sin propiedades', function (): void {
+it('leaves a trail of the signup and the login with no properties', function (): void {
     ['user' => $user] = completeRegistration();
 
     expect(activityLogEvents())->toBe([

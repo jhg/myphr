@@ -1,10 +1,10 @@
 /**
- * Comprobaciones de las funciones puras de `registerPage.js` (alta pública).
+ * Checks of the pure functions of `registerPage.js` (public sign-up).
  *
- * Solo lo que no necesita DOM: `submit()` y `run()` dependen de `document`, `window` y del
- * WebAssembly de `@serenity-kit/opaque`, igual que el resto de `tests/js/auth.test.mjs`. Lo que sí
- * se puede probar sin montar nada es la comparación de contraseñas y la traducción del fallo del
- * servidor, incluido el caso propio del 409 `login_taken`.
+ * Only what needs no DOM: `submit()` and `run()` depend on `document`, `window` and the
+ * `@serenity-kit/opaque` WebAssembly, like the rest of `tests/js/auth.test.mjs`. What can be
+ * tested without mounting anything is the password comparison and the translation of the server
+ * failure, including the case of its own 409 `login_taken`.
  *
  *     npm test
  */
@@ -19,11 +19,11 @@ import { setLocale, t } from '../../resources/js/i18n/index.js';
 
 // --- passwordsMatch -------------------------------------------------------------------------------
 
-test('passwordsMatch: acepta dos contraseñas iguales', () => {
+test('passwordsMatch: accepts two identical passwords', () => {
     assert.equal(passwordsMatch('correct horse battery staple', 'correct horse battery staple'), true);
 });
 
-test('passwordsMatch: rechaza cualquier diferencia, incluida solo la capitalización', () => {
+test('passwordsMatch: rejects any difference, including capitalization alone', () => {
     assert.equal(passwordsMatch('Secreto123', 'secreto123'), false);
     assert.equal(passwordsMatch('Secreto123', 'Secreto124'), false);
     assert.equal(passwordsMatch('Secreto123', ''), false);
@@ -31,7 +31,7 @@ test('passwordsMatch: rechaza cualquier diferencia, incluida solo la capitalizac
 
 // --- describeFailure --------------------------------------------------------------------------
 
-test('describeFailure: el 409 login_taken es su propio caso, con la acción marcada', () => {
+test('describeFailure: the 409 login_taken is a case of its own, with the action flagged', () => {
     setLocale('en');
 
     const described = describeFailure(new AuthRequestError('Request failed.', 409, 'login_taken'));
@@ -40,7 +40,7 @@ test('describeFailure: el 409 login_taken es su propio caso, con la acción marc
     assert.equal(described.loginTaken, true);
 });
 
-test('describeFailure: un fallo de red no lleva la acción de ir a iniciar sesión', () => {
+test('describeFailure: a network failure does not carry the go-and-sign-in action', () => {
     setLocale('en');
 
     const described = describeFailure(new AuthRequestError('The request could not be sent.'));
@@ -49,7 +49,7 @@ test('describeFailure: un fallo de red no lleva la acción de ir a iniciar sesi�
     assert.equal(described.loginTaken, false);
 });
 
-test('describeFailure: 422 invalid_registration y cualquier otro código caen en el genérico', () => {
+test('describeFailure: 422 invalid_registration and any other code fall into the generic one', () => {
     setLocale('en');
 
     assert.equal(
@@ -62,7 +62,7 @@ test('describeFailure: 422 invalid_registration y cualquier otro código caen en
     );
 });
 
-test('describeFailure: un error de configuración OPAQUE se distingue de una contraseña incorrecta', () => {
+test('describeFailure: an OPAQUE configuration error is told apart from a wrong password', () => {
     setLocale('en');
 
     const described = describeFailure(new OpaqueConfigurationError('boom'));
@@ -71,7 +71,7 @@ test('describeFailure: un error de configuración OPAQUE se distingue de una con
     assert.equal(described.loginTaken, false);
 });
 
-test('describeFailure: cualquier otro fallo cae en el mensaje genérico, nunca en login_taken', () => {
+test('describeFailure: any other failure falls into the generic message, never into login_taken', () => {
     setLocale('en');
 
     const described = describeFailure(new Error('unexpected'));
@@ -80,7 +80,7 @@ test('describeFailure: cualquier otro fallo cae en el mensaje genérico, nunca e
     assert.equal(described.loginTaken, false);
 });
 
-test('describeFailure: el mensaje sale en el idioma activo', () => {
+test('describeFailure: the message comes out in the active language', () => {
     setLocale('es');
 
     assert.equal(

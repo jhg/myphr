@@ -11,7 +11,7 @@ use Illuminate\Support\Str;
 uses(RefreshDatabase::class);
 
 /** Spec 0001 §3.1 */
-it('tiene las columnas nuevas de users', function (): void {
+it('has the new users columns', function (): void {
     expect(Schema::hasColumns('users', [
         'id',
         'name',
@@ -28,28 +28,28 @@ it('tiene las columnas nuevas de users', function (): void {
     expect(Schema::getColumnType('users', 'encrypted_settings'))->toBe('text');
 });
 
-/** Con OPAQUE la contraseña nunca llega al servidor: no hay columna donde guardarla. */
-it('no tiene columna password', function (): void {
+/** With OPAQUE the password never reaches the server: there is no column to store it in. */
+it('has no password column', function (): void {
     expect(Schema::hasColumn('users', 'password'))->toBeFalse();
 });
 
-/** Spec 0001 §3.1: el alta no marca el correo como verificado. */
-it('crea un usuario sin email verificado', function (): void {
+/** Spec 0001 §3.1: signup does not mark the email as verified. */
+it('creates a user with no verified email', function (): void {
     $user = User::factory()->create();
 
     expect($user->email_verified_at)->toBeNull()
         ->and($user->opaque_registered_at)->toBeNull();
 });
 
-/** Sin columna `password`, el contrato de `Authenticatable` se cumple con una cadena vacía. */
-it('devuelve una contraseña de autenticación vacía', function (): void {
+/** With no `password` column, the `Authenticatable` contract is met with an empty string. */
+it('returns an empty authentication password', function (): void {
     $user = User::factory()->create();
 
     expect($user->getAuthPassword())->toBe('');
 });
 
-/** Spec 0001 §3: la clave primaria es un UUIDv7 en forma textual canónica en minúsculas. */
-it('genera un UUIDv7 como clave primaria', function (): void {
+/** Spec 0001 §3: the primary key is a UUIDv7 in canonical lowercase text form. */
+it('generates a UUIDv7 as the primary key', function (): void {
     $user = User::factory()->create();
 
     expect($user->getKeyType())->toBe('string')
@@ -59,8 +59,8 @@ it('genera un UUIDv7 como clave primaria', function (): void {
         ->and($user->id[14])->toBe('7');
 });
 
-/** Spec 0001 §3.1: las longitudes exactas se validan en aplicación, pero el esquema guarda bytes crudos. */
-it('guarda los binarios de OPAQUE sin alterarlos', function (): void {
+/** Spec 0001 §3.1: the exact lengths are validated in the application, but the schema stores raw bytes. */
+it('stores the OPAQUE binaries without altering them', function (): void {
     $credentialIdentifier = random_bytes(32);
     $registrationRecord = random_bytes(192);
 
@@ -78,14 +78,14 @@ it('guarda los binarios de OPAQUE sin alterarlos', function (): void {
         ->and($fresh->opaque_registration_record)->toBe($registrationRecord);
 });
 
-/** ADR 0009: entrar al panel exige únicamente tener el registro OPAQUE completo. */
-it('deniega el panel a una cuenta sin registro OPAQUE', function (): void {
+/** ADR 0009: entering the panel requires only a completed OPAQUE registration. */
+it('denies the panel to an account without an OPAQUE registration', function (): void {
     $panel = Filament\Facades\Filament::getPanel('phr');
 
     expect(User::factory()->create()->canAccessPanel($panel))->toBeFalse();
 });
 
-it('permite el panel a una cuenta con el registro OPAQUE completo', function (): void {
+it('allows the panel to an account with a complete OPAQUE registration', function (): void {
     $panel = Filament\Facades\Filament::getPanel('phr');
     $user = User::factory()->registered()->create();
 

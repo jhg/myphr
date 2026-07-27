@@ -11,7 +11,7 @@ use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
 
-it('carga la página de perfil para un usuario autenticado', function (): void {
+it('loads the profile page for an authenticated user', function (): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user);
@@ -23,11 +23,11 @@ it('carga la página de perfil para un usuario autenticado', function (): void {
 });
 
 /**
- * El inglés es el idioma de serie y las claves de traducción están en inglés, así que la misma
- * pantalla cambia de idioma sin tocar la plantilla. Sirve además de aviso si alguien borra una clave
- * de `lang/es.json`: el texto volvería al inglés en silencio y aquí se ve.
+ * English is the default language and the translation keys are in English, so the same screen
+ * changes language without touching the template. It also serves as a warning if somebody deletes a
+ * key from `lang/es.json`: the text would silently fall back to English and it shows up here.
  */
-it('pinta la página de perfil en el idioma en vigor', function (string $locale, string $expected): void {
+it('paints the profile page in the language in force', function (string $locale, string $expected): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user);
@@ -38,16 +38,16 @@ it('pinta la página de perfil en el idioma en vigor', function (string $locale,
         ->assertOk()
         ->assertSee($expected);
 })->with([
-    'castellano' => ['es', 'Rango objetivo de glucemia'],
+    'Spanish' => ['es', 'Rango objetivo de glucemia'],
     'chino simplificado' => ['zh_CN', '血糖目标范围'],
 ]);
 
 /**
- * El rango objetivo empieza vacío y sin valor sugerido (ADR 0007): un rango por defecto es una
- * indicación clínica, no una preferencia de interfaz. Este test vigila que nadie meta un `value` ni
- * un `placeholder` con números en los dos campos del rango «para que no se vean tan vacíos».
+ * The target range starts empty and with no suggested value (ADR 0007): a default range is a
+ * clinical recommendation, not an interface preference. This test watches that nobody puts a `value`
+ * or a `placeholder` with numbers in the two range fields "so they do not look so empty".
  */
-it('no propone ningún valor para el rango objetivo', function (): void {
+it('proposes no value for the target range', function (): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user);
@@ -62,16 +62,16 @@ it('no propone ningún valor para el rango objetivo', function (): void {
 });
 
 /**
- * El mismo test que exige el ADR 0002 en el resto de pantallas: el snapshot del componente no puede
- * llevar ciphertext. Aquí importa por partida doble, porque el sobre de ajustes de esta cuenta es
- * justo lo que la pantalla edita, y tiene que llegar al navegador por el arranque de sesión
- * (`session-secret`), nunca incrustado en el HTML ni en el estado de Livewire.
+ * The same test ADR 0002 requires on every other screen: the component snapshot cannot carry
+ * ciphertext. It matters twice over here, because this account's settings envelope is exactly what
+ * the screen edits, and it has to reach the browser through the session bootstrap
+ * (`session-secret`), never embedded in the HTML or in Livewire state.
  *
- * La llamada va por `call()` y no por `instance()`, igual que en `GlucosePageTest`: invocar sobre la
- * instancia se salta el ciclo de hidratación y deshidratación, y el snapshot inspeccionado sería el
- * de antes de la llamada.
+ * The call goes through `call()` and not `instance()`, as in `GlucosePageTest`: invoking on the
+ * instance skips the hydration and dehydration cycle, and the inspected snapshot would be the one
+ * from before the call.
  */
-it('el snapshot del componente no contiene ningún sobre cifrado', function (): void {
+it('the component snapshot contains no encrypted envelope', function (): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user);
@@ -87,16 +87,16 @@ it('el snapshot del componente no contiene ningún sobre cifrado', function (): 
 
 /*
 |--------------------------------------------------------------------------
-| Bloque de solo lectura: últimas medidas corporales
+| Read-only block: latest body measurements
 |--------------------------------------------------------------------------
 |
-| Peso, estatura e IMC se calculan descifrando en el navegador. El servidor solo entrega ciphertext:
-| aquí se comprueba la vía de lectura y que el bloque es de verdad de solo lectura, no un segundo
-| sitio donde guardar la misma medida.
+| Weight, height and BMI are computed by decrypting in the browser. The server only hands over
+| ciphertext: here we check the read path and that the block really is read only, not a second place
+| to store the same measurement.
 |
 */
 
-it('muestra el bloque de últimas medidas, en solo lectura', function (): void {
+it('shows the latest measurements block, read only', function (): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user);
@@ -110,8 +110,8 @@ it('muestra el bloque de últimas medidas, en solo lectura', function (): void {
         ->html();
 
     /**
-     * Sin ningún control dentro de la región: las medidas se registran en la pantalla de peso y
-     * estatura, con su fecha. Un campo aquí crearía dos verdades para el mismo día.
+     * No control inside the region: measurements are recorded on the weight and height screen, with
+     * their date. A field here would create two truths for the same day.
      */
     $region = str($html)->after('wire:key="profile-body-measurements-region"')->before('</section>')->toString();
 
@@ -120,14 +120,14 @@ it('muestra el bloque de últimas medidas, en solo lectura', function (): void {
     expect($region)->not->toContain('<textarea');
 });
 
-it('el bloque avisa de que el IMC no es un diagnóstico y no lo categoriza', function (): void {
+it('the block warns that BMI is not a diagnosis and does not categorize it', function (): void {
     $template = file_get_contents(resource_path('views/phr/pages/profile.blade.php'));
     $module = file_get_contents(resource_path('js/auth/profilePage.js'));
 
     expect($template)->toContain('not a diagnosis');
     expect($template)->toContain('percentiles for age and sex');
 
-    /** Ni categorías ni umbrales en la plantilla ni en el módulo (ver `health/bodyMassIndex.js`). */
+    /** No categories and no thresholds in the template or in the module (see `health/bodyMassIndex.js`). */
     foreach (['Overweight', 'Obese', 'Underweight', 'Normal weight'] as $verdict) {
         expect($template)->not->toContain($verdict);
         expect($module)->not->toContain($verdict);
@@ -135,11 +135,11 @@ it('el bloque avisa de que el IMC no es un diagnóstico y no lo categoriza', fun
 });
 
 /**
- * El perfil lee los eventos por `fetchEvents`, el mismo método y la misma autorización que las
- * pantallas de historial (por eso hereda de `HealthEventPage`). Sin este test, un cambio de herencia
- * dejaría el bloque en blanco sin ningún error visible.
+ * The profile reads events through `fetchEvents`, the same method and the same authorization as the
+ * history screens (which is why it extends `HealthEventPage`). Without this test, a change of parent
+ * class would leave the block blank with no visible error.
  */
-it('lee los eventos del usuario autenticado con el mismo fetchEvents de siempre', function (): void {
+it('reads the events of the authenticated user with the same fetchEvents as always', function (): void {
     $user = User::factory()->registered()->create();
     $otherUser = User::factory()->registered()->create();
 
@@ -157,7 +157,7 @@ it('lee los eventos del usuario autenticado con el mismo fetchEvents de siempre'
     expect(array_keys($result[0]))->toBe(['id', 'occurredAt', 'payload']);
 });
 
-it('cada $wire.<metodo> del modulo de perfil existe como metodo publico de la pagina', function (): void {
+it('every $wire.<method> in the profile module exists as a public method of the page', function (): void {
     preg_match_all('/\$wire\.(\w+)\(/', file_get_contents(resource_path('js/auth/profilePage.js')), $matches);
 
     expect($matches[1])->not->toBeEmpty();
@@ -167,7 +167,7 @@ it('cada $wire.<metodo> del modulo de perfil existe como metodo publico de la pa
 
     foreach (array_unique($matches[1]) as $method) {
         expect($publicMethods->has($method))->toBeTrue(
-            sprintf('El módulo llama a $wire.%s() y esa página no tiene ese método público.', $method)
+            sprintf('The module calls $wire.%s() and that page has no such public method.', $method)
         );
     }
 });

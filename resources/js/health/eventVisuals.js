@@ -1,16 +1,16 @@
 /**
- * Piezas de DOM compartidas por todas las vistas de eventos: el aviso, la baldosa de estadística y
- * el estado vacío (DESIGN.md).
+ * DOM pieces shared by every event view: the notice, the statistics tile and the empty state
+ * (DESIGN.md).
  *
- * **Reciben datos y devuelven nodos.** No leen el documento, no conocen ningún `x-ref`, no saben
- * qué pantalla las llama y no hablan con Livewire. Esa es la condición para que el mismo aviso y la
- * misma baldosa aparezcan en el panel del paciente, en el lector del profesional (sin sesión) y en
- * la vista previa de la pantalla de compartir: si una de las tres pintara sus cifras de otra forma,
- * el paciente y el médico estarían mirando dos documentos distintos del mismo dato.
+ * **They take data and return nodes.** They do not read the document, they know no `x-ref`, they
+ * do not know which screen calls them and they do not talk to Livewire. That is the condition for
+ * the same notice and the same tile to appear in the patient panel, in the professional's reader
+ * (with no session) and in the preview of the share screen: if one of the three painted its
+ * figures differently, patient and doctor would be looking at two different documents of the same datum.
  *
- * Todos los colores van por su **papel** (`error-*`, `info-*`, `bg-surface`, `text-ink`) y nunca por
- * la rampa: los papeles conmutan solos con el tema oscuro y las rampas de acento no se reasignan
- * (ver `theme.css`, § Ramp Mapping — Dark y § Avisos y chips).
+ * Every colour goes by its **role** (`error-*`, `info-*`, `bg-surface`, `text-ink`) and never by
+ * the ramp: the roles switch on their own with the dark theme and the accent ramps are not
+ * reassigned (see `theme.css`, § Ramp Mapping — Dark and § Notices and chips).
  */
 
 /**
@@ -22,9 +22,9 @@ export function createCallout(tone, message) {
     const callout = document.createElement('div');
 
     /**
-     * Los tres papeles del aviso —relleno, línea y tinta— por su nombre (`error-*` / `info-*`),
-     * igual que en `glucosePage.js`. Escrito con la rampa (`bg-danger-50`, `text-primary-600`) el
-     * aviso saldría en modo oscuro con fondo casi blanco y tinta clara encima.
+     * The three roles of the notice —fill, line and ink— by their name (`error-*` / `info-*`), as
+     * in `glucosePage.js`. Written with the ramp (`bg-danger-50`, `text-primary-600`) the notice
+     * would come out in dark mode with an almost white background and light ink on top.
      */
     callout.className = tone === 'warning'
         ? 'flex items-start gap-3 rounded-control border border-error-outline bg-error-surface p-pad-md '
@@ -63,11 +63,11 @@ export function createCallout(tone, message) {
 }
 
 /**
- * Tinta de cada lectura clínica de una cifra.
+ * Ink of each clinical reading of a figure.
  *
- * Son los papeles semánticos de DESIGN.md, que conmutan solos con el tema oscuro. `neutral` es el
- * caso normal: la mayoría de las cifras (recuento, media, mínimo) no significan nada por sí solas y
- * teñirlas sería decorar, no informar.
+ * They are the semantic roles of DESIGN.md, which switch on their own with the dark theme.
+ * `neutral` is the normal case: most figures (count, mean, minimum) mean nothing on their own and
+ * tinting them would be decorating, not informing.
  *
  * @type {Record<string, string>}
  */
@@ -78,13 +78,13 @@ const TONE_INK = Object.freeze({
 });
 
 /**
- * Relleno de cada papel semántico cuando lo que se pinta es una **superficie** y no texto: el tramo
- * de una barra, el cuadradito de una leyenda.
+ * Fill of each semantic role when what is painted is a **surface** and not text: the segment of a
+ * bar, the little square of a legend.
  *
- * Se usa la tinta (`success-ink`, `warning-ink`) y no el relleno suave (`*-surface`) porque un tramo
- * de barra es un objeto gráfico y necesita 3:1 contra la tarjeta (WCAG 1.4.11): los rellenos suaves
- * están pensados para llevar texto encima, no para leerse solos. Los dos papeles conmutan con el
- * tema por sí mismos.
+ * The ink (`success-ink`, `warning-ink`) is used and not the soft fill (`*-surface`) because a bar
+ * segment is a graphical object and needs 3:1 against the card (WCAG 1.4.11): the soft fills are
+ * meant to carry text on top, not to be read on their own. Both roles switch with the theme by
+ * themselves.
  *
  * @type {Record<string, string>}
  */
@@ -94,45 +94,45 @@ const TONE_FILL = Object.freeze({
     warning: 'bg-warning-ink',
 });
 
-/** Alto y ancho del lienzo lógico de la minigráfica, en unidades de su `viewBox`. */
+/** Height and width of the logical canvas of the sparkline, in units of its `viewBox`. */
 const SPARKLINE_WIDTH = 100;
 const SPARKLINE_HEIGHT = 24;
 
-/** Margen vertical del trazo, para que un máximo o un mínimo no se corte contra el borde. */
+/** Vertical margin of the stroke, so a maximum or a minimum is not cut against the edge. */
 const SPARKLINE_PADDING = 2;
 
 /**
- * Puntos mínimos para que una minigráfica se pinte.
+ * Minimum points for a sparkline to be painted.
  *
- * Dos puntos siempre forman una recta perfecta: dibujarla es afirmar una tendencia que no se ha
- * observado. Con menos de tres no se pinta nada, y la tarjeta se queda con sus cifras, que sí son
- * dato.
+ * Two points always make a perfect straight line: drawing it asserts a trend that has not been
+ * observed. With fewer than three nothing is painted, and the card keeps its figures, which are
+ * data.
  */
 export const SPARKLINE_MIN_POINTS = 3;
 
 /**
- * Minigráfica de tendencia: una polilínea sin ejes, sin etiquetas y sin leyenda.
+ * Trend sparkline: a polyline with no axes, no labels and no legend.
  *
- * **Por qué SVG a mano y no Chart.js.** Una tarjeta de estadísticas no lleva una gráfica, lleva un
- * gesto. Chart.js pide un `<canvas>` con su ciclo de vida (instancia que hay que destruir al
- * repintar, colores que hay que releer del tema al cambiar de modo, redibujado al redimensionar), y
- * eso multiplicado por cada baldosa de cada método de cada tipo es un coste real por un trazo de
- * cuatro líneas. Un SVG es un nodo más del fragmento: se tira con el resto cuando la vista se
- * repinta, hereda el color del tema por `currentColor` sin releer nada, y escala solo.
+ * **Why hand-written SVG and not Chart.js.** A statistics card does not carry a chart, it carries a
+ * gesture. Chart.js asks for a `<canvas>` with its life cycle (an instance to destroy on repaint,
+ * colours to re-read from the theme on mode change, redraw on resize), and that multiplied by
+ * every tile of every method of every type is a real cost for a four-line stroke. An SVG is one
+ * more node of the fragment: it is thrown away with the rest when the view repaints, it inherits
+ * the theme colour through `currentColor` without re-reading anything, and it scales on its own.
  *
- * **Los huecos son huecos** (misma regla que `dailyBands.js`): un día sin lecturas no aporta punto y
- * **parte el trazo**. Unir por encima del hueco dibujaría una pendiente que nadie ha medido, y
- * rellenarlo con un cero dibujaría una caída que no ocurrió. Un tramo suelto entre dos huecos se
- * marca con un punto, que es exactamente lo que se sabe de él.
+ * **Gaps are gaps** (same rule as `dailyBands.js`): a day with no readings contributes no point and
+ * **breaks the stroke**. Joining over the gap would draw a slope nobody measured, and filling it
+ * with a zero would draw a fall that did not happen. A lone stretch between two gaps is marked
+ * with a point, which is exactly what is known about it.
  *
- * La posición horizontal es la del día dentro del periodo, no la del punto dentro de la lista: así
- * un hueco de una semana se ve ancho y uno de un día, estrecho.
+ * The horizontal position is that of the day inside the period, not that of the point inside the
+ * list: that way a gap of a week looks wide and one of a day, narrow.
  *
- * Es decorativa (`aria-hidden`): todo lo que dice está también en las cifras de la baldosa, así que
- * no hay nada que anunciar dos veces (DESIGN.md, Do's #3).
+ * It is decorative (`aria-hidden`): everything it says is also in the figures of the tile, so there
+ * is nothing to announce twice (DESIGN.md, Do's #3).
  *
- * @param {list<number|null>} points Un valor por día del periodo, `null` en los días sin lecturas.
- * @returns {SVGElement|null} `null` si no hay tendencia que enseñar.
+ * @param {list<number|null>} points One value per day of the period, `null` on days with no readings.
+ * @returns {SVGElement|null} `null` if there is no trend to show.
  */
 export function createSparkline(points) {
     const present = points
@@ -150,7 +150,7 @@ export function createSparkline(points) {
     const usableHeight = SPARKLINE_HEIGHT - SPARKLINE_PADDING * 2;
 
     const x = (index) => (index / (points.length - 1)) * SPARKLINE_WIDTH;
-    /** Una serie plana se dibuja centrada: no hay recorrido que escalar, y dividir por cero tampoco. */
+    /** A flat series is drawn centred: there is no range to scale, and no division by zero either. */
     const y = (value) => (span === 0
         ? SPARKLINE_HEIGHT / 2
         : SPARKLINE_PADDING + ((max - value) / span) * usableHeight);
@@ -158,8 +158,8 @@ export function createSparkline(points) {
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('viewBox', `0 0 ${SPARKLINE_WIDTH} ${SPARKLINE_HEIGHT}`);
     /**
-     * El trazo se estira con la baldosa, así que la relación de aspecto no se conserva; el grosor de
-     * la línea sí, con `vector-effect`, o saldría más gruesa en horizontal que en vertical.
+     * The stroke stretches with the tile, so the aspect ratio is not kept; the line thickness is,
+     * with `vector-effect`, or it would come out thicker horizontally than vertically.
      */
     svg.setAttribute('preserveAspectRatio', 'none');
     svg.setAttribute('aria-hidden', 'true');
@@ -194,8 +194,8 @@ export function createSparkline(points) {
 }
 
 /**
- * Parte una lista de puntos en tramos de días **consecutivos**: cada salto de índice es un día sin
- * lecturas y abre un tramo nuevo.
+ * Splits a list of points into stretches of **consecutive** days: every index jump is a day with no
+ * readings and opens a new stretch.
  *
  * @param {list<{value: number, index: number}>} present
  * @returns {list<list<{value: number, index: number}>>}
@@ -217,7 +217,7 @@ function consecutiveRuns(present) {
 }
 
 /**
- * Coordenada con dos decimales: más precisión solo engorda el atributo sin mover ningún píxel.
+ * Coordinate with two decimals: more precision only fattens the attribute without moving a pixel.
  *
  * @param {number} value
  * @returns {number}
@@ -227,19 +227,19 @@ function round(value) {
 }
 
 /**
- * Barra horizontal por tramos, con su leyenda debajo.
+ * Horizontal bar in segments, with its legend below.
  *
- * Es la forma estándar de leer un reparto en tres partes —por debajo, dentro, por encima— sin hacer
- * ninguna cuenta. La proporción de cada tramo es su porcentaje, repartido con `flex-grow` para que
- * la barra llene el ancho exacto sin costuras aunque los tres redondeos no sumen 100 clavado.
+ * It is the standard way of reading a three-part split —below, inside, above— without doing any
+ * arithmetic. The proportion of each segment is its percentage, distributed with `flex-grow` so the
+ * bar fills the exact width seamlessly even if the three roundings do not add up to exactly 100.
  *
- * **El color nunca va solo** (DESIGN.md, Do's #3): la barra es decorativa y quien informa es la
- * leyenda, donde cada tramo lleva su etiqueta escrita y su porcentaje como número. En escala de
- * grises, con el tema oscuro o con un lector de pantalla se lee igual.
+ * **The colour never goes alone** (DESIGN.md, Do's #3): the bar is decorative and what informs is
+ * the legend, where each segment carries its written label and its percentage as a number. In
+ * greyscale, with the dark theme or with a screen reader it reads the same.
  *
- * El estilo va por atributo y no por la propiedad `style` a propósito: estos módulos se prueban con
- * un `document` mínimo (ver `tests/js`), y `setAttribute` es lo único que ese documento necesita
- * saber hacer.
+ * The style goes by attribute and not through the `style` property on purpose: these modules are
+ * tested with a minimal `document` (see `tests/js`), and `setAttribute` is the only thing that
+ * document needs to know how to do.
  *
  * @param {list<{label: string, percent: number, value: string, tone: 'neutral'|'good'|'warning'}>} segments
  * @returns {HTMLDivElement}
@@ -268,8 +268,8 @@ export function createSegmentedBar(segments) {
     legend.className = 'mt-2 flex flex-wrap gap-x-4 gap-y-1';
 
     /**
-     * Un tramo vacío se queda en la leyenda con su «0 %». Es información: saber que no hubo ninguna
-     * lectura por debajo del rango no es lo mismo que no saber nada de ese tramo.
+     * An empty segment stays in the legend with its "0%". That is information: knowing there was no
+     * reading below the range is not the same as knowing nothing about that band.
      */
     for (const segment of segments) {
         const item = document.createElement('li');
@@ -298,26 +298,26 @@ export function createSegmentedBar(segments) {
 }
 
 /**
- * Un valor con su etiqueta y su unidad, siempre juntos (Do's #2 y #7 de DESIGN.md: un número suelto
- * es un número que se malinterpreta). El valor va en IBM Plex Mono con contraste alto, nunca en gris
- * claro.
+ * A value with its label and its unit, always together (Do's #2 and #7 of DESIGN.md: a lone number
+ * is a number that gets misread). The value goes in IBM Plex Mono with high contrast, never in
+ * light grey.
  *
  * @param {object} params
  * @param {string} params.label
- * @param {string} params.value Ya formateado (`formatNumber` o la fecha).
+ * @param {string} params.value Already formatted (`formatNumber` or the date).
  * @param {string} [params.unit]
  * @param {'neutral'|'good'|'warning'} [params.tone]
- * @param {list<number|null>} [params.trend] Serie diaria para la minigráfica ({@see createSparkline}).
- *        Opcional y sin efecto si no hay tendencia que enseñar: quien ya llamaba a esta función sin
- *        ella sigue obteniendo exactamente la misma baldosa.
+ * @param {list<number|null>} [params.trend] Daily series for the sparkline ({@see createSparkline}).
+ *        Optional and with no effect if there is no trend to show: whoever already called this
+ *        function without it still gets exactly the same tile.
  * @returns {HTMLDivElement}
  */
 export function createStatTile({ label, value, unit, tone = 'neutral', trend }) {
     const tile = document.createElement('div');
     /**
-     * `bg-background` y `border-border`: papeles de § Colors, que conmutan solos con el tema. Con
-     * `bg-gray-50` / `border-gray-200` la baldosa saldría en oscuro como un rectángulo casi blanco
-     * con marco del color de la tinta.
+     * `bg-background` and `border-border`: roles of § Colors, which switch on their own with the
+     * theme. With `bg-gray-50` / `border-gray-200` the tile would come out in dark as an almost
+     * white rectangle with a frame the colour of the ink.
      */
     tile.className = 'rounded-card border border-border bg-background px-4 py-3';
 
@@ -327,12 +327,12 @@ export function createStatTile({ label, value, unit, tone = 'neutral', trend }) 
     tile.appendChild(caption);
 
     /**
-     * La cifra en tamaño Headline y la unidad pequeña al lado: la jerarquía la da el tamaño, no el
-     * color, así que sigue leyéndose igual en escala de grises y con el tema oscuro.
+     * The figure in Headline size and the unit small next to it: the hierarchy comes from the size,
+     * not from the colour, so it still reads the same in greyscale and with the dark theme.
      *
-     * `tone` tiñe la cifra cuando el dato tiene una lectura clínica —dentro o fuera del rango
-     * objetivo— y se queda en la tinta normal cuando no la tiene. El color nunca va solo: la cifra y
-     * su etiqueta siguen ahí, que es lo que exige DESIGN.md (Do's #3).
+     * `tone` tints the figure when the datum has a clinical reading —inside or outside the target
+     * range— and stays in the normal ink when it does not. The colour never goes alone: the figure
+     * and its label are still there, which is what DESIGN.md demands (Do's #3).
      */
     const valueLine = document.createElement('p');
     valueLine.className = `mt-1 font-mono text-headline font-semibold ${TONE_INK[tone] ?? TONE_INK.neutral}`;
@@ -348,8 +348,8 @@ export function createStatTile({ label, value, unit, tone = 'neutral', trend }) 
     tile.appendChild(valueLine);
 
     /**
-     * La minigráfica va debajo de la cifra y nunca en su lugar: es contexto («¿va subiendo?»), no
-     * dato. Si no hay tendencia que enseñar, la baldosa se queda como estaba.
+     * The sparkline goes below the figure and never in its place: it is context ("is it going up?"),
+     * not datum. If there is no trend to show, the tile stays as it was.
      */
     if (Array.isArray(trend)) {
         const sparkline = createSparkline(trend);
@@ -363,13 +363,13 @@ export function createStatTile({ label, value, unit, tone = 'neutral', trend }) 
 }
 
 /**
- * Estado vacío con salida.
+ * Empty state with a way out.
  *
- * Una frase gris y nada más deja a quien acaba de registrarse sin nada que hacer; con el botón, la
- * única acción posible en ese momento está a un clic. El destino llega **como argumento**, nunca
- * leído del documento: la ruta del panel la decide el servidor de Filament y el lector del
- * profesional no tiene ninguna a la que enviar a nadie, así que `null` es un caso normal y entonces
- * se pinta solo la frase, que es lo que informa.
+ * A grey sentence and nothing else leaves whoever has just signed up with nothing to do; with the
+ * button, the only possible action at that moment is one click away. The destination arrives **as
+ * an argument**, never read from the document: the panel route is decided by the Filament server
+ * and the professional's reader has none to send anybody to, so `null` is a normal case and then
+ * only the sentence is painted, which is what informs.
  *
  * @param {string} message
  * @param {string|null} href

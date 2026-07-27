@@ -12,15 +12,15 @@ use Livewire\Livewire;
 uses(RefreshDatabase::class);
 
 /**
- * Tests del transporte de la pantalla de tensión arterial (ADR 0002, ADR 0004, ADR 0006) y del
- * contrato entre la plantilla, el módulo de Alpine y esta página.
+ * Transport tests for the blood pressure screen (ADR 0002, ADR 0004, ADR 0006) and for the contract
+ * between the template, the Alpine module and this page.
  *
- * El servidor no puede fabricar un sobre cifrado real porque no tiene la clave del cliente. Los
- * tests que necesitan un payload válido usan `envelopeCipherText()` y `canonicalOccurredAtNow()`,
- * los ayudantes GLOBALES de `tests/Pest.php`: antes este fichero tenía su propia copia con otro
- * nombre, que es la forma de que las dos versiones se separen en silencio.
+ * The server cannot build a real encrypted envelope because it has no client key. The tests that
+ * need a valid payload use `envelopeCipherText()` and `canonicalOccurredAtNow()`, the GLOBAL helpers
+ * from `tests/Pest.php`: this file used to have its own copy under a different name, which is how
+ * two versions drift apart in silence.
  */
-it('guarda un evento con un sobre bien formado y una fecha canónica', function (): void {
+it('stores an event with a well formed envelope and a canonical date', function (): void {
     $user = User::factory()->registered()->create();
     $envelope = envelopeCipherText();
     $occurredAt = canonicalOccurredAtNow();
@@ -41,20 +41,20 @@ it('guarda un evento con un sobre bien formado y una fecha canónica', function 
     ]);
 });
 
-it('rechaza un payload mal formado y no crea ninguna fila', function (): void {
+it('rejects a malformed payload and creates no row', function (): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user);
 
     expect(fn () => Livewire::test(BloodPressure::class)
         ->instance()
-        ->storeEvent('esto no es un sobre cifrado', canonicalOccurredAtNow()))
+        ->storeEvent('this is not an encrypted envelope', canonicalOccurredAtNow()))
         ->toThrow(ValidationException::class);
 
     expect(Event::query()->count())->toBe(0);
 });
 
-it('rechaza una fecha sin microsegundos', function (): void {
+it('rejects a date without microseconds', function (): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user);
@@ -67,7 +67,7 @@ it('rechaza una fecha sin microsegundos', function (): void {
     expect(Event::query()->count())->toBe(0);
 });
 
-it('rechaza una fecha con desfase horario en vez de Z', function (): void {
+it('rejects a date with a UTC offset instead of Z', function (): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user);
@@ -80,7 +80,7 @@ it('rechaza una fecha con desfase horario en vez de Z', function (): void {
     expect(Event::query()->count())->toBe(0);
 });
 
-it('fetchEvents solo devuelve los eventos del usuario autenticado', function (): void {
+it('fetchEvents only returns the events of the authenticated user', function (): void {
     $user = User::factory()->registered()->create();
     $otherUser = User::factory()->registered()->create();
 
@@ -97,7 +97,7 @@ it('fetchEvents solo devuelve los eventos del usuario autenticado', function ():
     expect($result[0]['id'])->toBe($ownEvent->id);
 });
 
-it('storeEvent y fetchEvents aíslan los eventos por usuario, sin ver los de otro', function (): void {
+it('storeEvent and fetchEvents isolate events per user, never showing another user events', function (): void {
     $user = User::factory()->registered()->create();
     $otherUser = User::factory()->registered()->create();
 
@@ -126,11 +126,12 @@ it('storeEvent y fetchEvents aíslan los eventos por usuario, sin ver los de otr
 });
 
 /**
- * El test que exige el ADR 0002: el ciphertext baja como valor de retorno y sube como parámetro,
- * nunca por una propiedad pública, así que el snapshot del componente no puede contenerlo. Sigue el
- * mismo enfoque que `tests/Feature/EncryptedPayloadGuardTest.php` y `GlucosePageTest.php`.
+ * The test ADR 0002 requires: the ciphertext comes down as a return value and goes up as a
+ * parameter, never through a public property, so the component snapshot cannot contain it. It
+ * follows the same approach as `tests/Feature/EncryptedPayloadGuardTest.php` and
+ * `GlucosePageTest.php`.
  */
-it('el snapshot del componente no contiene ningún sobre cifrado', function (): void {
+it('the component snapshot contains no encrypted envelope', function (): void {
     $user = User::factory()->registered()->create();
     $envelope = envelopeCipherText();
     $occurredAt = canonicalOccurredAtNow();
@@ -140,10 +141,10 @@ it('el snapshot del componente no contiene ningún sobre cifrado', function (): 
     $this->actingAs($user);
 
     /**
-     * Las llamadas van por `call()` y no por `instance()`: invocar el método sobre la instancia se
-     * salta el ciclo de hidratación y deshidratación de Livewire, y entonces el snapshot que se
-     * inspecciona es el de antes de la llamada. El test pasaría aunque el sobre acabase en una
-     * propiedad pública, que es justo lo que tiene que detectar.
+     * The calls go through `call()` and not `instance()`: invoking the method on the instance skips
+     * Livewire's hydration and dehydration cycle, and then the snapshot being inspected is the one
+     * from before the call. The test would pass even if the envelope ended up in a public property,
+     * which is exactly what it has to catch.
      */
     $test = Livewire::test(BloodPressure::class)
         ->call('storeEvent', $envelope, $occurredAt)
@@ -155,7 +156,7 @@ it('el snapshot del componente no contiene ningún sobre cifrado', function (): 
     expect($snapshotJson)->not->toContain('v1.');
 });
 
-it('el catálogo trae los tres códigos LOINC verificados y las unidades UCUM del ADR 0005', function (): void {
+it('the catalog carries the three verified LOINC codes and the UCUM units from ADR 0005', function (): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user);
@@ -181,36 +182,36 @@ it('el catálogo trae los tres códigos LOINC verificados y las unidades UCUM de
 
 /*
 |--------------------------------------------------------------------------
-| Contrato entre cliente y servidor
+| Contract between client and server
 |--------------------------------------------------------------------------
 |
-| En producción apareció `MethodNotFoundException: Public method
-| [storeBloodPressureEvent] not found on component`: el transporte común se extrajo a
-| `HealthEventPage` y el método pasó a llamarse `storeEvent`, pero el módulo de Alpine siguió
-| llamando al nombre viejo. Nada lo comprobaba. Estos tests lo comprueban.
+| `MethodNotFoundException: Public method [storeBloodPressureEvent] not found on component` showed
+| up in production: the shared transport was extracted into `HealthEventPage` and the method was
+| renamed to `storeEvent`, but the Alpine module kept calling the old name. Nothing checked it.
+| These tests check it.
 |
-| Los tres contratos de esta pantalla son de texto, no de tipos: nombres de método que el cliente
-| escribe como cadena, y `x-ref` que la plantilla declara y el módulo lee. Ninguno de los dos falla
-| al compilar ni al desplegar: fallan al pulsar. Se leen los ficheros y se cruzan.
+| The three contracts of this screen are textual, not typed: method names the client writes as
+| strings, and `x-ref`s the template declares and the module reads. Neither fails at compile time or
+| at deploy time: they fail on click. The files are read and cross-checked.
 |
 */
 
-/** @return string Código fuente del módulo Alpine de la pantalla. */
+/** @return string Source code of the screen's Alpine module. */
 function bloodPressureModuleSource(): string
 {
     return file_get_contents(resource_path('js/health/bloodPressurePage.js'));
 }
 
-/** @return string Código fuente de la plantilla Blade de la pantalla. */
+/** @return string Source code of the screen's Blade template. */
 function bloodPressureTemplateSource(): string
 {
     return file_get_contents(resource_path('views/phr/pages/blood-pressure.blade.php'));
 }
 
 /**
- * La plantilla sin sus comentarios Blade. Las reglas del ADR 0002 se comprueban sobre el marcado
- * que llega al navegador: los comentarios citan `wire:model` o `@island` para explicar por qué se
- * usan o no, y contarlos daría un falso positivo.
+ * The template without its Blade comments. The ADR 0002 rules are checked against the markup that
+ * reaches the browser: the comments quote `wire:model` or `@island` to explain why they are or are
+ * not used, and counting them would give a false positive.
  */
 function bloodPressureTemplateMarkup(): string
 {
@@ -218,8 +219,8 @@ function bloodPressureTemplateMarkup(): string
 }
 
 /**
- * Extrae el texto de los argumentos de cada llamada `$wire.<metodo>(...)`, respetando paréntesis
- * anidados, para poder contar cuántos argumentos se pasan de verdad.
+ * Extracts the argument text of every `$wire.<method>(...)` call, honouring nested parentheses, so
+ * we can count how many arguments are really passed.
  *
  * @return list<array{method: string, arguments: string}>
  */
@@ -249,7 +250,7 @@ function bloodPressureWireCalls(string $source): array
     return $calls;
 }
 
-/** @return int Número de argumentos de primer nivel en el texto de una llamada. */
+/** @return int Number of top-level arguments in the text of a call. */
 function bloodPressureArgumentCount(string $arguments): int
 {
     if (trim($arguments) === '') {
@@ -274,7 +275,7 @@ function bloodPressureArgumentCount(string $arguments): int
     return $count;
 }
 
-it('cada $wire.<metodo> del modulo existe como metodo publico de la pagina', function (): void {
+it('every $wire.<method> in the module exists as a public method of the page', function (): void {
     $calls = bloodPressureWireCalls(bloodPressureModuleSource());
 
     expect($calls)->not->toBeEmpty();
@@ -284,12 +285,12 @@ it('cada $wire.<metodo> del modulo existe como metodo publico de la pagina', fun
 
     foreach ($calls as $call) {
         expect($publicMethods->has($call['method']))->toBeTrue(
-            sprintf('El módulo llama a $wire.%s() y esa página no tiene ese método público.', $call['method'])
+            sprintf('The module calls $wire.%s() and that page has no such public method.', $call['method'])
         );
     }
 });
 
-it('cada $wire.<metodo> pasa un numero de argumentos que el metodo del servidor acepta', function (): void {
+it('every $wire.<method> passes a number of arguments the server method accepts', function (): void {
     foreach (bloodPressureWireCalls(bloodPressureModuleSource()) as $call) {
         $method = new ReflectionMethod(BloodPressure::class, $call['method']);
         $passed = bloodPressureArgumentCount($call['arguments']);
@@ -299,7 +300,7 @@ it('cada $wire.<metodo> pasa un numero de argumentos que el metodo del servidor 
     }
 });
 
-it('el cliente solo lee campos que storeEvent y fetchEvents devuelven de verdad', function (): void {
+it('the client only reads fields storeEvent and fetchEvents really return', function (): void {
     $user = User::factory()->registered()->create();
     $this->actingAs($user);
 
@@ -308,13 +309,13 @@ it('el cliente solo lee campos que storeEvent y fetchEvents devuelven de verdad'
     $stored = $page->storeEvent(envelopeCipherText(), canonicalOccurredAtNow());
     expect(array_keys($stored))->toBe(['id', 'occurredAt']);
 
-    /** `loadHistory()` lee estos tres campos de cada fila; si faltase uno, el sobre no abriría. */
+    /** `loadHistory()` reads these three fields from every row; if one were missing, the envelope would not open. */
     $fetched = $page->fetchEvents();
     expect($fetched)->toHaveCount(1);
     expect(array_keys($fetched[0]))->toBe(['id', 'occurredAt', 'payload']);
 });
 
-it('cada this.$refs del modulo tiene su x-ref en la plantilla', function (): void {
+it('every this.$refs in the module has its x-ref in the template', function (): void {
     preg_match_all('/this\.\$refs\.(\w+)/', bloodPressureModuleSource(), $usedMatches);
     preg_match_all('/x-ref="(\w+)"/', bloodPressureTemplateSource(), $declaredMatches);
 
@@ -325,51 +326,51 @@ it('cada this.$refs del modulo tiene su x-ref en la plantilla', function (): voi
 
     foreach ($used as $ref) {
         expect(in_array($ref, $declared, true))->toBeTrue(
-            sprintf('El módulo lee this.$refs.%s y la plantilla no declara ese x-ref.', $ref)
+            sprintf('The module reads this.$refs.%s and the template does not declare that x-ref.', $ref)
         );
     }
 });
 
-it('la plantilla no declara ningun x-ref huerfano', function (): void {
+it('the template declares no orphan x-ref', function (): void {
     preg_match_all('/this\.\$refs\.(\w+)/', bloodPressureModuleSource(), $usedMatches);
     preg_match_all('/x-ref="(\w+)"/', bloodPressureTemplateSource(), $declaredMatches);
 
     /**
-     * `form` y `error` los declaran las cuatro pantallas de eventos y ninguna los lee desde
-     * JavaScript: el formulario se maneja con `@submit.prevent` y el error con `x-text`. Se dejan
-     * porque quitarlos solo aquí rompería la simetría entre pantallas, pero se nombran de una en
-     * una para que un `x-ref` nuevo y no usado sí haga fallar este test.
+     * `form` and `error` are declared by all four event screens and none of them reads them from
+     * JavaScript: the form is handled with `@submit.prevent` and the error with `x-text`. They are
+     * left in place because removing them here alone would break the symmetry between screens, but
+     * they are named one by one so that a new, unused `x-ref` does make this test fail.
      */
     $knownUnused = ['form', 'error'];
 
     $orphans = array_diff(array_unique($declaredMatches[1]), $usedMatches[1], $knownUnused);
 
-    expect($orphans)->toBe([], 'x-ref declarados en la plantilla que nadie lee: '.implode(', ', $orphans));
+    expect($orphans)->toBe([], 'x-refs declared in the template that nobody reads: '.implode(', ', $orphans));
 });
 
 /*
 |--------------------------------------------------------------------------
-| Reglas del ADR 0002 y del envoltorio de página
+| ADR 0002 rules and the page wrapper
 |--------------------------------------------------------------------------
 */
 
-it('la plantilla va envuelta en el componente de pagina de Filament', function (): void {
-    /** Sin él se pierde `fi-page-header-main-ctn` y la primera tarjeta queda pegada a la barra. */
+it('the template is wrapped in the Filament page component', function (): void {
+    /** Without it, `fi-page-header-main-ctn` is lost and the first card sticks to the top bar. */
     expect(bloodPressureTemplateSource())->toContain('<x-filament-panels::page>');
 });
 
-it('el historial va en un island y las graficas solo con wire:ignore', function (): void {
+it('the history goes in an island and the charts only with wire:ignore', function (): void {
     $template = bloodPressureTemplateMarkup();
 
     /**
-     * El historial lleva las dos capas del ADR 0002: `@island` fuera y `wire:ignore` dentro.
+     * The history carries both ADR 0002 layers: `@island` outside and `wire:ignore` inside.
      *
-     * Las graficas NO llevan island, y es deliberado. Comprobado ejecutando el componente: tras
-     * cualquier peticion de Livewire el servidor emite el island vacio, asi que el `<canvas>` y su
-     * pie desaparecen del HTML y `$refs.chart` queda indefinido; guardar un registro reventaba con
-     * «Cannot set properties of undefined». El island no aporta nada en esa region porque el
-     * servidor no la renderiza nunca, la construye Alpine entera, y `wire:ignore` ya impide que el
-     * morph la toque.
+     * The charts do NOT carry an island, and that is deliberate. Verified by running the component:
+     * after any Livewire request the server emits the island empty, so the `<canvas>` and its
+     * caption disappear from the HTML and `$refs.chart` becomes undefined; storing a record blew up
+     * with "Cannot set properties of undefined". The island adds nothing in that region because the
+     * server never renders it, Alpine builds it entirely, and `wire:ignore` already stops the morph
+     * from touching it.
      */
     expect($template)->toContain("@island(name: 'blood-pressure-list')");
     expect($template)->not->toContain("@island(name: 'blood-pressure-chart')");
@@ -383,12 +384,12 @@ it('el historial va en un island y las graficas solo con wire:ignore', function 
     expect(substr_count($template, '@island('))->toBe(1);
 });
 
-it('cada canvas tiene nombre accesible y un pie que lo describe en texto', function (): void {
+it('every canvas has an accessible name and a caption describing it in text', function (): void {
     $template = bloodPressureTemplateMarkup();
 
     /**
-     * Do's #3: la tendencia no puede comunicarse solo por el color de la línea. El pie lo pinta
-     * Blade y no el JavaScript, para que tenga un `id` estable al que apuntar desde el lienzo.
+     * Do's #3: the trend cannot be communicated by the line colour alone. The caption is painted by
+     * Blade and not by JavaScript, so it has a stable `id` for the canvas to point at.
      */
     foreach (['blood-pressure-chart-caption', 'blood-pressure-pulse-chart-caption'] as $captionId) {
         expect($template)->toContain('aria-describedby="'.$captionId.'"');
@@ -399,22 +400,22 @@ it('cada canvas tiene nombre accesible y un pie que lo describe en texto', funct
     expect(bloodPressureModuleSource())->not->toContain('insertAdjacentElement');
 });
 
-it('la plantilla no usa wire:model en ninguna variante', function (): void {
+it('the template does not use wire:model in any form', function (): void {
     expect(bloodPressureTemplateMarkup())->not->toContain('wire:model');
 });
 
-it('los option de brazo y postura los renderiza Blade, no Alpine', function (): void {
+it('the arm and posture options are rendered by Blade, not Alpine', function (): void {
     $template = bloodPressureTemplateSource();
     $module = bloodPressureModuleSource();
 
     expect($template)->toContain("@foreach (\$catalog['arms'] as \$arm)");
     expect($template)->toContain("@foreach (\$catalog['postures'] as \$posture)");
 
-    /** Si Alpine creara `<option>`, el morph los borraría en la primera petición (ADR 0002). */
+    /** If Alpine created `<option>`s, the morph would wipe them on the first request (ADR 0002). */
     expect($module)->not->toContain("createElement('option')");
 });
 
-it('los campos numericos siguen la convencion de .ai/guidelines/ai.md', function (): void {
+it('the numeric fields follow the convention in .ai/guidelines/ai.md', function (): void {
     $template = bloodPressureTemplateSource();
 
     foreach (['bp-systolic', 'bp-diastolic', 'bp-pulse'] as $id) {
@@ -428,16 +429,16 @@ it('los campos numericos siguen la convencion de .ai/guidelines/ai.md', function
         expect($field)->toContain('min-h-11');
     }
 
-    /** El límite de dos decimales y la normalización de coma a punto son de `numericValue.js`. */
+    /** The two-decimal limit and the comma-to-dot normalization come from `numericValue.js`. */
     expect(bloodPressureModuleSource())->toContain("from './numericValue.js'");
 });
 
-it('cada campo del formulario tiene una etiqueta visible asociada', function (): void {
+it('every form field has a visible label associated with it', function (): void {
     $template = bloodPressureTemplateSource();
 
     preg_match_all('/<label for="([\w-]+)"/', $template, $labels);
     preg_match_all('/\sid="(bp-[\w-]+)"/', $template, $fields);
 
-    /** DESIGN.md: la etiqueta siempre visible, nunca un placeholder haciendo de etiqueta. */
+    /** DESIGN.md: the label is always visible, never a placeholder acting as a label. */
     expect(array_diff($fields[1], $labels[1]))->toBe([]);
 });

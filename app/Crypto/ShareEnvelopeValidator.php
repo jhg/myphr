@@ -43,11 +43,11 @@ final class ShareEnvelopeValidator
     /** Same header as the ADR 0004 envelope: version, algorithm, KDF, flags, key id, salt and nonce. */
     public const int HEADER_BYTES = EnvelopeValidator::HEADER_BYTES;
 
-    /** Tag del AEAD. */
+    /** AEAD tag. */
     public const int TAG_BYTES = EnvelopeValidator::TAG_BYTES;
 
     /**
-     * Escalones de relleno del ADR 0011, en bytes de contenido rellenado.
+     * ADR 0011 padding steps, in bytes of padded content.
      *
      * @var list<int>
      */

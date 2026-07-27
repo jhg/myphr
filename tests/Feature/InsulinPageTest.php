@@ -14,14 +14,14 @@ use Livewire\Livewire;
 uses(RefreshDatabase::class);
 
 /**
- * Tests del transporte de la pantalla de insulina (ADR 0002, ADR 0004, ADR 0006).
+ * Transport tests for the insulin screen (ADR 0002, ADR 0004, ADR 0006).
  *
- * El servidor no puede fabricar un sobre cifrado real porque no tiene la clave del cliente. Los
- * tests que necesitan un payload válido generan uno con la misma forma que produce
- * `resources/js/crypto/envelope.js`: prefijo `v1.` más base64url de un tamaño de relleno admitido.
- * Calca `tests/Feature/GlucosePageTest.php`: {@see Insulin} no aporta lógica propia de transporte,
- * solo hereda {@see HealthEventPage::storeEvent()} y
- * {@see HealthEventPage::fetchEvents()}, así que las mismas garantías aplican.
+ * The server cannot build a real encrypted envelope because it has no client key. The tests that
+ * need a valid payload generate one with the same shape `resources/js/crypto/envelope.js` produces:
+ * the `v1.` prefix plus base64url of an allowed padding size. It mirrors
+ * `tests/Feature/GlucosePageTest.php`: {@see Insulin} adds no transport logic of its own, it only
+ * inherits {@see HealthEventPage::storeEvent()} and {@see HealthEventPage::fetchEvents()}, so the
+ * same guarantees apply.
  */
 function insulinEnvelopeCipherText(int $paddedSize = 256): string
 {
@@ -35,7 +35,7 @@ function insulinCanonicalOccurredAtNow(): string
     return now()->utc()->format('Y-m-d\TH:i:s.u\Z');
 }
 
-it('guarda un evento con un sobre bien formado y una fecha canónica', function (): void {
+it('stores an event with a well formed envelope and a canonical date', function (): void {
     $user = User::factory()->registered()->create();
     $envelope = insulinEnvelopeCipherText();
     $occurredAt = insulinCanonicalOccurredAtNow();
@@ -56,20 +56,20 @@ it('guarda un evento con un sobre bien formado y una fecha canónica', function 
     ]);
 });
 
-it('rechaza un payload mal formado y no crea ninguna fila', function (): void {
+it('rejects a malformed payload and creates no row', function (): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user);
 
     expect(fn () => Livewire::test(Insulin::class)
         ->instance()
-        ->storeEvent('esto no es un sobre cifrado', insulinCanonicalOccurredAtNow()))
+        ->storeEvent('this is not an encrypted envelope', insulinCanonicalOccurredAtNow()))
         ->toThrow(ValidationException::class);
 
     expect(Event::query()->count())->toBe(0);
 });
 
-it('rechaza una fecha sin microsegundos', function (): void {
+it('rejects a date without microseconds', function (): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user);
@@ -82,7 +82,7 @@ it('rechaza una fecha sin microsegundos', function (): void {
     expect(Event::query()->count())->toBe(0);
 });
 
-it('rechaza una fecha con desfase horario en vez de Z', function (): void {
+it('rejects a date with a UTC offset instead of Z', function (): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user);
@@ -95,7 +95,7 @@ it('rechaza una fecha con desfase horario en vez de Z', function (): void {
     expect(Event::query()->count())->toBe(0);
 });
 
-it('fetchEvents solo devuelve los eventos del usuario autenticado', function (): void {
+it('fetchEvents only returns the events of the authenticated user', function (): void {
     $user = User::factory()->registered()->create();
     $otherUser = User::factory()->registered()->create();
 
@@ -112,7 +112,7 @@ it('fetchEvents solo devuelve los eventos del usuario autenticado', function ():
     expect($result[0]['id'])->toBe($ownEvent->id);
 });
 
-it('storeEvent y fetchEvents aíslan los eventos por usuario, sin ver los de otro', function (): void {
+it('storeEvent and fetchEvents isolate events per user, never showing another user events', function (): void {
     $user = User::factory()->registered()->create();
     $otherUser = User::factory()->registered()->create();
 
@@ -141,10 +141,10 @@ it('storeEvent y fetchEvents aíslan los eventos por usuario, sin ver los de otr
 });
 
 /**
- * El test que exige el ADR 0002: el ciphertext baja como valor de retorno y sube como parámetro,
- * nunca por una propiedad pública, así que el snapshot del componente no puede contenerlo.
+ * The test ADR 0002 requires: the ciphertext comes down as a return value and goes up as a
+ * parameter, never through a public property, so the component snapshot cannot contain it.
  */
-it('el snapshot del componente no contiene ningún sobre cifrado', function (): void {
+it('the component snapshot contains no encrypted envelope', function (): void {
     $user = User::factory()->registered()->create();
     $envelope = insulinEnvelopeCipherText();
     $occurredAt = insulinCanonicalOccurredAtNow();
@@ -154,10 +154,10 @@ it('el snapshot del componente no contiene ningún sobre cifrado', function (): 
     $this->actingAs($user);
 
     /**
-     * Las llamadas van por `call()` y no por `instance()`: invocar el método sobre la instancia se
-     * salta el ciclo de hidratación y deshidratación de Livewire, y entonces el snapshot que se
-     * inspecciona es el de antes de la llamada. El test pasaría aunque el sobre acabase en una
-     * propiedad pública, que es justo lo que tiene que detectar.
+     * The calls go through `call()` and not `instance()`: invoking the method on the instance skips
+     * Livewire's hydration and dehydration cycle, and then the snapshot being inspected is the one
+     * from before the call. The test would pass even if the envelope ended up in a public property,
+     * which is exactly what it has to catch.
      */
     $test = Livewire::test(Insulin::class)
         ->call('storeEvent', $envelope, $occurredAt)
@@ -170,10 +170,11 @@ it('el snapshot del componente no contiene ningún sobre cifrado', function (): 
 });
 
 /**
- * El catálogo no lleva LOINC (ADR 0006, insulina es administración de medicación, no observación)
- * y no publica `dataOrigins` (corrección de alcance: el formulario no pregunta el origen del dato).
+ * The catalog carries no LOINC (ADR 0006, insulin is a medication administration, not an
+ * observation) and does not publish `dataOrigins` (a scope fix: the form does not ask for the data
+ * origin).
  */
-it('el catálogo trae los tipos de insulina, la unidad internacional y las zonas de inyección, sin LOINC ni orígenes', function (): void {
+it('the catalog carries the insulin types, the international unit and the injection sites, with no LOINC and no origins', function (): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user);
@@ -195,39 +196,38 @@ it('el catálogo trae los tipos de insulina, la unidad internacional y las zonas
 });
 
 /**
- * El fallo que llegó a producción: el transporte común pasó a llamarse `storeEvent` en
- * {@see HealthEventPage} y dos módulos de JavaScript siguieron llamando al nombre viejo, con lo que
- * la pantalla reventaba al guardar con «Public method [...] not found on component». Nada lo
- * comprobaba.
+ * The bug that reached production: the shared transport was renamed to `storeEvent` in
+ * {@see HealthEventPage} and two JavaScript modules kept calling the old name, so the screen blew up
+ * on save with "Public method [...] not found on component". Nothing checked it.
  *
- * Este test lee el módulo de la pantalla, saca cada `$wire.<metodo>` que llama y exige que exista
- * de verdad como método público de {@see Insulin} —propio o heredado—. Renombrar el método en el
- * servidor sin tocar el cliente deja de compilar aquí, no en producción.
+ * This test reads the screen module, extracts every `$wire.<method>` it calls and requires that it
+ * really exists as a public method of {@see Insulin} —its own or inherited—. Renaming the method on
+ * the server without touching the client stops working here, not in production.
  */
-it('cada $wire.<metodo> del modulo de insulina existe como metodo publico de la pagina', function (): void {
+it('every $wire.<method> in the insulin module exists as a public method of the page', function (): void {
     $module = file_get_contents(resource_path('js/health/insulinPage.js'));
 
     preg_match_all('/\$wire\.([a-zA-Z]+)/', $module, $matches);
 
     $calledMethods = array_values(array_unique($matches[1]));
 
-    expect($calledMethods)->not->toBeEmpty('el módulo tiene que llamar a algún método del componente');
+    expect($calledMethods)->not->toBeEmpty('the module has to call some method of the component');
 
     foreach ($calledMethods as $method) {
         expect(method_exists(Insulin::class, $method))
             ->toBeTrue("insulinPage.js llama a \$wire.{$method}(), que no existe en ".Insulin::class);
 
         expect((new ReflectionMethod(Insulin::class, $method))->isPublic())
-            ->toBeTrue("\$wire.{$method}() existe pero no es público, así que Livewire no lo expone");
+            ->toBeTrue("\$wire.{$method}() exists but is not public, so Livewire does not expose it");
     }
 });
 
 /**
- * El número y el orden de los argumentos también forman parte del contrato: `storeEvent` recibe
- * primero el sobre y después la fecha canónica, y `fetchEvents` se llama sin argumentos, así que
- * sus dos parámetros tienen que ser opcionales.
+ * The number and order of the arguments is part of the contract too: `storeEvent` takes the envelope
+ * first and the canonical date second, and `fetchEvents` is called with no arguments, so both of its
+ * parameters have to be optional.
  */
-it('storeEvent y fetchEvents aceptan los argumentos con los que los llama el cliente', function (): void {
+it('storeEvent and fetchEvents accept the arguments the client calls them with', function (): void {
     $storeEvent = new ReflectionMethod(Insulin::class, 'storeEvent');
 
     expect($storeEvent->getNumberOfParameters())->toBe(2);
@@ -239,10 +239,10 @@ it('storeEvent y fetchEvents aceptan los argumentos con los que los llama el cli
 });
 
 /**
- * Los campos que el cliente lee de la respuesta tienen que existir en lo que devuelve el servidor:
- * `insulinPage.js` lee `id`, `occurredAt` y `payload` de cada fila de `fetchEvents`.
+ * The fields the client reads from the response have to exist in what the server returns:
+ * `insulinPage.js` reads `id`, `occurredAt` and `payload` from every `fetchEvents` row.
  */
-it('fetchEvents devuelve exactamente las claves que lee el cliente', function (): void {
+it('fetchEvents returns exactly the keys the client reads', function (): void {
     $user = User::factory()->registered()->create();
     Event::factory()->for($user)->create();
 
@@ -254,12 +254,12 @@ it('fetchEvents devuelve exactamente las claves que lee el cliente', function ()
 });
 
 /**
- * La pantalla se renderiza entera, con el envoltorio de página de Filament (sin él el contenido
- * queda pegado a la barra superior porque se pierde el contenedor con el relleno vertical) y con
- * los `<option>` pintados por el servidor: si los pintase Alpine, el morph de Livewire los borraría
- * en la primera petición (ADR 0002).
+ * The screen renders in full, with the Filament page wrapper (without it the content sticks to the
+ * top bar because the container with the vertical padding is lost) and with the `<option>`s painted
+ * by the server: if Alpine painted them, the Livewire morph would wipe them on the first request
+ * (ADR 0002).
  */
-it('la pantalla se renderiza con el envoltorio de pagina y las opciones pintadas por el servidor', function (): void {
+it('the screen renders with the page wrapper and the options painted by the server', function (): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user);
@@ -270,16 +270,16 @@ it('la pantalla se renderiza con el envoltorio de pagina y las opciones pintadas
     expect($html)->toContain('x-data="phrInsulinPage"');
     expect($html)->toContain('data-phr-insulin-catalog');
 
-    /** Las tres opciones de tipo de insulina, emitidas por Blade desde `catalog()`. */
+    /** The three insulin type options, emitted by Blade from `catalog()`. */
     expect($html)->toContain('value="rapid"');
     expect($html)->toContain('value="long"');
     expect($html)->toContain('value="mixed"');
 
-    /** Las dos regiones descifradas, cada una con su island y su `wire:key` estable (ADR 0002). */
+    /** The two decrypted regions, each with its island and its stable `wire:key` (ADR 0002). */
     expect($html)->toContain('wire:key="insulin-list-region"');
     expect($html)->toContain('wire:key="insulin-chart-region"');
     expect($html)->toContain('id="insulin-chart-caption"');
 
-    /** Ninguna variante de `wire:model` en una pantalla de datos cifrados (ADR 0002). */
+    /** No variant of `wire:model` on a screen with encrypted data (ADR 0002). */
     expect($html)->not->toContain('wire:model');
 });

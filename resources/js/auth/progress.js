@@ -2,10 +2,16 @@
  * Progress bar of the authentication screens.
  *
  * Not decoration. `finishRegistration` and `finishLogin` run Argon2id (t=3, m=64 MiB, p=4) in the
- * package WebAssembly, **synchronously and on the main thread**: the tab stays blocked for
- * several seconds. With nothing on screen saying something is happening, the person presses the
- * button again, and with a registration link involved that second attempt is a consumed link
+ * package WebAssembly, **synchronously and on the main thread**: the tab stays blocked. With
+ * nothing on screen saying something is happening, the person presses the button again, and with a
+ * registration link involved that second attempt is a consumed link
  * (`docs/specs/0001-account-provisioning-and-session-bootstrap.md` §7).
+ *
+ * **How long the block really lasts.** Measured on a recent laptop, the WebAssembly Argon2id takes
+ * about 0.1 s, not the "several seconds" this comment used to claim — that figure came from the
+ * pure-JavaScript implementation and stopped being true when the package moved to WebAssembly. On a
+ * modest phone the same work is roughly ten times slower. What has not changed is that the block is
+ * real and that the bar has to keep moving through it.
  *
  * Two consequences of the main thread being blocked, and both shape this module:
  *
@@ -22,8 +28,21 @@
  * the next stage cuts it short as soon as it really arrives.
  */
 
-/** Estimated duration, in seconds, of one Argon2id with the ADR 0004 parameters. */
-export const KEY_STRETCHING_SECONDS = 12;
+/**
+ * Estimated duration, in seconds, of one Argon2id with the ADR 0004 parameters.
+ *
+ * **This number is the whole perception bug, and it was 12.** The stretching stage animates the bar
+ * from 0.25 to 0.85 with a linear transition of this many seconds, and the next stage cuts it short
+ * when it really arrives. With 12 s against a measured 0.1 s, the bar advanced 0.5 % of its travel
+ * during the one stage the person experiences as "the slow one": visually frozen, then a jump. That
+ * on its own is the "it looks like nothing is happening" complaint, and it had nothing to do with
+ * the cryptography.
+ *
+ * 1.5 s is a deliberate over-estimate of the measured 0.1 s: it is roughly what the same stretching
+ * costs on a slow phone, so the bar never gets to the end and sits there, which reads as stuck just
+ * as badly. Being a little slow to fill is fine — the next stage always cuts it short.
+ */
+export const KEY_STRETCHING_SECONDS = 1.5;
 
 /** Default duration of the steps that do not block the thread. */
 const QUICK_SECONDS = 0.3;

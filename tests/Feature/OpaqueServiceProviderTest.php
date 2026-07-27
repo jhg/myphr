@@ -12,13 +12,13 @@ use App\Security\Opaque\ServerSetup;
 use App\Security\Opaque\SystemRandomSource;
 
 /**
- * Arranque del subsistema OPAQUE (`docs/OPAQUE.md` §12.2): el contenedor
- * entrega un {@see ServerSetup} validado o falla con un error explícito, y
- * nunca genera secretos por su cuenta.
+ * Bootstrap of the OPAQUE subsystem (`docs/OPAQUE.md` §12.2): the container
+ * hands over a validated {@see ServerSetup} or fails with an explicit error, and
+ * never generates secrets on its own.
  */
 
 /**
- * Configuración válida equivalente a la que produce `opaque:setup`.
+ * Valid configuration equivalent to the one `opaque:setup` produces.
  *
  * @param  array<string, mixed>  $overrides
  * @return array<string, mixed>
@@ -68,14 +68,14 @@ it('fails explicitly instead of generating anything when the setup is missing or
 
     expect(fn () => app(ServerSetup::class))->toThrow(InvalidConfigurationException::class);
 })->with([
-    'sin configuración' => [[]],
+    'no configuration' => [[]],
     'sin oprf_seed' => [validOpaqueConfig(['oprf_seed' => null])],
     'oprf_seed corto' => [validOpaqueConfig(['oprf_seed' => Base64Url::encode(str_repeat("\x01", 32))])],
-    'base64url no canónico' => [validOpaqueConfig(['oprf_seed' => str_repeat('A', 86).'='])],
+    'non-canonical base64url' => [validOpaqueConfig(['oprf_seed' => str_repeat('A', 86).'='])],
     'escalar cero' => [validOpaqueConfig(['server_private_key' => Base64Url::encode(str_repeat("\x00", 32))])],
-    'clave pública que no corresponde' => [validOpaqueConfig(['server_public_key' => Base64Url::encode(str_repeat("\x02", 32))])],
+    'public key that does not match' => [validOpaqueConfig(['server_public_key' => Base64Url::encode(str_repeat("\x02", 32))])],
     'registro ficticio corto' => [validOpaqueConfig(['fake_registration_record' => Base64Url::encode(str_repeat("\x00", 191))])],
-    'identidad vacía' => [validOpaqueConfig(['server_identity' => ''])],
+    'empty identity' => [validOpaqueConfig(['server_identity' => ''])],
     'perfil desconocido' => [validOpaqueConfig(['profile' => 'OPAQUE-otra-cosa'])],
-    'contexto no vacío' => [validOpaqueConfig(['context' => 'phr'])],
+    'non-empty context' => [validOpaqueConfig(['context' => 'phr'])],
 ]);

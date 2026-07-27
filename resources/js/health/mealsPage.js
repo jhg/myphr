@@ -1,52 +1,52 @@
 /**
- * Componente Alpine de la pantalla de comidas (ADR 0002, ADR 0004, ADR 0005, ADR 0006).
+ * Alpine component of the meals screen (ADR 0002, ADR 0004, ADR 0005, ADR 0006).
  *
- * El contrato del DOM lo fija `resources/views/phr/pages/meals.blade.php`: nada de `wire:model`
- * (ADR 0002), los campos comunes se leen por `x-ref`, y la lista de alimentos vive en un
- * contenedor `wire:ignore` cuyas filas se clonan desde un `<template>` renderizado por Blade (así
- * el `<select>` de unidad de cada fila nueva sigue siendo HTML escrito por el servidor, no por
- * Alpine, tal y como exige el ADR 0002). El sobre cifrado sube como argumento de `storeEvent` de
- * `HealthEventPage`, nunca como propiedad de Livewire.
+ * The DOM contract is fixed by `resources/views/phr/pages/meals.blade.php`: no `wire:model`
+ * (ADR 0002), the common fields are read through `x-ref`, and the food list lives in a
+ * `wire:ignore` container whose rows are cloned from a `<template>` rendered by Blade (that way
+ * the unit `<select>` of each new row is still HTML written by the server, not by Alpine, as ADR
+ * 0002 demands). The encrypted envelope goes up as an argument of the `storeEvent` of
+ * `HealthEventPage`, never as a Livewire property.
  *
- * **El servidor no puede filtrar por tipo** (ADR 0006, ver JSDoc de `HealthEventPage::fetchEvents()`):
- * `fetchEvents` trae todos los eventos del usuario y aquí se descifra cada uno y se descarta el que
- * no sea `type === 'meal'`. Un sobre que no abre no tumba la pantalla: se cuenta y se avisa, porque
- * un fallo de descifrado silencioso es justo lo que el ADR 0004 prohíbe.
+ * **The server cannot filter by type** (ADR 0006, see the JSDoc of `HealthEventPage::fetchEvents()`):
+ * `fetchEvents` brings every event of the user and here each one is decrypted and whatever is not
+ * `type === 'meal'` is discarded. An envelope that does not open does not take the screen down: it
+ * is counted and reported, because a silent decryption failure is exactly what ADR 0004 forbids.
  *
- * **No hay selector de "origen del dato".** Hoy toda comida se teclea a mano: no existe ninguna
- * integración con un aparato que registre comidas, así que un `<select>` "¿manual o aparato?" no
- * tendría una segunda respuesta real y solo invitaría a contestarlo mal. `origin` (token de
- * `App\Catalog\DataOrigin`) sigue viajando en el sobre cifrado porque el ADR 0006 lo exige y no se
- * puede añadir después sin re-cifrar todo lo ya guardado, pero aquí se fija siempre a `manual`
- * dejando que `buildCommonEventFields()` use su valor por defecto (ver `eventCommonFields.js`,
- * ampliado con esta misma explicación): el día que exista una importación automática, será ella
- * quien escriba `origin: 'device'`, no este formulario.
+ * **There is no "data origin" selector.** Today every meal is typed by hand: there is no
+ * integration with a device that records meals, so a "manual or device?" `<select>` would have no
+ * real second answer and would only invite a wrong one. `origin` (token of
+ * `App\Catalog\DataOrigin`) still travels in the encrypted envelope because ADR 0006 demands it
+ * and it cannot be added later without re-encrypting everything already stored, but here it is
+ * always fixed to `manual` by letting `buildCommonEventFields()` use its default value (see
+ * `eventCommonFields.js`, extended with this same explanation): the day an automatic import
+ * exists, that will be the one writing `origin: 'device'`, not this form.
  *
- * **La lista de alimentos es un dato ordenado** (ADR 0006): el orden en que aparecen las filas en
- * el DOM es el orden que se guarda, y `buildMealContent` lo respeta tal cual porque nunca reordena
- * ni el DOM ni el array que construye a partir de él.
+ * **The food list is ordered data** (ADR 0006): the order the rows appear in the DOM is the order
+ * that is stored, and `buildMealContent` respects it as is because it never reorders the DOM or
+ * the array it builds from it.
  *
- * **Los alimentos NO se codifican contra ningún vocabulario** (excepción consciente al ADR 0005,
- * justificada en el ADR propio de esta pantalla): el nombre de cada alimento es texto libre. La
- * cantidad de cada alimento viaja siempre como cadena, nunca como número (ADR 0004: decimales como
- * cadena), y la unidad sí va codificada en UCUM (`App\Catalog\FoodQuantityUnit`).
+ * **Foods are NOT coded against any vocabulary** (a deliberate exception to ADR 0005, justified in
+ * the ADR of this screen): the name of each food is free text. The quantity of each food always
+ * travels as a string, never as a number (ADR 0004: decimals as a string), and the unit is coded
+ * in UCUM (`App\Catalog\FoodQuantityUnit`).
  *
- * **La cantidad es un campo numérico clínico**, así que pasa por `numericValue.js` como el valor de
- * glucemia o la dosis de insulina: dos decimales como mucho, nunca negativa y la coma normalizada a
- * punto antes de sellar el sobre. Sin esa normalización, «250,5 g» y «250.5 g» acabarían guardados
- * como dos cadenas distintas dentro de un dato ya cifrado, imposible de corregir después.
+ * **The quantity is a clinical numeric field**, so it goes through `numericValue.js` like the
+ * glucose value or the insulin dose: two decimals at most, never negative and the comma normalized
+ * to a dot before sealing the envelope. Without that normalization, "250,5 g" and "250.5 g" would
+ * end up stored as two different strings inside an already encrypted datum, impossible to fix later.
  *
- * **Una fila totalmente vacía no cuenta como alimento.** El formulario siempre arranca con una fila
- * en blanco para que quien no tiene nada que anotar no tenga que "añadir" nada; `buildMealContent`
- * la descarta sin más. Una fila a medias (con nombre pero sin cantidad, o al revés) sí es un error:
- * silenciarla guardaría un alimento incompleto sin que la persona se diera cuenta.
+ * **A completely empty row does not count as a food.** The form always starts with a blank row so
+ * that whoever has nothing to note does not have to "add" anything; `buildMealContent` simply
+ * discards it. A half-filled row (with a name but no quantity, or the other way round) is an
+ * error: silencing it would store an incomplete food without the person noticing.
  *
- * **La fecha del evento no se convierte aquí.** `datetimeLocalToCanonical` vive en
- * `datetimeLocal.js` porque lo que devuelve entra como dato asociado del AEAD (ADR 0004): si cada
- * pantalla llevara su copia y una se desviara, sus sobres dejarían de abrirse.
+ * **The event date is not converted here.** `datetimeLocalToCanonical` lives in `datetimeLocal.js`
+ * because what it returns enters as AEAD associated data (ADR 0004): if each screen carried its
+ * own copy and one drifted, its envelopes would stop opening.
  *
- * Las funciones exportadas antes de `mealsPage()` son la lógica pura del componente, para poder
- * probarlas sin montar Alpine (`tests/js/mealsPage.test.mjs`).
+ * The functions exported before `mealsPage()` are the pure logic of the component, so they can be
+ * tested without mounting Alpine (`tests/js/mealsPage.test.mjs`).
  */
 
 import { isUnlocked, ownerId } from '../auth/keyring.js';
@@ -69,20 +69,20 @@ function trimmedOrEmpty(value) {
 }
 
 /**
- * Reduce la lista cruda de filas de alimento (tal cual se leen del DOM) a la lista ordenada que
- * entra en `data.foods`. Una fila totalmente vacía se descarta en silencio (no es un alimento); una
- * fila a medias es un error, porque guardarla completaría el dato con un valor que nadie escribió.
+ * Reduces the raw list of food rows (exactly as read from the DOM) to the ordered list that enters
+ * `data.foods`. A completely empty row is discarded silently (it is not a food); a half-filled row
+ * is an error, because storing it would complete the datum with a value nobody wrote.
  *
- * La cantidad pasa por `parseNumericValue` (ver `numericValue.js`): rechaza negativos y más de dos
- * decimales, y normaliza la coma a punto. El resultado sigue siendo cadena, nunca `Number`
- * (ADR 0004).
+ * The quantity goes through `parseNumericValue` (see `numericValue.js`): it rejects negatives and
+ * more than two decimals, and normalizes the comma to a dot. The result is still a string, never a
+ * `Number` (ADR 0004).
  *
- * @param {list<{name: string, quantity: string, unit: string}>} rawFoods En el mismo orden en que
- *        aparecen en el DOM.
- * @returns {list<{name: string, quantity: string, unit: string}>} Cantidad siempre como cadena
+ * @param {list<{name: string, quantity: string, unit: string}>} rawFoods In the same order they
+ *        appear in the DOM.
+ * @returns {list<{name: string, quantity: string, unit: string}>} Quantity always as a string
  *          (ADR 0004).
- * @throws {Error} Si alguna fila tiene solo parte de sus campos rellenados o la cantidad no es un
- *         número válido.
+ * @throws {Error} If a row has only part of its fields filled in or the quantity is not a valid
+ *         number.
  */
 export function normalizeFoods(rawFoods) {
     const foods = [];
@@ -109,23 +109,23 @@ export function normalizeFoods(rawFoods) {
 }
 
 /**
- * Construye el contenido en claro de un evento de comida, con la forma del ADR 0006.
+ * Builds the content in the clear of a meal event, with the shape of ADR 0006.
  *
- * `common` son los campos que comparte cualquier tipo de evento (aparato, quién registra, nota) y
- * van en el nivel superior del contenido, no dentro de `data`. Esta función nunca los recibe con
- * `origin`: el origen del dato es siempre `manual` en un formulario de entrada a mano (ver JSDoc del
- * módulo), así que se deja que `common` traiga el valor por defecto de `buildCommonEventFields()`.
+ * `common` are the fields any event type shares (device, who records, note) and they go at the top
+ * level of the content, not inside `data`. This function never receives them with `origin`: the
+ * data origin is always `manual` in a hand-entry form (see the module JSDoc), so `common` is left
+ * to bring the default value of `buildCommonEventFields()`.
  *
  * @param {object} params
- * @param {string} params.mealType Token de `App\Catalog\MealType`.
- * @param {list<{name: string, quantity: string, unit: string}>} params.rawFoods Filas del DOM, en
- *        orden, sin normalizar todavía.
- * @param {string} params.tz Desfase `±HH:MM` del momento del registro.
+ * @param {string} params.mealType `App\Catalog\MealType` token.
+ * @param {list<{name: string, quantity: string, unit: string}>} params.rawFoods DOM rows, in
+ *        order, not normalized yet.
+ * @param {string} params.tz `±HH:MM` offset of the moment of recording.
  * @param {{origin: string, recordedBy: string, device?: string, note?: string}} params.common
- *        Ya construido por `buildCommonEventFields`, con `origin` en su valor por defecto (`manual`).
+ *        Already built by `buildCommonEventFields`, with `origin` at its default value (`manual`).
  * @returns {{v: 1, type: 'meal', tz: string, origin: string, recordedBy: string, device?: string,
  *           note?: string, data: {mealType: string, foods: list<{name: string, quantity: string, unit: string}>}}}
- * @throws {Error} Si falta el tipo de comida o alguna fila de alimento está a medias.
+ * @throws {Error} If the meal type is missing or some food row is half filled.
  */
 export function buildMealContent({ mealType, rawFoods, tz, common }) {
     if (typeof mealType !== 'string' || mealType.trim() === '') {
@@ -144,10 +144,10 @@ export function buildMealContent({ mealType, rawFoods, tz, common }) {
 }
 
 /**
- * Descarta los eventos descifrados que no son de tipo `meal`. El servidor no puede hacer este
- * filtro porque el tipo va cifrado dentro del sobre (ADR 0006): es responsabilidad del cliente.
+ * Discards the decrypted events that are not of type `meal`. The server cannot do this filter
+ * because the type travels encrypted inside the envelope (ADR 0006): it is the client's job.
  *
- * @param {list<{id: string, occurredAt: string, content: object}>} events Ya descifrados.
+ * @param {list<{id: string, occurredAt: string, content: object}>} events Already decrypted.
  * @returns {list<{id: string, occurredAt: string, content: object}>}
  */
 export function filterMealEvents(events) {
@@ -155,8 +155,8 @@ export function filterMealEvents(events) {
 }
 
 /**
- * Resuelve la etiqueta de un token de catálogo (tipo de comida o unidad), tolerando un token que ya
- * no esté en el catálogo actual: se muestra el token tal cual en vez de romper la vista.
+ * Resolves the label of a catalog token (meal type or unit), tolerating a token that is no longer
+ * in the current catalog: the token itself is shown instead of breaking the view.
  *
  * @param {list<{token?: string, code?: string, label: string}>} entries
  * @param {string} token
@@ -168,15 +168,15 @@ function resolveCatalogLabel(entries, token, key) {
 }
 
 /**
- * Da forma legible a un evento de comida ya descifrado, para pintar el historial sin volcar JSON
- * (lo pide la pantalla: "el historial debe mostrar la comida con su lista de alimentos legible").
- * Tolera un evento sin nota y sin aparato (ADR 0006: ambos son opcionales y se omiten del contenido
- * cuando no se indicaron), sin lanzar ni inventar un valor por defecto para ellos.
+ * Gives readable shape to an already decrypted meal event, to paint the history without dumping
+ * JSON (the screen asks for it: "the history must show the meal with its readable food list").
+ * It tolerates an event with no note and no device (ADR 0006: both are optional and left out of
+ * the content when not given), without throwing and without inventing a default value for them.
  *
- * Tolera también un sobre que abre pero cuyo contenido no tiene la forma esperada (`data` ausente o
- * `foods` que no es una lista): se pinta lo que haya en vez de lanzar. Un solo registro raro no
- * puede dejar el historial entero en blanco, que es lo mismo que persigue el recuento de sobres que
- * no abren.
+ * It also tolerates an envelope that opens but whose content does not have the expected shape
+ * (`data` absent or `foods` not a list): whatever there is gets painted instead of throwing. One
+ * odd record cannot leave the whole history blank, which is the same thing the count of envelopes
+ * that do not open is after.
  *
  * @param {{mealTypes: list<{token: string, label: string}>, units: list<{code: string, label: string}>}} catalog
  * @param {{data: {mealType: string, foods: list<{name: string, quantity: string, unit: string}>}, note?: string, device?: string}} content
@@ -198,7 +198,7 @@ export function describeMealEvent(catalog, content) {
     };
 }
 
-/** @returns {string} Ahora mismo, en la forma que espera un `<input type="datetime-local" step="1">`. */
+/** @returns {string} Right now, in the shape an `<input type="datetime-local" step="1">` expects. */
 function nowAsDatetimeLocalValue() {
     return toDatetimeLocalValue(new Date());
 }
@@ -215,8 +215,8 @@ function toDatetimeLocalValue(date) {
 }
 
 /**
- * Trazado de Heroicons v2 (outline, 24×24), el mismo pastel de `Meals::$navigationIcon`, para que
- * el icono guía de cada registro sea el mismo que el de la sección.
+ * Heroicons v2 path (outline, 24×24), the same cake as `Meals::$navigationIcon`, so the guide icon
+ * of each record is the same as the one of the section.
  */
 const ICON_PATHS = Object.freeze({
     warning: 'M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 '
@@ -230,7 +230,7 @@ const ICON_PATHS = Object.freeze({
 });
 
 /**
- * Icono decorativo de 20px (DESIGN.md § Lists: «20px icon»). Va con `aria-hidden`.
+ * Decorative 20px icon (DESIGN.md § Lists: "20px icon"). It goes with `aria-hidden`.
  *
  * @param {'warning'|'info'|'cake'} name
  * @param {string} className
@@ -257,8 +257,8 @@ function createIcon(name, className) {
 }
 
 /**
- * Aviso en bloque con icono (DESIGN.md § Chips (Status Chip): color + icono + texto, nunca color a
- * secas, Do's #3).
+ * Block notice with an icon (DESIGN.md § Chips (Status Chip): colour + icon + text, never colour
+ * alone, Do's #3).
  *
  * @param {object} params
  * @param {'error'|'info'} params.tone
@@ -269,10 +269,10 @@ function createCallout({ tone, message }) {
     const callout = document.createElement('div');
 
     /**
-     * Los dos tonos salen de los tokens de aviso (`error-*` / `info-*`, ver `theme.css`), no de las
-     * rampas `danger-*` / `primary-*`: los tokens ya llevan dentro el par corregido a AA y su
-     * equivalente de § Dark Mode, mientras que `bg-danger-50` no conmuta con el tema y dejaría el
-     * aviso ilegible en oscuro. Mismos tonos que la pantalla de glucemia.
+     * The two tones come from the notice tokens (`error-*` / `info-*`, see `theme.css`), not from
+     * the `danger-*` / `primary-*` ramps: the tokens already carry inside the pair corrected to AA
+     * and its § Dark Mode equivalent, while `bg-danger-50` does not switch with the theme and would
+     * leave the notice unreadable in dark. Same tones as the glucose screen.
      */
     callout.className = tone === 'error'
         ? 'flex items-start gap-3 rounded-control border border-error-outline bg-error-surface p-pad-md '
@@ -294,15 +294,15 @@ function createCallout({ tone, message }) {
 }
 
 /**
- * Chip de filtro (DESIGN.md § Chips · Filter Chip): píldora #F0F7FF con borde #CBD5E1 y texto
- * #475569 de 13px semibold, 6px/14px de relleno. Se usa para cada alimento de la lista.
+ * Filter chip (DESIGN.md § Chips · Filter Chip): #F0F7FF pill with a #CBD5E1 border and #475569
+ * 13px semibold text, 6px/14px padding. It is used for each food of the list.
  *
- * El nombre del alimento es prosa y va en la tipografía de texto; la cantidad y su unidad son un
- * valor de medida y van en IBM Plex Mono (Do's #7), en su propio `<span>`: mezclarlos en una sola
- * cadena dejaría el número en la tipografía de prosa, que es justo lo que la regla evita.
+ * The food name is prose and goes in the text typography; the quantity and its unit are a
+ * measurement value and go in IBM Plex Mono (Do's #7), in their own `<span>`: mixing them in one
+ * string would leave the number in the prose typography, which is exactly what the rule avoids.
  *
- * @param {string} name Nombre del alimento, texto libre.
- * @param {string} measurement Cantidad y unidad ya compuestas, p. ej. «250 g».
+ * @param {string} name Food name, free text.
+ * @param {string} measurement Quantity and unit already composed, e.g. "250 g".
  * @returns {HTMLSpanElement}
  */
 function createFoodChip(name, measurement) {
@@ -323,11 +323,11 @@ function createFoodChip(name, measurement) {
 }
 
 /**
- * Chip de estado (DESIGN.md § Chips · Status Chip, variante info): 12px bold en mayúsculas, 4px de
- * radio, 4px/12px de relleno. Se usa para el tipo de comida.
+ * Status chip (DESIGN.md § Chips · Status Chip, info variant): 12px bold in uppercase, 4px radius,
+ * 4px/12px padding. It is used for the meal type.
  *
- * El tamaño va en `text-status-chip` y no en `text-caption`: los dos son 12px, pero el segundo es
- * el papel de las marcas de tiempo y arrastra su tracking de 0.01em, que aquí no pinta nada.
+ * The size goes in `text-status-chip` and not in `text-caption`: both are 12px, but the second is
+ * the role of timestamps and drags its 0.01em tracking, which serves nothing here.
  *
  * @param {string} label
  * @returns {HTMLSpanElement}
@@ -358,15 +358,15 @@ function describeError(failure) {
 }
 
 /**
- * Tamaño de página del historial. Es el mismo valor que el `$limit` por defecto de
- * `HealthEventPage::fetchEvents()`: los argumentos son posicionales, así que pasar el rango obliga
- * a pasar también el cursor y el límite, y aquí se repite el valor de siempre para no cambiar de
- * paso la cantidad de eventos que baja cada carga.
+ * History page size. It is the same value as the default `$limit` of
+ * `HealthEventPage::fetchEvents()`: the arguments are positional, so passing the range forces
+ * passing the cursor and the limit too, and the usual value is repeated here so as not to change
+ * in passing how many events come down on each load.
  */
 const HISTORY_FETCH_LIMIT = 100;
 
 /**
- * Factoría del componente Alpine. Se registra como `phrMealsPage`.
+ * Alpine component factory. Registered as `phrMealsPage`.
  *
  * @returns {object}
  */
@@ -379,20 +379,20 @@ export function mealsPage() {
         catalog: null,
         loading: false,
 
-        /** Sobres descifrados que fallaron al abrir en la última carga (no tumban la pantalla). */
+        /** Decrypted envelopes that failed to open on the last load (they do not take the screen down). */
         failedToOpenCount: 0,
 
         init() {
             this.catalog = JSON.parse(document.querySelector('[data-phr-meals-catalog]').textContent);
 
             /**
-             * Las opciones de `mealType`, `recordedBy` y de la unidad de cada fila de alimento las
-             * renderiza el servidor en Blade (ADR 0002, ADR 0005): no se rellenan aquí. Ver el
-             * comentario al inicio de `meals.blade.php`.
+             * The options of `mealType`, `recordedBy` and of the unit of each food row are rendered
+             * by the server in Blade (ADR 0002, ADR 0005): they are not filled in here. See the
+             * comment at the start of `meals.blade.php`.
              */
             this.$refs.occurredAt.value = nowAsDatetimeLocalValue();
 
-            /** El formulario arranca con una fila de alimento en blanco, lista para rellenar. */
+            /** The form starts with a blank food row, ready to fill in. */
             this.addFoodRow();
 
             if (isUnlocked()) {
@@ -406,9 +406,9 @@ export function mealsPage() {
         },
 
         /**
-         * Clona la fila de `x-ref="foodRowTemplate"` (HTML escrito por Blade, con sus `<option>`
-         * de unidad ya puestos) y la añade al final de `x-ref="foods"`, para que el orden en el DOM
-         * sea el orden de guardado (ADR 0006).
+         * Clones the row of `x-ref="foodRowTemplate"` (HTML written by Blade, with its unit
+         * `<option>` already in place) and appends it to `x-ref="foods"`, so that the order in the
+         * DOM is the order of storage (ADR 0006).
          */
         addFoodRow() {
             const row = this.$refs.foodRowTemplate.content.firstElementChild.cloneNode(true);
@@ -420,7 +420,7 @@ export function mealsPage() {
             this.$refs.foods.appendChild(row);
         },
 
-        /** Lee las filas de alimento del DOM, en orden, tal cual las tecleó la persona. */
+        /** Reads the food rows from the DOM, in order, exactly as the person typed them. */
         readFoodRows() {
             return [...this.$refs.foods.querySelectorAll('[data-food-row]')].map((row) => ({
                 name: row.querySelector('[data-food-name]').value,
@@ -430,13 +430,13 @@ export function mealsPage() {
         },
 
         /**
-         * Guarda el registro.
+         * Saves the record.
          *
-         * `loading` cubre TODA la operación, no solo la descarga del historial: entre el clic y el
-         * repintado hay derivación de clave, sellado AEAD e ida y vuelta a Livewire, y sin señal
-         * alguna la persona vuelve a pulsar el botón y guarda la misma comida dos veces. La
-         * plantilla lo usa para deshabilitarlo, marcar `aria-busy` y cambiar el texto (Do's #3),
-         * igual que la pantalla de glucemia y las de acceso.
+         * `loading` covers the WHOLE operation, not just the history download: between the click and
+         * the repaint there is key derivation, AEAD sealing and a round trip to Livewire, and with
+         * no signal at all the person presses the button again and stores the same meal twice. The
+         * template uses it to disable it, set `aria-busy` and change the text (Do's #3), like the
+         * glucose screen and the sign-in ones.
          *
          * @param {SubmitEvent} [event]
          */
@@ -461,9 +461,9 @@ export function mealsPage() {
                 const { occurredAt, tz } = datetimeLocalToCanonical(localDatetime);
 
                 /**
-                 * Sin `origin`: en un formulario de entrada manual siempre vale `manual`, así que
-                 * `buildCommonEventFields()` lo fija con su valor por defecto (ver JSDoc del
-                 * módulo). No hay ningún `x-ref="origin"` que leer.
+                 * No `origin`: in a manual entry form it is always `manual`, so
+                 * `buildCommonEventFields()` fixes it with its default value (see the module
+                 * JSDoc). There is no `x-ref="origin"` to read.
                  */
                 const common = buildCommonEventFields({
                     device: this.$refs.device.value,
@@ -489,7 +489,7 @@ export function mealsPage() {
 
                 await this.loadHistory();
 
-                /** Al final de todo: el aviso confirma la operación entera, no solo el POST. */
+                /** At the very end: the notice confirms the whole operation, not just the POST. */
                 this.confirmSaved();
             } catch (failure) {
                 this.error = describeError(failure);
@@ -498,7 +498,7 @@ export function mealsPage() {
             }
         },
 
-        /** Descarga, descifra, filtra y pinta el historial. */
+        /** Downloads, decrypts, filters and paints the history. */
         async loadHistory() {
             this.loading = true;
 
@@ -512,10 +512,10 @@ export function mealsPage() {
                 }
 
                 /**
-                 * El rango sí lo aplica el servidor: `occurred_at` es columna en claro (ADR 0006) y
-                 * acotarla ahorra descargar y descifrar meses de eventos de otros tipos que este
-                 * módulo tiraría igualmente. El tipo se sigue descartando aquí, que es lo que el
-                 * servidor no puede hacer.
+                 * The range is applied by the server: `occurred_at` is a column in the clear (ADR
+                 * 0006) and narrowing it saves downloading and decrypting months of events of other
+                 * types this module would throw away anyway. The type is still discarded here,
+                 * which is what the server cannot do.
                  */
                 const range = this.historyRange();
                 const rawEvents = await this.$wire.fetchEvents(null, HISTORY_FETCH_LIMIT, range.from, range.to);
@@ -533,7 +533,7 @@ export function mealsPage() {
 
                         opened.push({ id: rawEvent.id, occurredAt: rawEvent.occurredAt, content });
                     } catch {
-                        /** Un sobre que no abre no tumba la pantalla (ADR 0004): se cuenta y se avisa. */
+                        /** An envelope that does not open does not take the screen down (ADR 0004): it is counted and reported. */
                         failedToOpen += 1;
                     }
                 }
@@ -550,7 +550,7 @@ export function mealsPage() {
             }
         },
 
-        /** Sin clave no se puede descifrar nada: se dice, no se pinta una lista vacía. */
+        /** With no key nothing can be decrypted: it is said, no empty list is painted. */
         renderLocked() {
             this.$refs.list.replaceChildren(createCallout({ tone: 'info', message: t('common.locked.history') }));
         },
@@ -570,13 +570,13 @@ export function mealsPage() {
 
             if (mealEvents.length === 0) {
                 const empty = document.createElement('p');
-                /** El papel de texto secundario, no un tono de la rampa; nunca un gris apagado (Don'ts #10). */
+                /** The secondary text role, not a ramp shade; never a dull grey (Don'ts #10). */
                 empty.className = 'text-body text-ink-secondary';
                 empty.textContent = t('meals.empty');
                 fragment.appendChild(empty);
             } else {
                 const list = document.createElement('ul');
-                /** El borde va en cada item (DESIGN.md § Lists), no en un divisor del contenedor. */
+                /** The border goes on each item (DESIGN.md § Lists), not on a container divider. */
                 list.className = 'flex flex-col';
 
                 for (const event of mealEvents) {
@@ -590,17 +590,17 @@ export function mealsPage() {
         },
 
         /**
-         * Item de historial con la forma de DESIGN.md § Lists: borde inferior #E2E8F0, 14px/16px de
-         * relleno, 48px de alto mínimo (objetivo táctil, Do's #2), icono guía de 20px en #0077B6.
+         * History item with the shape of DESIGN.md § Lists: #E2E8F0 bottom border, 14px/16px
+         * padding, 48px minimum height (touch target, Do's #2), 20px guide icon in #0077B6.
          *
-         * La comida se pinta legible, no como volcado de JSON: un chip con el tipo de comida y, por
-         * cada alimento, un chip con «nombre» y, en monoespaciada, «cantidad unidad», porque son
-         * valor de medida (Do's #7).
+         * The meal is painted readable, not as a JSON dump: a chip with the meal type and, for each
+         * food, a chip with "name" and, in monospace, "quantity unit", because they are a
+         * measurement value (Do's #7).
          *
-         * El `<li>` NO lleva `hover:` ni `active:`: DESIGN.md § Lists reserva esos dos estados a un
-         * elemento de lista pulsable, y este no es enlace ni botón —no tiene destino, ni manejador,
-         * ni foco—. Prometer una interacción que no ocurre es peor que no prometerla. Mismo criterio
-         * que la lista de glucemia.
+         * The `<li>` does NOT carry `hover:` or `active:`: DESIGN.md § Lists reserves those two
+         * states for a pressable list element, and this is neither link nor button —it has no
+         * destination, no handler and no focus—. Promising an interaction that does not happen is
+         * worse than not promising it. Same criterion as the glucose list.
          *
          * @param {{id: string, occurredAt: string, content: object}} event
          * @returns {HTMLLIElement}
@@ -616,7 +616,7 @@ export function mealsPage() {
             const body = document.createElement('div');
             body.className = 'flex flex-1 flex-col gap-2';
 
-            /** Un contenido sin tipo de comida no pinta un chip vacío: se omite. */
+            /** Content with no meal type paints no empty chip: it is left out. */
             if (described.mealTypeLabel !== '') {
                 const header = document.createElement('div');
                 header.className = 'flex flex-wrap items-center gap-2';
@@ -634,7 +634,7 @@ export function mealsPage() {
                 foods.className = 'flex flex-wrap items-center gap-2';
 
                 for (const food of described.foods) {
-                    /** Cantidad y unidad son valor de medida: van en monoespaciada (Do's #7). */
+                    /** Quantity and unit are a measurement value: they go in monospace (Do's #7). */
                     foods.appendChild(createFoodChip(food.name, `${food.quantity} ${food.unitLabel}`));
                 }
 
@@ -649,9 +649,9 @@ export function mealsPage() {
             }
 
             /**
-             * Texto secundario: marca de tiempo (numérica → monoespaciada, en el tamaño Code de
-             * § Typography) y, si lo hay, el aparato. Mismo formato de fecha que el resto de
-             * historiales: `formatDateTime`, en el idioma activo.
+             * Secondary text: timestamp (numeric → monospace, in the Code size of § Typography)
+             * and, if there is one, the device. Same date format as the other histories:
+             * `formatDateTime`, in the active language.
              */
             const meta = document.createElement('p');
             meta.className = 'font-mono text-code text-ink-secondary';

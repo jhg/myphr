@@ -117,7 +117,7 @@ function fuzzParser(
         restore_error_handler();
 
         if ($previous !== null) {
-            // `restore_error_handler()` ya devuelve el handler anterior; esta
+            // `restore_error_handler()` already restores the previous handler; this
             // check only documents that it has not been lost.
             set_error_handler($previous);
             restore_error_handler();
@@ -172,7 +172,7 @@ it('survives random input on the base64url decoders', function (): void {
 
     // Strings inside the base64url alphabet: they exercise the impossible-length
     // (% 4 === 1) and non-canonical encoding branches, which binary inputs
-    // binarias casi nunca alcanzan.
+    // almost never reach.
     $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 
     fuzzParser(
@@ -276,9 +276,9 @@ it('survives random input on the OPRF server functions', function (): void {
 
     // `oprf_seed` does not come from the wire: `ServerSetup` validates it at boot,
     // so no remote byte can reach here with an unexpected length. With a short
-    // PRK corto, `HkdfSha512::expand()` lanza `InvalidConfigurationException`
     // PRK, `HkdfSha512::expand()` throws `InvalidConfigurationException` (an
-    // `OpaqueException` (`docs/OPAQUE.md` §18).
+    // RFC 5869 §2.3 precondition), which is already inside the `OpaqueException`
+    // hierarchy (`docs/OPAQUE.md` §18).
     fuzzParser(
         'Oprf::deriveOprfKey(seed)',
         static fn (string $input): string => Oprf::deriveOprfKey($input, str_repeat("\x01", 32)),
@@ -313,7 +313,7 @@ it('survives random input on the full server registration and login entry points
         32
     );
 
-    // registration/finish: el record llega del cliente y se persiste.
+    // registration/finish: the record arrives from the client and is persisted.
     fuzzParser(
         'RegistrationRecord::parse (upload)',
         RegistrationRecord::parse(...),
@@ -348,7 +348,7 @@ it('survives random input on the full server registration and login entry points
         96
     );
 
-    // login/finish: KE3 crudo contra un estado fijo.
+    // login/finish: raw KE3 against a fixed state.
     $state = new ServerLoginState(str_repeat("\x66", 64), str_repeat("\x77", 64));
 
     fuzzParser(

@@ -167,7 +167,7 @@ export function registerPage() {
             const pinned = opaqueParameters();
 
             /** Without `keyStretching` (§5, step 3). */
-            const { clientRegistrationState, registrationRequest } = startRegistration(password);
+            const { clientRegistrationState, registrationRequest } = await startRegistration(password);
 
             await this.advance(t('register.stage.contacting'), 0.1);
 
@@ -187,7 +187,7 @@ export function registerPage() {
             await this.advance(t('register.stage.stretching'), 0.4, KEY_STRETCHING_SECONDS);
 
             /** The first Argon2id runs here (§5, step 6). */
-            const registered = finishRegistration({
+            const registered = await finishRegistration({
                 password,
                 clientRegistrationState,
                 registrationResponse: started.registrationResponse,
@@ -246,7 +246,7 @@ export function registerPage() {
             });
 
             /** Full OPAQUE login with the same password, identical to §6.1 (§5, steps 13 and 14). */
-            const { clientLoginState, startLoginRequest } = startLogin(password);
+            const { clientLoginState, startLoginRequest } = await startLogin(password);
 
             const loginStarted = await postJson(form.dataset.loginStartUrl, {
                 login,
@@ -258,7 +258,7 @@ export function registerPage() {
             /** Second Argon2id, the one of the immediate login. */
             await this.advance(t('register.stage.verifying'), 0.9, KEY_STRETCHING_SECONDS);
 
-            const loginFinished = finishLogin({
+            const loginFinished = await finishLogin({
                 password,
                 clientLoginState,
                 loginResponse: loginStarted.loginResponse,

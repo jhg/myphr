@@ -14,14 +14,14 @@ use Livewire\Livewire;
 uses(RefreshDatabase::class);
 
 /**
- * Tests del transporte de la pantalla de temperatura corporal (ADR 0002, ADR 0004, ADR 0006) y del
- * contrato entre la plantilla, el módulo de Alpine y esta página.
+ * Transport tests for the body temperature screen (ADR 0002, ADR 0004, ADR 0006) and for the
+ * contract between the template, the Alpine module and this page.
  *
- * El servidor no puede fabricar un sobre cifrado real porque no tiene la clave del cliente. Los
- * tests que necesitan un payload válido usan `envelopeCipherText()` y `canonicalOccurredAtNow()`,
- * los ayudantes GLOBALES de `tests/Pest.php`.
+ * The server cannot build a real encrypted envelope because it has no client key. The tests that
+ * need a valid payload use `envelopeCipherText()` and `canonicalOccurredAtNow()`, the GLOBAL helpers
+ * from `tests/Pest.php`.
  */
-it('guarda un evento con un sobre bien formado y una fecha canónica', function (): void {
+it('stores an event with a well formed envelope and a canonical date', function (): void {
     $user = User::factory()->registered()->create();
     $envelope = envelopeCipherText();
     $occurredAt = canonicalOccurredAtNow();
@@ -42,20 +42,20 @@ it('guarda un evento con un sobre bien formado y una fecha canónica', function 
     ]);
 });
 
-it('rechaza un payload mal formado y no crea ninguna fila', function (): void {
+it('rejects a malformed payload and creates no row', function (): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user);
 
     expect(fn () => Livewire::test(Temperature::class)
         ->instance()
-        ->storeEvent('esto no es un sobre cifrado', canonicalOccurredAtNow()))
+        ->storeEvent('this is not an encrypted envelope', canonicalOccurredAtNow()))
         ->toThrow(ValidationException::class);
 
     expect(Event::query()->count())->toBe(0);
 });
 
-it('rechaza una fecha con desfase horario en vez de Z', function (): void {
+it('rejects a date with a UTC offset instead of Z', function (): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user);
@@ -68,7 +68,7 @@ it('rechaza una fecha con desfase horario en vez de Z', function (): void {
     expect(Event::query()->count())->toBe(0);
 });
 
-it('fetchEvents solo devuelve los eventos del usuario autenticado', function (): void {
+it('fetchEvents only returns the events of the authenticated user', function (): void {
     $user = User::factory()->registered()->create();
     $otherUser = User::factory()->registered()->create();
 
@@ -86,10 +86,10 @@ it('fetchEvents solo devuelve los eventos del usuario autenticado', function ():
 });
 
 /**
- * El test que exige el ADR 0002: el ciphertext baja como valor de retorno y sube como parámetro,
- * nunca por una propiedad pública, así que el snapshot del componente no puede contenerlo.
+ * The test ADR 0002 requires: the ciphertext comes down as a return value and goes up as a
+ * parameter, never through a public property, so the component snapshot cannot contain it.
  */
-it('el snapshot del componente no contiene ningún sobre cifrado', function (): void {
+it('the component snapshot contains no encrypted envelope', function (): void {
     $user = User::factory()->registered()->create();
     $envelope = envelopeCipherText();
 
@@ -107,7 +107,7 @@ it('el snapshot del componente no contiene ningún sobre cifrado', function (): 
     expect($snapshotJson)->not->toContain('v1.');
 });
 
-it('el catálogo resuelve un código LOINC verificado por cada sitio de medición', function (): void {
+it('the catalog resolves a verified LOINC code for every measurement site', function (): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user);
@@ -117,9 +117,9 @@ it('el catálogo resuelve un código LOINC verificado por cada sitio de medició
         ->catalog();
 
     /**
-     * A diferencia de la tensión, aquí el código LOINC depende del sitio: LOINC publica uno por
-     * sitio de medida. Los cinco están verificados contra LOINC y no pueden cambiar (entran en el
-     * sobre cifrado).
+     * Unlike blood pressure, here the LOINC code depends on the site: LOINC publishes one per
+     * measurement site. All five are verified against LOINC and cannot change (they go into the
+     * encrypted envelope).
      */
     expect($catalog['loinc'])->toBe([
         ['site' => 'axillary', 'code' => '8328-7'],
@@ -138,7 +138,7 @@ it('el catálogo resuelve un código LOINC verificado por cada sitio de medició
         ->toBe(['axillary', 'oral', 'tympanic', 'temporal', 'rectal']);
 });
 
-it('la tabla LOINC del catálogo cubre todos los sitios publicados', function (): void {
+it('the catalog LOINC table covers every published site', function (): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user);
@@ -146,17 +146,18 @@ it('la tabla LOINC del catálogo cubre todos los sitios publicados', function ()
     $catalog = Livewire::test(Temperature::class)->instance()->catalog();
 
     /**
-     * Un sitio en el desplegable sin fila en la tabla dejaría a la pantalla sin código que guardar
-     * justo al pulsar «Guardar»: el cliente no inventa códigos ni cae al genérico 8310-5.
+     * A site in the dropdown without a row in the table would leave the screen with no code to store
+     * exactly when "Save" is pressed: the client invents no codes and does not fall back to the
+     * generic 8310-5.
      */
     expect(collect($catalog['loinc'])->pluck('site')->all())
         ->toBe(collect($catalog['sites'])->pluck('token')->all());
 });
 
-it('no usa el código genérico de temperatura corporal', function (): void {
+it('does not use the generic body temperature code', function (): void {
     /**
-     * 8310-5 «Body temperature» no dice dónde se midió. La pantalla exige sitio, así que guardarlo
-     * sería tirar un dato que sí se tiene (ADR 0005).
+     * 8310-5 "Body temperature" does not say where it was measured. The screen requires a site, so
+     * storing that would mean throwing away a fact we do have (ADR 0005).
      */
     foreach (TemperatureMeasurementSite::cases() as $site) {
         expect(TemperatureLoincCode::resolve($site)->value)->not->toBe('8310-5');
@@ -165,38 +166,38 @@ it('no usa el código genérico de temperatura corporal', function (): void {
 
 /*
 |--------------------------------------------------------------------------
-| Contrato entre cliente y servidor
+| Contract between client and server
 |--------------------------------------------------------------------------
 |
-| Los contratos de esta pantalla son de texto, no de tipos: nombres de método que el cliente escribe
-| como cadena, y `x-ref` que la plantilla declara y el módulo lee. Ninguno de los dos falla al
-| compilar ni al desplegar: fallan al pulsar. Se leen los ficheros y se cruzan.
+| The contracts of this screen are textual, not typed: method names the client writes as strings, and
+| `x-ref`s the template declares and the module reads. Neither fails at compile time or at deploy
+| time: they fail on click. The files are read and cross-checked.
 |
 */
 
-/** @return string Código fuente del módulo Alpine de la pantalla. */
+/** @return string Source code of the screen's Alpine module. */
 function temperatureModuleSource(): string
 {
     return file_get_contents(resource_path('js/health/temperaturePage.js'));
 }
 
-/** @return string Código fuente de la plantilla Blade de la pantalla. */
+/** @return string Source code of the screen's Blade template. */
 function temperatureTemplateSource(): string
 {
     return file_get_contents(resource_path('views/phr/pages/temperature.blade.php'));
 }
 
 /**
- * La plantilla sin sus comentarios Blade. Las reglas del ADR 0002 se comprueban sobre el marcado
- * que llega al navegador: los comentarios citan `wire:model` o `@island` para explicar por qué se
- * usan o no, y contarlos daría un falso positivo.
+ * The template without its Blade comments. The ADR 0002 rules are checked against the markup that
+ * reaches the browser: the comments quote `wire:model` or `@island` to explain why they are or are
+ * not used, and counting them would give a false positive.
  */
 function temperatureTemplateMarkup(): string
 {
     return preg_replace('/\{\{--.*?--\}\}/s', '', temperatureTemplateSource());
 }
 
-it('cada $wire.<metodo> del modulo existe como metodo publico de la pagina', function (): void {
+it('every $wire.<method> in the module exists as a public method of the page', function (): void {
     preg_match_all('/\$wire\.(\w+)\(/', temperatureModuleSource(), $matches);
 
     expect($matches[1])->not->toBeEmpty();
@@ -206,12 +207,12 @@ it('cada $wire.<metodo> del modulo existe como metodo publico de la pagina', fun
 
     foreach (array_unique($matches[1]) as $method) {
         expect($publicMethods->has($method))->toBeTrue(
-            sprintf('El módulo llama a $wire.%s() y esa página no tiene ese método público.', $method)
+            sprintf('The module calls $wire.%s() and that page has no such public method.', $method)
         );
     }
 });
 
-it('el cliente solo lee campos que storeEvent y fetchEvents devuelven de verdad', function (): void {
+it('the client only reads fields storeEvent and fetchEvents really return', function (): void {
     $user = User::factory()->registered()->create();
     $this->actingAs($user);
 
@@ -220,13 +221,13 @@ it('el cliente solo lee campos que storeEvent y fetchEvents devuelven de verdad'
     $stored = $page->storeEvent(envelopeCipherText(), canonicalOccurredAtNow());
     expect(array_keys($stored))->toBe(['id', 'occurredAt']);
 
-    /** `loadHistory()` lee estos tres campos de cada fila; si faltase uno, el sobre no abriría. */
+    /** `loadHistory()` reads these three fields from every row; if one were missing, the envelope would not open. */
     $fetched = $page->fetchEvents();
     expect($fetched)->toHaveCount(1);
     expect(array_keys($fetched[0]))->toBe(['id', 'occurredAt', 'payload']);
 });
 
-it('cada this.$refs del modulo tiene su x-ref en la plantilla', function (): void {
+it('every this.$refs in the module has its x-ref in the template', function (): void {
     preg_match_all('/this\.\$refs\.(\w+)/', temperatureModuleSource(), $usedMatches);
     preg_match_all('/x-ref="(\w+)"/', temperatureTemplateSource(), $declaredMatches);
 
@@ -237,35 +238,35 @@ it('cada this.$refs del modulo tiene su x-ref en la plantilla', function (): voi
 
     foreach ($used as $ref) {
         expect(in_array($ref, $declared, true))->toBeTrue(
-            sprintf('El módulo lee this.$refs.%s y la plantilla no declara ese x-ref.', $ref)
+            sprintf('The module reads this.$refs.%s and the template does not declare that x-ref.', $ref)
         );
     }
 });
 
-it('la plantilla no declara ningun x-ref huerfano', function (): void {
+it('the template declares no orphan x-ref', function (): void {
     preg_match_all('/this\.\$refs\.(\w+)/', temperatureModuleSource(), $usedMatches);
     preg_match_all('/x-ref="(\w+)"/', temperatureTemplateSource(), $declaredMatches);
 
-    /** `form` y `error` los declaran todas las pantallas de eventos y nadie los lee (ver el mismo
-     * comentario en `BloodPressurePageTest`). */
+    /** `form` and `error` are declared by every event screen and nobody reads them (see the same
+     * comment in `BloodPressurePageTest`). */
     $knownUnused = ['form', 'error'];
 
     $orphans = array_diff(array_unique($declaredMatches[1]), $usedMatches[1], $knownUnused);
 
-    expect($orphans)->toBe([], 'x-ref declarados en la plantilla que nadie lee: '.implode(', ', $orphans));
+    expect($orphans)->toBe([], 'x-refs declared in the template that nobody reads: '.implode(', ', $orphans));
 });
 
 /*
 |--------------------------------------------------------------------------
-| Reglas del ADR 0002 y del envoltorio de página
+| ADR 0002 rules and the page wrapper
 |--------------------------------------------------------------------------
 */
 
-it('la plantilla va envuelta en el componente de pagina de Filament', function (): void {
+it('the template is wrapped in the Filament page component', function (): void {
     expect(temperatureTemplateSource())->toContain('<x-filament-panels::page>');
 });
 
-it('el historial va en un island y la grafica solo con wire:ignore', function (): void {
+it('the history goes in an island and the chart only with wire:ignore', function (): void {
     $template = temperatureTemplateMarkup();
 
     expect($template)->toContain("@island(name: 'temperature-list')");
@@ -279,30 +280,30 @@ it('el historial va en un island y la grafica solo con wire:ignore', function ()
     expect(substr_count($template, '@island('))->toBe(1);
 });
 
-it('el canvas tiene nombre accesible y un pie que lo describe en texto', function (): void {
+it('the canvas has an accessible name and a caption describing it in text', function (): void {
     $template = temperatureTemplateMarkup();
 
-    /** Do's #3: la tendencia no puede comunicarse solo por el color de la línea. */
+    /** Do's #3: the trend cannot be communicated by the line colour alone. */
     expect($template)->toContain('aria-describedby="temperature-chart-caption"');
     expect($template)->toContain('id="temperature-chart-caption"');
     expect(substr_count($template, 'role="img"'))->toBe(1);
 });
 
-it('la plantilla no usa wire:model en ninguna variante', function (): void {
+it('the template does not use wire:model in any form', function (): void {
     expect(temperatureTemplateMarkup())->not->toContain('wire:model');
 });
 
-it('los option de unidad y sitio los renderiza Blade, no Alpine', function (): void {
+it('the unit and site options are rendered by Blade, not Alpine', function (): void {
     $template = temperatureTemplateSource();
 
     expect($template)->toContain("@foreach (\$catalog['units'] as \$unit)");
     expect($template)->toContain("@foreach (\$catalog['sites'] as \$site)");
 
-    /** Si Alpine creara `<option>`, el morph los borraría en la primera petición (ADR 0002). */
+    /** If Alpine created `<option>`s, the morph would wipe them on the first request (ADR 0002). */
     expect(temperatureModuleSource())->not->toContain("createElement('option')");
 });
 
-it('el historial hereda el filtro por rango de fechas', function (): void {
+it('the history inherits the date range filter', function (): void {
     expect(temperatureTemplateSource())
         ->toContain("@include('phr.partials.date-range', ['idPrefix' => 'temperature'])");
 
@@ -310,11 +311,11 @@ it('el historial hereda el filtro por rango de fechas', function (): void {
 
     expect($module)->toContain("from './dateRange.js'");
     expect($module)->toContain('...dateRangeControl()');
-    /** El rango viaja como argumento de `fetchEvents`, nunca como propiedad de Livewire (ADR 0002). */
+    /** The range travels as an argument of `fetchEvents`, never as a Livewire property (ADR 0002). */
     expect($module)->toContain('this.$wire.fetchEvents(null, HISTORY_FETCH_LIMIT, range.from, range.to)');
 });
 
-it('el campo numerico sigue la convencion de .ai/guidelines/ai.md', function (): void {
+it('the numeric field follows the convention in .ai/guidelines/ai.md', function (): void {
     $field = str(temperatureTemplateSource())->after('id="temperature-value"')->before('>')->toString();
 
     expect($field)->toContain('type="number"');
@@ -324,17 +325,17 @@ it('el campo numerico sigue la convencion de .ai/guidelines/ai.md', function ():
     expect($field)->toContain('font-mono');
     expect($field)->toContain('min-h-11');
 
-    /** El límite de dos decimales y la normalización de coma a punto son de `numericValue.js`. */
+    /** The two-decimal limit and the comma-to-dot normalization come from `numericValue.js`. */
     expect(temperatureModuleSource())->toContain("from './numericValue.js'");
 });
 
-it('cada campo del formulario tiene una etiqueta visible asociada', function (): void {
+it('every form field has a visible label associated with it', function (): void {
     $template = temperatureTemplateSource();
 
     preg_match_all('/<label for="([\w-]+)"/', $template, $labels);
-    /** Solo controles: el `id` del pie de la gráfica existe para `aria-describedby`, no es campo. */
+    /** Controls only: the `id` of the chart caption exists for `aria-describedby`, it is not a field. */
     preg_match_all('/<(?:input|select|textarea)\s+id="([\w-]+)"/', $template, $fields);
 
-    /** DESIGN.md: la etiqueta siempre visible, nunca un placeholder haciendo de etiqueta. */
+    /** DESIGN.md: the label is always visible, never a placeholder acting as a label. */
     expect(array_diff($fields[1], $labels[1]))->toBe([]);
 });

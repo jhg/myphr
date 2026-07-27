@@ -12,7 +12,6 @@
  * `step="any"` lets the arrows step by one and still accept decimals. That `step` does not impose
  * a decimal limit on its own, so the 2-decimal limit is imposed by this module, on the client,
  * with a clear message in the person's language, BEFORE sealing the envelope (ADR 0004).
- * sobre (ADR 0004).
  *
  * The value still travels as a **string** in the payload (ADR 0004, "decimals as a string"): these
  * functions never convert to `Number`, they only validate the shape and normalize the separator.

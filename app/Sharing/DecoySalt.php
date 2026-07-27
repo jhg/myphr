@@ -51,7 +51,7 @@ final readonly class DecoySalt
     }
 
     /**
-     * @throws InvalidConfigurationException Si no hay ninguna clave utilizable.
+     * @throws InvalidConfigurationException If there is no usable key.
      */
     private function key(): string
     {

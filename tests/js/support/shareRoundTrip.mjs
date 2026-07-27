@@ -1,27 +1,27 @@
 /**
- * Mitad de JavaScript del test de extremo a extremo del recorte compartido
+ * JavaScript half of the end-to-end test of the shared clipping
  * (`tests/Feature/ShareRoundTripTest.php`, ADR 0011).
  *
- * Existe porque la costura que rompió esta funcionalidad no vive en ninguno de
- * los dos lados, sino entre ellos: `canonicalDate(expiresAt)` entra en el `info`
- * de `wrapKey` y en el dato asociado del envoltorio, lo cifra el navegador y lo
- * relee el servidor. Un test de PHP solo, o de JavaScript solo, no la ve. Este
- * script cifra con los módulos reales de `resources/js/crypto/` y el test de
- * Pest pone en medio la base de datos y las rutas HTTP de verdad.
+ * It exists because the seam that broke this feature lives on neither of the
+ * two sides, but between them: `canonicalDate(expiresAt)` enters the `info` of
+ * `wrapKey` and the associated data of the wrapper, the browser encrypts it and
+ * the server reads it back. A PHP-only or JavaScript-only test does not see it.
+ * This script encrypts with the real modules of `resources/js/crypto/` and the
+ * Pest test puts the real database and HTTP routes in between.
  *
- * Dos órdenes, que se corresponden con las dos pantallas:
+ * Two commands, matching the two screens:
  *
- * * `seal`  — lo que hace `health/sharePage.js` al armar el recorte. Escribe en
- *   la salida el cuerpo del `POST /phr/shares` y, aparte, el material de clave
- *   que en la aplicación real viaja en el fragmento de la URL.
- * * `open`  — lo que hace `reader/readerPage.js` con la respuesta de
- *   `POST /s/{link}/open`: deriva `wrapKey` con el `expiresAt` **que devuelve el
- *   servidor**, abre el envoltorio y con `CK` abre el paquete.
+ * * `seal`  — what `health/sharePage.js` does when building the clipping. It
+ *   writes to the output the body of the `POST /phr/shares` and, apart, the key
+ *   material that in the real application travels in the URL fragment.
+ * * `open`  — what `reader/readerPage.js` does with the response of
+ *   `POST /s/{link}/open`: it derives `wrapKey` with the `expiresAt` **the
+ *   server returns**, opens the wrapper and with `CK` opens the package.
  *
- * El PIN no se estira con Argon2id aquí: `stretched` llega ya hecho desde el
- * test. Argon2id no toca ninguna de las dos puntas de esta costura (depende del
- * PIN y de la sal, nunca de la caducidad ni del identificador) y cuesta más de
- * un segundo por lado; su comportamiento lo cubre `tests/js/shareKeys.test.mjs`.
+ * The PIN is not stretched with Argon2id here: `stretched` arrives ready from
+ * the test. Argon2id touches neither end of this seam (it depends on the PIN
+ * and the salt, never on the expiry or the identifier) and costs more than a
+ * second per side; its behaviour is covered by `tests/js/shareKeys.test.mjs`.
  */
 
 import { adoptMasterKey, forget } from '../../../resources/js/auth/keyring.js';
@@ -41,7 +41,7 @@ import { sealShareDescriptor } from '../../../resources/js/health/shareDescripto
 import { buildSharePackageBody, partitionTypes } from '../../../resources/js/health/sharePage.js';
 
 /**
- * @returns {Promise<string>} Todo lo que llegue por la entrada estándar.
+ * @returns {Promise<string>} Everything arriving on standard input.
  */
 async function readStdin() {
     const chunks = [];
@@ -54,7 +54,7 @@ async function readStdin() {
 }
 
 /**
- * Cifra el recorte igual que la pantalla de crear.
+ * Encrypts the clipping just like the create screen.
  *
  * @param {{pin: string, stretched: string, ttlHours: number, eventCount: number, masterKey: string}} input
  * @returns {Promise<object>}
@@ -64,9 +64,9 @@ async function seal(input) {
     const masterKey = decodeBase64Url(input.masterKey, 'masterKey');
 
     /**
-     * Igual que `sharePage.js`: un `new Date()` corriente, con sus milisegundos,
-     * y la caducidad calculada sobre él. Ese instante con fracción es justo lo
-     * que la base de datos tiene que devolver intacto.
+     * Just like `sharePage.js`: a plain `new Date()`, with its milliseconds, and
+     * the expiry computed on it. That instant with a fraction is exactly what
+     * the database has to return intact.
      */
     const generatedAt = new Date();
     const expiresAt = new Date(generatedAt.getTime() + input.ttlHours * 3600 * 1000);
@@ -99,7 +99,7 @@ async function seal(input) {
 
     const packageEnvelope = await sealSharePackage({ contentKey, shareId, body });
 
-    /** El descriptor es un sobre `v1.` corriente bajo la clave maestra (ADR 0011). */
+    /** The descriptor is a plain `v1.` envelope under the master key (ADR 0011). */
     const descriptor = sealEnvelope({
         key: masterKey,
         plaintext: new TextEncoder().encode(JSON.stringify({
@@ -131,7 +131,7 @@ async function seal(input) {
         pin: input.pin,
         pinSalt: encodeBase64Url(pinSalt),
         pinTag: encodeBase64Url(pinTag),
-        /** Lo que en la aplicación real viaja tras el `#` y nunca llega al servidor. */
+        /** What in the real application travels after the `#` and never reaches the server. */
         fragment: encodeShareFragment({ sendKey, generatedAt }),
         expiresAtSealed: canonicalDate(expiresAt),
         eventCount: events.length,
@@ -139,7 +139,7 @@ async function seal(input) {
 }
 
 /**
- * Abre el recorte igual que el lector, con lo que haya contestado el servidor.
+ * Opens the clipping just like the reader, with whatever the server answered.
  *
  * @param {{stretched: string, pinSalt: string, fragment: string, linkId: string, opened: object}} input
  * @returns {Promise<object>}
@@ -309,9 +309,9 @@ try {
 
     process.stdout.write(JSON.stringify({ ok: true, result }));
 } catch (failure) {
-    // El test necesita el nombre del error, no solo el mensaje: `EnvelopeError`
-    // es el fallo del envoltorio y `ShareEnvelopeError` el del paquete, y saber
-    // cuál de los dos revienta es la mitad del diagnóstico.
+    // The test needs the name of the error, not just the message: `EnvelopeError`
+    // is the failure of the wrapper and `ShareEnvelopeError` that of the package,
+    // and knowing which of the two blows up is half the diagnosis.
     process.stdout.write(JSON.stringify({
         ok: false,
         error: failure?.name ?? 'Error',

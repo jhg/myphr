@@ -12,15 +12,15 @@ use Illuminate\Support\Str;
 uses(RefreshDatabase::class);
 
 /**
- * ADR 0011: la página que abre el profesional. Lo que estos tests vigilan no es cómo se ve, sino lo
- * que **no** sale por ella: nada de la cuenta del paciente, nada que distinga un enlace vivo de uno
- * muerto y ninguna cookie.
+ * ADR 0011: the page the professional opens. What these tests watch is not how it looks, but what
+ * does **not** come out of it: nothing about the patient account, nothing that tells a live link
+ * from a dead one, and no cookies.
  */
 beforeEach(function (): void {
     config()->set('share.decoy_salt_key', Base64Url::encode(str_repeat("\x2a", 32)));
 });
 
-it('sirve la página del lector sin sesión y sin cookies', function (): void {
+it('serves the reader page without a session and without cookies', function (): void {
     $response = $this->get('/s/'.Str::uuid());
 
     $response->assertOk()
@@ -28,26 +28,26 @@ it('sirve la página del lector sin sesión y sin cookies', function (): void {
         ->assertHeader('Referrer-Policy', 'no-referrer');
 
     /**
-     * Ni una cookie. Una cookie de sesión aquí sería un identificador estable de un profesional en
-     * su consulta, correlacionable entre los recortes de dos pacientes distintos.
+     * Not one cookie. A session cookie here would be a stable identifier for a professional in their
+     * practice, correlatable across the clippings of two different patients.
      */
     expect($response->headers->getCookies())->toBeEmpty();
 });
 
 /**
- * La respuesta es la misma para un enlace vivo, uno caducado, uno revocado y uno que nunca existió.
- * Si la página dijera «este enlace ya no está disponible», una lista de identificadores se
- * convertiría en un mapa de qué recortes siguen abiertos, y de paso diría que esa persona compartió
- * algo. La respuesta genérica única empieza en esta página, no en el `challenge`.
+ * The response is the same for a live link, an expired one, a revoked one and one that never
+ * existed. If the page said "this link is no longer available", a list of identifiers would become a
+ * map of which clippings are still open, and along the way it would say that this person shared
+ * something. The single generic response starts on this page, not at `challenge`.
  */
-it('responde igual para un enlace vivo, uno caducado y uno inexistente', function (): void {
+it('answers the same for a live link, an expired one and a non-existent one', function (): void {
     $live = ShareLink::factory()->create();
     $expired = ShareLink::factory()->expired()->create();
 
     /**
-     * Se compara el `<body>` y no el documento entero porque el ayudante de fuentes de
-     * laravel-vite-plugin emite las precargas una sola vez por proceso, y esa diferencia es del
-     * banco de pruebas y no de esta página.
+     * The `<body>` is compared and not the whole document because the laravel-vite-plugin font
+     * helper emits the preloads only once per process, and that difference belongs to the test
+     * harness and not to this page.
      */
     $bodies = collect([$live->id, $expired->id, (string) Str::uuid()])
         ->map(function (string $link): string {
@@ -59,8 +59,8 @@ it('responde igual para un enlace vivo, uno caducado y uno inexistente', functio
     expect($bodies->unique())->toHaveCount(1);
 });
 
-/** Ni una consulta a la base de datos: la página no mira si el enlace existe. */
-it('no consulta la base de datos para pintar la página', function (): void {
+/** Not one database query: the page does not check whether the link exists. */
+it('does not query the database to paint the page', function (): void {
     $queries = 0;
 
     DB::listen(function () use (&$queries): void {
@@ -73,10 +73,11 @@ it('no consulta la base de datos para pintar la página', function (): void {
 });
 
 /**
- * Nada de la cuenta del paciente sale por aquí: ni su nombre, ni su correo, ni su idioma, ni cuántos
- * recortes tiene. El servidor los conoce y esta página no los pinta.
+ * Nothing about the patient account comes out of here: not their name, not their email, not their
+ * language, not how many clippings they have. The server knows them and this page does not paint
+ * them.
  */
-it('no filtra nada de la cuenta del paciente', function (): void {
+it('leaks nothing about the patient account', function (): void {
     $user = User::factory()->registered()->create(['locale' => 'zh_CN']);
     $share = Share::factory()->for($user)->create();
     $link = ShareLink::factory()->for($share)->create();
@@ -89,15 +90,15 @@ it('no filtra nada de la cuenta del paciente', function (): void {
         ->and($content)->not->toContain($share->payload)
         ->and($content)->not->toContain($share->descriptor)
         ->and($content)->not->toContain($link->wrapper)
-        /** El idioma de la cuenta es columna en claro (ADR 0007) y no tiene por qué salir de casa. */
+        /** The account language is a plaintext column (ADR 0007) and has no reason to leave home. */
         ->and($content)->toContain('lang="es"');
 });
 
 /**
- * Ni la sal ni el comprobante del PIN pueden viajar en la cáscara: con ellos en la página, el ataque
- * fuera de línea contra un PIN de seis dígitos vuelve, que es el fallo que este diseño corrigió.
+ * Neither the salt nor the PIN proof may travel in the shell: with them on the page, the offline
+ * attack against a six-digit PIN is back, which is the flaw this design fixed.
  */
-it('no publica la sal ni el comprobante del PIN', function (): void {
+it('publishes neither the salt nor the PIN proof', function (): void {
     $link = ShareLink::factory()->create();
     $content = $this->get('/s/'.$link->id)->getContent();
 
@@ -105,24 +106,24 @@ it('no publica la sal ni el comprobante del PIN', function (): void {
         ->and($content)->not->toContain(Base64Url::encode((string) $link->pin_tag));
 });
 
-it('se pinta en el idioma del profesional, negociado por Accept-Language', function (string $header, string $tag): void {
+it('is painted in the professional language, negotiated by Accept-Language', function (string $header, string $tag): void {
     $this->withHeader('Accept-Language', $header)
         ->get('/s/'.Str::uuid())
         ->assertOk()
         ->assertSee('lang="'.$tag.'"', false);
 })->with([
-    'castellano' => ['es-ES,es;q=0.9', 'es'],
+    'Spanish' => ['es-ES,es;q=0.9', 'es'],
     'chino' => ['zh-CN,zh;q=0.9', 'zh-CN'],
-    'inglés' => ['en-GB,en;q=0.8', 'en'],
+    'English' => ['en-GB,en;q=0.8', 'en'],
     'idioma no soportado' => ['fr-FR,fr;q=0.9', 'en'],
 ]);
 
 /**
- * El catálogo trae los tres idiomas dentro para que el selector de la página cambie de idioma sin
- * pedir nada al servidor: una segunda petición sería una petición más que ata a ese lector con ese
- * enlace, y una cookie de preferencia sería justo la cookie que esta ruta se quita de encima.
+ * The catalog carries all three languages inside so the page's language selector can switch without
+ * asking the server for anything: a second request would be one more request tying that reader to
+ * that link, and a preference cookie would be exactly the cookie this route shakes off.
  */
-it('publica el vocabulario clínico en los tres idiomas y el término LOINC sin traducir', function (): void {
+it('publishes the clinical vocabulary in the three languages and the LOINC term untranslated', function (): void {
     $content = $this->get('/s/'.Str::uuid())->getContent();
     $catalog = json_decode(
         html_entity_decode((string) preg_replace(
@@ -136,19 +137,19 @@ it('publica el vocabulario clínico en los tres idiomas y el término LOINC sin 
     expect(array_keys($catalog['labels']))->toBe(['en', 'es', 'zh_CN'])
         ->and($catalog['labels']['es']['types']['glucose'])->toBe('Glucemia')
         ->and($catalog['labels']['zh_CN']['types']['glucose'])->not->toBe('Glucemia')
-        /** El término oficial LOINC no se traduce (ADR 0005): va una sola vez y en inglés. */
+        /** The official LOINC term is not translated (ADR 0005): it goes once and in English. */
         ->and($catalog['loinc']['41653-7'])->toBe('Glucose [Mass/volume] in Capillary blood by Glucometer')
-        /** Los códigos UCUM son notación de intercambio, no algo que se le pida leer a nadie. */
+        /** UCUM codes are exchange notation, not something anyone should be asked to read. */
         ->and($catalog['units']['Cel'])->toBe('°C');
 });
 
 /**
- * `open` devuelve, además del envoltorio y el paquete, las dos piezas de los datos asociados que el
- * lector no lleva consigo. Las dos van dentro del AEAD, así que un servidor que mintiera en
- * cualquiera de ellas no engaña a nadie: el envoltorio deja de abrir. El instante de generación no
- * está aquí a propósito: viaja en el fragmento de la URL, que el servidor nunca ve.
+ * On top of the wrapper and the package, `open` returns the two pieces of associated data the reader
+ * does not carry with it. Both go inside the AEAD, so a server that lied about either fools nobody:
+ * the wrapper stops opening. The generation instant is deliberately not here: it travels in the URL
+ * fragment, which the server never sees.
  */
-it('devuelve el identificador del recorte y la caducidad junto al paquete', function (): void {
+it('returns the clipping identifier and the expiry alongside the package', function (): void {
     $tag = random_bytes(ShareLink::PIN_TAG_BYTES);
     $link = ShareLink::factory()->create(['pin_tag' => $tag]);
 
@@ -165,22 +166,28 @@ it('devuelve el identificador del recorte y la caducidad junto al paquete', func
 });
 
 /**
- * El profesional ve la **misma** interfaz que el paciente —gráficas, estadísticas, línea temporal,
- * búsqueda y subperiodos— y no un informe estático. Lo que este test vigila es que la pinte el
- * módulo compartido y no una copia: dos copias de la misma lectura clínica divergen en cuanto se
- * añade el séptimo tipo de evento, y entonces el paciente y el médico miran documentos distintos del
- * mismo dato.
+ * The professional sees the **same** interface as the patient —charts, statistics, timeline, search
+ * and sub-periods— and not a static report. What this test watches is that the shared module paints
+ * it and not a copy: two copies of the same clinical view drift apart as soon as the seventh event
+ * type is added, and then the patient and the doctor are looking at different documents of the same
+ * data.
  */
-it('monta la pantalla compartida del recorte, no un informe propio', function (): void {
+it('mounts the shared clipping screen, not a report of its own', function (): void {
     $reader = file_get_contents(base_path('resources/js/reader/readerPage.js'));
 
+    /**
+     * The import is dynamic, not static: Chart.js is the bulk of that module and none of it is
+     * needed until the PIN is right, so it downloads while the PIN is being typed instead of
+     * blocking the first paint of the form. What matters here is unchanged — it is *that* module
+     * that paints the clipping.
+     */
     expect($reader)
-        ->toContain("import { renderClippingExplorer } from './clippingExplorer.js';")
+        ->toContain("import('./clippingExplorer.js')")
         ->toContain('renderClippingExplorer(nodes.report');
 
     $explorer = file_get_contents(base_path('resources/js/reader/clippingExplorer.js'));
 
-    /** Las cuatro vistas del panel, importadas tal cual: aquí no se reimplementa ninguna. */
+    /** The four panel views, imported as they are: nothing is reimplemented here. */
     expect($explorer)
         ->toContain("from '../health/timelineView.js'")
         ->toContain("from '../health/statsView.js'")
@@ -189,37 +196,38 @@ it('monta la pantalla compartida del recorte, no un informe propio', function ()
 });
 
 /**
- * **El médico solo puede acotar dentro del recorte, jamás ampliarlo.**
+ * **The doctor can only narrow inside the clipping, never widen it.**
  *
- * Los subperiodos y la búsqueda trabajan contra `memoryEventSource`, que no tiene de dónde sacar un
- * evento que no esté ya en el paquete: el único endpoint que sirve datos clínicos es el que está
- * tras el PIN, y entrega el paquete entero de una vez. No existe la vía para pedir uno más, y este
- * test comprueba esa ausencia, que es lo que no se puede comprobar mirando la pantalla.
+ * Sub-periods and search work against `memoryEventSource`, which has nowhere to get an event that is
+ * not already in the package: the only endpoint serving clinical data is the one behind the PIN, and
+ * it hands over the whole package at once. There is no way to ask for one more, and this test checks
+ * that absence, which is what you cannot check by looking at the screen.
  */
-it('la pantalla del recorte no puede pedir ni un evento más', function (): void {
+it('the clipping screen cannot request a single extra event', function (): void {
     $explorer = file_get_contents(base_path('resources/js/reader/clippingExplorer.js'));
 
     expect($explorer)->toContain("import { flattenDecryptedEvent, memoryEventSource } from '../health/eventSource.js';");
 
-    /** Los comentarios nombran a propósito lo que no se usa, así que se miran fuera de ellos. */
+    /** The comments deliberately name what is not used, so they are looked at from outside them. */
     $code = (string) preg_replace(['#/\*[\s\S]*?\*/#', '#^\s*//.*$#m'], ' ', $explorer);
 
     foreach (['fetch(', 'XMLHttpRequest', 'sendBeacon', '$wire', 'livewire'] as $forbidden) {
         expect($code)->not->toContain($forbidden);
     }
 
-    /** Y el paquete descifrado no se escribe en el dispositivo del profesional (ADR 0003). */
+    /** And the decrypted package is not written to the professional's device (ADR 0003). */
     foreach (['localStorage', 'sessionStorage', 'indexedDB', 'document.cookie'] as $storage) {
         expect($code)->not->toContain($storage);
     }
 });
 
 /**
- * La página sigue fuera del panel: extraer las vistas compartidas no puede haber colado Livewire ni
- * Filament en un documento que se abre sin sesión y en un dispositivo ajeno. Las gráficas sí entran
- * ahora (Chart.js), y es código propio servido desde este mismo origen, que la CSP ya permite.
+ * The page stays outside the panel: extracting the shared views must not have smuggled Livewire or
+ * Filament into a document opened without a session and on somebody else's device. The charts do go
+ * in now (Chart.js), and that is our own code served from this same origin, which the CSP already
+ * allows.
  */
-it('la página del lector sigue sin Livewire, sin Filament y sin recursos de terceros', function (): void {
+it('the reader page stays free of Livewire, Filament and third-party resources', function (): void {
     $content = $this->get('/s/'.Str::uuid())->getContent();
 
     expect($content)
@@ -232,12 +240,11 @@ it('la página del lector sigue sin Livewire, sin Filament y sin recursos de ter
 });
 
 /**
- * Lo que de verdad acaba dentro de una historia clínica es papel, así que la hoja de impresión no es
- * un extra: los controles y las gráficas se van (un desplegable impreso es tinta que no se puede
- * pulsar, y un lienzo dibujado en tema oscuro sale invisible sobre blanco), y la tabla clínica con
- * su término LOINC se queda.
+ * What really ends up in a medical record is paper, so the print stylesheet is not an extra: the
+ * controls and the charts go away (a printed dropdown is ink you cannot click, and a canvas drawn in
+ * dark theme comes out invisible on white), and the clinical table with its LOINC term stays.
  */
-it('conserva la hoja de impresión y el término LOINC de la tabla clínica', function (): void {
+it('keeps the print stylesheet and the LOINC term of the clinical table', function (): void {
     $explorer = file_get_contents(base_path('resources/js/reader/clippingExplorer.js'));
 
     expect($explorer)

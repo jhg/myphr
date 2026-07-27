@@ -1,7 +1,7 @@
 /**
- * Comprobaciones de `health/eventEnvelope.js` (ADR 0006).
+ * Checks of `health/eventEnvelope.js` (ADR 0006).
  *
- * Corredor incorporado de Node, como el resto de `tests/js` (ver `crypto.test.mjs`).
+ * Node's built-in runner, like the rest of `tests/js` (see `crypto.test.mjs`).
  *
  *     npm test
  */
@@ -17,7 +17,7 @@ const USER_ID = '9c8f2e2a-2222-4444-8888-abcdefabcdef';
 const OTHER_USER_ID = '00000000-1111-4444-8888-000000000000';
 const OCCURRED_AT = '2026-07-25T09:08:07.123456Z';
 
-/** @returns {Uint8Array} Clave maestra de prueba, 32 bytes deterministas. */
+/** @returns {Uint8Array} Test master key, 32 deterministic bytes. */
 function testMasterKey() {
     return new Uint8Array(MASTER_KEY_LENGTH).map((_, index) => index + 1);
 }
@@ -33,7 +33,7 @@ afterEach(() => {
     forget();
 });
 
-test('sealEvent/openEvent: ida y vuelta devuelve el mismo objeto', () => {
+test('sealEvent/openEvent: the round trip returns the same object', () => {
     adoptMasterKey(testMasterKey(), USER_ID);
 
     const envelope = sealEvent({ userId: USER_ID, occurredAt: OCCURRED_AT, content: GLUCOSE_EVENT });
@@ -42,7 +42,7 @@ test('sealEvent/openEvent: ida y vuelta devuelve el mismo objeto', () => {
     assert.deepEqual(opened, GLUCOSE_EVENT);
 });
 
-test('openEvent: cambiar el userId hace fallar el descifrado', () => {
+test('openEvent: changing the userId makes the decryption fail', () => {
     adoptMasterKey(testMasterKey(), USER_ID);
 
     const envelope = sealEvent({ userId: USER_ID, occurredAt: OCCURRED_AT, content: GLUCOSE_EVENT });
@@ -53,10 +53,10 @@ test('openEvent: cambiar el userId hace fallar el descifrado', () => {
     );
 });
 
-test('openEvent: cambiar occurred_at en un microsegundo hace fallar el descifrado', () => {
+test('openEvent: changing occurred_at by one microsecond makes the decryption fail', () => {
     /**
-     * Este es el test que importa: demuestra que el sobre está atado a su fila y que un evento
-     * movido de fecha no se descifra "mal atribuido" en vez de fallar de forma visible.
+     * This is the test that matters: it shows the envelope is tied to its row and that an event
+     * moved in date does not decrypt "misattributed" instead of failing visibly.
      */
     adoptMasterKey(testMasterKey(), USER_ID);
 
@@ -70,7 +70,7 @@ test('openEvent: cambiar occurred_at en un microsegundo hace fallar el descifrad
     );
 });
 
-test('sealEvent/openEvent: dos formas distintas del mismo instante producen el mismo contexto', () => {
+test('sealEvent/openEvent: two different forms of the same instant produce the same context', () => {
     adoptMasterKey(testMasterKey(), USER_ID);
 
     const envelope = sealEvent({

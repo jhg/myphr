@@ -1,33 +1,33 @@
 /**
- * Componente Alpine del panel de inicio (ADR 0002, ADR 0004, ADR 0006, ADR 0007, ADR 0008).
+ * Alpine component of the home dashboard (ADR 0002, ADR 0004, ADR 0006, ADR 0007, ADR 0008).
  *
- * **Qué queda aquí después de la extracción.** Solo lo que es del panel del paciente: el componente
- * Alpine, los `x-ref` de su plantilla, las rutas de sus estados vacíos y la **única** llamada a
- * Livewire de todo el camino de visualización. Lo que se pinta —línea temporal, tarjetas de
- * estadísticas y gráficas— vive ahora en módulos que reciben un array de eventos descifrados y
- * devuelven nodos (`timelineView.js`, `statsView.js`, `chartsView.js`), y de dónde salen esos
- * eventos lo decide un origen intercambiable (`eventSource.js`, `livewireEventSource.js`). Esa es la condición para que el
- * profesional que abre un recorte compartido vea la misma interfaz sin cuenta y sin sesión: si el
- * pintado siguiera atado a este componente, el lector tendría que reimplementarlo y las dos copias
- * divergirían.
+ * **What is left here after the extraction.** Only what belongs to the patient panel: the Alpine
+ * component, the `x-ref` of its template, the routes of its empty states and the **only** Livewire
+ * call of the whole display path. What is painted —timeline, statistics cards and charts— now
+ * lives in modules that take an array of decrypted events and return nodes (`timelineView.js`,
+ * `statsView.js`, `chartsView.js`), and where those events come from is decided by an
+ * interchangeable source (`eventSource.js`, `livewireEventSource.js`). That is the condition for the
+ * professional opening a shared clipping to see the same interface with no account and no session:
+ * if the painting were still tied to this component, the reader would have to reimplement it and
+ * the two copies would diverge.
  *
- * **Nada de esto pasa por un componente Livewire**, y no es negociable: todo lo que toca una
- * propiedad pública acaba en el snapshot, que viaja al servidor y se queda ahí (ADR 0002, con
- * `App\Livewire\Hooks\EncryptedPayloadGuardHook` y los tests de arquitectura vigilándolo). El único
- * dato que sube es la petición de lectura `fetchEvents`; el descifrado ocurre aquí, en el navegador.
+ * **None of this goes through a Livewire component**, and that is not negotiable: everything that
+ * touches a public property ends up in the snapshot, which travels to the server and stays there
+ * (ADR 0002, with `App\Livewire\Hooks\EncryptedPayloadGuardHook` and the architecture tests
+ * watching it). The only datum that goes up is the `fetchEvents` read request; decryption happens here, in the browser.
  *
- * **El periodo se elige y por defecto es el último día.** El rango sí lo aplica el servidor y por
- * eso viaja a `fetchEvents`: `occurred_at` es una de las tres columnas en claro del ADR 0006. Es la
- * mejora que importa, porque descifrar un año de eventos en el navegador se nota: con «último día»
- * se abren los sobres de 24 horas, no los de un mes. El control de rango es el compartido con las
- * pantallas de historial (`health/dateRange.js`), no uno propio.
+ * **The period is chosen and by default it is the last day.** The range is applied by the server
+ * and that is why it travels to `fetchEvents`: `occurred_at` is one of the three ADR 0006 columns
+ * in the clear. It is the improvement that matters, because decrypting a year of events in the
+ * browser is noticeable: with "last day" the envelopes of 24 hours are opened, not those of a
+ * month. The range control is the one shared with the history screens (`health/dateRange.js`), not its own.
  *
- * **El servidor no puede filtrar por tipo ni buscar texto** (ADR 0006), así que las dos cosas se
- * hacen aquí, sobre lo ya descifrado, y son gratis: marcar un tipo o teclear en el buscador repinta
- * sin pedir ni descifrar nada ({@see filterBySelectedTypes}, {@see searchEvents}). **No son el mismo
- * filtro**: los tipos eligen la población que resumen las tarjetas y las gráficas, y la búsqueda solo
- * estrecha la línea temporal (ver {@see dashboardPage}, `render()`). Un sobre que no abre no tumba el
- * panel: se cuenta y se avisa (ADR 0004).
+ * **The server can neither filter by type nor search text** (ADR 0006), so both are done here, over
+ * what is already decrypted, and they are free: ticking a type or typing in the search box
+ * repaints without asking for or decrypting anything ({@see filterBySelectedTypes},
+ * {@see searchEvents}). **They are not the same filter**: the types choose the population the cards
+ * and the charts summarize, and the search only narrows the timeline (see {@see dashboardPage},
+ * `render()`). An envelope that does not open does not take the panel down: it is counted and reported (ADR 0004).
  */
 
 import { isUnlocked, ownerId } from '../auth/keyring.js';
@@ -45,13 +45,13 @@ import { livewireEventSource } from './livewireEventSource.js';
 import { renderStatsSections, resolveGlucoseTargetRange, targetRangeUnitMismatch } from './statsView.js';
 import { renderTimelineSection } from './timelineView.js';
 
-/** Unidad de presentación de glucemia por defecto, igual que en `glucosePage.js` (ADR 0006). */
+/** Default glucose display unit, the same as in `glucosePage.js` (ADR 0006). */
 const DEFAULT_UNIT = 'mg/dL';
 
 /**
- * Nombre del `data-*` con la ruta de la pantalla de cada tipo, para el botón del estado vacío. Los
- * pinta Blade en el contenedor porque la ruta la decide `PhrPanelProvider` y una ruta duplicada a
- * mano en el cliente se queda obsoleta sin que nadie lo note hasta que alguien pulsa el botón.
+ * Name of the `data-*` with the route of the screen of each type, for the empty state button. Blade
+ * paints them on the container because `PhrPanelProvider` decides the route and a route duplicated
+ * by hand in the client goes stale with nobody noticing until somebody presses the button.
  *
  * @type {Record<string, string>}
  */
@@ -65,11 +65,11 @@ const TYPE_URL_KEYS = Object.freeze({
 });
 
 /**
- * Destino de una pantalla, leído del contenedor que pinta Blade.
+ * Destination of a screen, read from the container Blade paints.
  *
- * Devuelve `null` si no hay documento con `querySelector` —los tests montan un `document` mínimo— o
- * si el atributo falta. En ese caso el estado vacío se pinta igual, solo que sin botón: la frase,
- * que es lo que informa, no depende de encontrar la ruta.
+ * It returns `null` if there is no document with `querySelector` —the tests mount a minimal
+ * `document`— or if the attribute is missing. In that case the empty state is painted all the same,
+ * only without a button: the sentence, which is what informs, does not depend on finding the route.
  *
  * @param {string} type
  * @returns {string|null}
@@ -101,57 +101,57 @@ function describeError(failure) {
 }
 
 /**
- * Factoría del componente Alpine. Se registra como `phrDashboardPage`.
+ * Alpine component factory. Registered as `phrDashboardPage`.
  *
  * @returns {object}
  */
 export function dashboardPage() {
     return {
         /**
-         * El control de periodo compartido con las pantallas de historial: aporta `rangePreset`,
-         * `rangeFromDay`, `rangeToDay` y `rangeError` (los tres primeros con `x-model` en la
-         * plantilla común) y llama a `loadHistory()` al aplicar.
+         * The period control shared with the history screens: it provides `rangePreset`,
+         * `rangeFromDay`, `rangeToDay` and `rangeError` (the first three with `x-model` in the
+         * shared template) and calls `loadHistory()` on apply.
          *
-         * Arranca en `day` y no en `all` como el historial: el panel es la pantalla de entrada, tiene
-         * que abrir rápido y enseñar lo de hoy. El historial, en cambio, se abre para buscar, y allí
-         * acotar de oficio escondería registros antiguos que nadie ha pedido esconder.
+         * It starts at `day` and not at `all` like the history: the panel is the entry screen, it
+         * has to open fast and show what happened today. The history, on the other hand, is opened
+         * to search, and clipping by default there would hide old records nobody asked to hide.
          */
         ...dateRangeControl({ preset: 'day' }),
 
         /**
-         * Tipos de evento marcados. Es estado de interfaz del cliente (`x-model`, nunca
-         * `wire:model`: ADR 0002) y no viaja a ninguna parte.
+         * Ticked event types. It is client interface state (`x-model`, never `wire:model`: ADR
+         * 0002) and it travels nowhere.
          */
         selectedTypes: defaultSelectedTypes(),
 
         /**
-         * Lo tecleado en el buscador. Igual que las casillas: `x-model`, jamás `wire:model`. El
-         * texto de búsqueda de alguien sobre su propio historial es un dato clínico por sí mismo
-         * («hipoglucemia», el nombre de un fármaco) y no tiene por qué salir del dispositivo; ver el
-         * encabezado de `eventSearch.js`.
+         * What is typed in the search box. Like the checkboxes: `x-model`, never `wire:model`. The
+         * search text of somebody over their own history is a clinical datum in itself
+         * ("hypoglycaemia", a drug name) and has no business leaving the device; see the header of
+         * `eventSearch.js`.
          */
         searchQuery: '',
 
         /**
-         * Los eventos ya descifrados de la última carga.
+         * The already decrypted events of the last load.
          *
-         * No es caché ni un atajo: es lo que permite que el filtro por tipo y la búsqueda repinten
-         * **sin volver a pedir ni a descifrar nada**. Mismo patrón que `chartEvents` en
-         * `glucosePage.js`, y con el mismo límite: se vacía al bloquearse la sesión, porque son
-         * valores en claro de una sesión que ya no está desbloqueada (ADR 0003).
+         * It is not a cache and not a shortcut: it is what lets the type filter and the search
+         * repaint **without asking for or decrypting anything again**. Same pattern as `chartEvents`
+         * in `glucosePage.js`, and with the same limit: it is emptied when the session locks,
+         * because they are values in the clear of a session that is no longer unlocked (ADR 0003).
          *
          * @type {list<object>}
          */
         decryptedEvents: [],
 
-        /** Estado de la última carga, para poder repintar sin volver a pedir. */
+        /** State of the last load, so it can repaint without asking again. */
         failedToOpen: 0,
         truncated: false,
 
         /**
-         * Instancias vivas de Chart.js, una por tipo con gráfica. Se guardan para poder destruirlas
-         * antes de repintar: dos gráficas sobre el mismo lienzo dejan la vieja debajo y los tooltips
-         * de las dos respondiendo al ratón.
+         * Live Chart.js instances, one per type with a chart. They are stored so they can be
+         * destroyed before repainting: two charts on the same canvas leave the old one underneath
+         * and the tooltips of both responding to the mouse.
          *
          * @type {Record<string, object>}
          */
@@ -159,11 +159,11 @@ export function dashboardPage() {
 
         init() {
             /**
-             * DESIGN.md § Charts — Dark: «a chart must also re-read them and redraw when the `.dark`
-             * class on `<html>` changes». Chart.js congela los colores al construir el lienzo, así
-             * que la única forma de conmutar de tema es rehacer la gráfica con los mismos datos, y
-             * repintar aquí no cuesta ni una petición ni un descifrado: los eventos ya están
-             * abiertos en memoria. Sin datos no hay nada que repintar.
+             * DESIGN.md § Charts — Dark: "a chart must also re-read them and redraw when the `.dark`
+             * class on `<html>` changes". Chart.js freezes the colours when the canvas is built, so
+             * the only way to switch theme is rebuilding the chart with the same data, and
+             * repainting here costs neither a request nor a decryption: the events are already open
+             * in memory. With no data there is nothing to repaint.
              */
             observeThemeChange(() => {
                 if (this.decryptedEvents.length > 0) {
@@ -182,21 +182,21 @@ export function dashboardPage() {
         },
 
         /**
-         * Contrato de `dateRangeControl`: al aplicar un periodo se vuelve a cargar por aquí. Es una
-         * carga de verdad —el rango lo aplica el servidor— a diferencia del filtro de tipos y de la
-         * búsqueda, que solo repintan.
+         * Contract of `dateRangeControl`: applying a period loads again through here. It is a real
+         * load —the server applies the range— unlike the type filter and the search, which only
+         * repaint.
          */
         loadHistory() {
             return this.loadSummary();
         },
 
         /**
-         * El origen de datos del panel: pide páginas a Livewire y las abre aquí.
+         * The data source of the panel: it asks Livewire for pages and opens them here.
          *
-         * Es la **única** frontera con el servidor de toda la visualización. El lector del
-         * profesional monta en su lugar `memoryEventSource(...)` sobre el paquete ya descifrado y
-         * las vistas no notan la diferencia; por eso la petición se pasa como función y no se
-         * escribe dentro de los módulos de pintado.
+         * It is the **only** border with the server of the whole display. The professional's reader
+         * mounts `memoryEventSource(...)` in its place over the already decrypted package and the
+         * views notice no difference; that is why the request is passed as a function and not
+         * written inside the painting modules.
          *
          * @param {string} userId
          * @returns {(range: object) => Promise<{events: list<object>, failedToOpen: number, truncated: boolean}>}
@@ -204,12 +204,12 @@ export function dashboardPage() {
         eventSource(userId) {
             return livewireEventSource({
                 userId,
-                /** Mismo orden de argumentos que `HealthEventPage::fetchEvents(?string, int, ?string, ?string)`. */
+                /** Same argument order as `HealthEventPage::fetchEvents(?string, int, ?string, ?string)`. */
                 fetchPage: (cursor, limit, range) => this.$wire.fetchEvents(cursor, limit, range.from, range.to),
             });
         },
 
-        /** Descarga y descifra los eventos del periodo elegido, y pinta con lo que haya marcado. */
+        /** Downloads and decrypts the events of the chosen period, and paints with whatever is ticked. */
         async loadSummary() {
             try {
                 const userId = ownerId();
@@ -233,9 +233,9 @@ export function dashboardPage() {
         },
 
         /**
-         * Repinta con lo ya descifrado. Lo llaman la carga, el filtro de tipos y el buscador; los dos
-         * últimos no piden ni descifran nada, que es lo que permite marcar, desmarcar y teclear sin
-         * esperas.
+         * Repaints with what is already decrypted. The load, the type filter and the search box call
+         * it; the last two ask for and decrypt nothing, which is what allows ticking, unticking and
+         * typing without waits.
          */
         render() {
             const userSettings = settings();
@@ -244,29 +244,29 @@ export function dashboardPage() {
             const unitMismatch = targetRangeUnitMismatch(userSettings, unit);
 
             /**
-             * **El periodo y los tipos son la población; la búsqueda no.** Las gráficas y las
-             * tarjetas se calculan sobre `selected`, y lo tecleado solo estrecha la línea temporal,
-             * que es donde buscar significa «localiza esto».
+             * **The period and the types are the population; the search is not.** The charts and the
+             * cards are computed over `selected`, and what is typed only narrows the timeline, which
+             * is where searching means "find this".
              *
-             * Mientras la búsqueda fue el último filtro de todo, teclear «mañana» —o «140»—
-             * reescribía la media, la mediana y el tiempo en rango sobre el subconjunto de registros
-             * cuyo **texto** contenía esa cadena, con el rótulo «Media» intacto. Una media sobre una
-             * coincidencia de cadena no es una población clínica.
+             * While the search was the last filter of everything, typing "morning" —or "140"—
+             * rewrote the mean, the median and the time in range over the subset of records whose
+             * **text** contained that string, with the "Mean" label untouched. A mean over a string
+             * match is not a clinical population.
              */
             const selected = filterBySelectedTypes(this.decryptedEvents, this.selectedTypes);
             const shown = searchEvents(selected, this.searchQuery);
 
             this.renderNotice(this.failedToOpen, this.truncated, selected.length, selected.length - shown.length);
             /**
-             * Las tres vistas se pintan con la **misma** lista de eventos ya descifrados: ni una
-             * petición ni un descifrado de más.
+             * The three views are painted with the **same** list of already decrypted events: not
+             * one extra request and not one extra decryption.
              */
             this.$refs.timeline.replaceChildren(renderTimelineSection(shown, {
                 emptyStateUrl: urlForType('glucose'),
                 /**
-                 * Si lo que vacía la lista es el buscador, se dice que es el buscador: «no hay
-                 * registros en este periodo» sobre registros que están y solo están filtrados es una
-                 * ausencia leída como un cero clínico.
+                 * If what empties the list is the search box, it is said that it is the search box:
+                 * "no records in this period" over records that are there and merely filtered is an
+                 * absence read as a clinical zero.
                  */
                 emptyText: this.searchQuery.trim() === '' ? undefined : t('dashboard.empty.search'),
             }));
@@ -278,29 +278,29 @@ export function dashboardPage() {
                 urlForType,
             }));
             /**
-             * Los bloques de gráfica los pinta Blade y viven **fuera** de los islands, con
-             * `wire:ignore`: dentro de un `@island`, el servidor los reemite tras cualquier petición
-             * de Livewire y el `<canvas>` desaparece con todo lo dibujado.
+             * The chart blocks are painted by Blade and live **outside** the islands, with
+             * `wire:ignore`: inside an `@island`, the server re-emits them after any Livewire
+             * request and the `<canvas>` disappears with everything drawn on it.
              */
             renderCharts(selected, {
                 glucoseUnit: unit,
                 charts: this.charts,
                 includesType: (type) => this.selectedTypes[type] === true,
                 /**
-                 * El rango objetivo pinta la banda de fondo de la superposición de 24 horas, que es
-                 * lo que convierte esa nube de puntos en información. Llega ya resuelto y ya
-                 * comprobado en la unidad de presentación (ADR 0007: no se convierte), así que si
-                 * está en otra unidad llega `undefined` y la gráfica se dibuja sin banda, en vez de
-                 * con una referencia falsa.
+                 * The target range paints the background band of the 24-hour overlay, which is what
+                 * turns that cloud of points into information. It arrives already resolved and
+                 * already checked in the display unit (ADR 0007: nothing is converted), so if it is
+                 * in another unit it arrives as `undefined` and the chart is drawn with no band,
+                 * instead of with a false reference.
                  */
                 targetRange,
             });
         },
 
         /**
-         * Marcar o desmarcar un tipo, o teclear en el buscador, solo repinta: los datos ya están
-         * descifrados en memoria. Sin sesión desbloqueada no hay nada que repintar y se deja el aviso
-         * de bloqueo en pantalla.
+         * Ticking or unticking a type, or typing in the search box, only repaints: the data is
+         * already decrypted in memory. Without an unlocked session there is nothing to repaint and
+         * the lock notice is left on screen.
          */
         applyFilters() {
             if (!isUnlocked()) {
@@ -312,23 +312,23 @@ export function dashboardPage() {
             this.render();
         },
 
-        /** Nombre que usa la plantilla para las casillas de tipo desde antes del buscador. */
+        /** Name the template has used for the type checkboxes since before the search box. */
         applyTypeFilter() {
             this.applyFilters();
         },
 
         /**
-         * Sin clave no se puede descifrar nada: se dice en las dos regiones, no se pinta un resumen
-         * vacío que se confundiría con «no tienes registros» (ADR 0003: perder la clave es normal).
+         * With no key nothing can be decrypted: it is said in both regions, no empty summary is
+         * painted that would be mistaken for "you have no records" (ADR 0003: losing the key is normal).
          *
-         * Los eventos descifrados de la carga anterior se tiran: son valores en claro de una sesión
-         * que ya no está desbloqueada.
+         * The decrypted events of the previous load are thrown away: they are values in the clear
+         * of a session that is no longer unlocked.
          */
         renderLocked() {
             this.decryptedEvents = [];
             this.failedToOpen = 0;
             this.truncated = false;
-            /** Las gráficas dibujan valores en claro: con la sesión bloqueada no pueden quedarse. */
+            /** The charts draw values in the clear: with the session locked they cannot stay. */
             destroyCharts(this.charts);
 
             this.$refs.notice.replaceChildren();
@@ -337,18 +337,18 @@ export function dashboardPage() {
         },
 
         /**
-         * Avisos de la carga: sobres que no abrieron, resumen recortado, cuántos registros hay
-         * detrás de lo que se está enseñando y cuántos ha dejado fuera la búsqueda.
+         * Notices of the load: envelopes that did not open, a clipped summary, how many records are
+         * behind what is being shown and how many the search left out.
          *
-         * El recuento se dice siempre, no solo cuando algo se recorta: es la referencia que permite
-         * leer «100 entradas» de la línea temporal sabiendo cuántas había. Y lo que esconde el
-         * buscador también se dice, por lo mismo: una lista acortada sin explicación se lee como «no
-         * hay más registros».
+         * The count is always stated, not only when something is clipped: it is the reference that
+         * lets "100 entries" of the timeline be read knowing how many there were. And what the
+         * search box hides is stated too, for the same reason: a shortened list with no explanation
+         * reads as "there are no more records".
          *
          * @param {number} failedToOpen
          * @param {boolean} truncated
-         * @param {number} shownCount Eventos del periodo que pasan el filtro de tipos.
-         * @param {number} hiddenBySearch Cuántos de esos deja fuera el texto buscado.
+         * @param {number} shownCount Events of the period that pass the type filter.
+         * @param {number} hiddenBySearch How many of those the searched text leaves out.
          */
         renderNotice(failedToOpen, truncated, shownCount, hiddenBySearch = 0) {
             const callouts = [];

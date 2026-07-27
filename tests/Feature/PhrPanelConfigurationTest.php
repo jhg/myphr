@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Vite;
 uses(RefreshDatabase::class);
 
 /**
- * Cableado del panel `phr` (Spec 0001 §9 y §10).
+ * Wiring of the `phr` panel (Spec 0001 §9 and §10).
  */
 function phrPanel(): Panel
 {
@@ -22,9 +22,9 @@ function phrPanel(): Panel
 
 it('runs as an SPA but never prefetches', function (): void {
     /**
-     * El prefetching pide la página al pasar el ratón por encima del enlace. Cada una de esas
-     * peticiones es un acceso a datos clínicos que nadie solicitó y que queda en el registro de
-     * auditoría como si la persona hubiera abierto la pantalla.
+     * Prefetching requests the page when you hover over a link. Each of those requests is an access
+     * to clinical data nobody asked for and it lands in the audit log as if the person had opened
+     * the screen.
      */
     expect(phrPanel()->hasSpaMode())->toBeTrue()
         ->and(phrPanel()->hasSpaPrefetching())->toBeFalse();
@@ -37,7 +37,7 @@ it('keeps the JSON endpoints out of the SPA router', function (): void {
 });
 
 it('has no global search', function (): void {
-    /** Resolvería en servidor sobre datos cifrados: no encontraría nada y enviaría lo tecleado. */
+    /** It would resolve on the server over encrypted data: it would find nothing and send what was typed. */
     expect(phrPanel()->getGlobalSearchProvider())->toBeNull();
 });
 

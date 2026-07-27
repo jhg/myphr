@@ -8,14 +8,14 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 uses(RefreshDatabase::class);
 
 /**
- * El `lang` del `<html>` es la única fuente del idioma para todo lo que pinta JavaScript.
+ * The `lang` on `<html>` is the only source of the language for everything JavaScript paints.
  *
- * `resources/js/i18n/index.js` lo lee una vez y lo recuerda: de ahí salen las etiquetas del panel de
- * salud, los pies de las gráficas y los mensajes de validación clínica. Si el servidor emite ahí un
- * idioma distinto del que usa para renderizar con `__()`, la pantalla acaba en dos idiomas a la vez
- * y ningún test lo nota, porque cada mitad es correcta por su lado.
+ * `resources/js/i18n/index.js` reads it once and remembers it: the health panel labels, the chart
+ * captions and the clinical validation messages all come from there. If the server emits a language
+ * there different from the one it renders with using `__()`, the screen ends up in two languages at
+ * once and no test notices, because each half is correct on its own.
  */
-it('emite en el html el mismo idioma que usa para renderizar', function (): void {
+it('emits in the html the same language it renders with', function (): void {
     $user = User::factory()->registered()->create(['locale' => 'zh_CN']);
 
     $html = $this->actingAs($user)
@@ -27,7 +27,7 @@ it('emite en el html el mismo idioma que usa para renderizar', function (): void
         ->and($html)->toContain('data-phr-locale="zh_CN"');
 });
 
-it('respeta la cabecera del navegador en las pantallas sin sesión', function (): void {
+it('honours the browser header on the screens without a session', function (): void {
     $html = $this->get('/phr/login', ['Accept-Language' => 'zh-CN,zh;q=0.9'])
         ->assertOk()
         ->getContent();
@@ -37,14 +37,14 @@ it('respeta la cabecera del navegador en las pantallas sin sesión', function ()
 });
 
 /**
- * El marcador tiene que viajar en el `<body>`, no en el `<head>`.
+ * The marker has to travel in the `<body>`, not in the `<head>`.
  *
- * Ahí está el fallo que este fichero existe para impedir: Livewire navega sin recargar y reemplaza
- * el `<body>`, pero no los atributos del `<html>` ni el `<head>`. Un idioma leído solo de la
- * cabecera se queda en el de la primera carga, que en la práctica es el de la pantalla de acceso,
- * servida por `Accept-Language` cuando todavía no hay sesión.
+ * That is where the bug this file exists to prevent lives: Livewire navigates without reloading and
+ * replaces the `<body>`, but not the attributes of `<html>` and not the `<head>`. A language read
+ * only from the head stays at the one from the first load, which in practice is the login screen's,
+ * served from `Accept-Language` when there is no session yet.
  */
-it('emite el marcador dentro del body', function (): void {
+it('emits the marker inside the body', function (): void {
     $user = User::factory()->registered()->create(['locale' => 'es']);
 
     $html = $this->actingAs($user)->get('/phr')->assertOk()->getContent();
@@ -58,14 +58,13 @@ it('emite el marcador dentro del body', function (): void {
 });
 
 /**
- * El menú de usuario se traduce en cada petición, no al construir el panel.
+ * The user menu is translated on every request, not while building the panel.
  *
- * `PhrPanelProvider::panel()` corre una sola vez, al registrar el panel, y en ese momento todavía no
- * ha pasado `SetLocale`: un `__()` evaluado ahí congela la traducción del primer idioma que hubiera.
- * Es el mismo motivo por el que los títulos de las páginas se resuelven por método y no como
- * propiedad estática.
+ * `PhrPanelProvider::panel()` runs once, when the panel is registered, and at that point `SetLocale`
+ * has not run: a `__()` evaluated there freezes the translation of whatever the first language was.
+ * It is the same reason page titles are resolved by method and not as a static property.
  */
-it('traduce el menú de usuario en el idioma de la cuenta', function (): void {
+it('translates the user menu into the account language', function (): void {
     $user = User::factory()->registered()->create(['locale' => 'zh_CN']);
 
     $this->actingAs($user)
@@ -76,20 +75,20 @@ it('traduce el menú de usuario en el idioma de la cuenta', function (): void {
 });
 
 /**
- * Guardia contra la recaída: ya han sido tres en este proyecto.
+ * A guard against relapse: there have already been three in this project.
  *
- * El cuerpo de `panel()` corre una sola vez. Toda traducción que aparezca ahí tiene que estar dentro
- * de un `Closure` para que Filament la resuelva al pintar, con `SetLocale` ya aplicado. Escrita como
- * cadena suelta se congela en el idioma por defecto y el fallo no da ningún error: simplemente sale
- * en el idioma equivocado, que es de lo más difícil de notar revisando código.
+ * The body of `panel()` runs once. Every translation appearing there has to be inside a `Closure` so
+ * Filament resolves it when painting, with `SetLocale` already applied. Written as a loose string it
+ * freezes into the default language and the fault raises no error: it simply comes out in the wrong
+ * language, which is one of the hardest things to spot in code review.
  */
-it('no evalúa ninguna traducción al construir el panel', function (): void {
+it('evaluates no translation while building the panel', function (): void {
     $lines = file(app_path('Providers/Filament/PhrPanelProvider.php'), FILE_IGNORE_NEW_LINES);
 
     /**
-     * Se miran solo líneas de código. Los comentarios que explican por qué la traducción va dentro
-     * de un `Closure` mencionan `__()` por fuerza, y contarlos haría fallar el test por documentar
-     * justo lo que quiere impedir.
+     * Only lines of code are examined. The comments explaining why the translation goes inside a
+     * `Closure` inevitably mention `__()`, and counting them would make the test fail for
+     * documenting exactly what it wants to prevent.
      */
     $eager = array_filter(
         $lines,
@@ -105,5 +104,5 @@ it('no evalúa ninguna traducción al construir el panel', function (): void {
         },
     );
 
-    expect($eager)->toBe([], 'Traducción evaluada fuera de un Closure: '.implode(' | ', $eager));
+    expect($eager)->toBe([], 'Translation evaluated outside a Closure: '.implode(' | ', $eager));
 });

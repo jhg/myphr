@@ -7,18 +7,18 @@ use Filament\Panel;
 use Livewire\Attributes\Url;
 
 /**
- * Guardarraíl de Spec 0001 §9, «Propiedades en URL».
+ * Guardrail from Spec 0001 §9, "Properties in the URL".
  *
- * `InteractsWithActions` publica en la barra de direcciones la acción abierta de Filament y sus
- * argumentos. En este proyecto el argumento de una acción es casi siempre el identificador de un
- * evento clínico, y una URL acaba en el historial del navegador, en el registro de acceso del
- * proveedor y en el `Referer` de cualquier recurso externo.
+ * `InteractsWithActions` publishes the open Filament action and its arguments in the address bar. In
+ * this project the argument of an action is almost always the identifier of a clinical event, and a
+ * URL ends up in the browser history, in the provider's access log and in the `Referer` of any
+ * external resource.
  *
- * {@see PhrPage} las redeclara sin el atributo. Este test falla si alguna vuelve a aparecer con él
- * en cualquier página registrada en el panel, incluidas las que vengan de Filament o de un paquete.
+ * {@see PhrPage} redeclares them without the attribute. This test fails if any of them shows up with
+ * it again on any page registered in the panel, including those coming from Filament or a package.
  */
 
-/** Las seis de §9, por nombre. */
+/** The six from §9, by name. */
 const URL_PUBLISHED_PROPERTIES = [
     'defaultAction',
     'defaultActionArguments',
@@ -29,8 +29,7 @@ const URL_PUBLISHED_PROPERTIES = [
 ];
 
 /**
- * Toda clase que el panel monta como pantalla: sus páginas, las páginas de sus recursos y la
- * pantalla de login.
+ * Every class the panel mounts as a screen: its pages, its resource pages and the login screen.
  *
  * @return array<int, class-string>
  */

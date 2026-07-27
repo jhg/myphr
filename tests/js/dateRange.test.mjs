@@ -1,12 +1,12 @@
 /**
- * Comprobaciones de `health/dateRange.js`: los atajos del historial y el rango a medida.
+ * Checks of `health/dateRange.js`: the history shortcuts and the custom range.
  *
- * No se monta Alpine: `dateRangeControl()` solo mezcla estado en el componente de cada pantalla, y
- * lo que aquí importa es la lógica pura que decide qué dos fechas se le piden al servidor. El
- * desfase horario se pasa siempre explícito (`timezoneOffsetMinutes`) para que el resultado no
- * dependa de la zona de quien ejecute los tests.
+ * Alpine is not mounted: `dateRangeControl()` only mixes state into the component of each screen,
+ * and what matters here is the pure logic that decides which two dates are asked of the server.
+ * The time offset is always passed explicitly (`timezoneOffsetMinutes`) so the result does not
+ * depend on the zone of whoever runs the tests.
  *
- * Corredor incorporado de Node, como el resto de `tests/js`.
+ * Node's built-in runner, like the rest of `tests/js`.
  *
  *     npm test
  */
@@ -29,24 +29,24 @@ import { setLocale } from '../../resources/js/i18n/index.js';
 
 setLocale('es');
 
-/** UTC, para que las medianoches locales y las UTC coincidan y el cálculo se lea a simple vista. */
+/** UTC, so local midnights and UTC ones coincide and the computation reads at a glance. */
 const UTC = { timezoneOffsetMinutes: 0 };
 
-/** Madrid en marzo: UTC+1, que `getTimezoneOffset()` expresa como -60. */
+/** Madrid in March: UTC+1, which `getTimezoneOffset()` expresses as -60. */
 const MADRID_WINTER = { timezoneOffsetMinutes: -60 };
 
 const REFERENCE = new Date('2026-03-20T10:30:00.000Z');
 
-// --- Atajos relativos ---------------------------------------------------------------------------
+// --- Relative shortcuts -------------------------------------------------------------------------
 
 /**
- * El defecto era `all` para que estrenar el filtro no escondiera registros. Ahora acota a las
- * últimas 24 horas: sin acotar, abrir el historial descarga y descifra todo en el navegador de
- * quien mira, y eso solo empeora con los años. La objeción de entonces sigue viva y se paga en la
- * interfaz —aviso de periodo y botón de «ver todos los registros», ver
- * `tests/Feature/HealthEventRangeTest.php`—, no bajando la ambición del defecto.
+ * The default used to be `all` so that introducing the filter hid no records. Now it clips to the
+ * last 24 hours: without clipping, opening the history downloads and decrypts everything in the
+ * browser of whoever is looking, and that only gets worse over the years. The objection of then
+ * still holds and is paid for in the interface —period notice and "see every record" button, see
+ * `tests/Feature/HealthEventRangeTest.php`—, not by lowering the ambition of the default.
  */
-test('el atajo por defecto acota a las últimas 24 horas, para no descifrar años de oficio', () => {
+test('the default shortcut clips to the last 24 hours, so as not to decrypt years by default', () => {
     assert.equal(DEFAULT_RANGE_PRESET, 'day');
 
     assert.deepEqual(presetRange(DEFAULT_RANGE_PRESET, REFERENCE), {
@@ -54,11 +54,11 @@ test('el atajo por defecto acota a las últimas 24 horas, para no descifrar año
         to: null,
     });
 
-    /** `all` sigue existiendo, y sigue siendo el rango sin puntas. */
+    /** `all` still exists, and is still the range with no ends. */
     assert.deepEqual(presetRange('all', REFERENCE), { from: null, to: null });
 });
 
-test('«última semana» cuenta los mismos días que el panel de inicio', () => {
+test('"last week" counts the same days as the home dashboard', () => {
     assert.equal(WINDOW_DAYS.week, 7);
 
     assert.deepEqual(presetRange('week', REFERENCE), {
@@ -67,7 +67,7 @@ test('«última semana» cuenta los mismos días que el panel de inicio', () => 
     });
 });
 
-test('«último mes» cuenta los mismos días que el panel de inicio', () => {
+test('"last month" counts the same days as the home dashboard', () => {
     assert.equal(WINDOW_DAYS.month, 30);
 
     assert.deepEqual(presetRange('month', REFERENCE), {
@@ -77,25 +77,25 @@ test('«último mes» cuenta los mismos días que el panel de inicio', () => {
 });
 
 /**
- * La punta superior de los atajos relativos queda abierta a propósito: un registro con fecha unos
- * minutos por delante del reloj desaparecería del historial justo después de guardarlo.
+ * The upper end of the relative shortcuts is left open on purpose: a record dated a few minutes
+ * ahead of the clock would disappear from the history right after saving it.
  */
-test('los atajos relativos no ponen techo, para que un registro adelantado no se esconda', () => {
+test('the relative shortcuts set no ceiling, so a record ahead of the clock is not hidden', () => {
     for (const preset of ['day', 'week', 'month']) {
         assert.equal(presetRange(preset, REFERENCE).to, null);
     }
 });
 
-test('un atajo desconocido falla en vez de devolver un rango inventado', () => {
+test('an unknown shortcut fails instead of returning an invented range', () => {
     assert.throws(() => presetRange('trimestre', REFERENCE), DateRangeError);
 });
 
-test('los tokens de los atajos son los que ofrece el desplegable', () => {
+test('the shortcut tokens are the ones the dropdown offers', () => {
     assert.deepEqual([...RANGE_PRESETS], ['all', 'day', 'week', 'month', 'custom']);
 });
 
-/** El periodo por defecto de todas las pantallas: 24 horas hacia atrás, como los demás atajos. */
-test('«último día» son las últimas 24 horas, no el día natural', () => {
+/** The default period of every screen: 24 hours back, like the other shortcuts. */
+test('"last day" is the last 24 hours, not the calendar day', () => {
     assert.equal(WINDOW_DAYS.day, 1);
 
     assert.deepEqual(presetRange('day', REFERENCE), {
@@ -104,13 +104,13 @@ test('«último día» son las últimas 24 horas, no el día natural', () => {
     });
 });
 
-// --- Rango a medida -----------------------------------------------------------------------------
+// --- Custom range -------------------------------------------------------------------------------
 
-test('el rango a medida abarca los dos días completos, con el fin excluido', () => {
+test('the custom range covers both full days, with the end excluded', () => {
     /**
-     * Del 3 al 10 incluidos: la punta superior es la medianoche del 11, no un `23:59:59.999999`.
-     * Así el rango semiabierto `[from, to)` del servidor no deja fuera un registro de la última
-     * fracción de segundo del día 10.
+     * From the 3rd to the 10th included: the upper end is midnight on the 11th, not a
+     * `23:59:59.999999`. That way the half-open `[from, to)` range of the server does not leave out
+     * a record from the last fraction of a second of the 10th.
      */
     assert.deepEqual(customRange('2026-03-03', '2026-03-10', UTC), {
         from: '2026-03-03T00:00:00.000000Z',
@@ -118,7 +118,7 @@ test('el rango a medida abarca los dos días completos, con el fin excluido', ()
     });
 });
 
-test('un solo día de rango sigue siendo un tramo de 24 horas', () => {
+test('a single-day range is still a 24-hour stretch', () => {
     assert.deepEqual(customRange('2026-03-03', '2026-03-03', UTC), {
         from: '2026-03-03T00:00:00.000000Z',
         to: '2026-03-04T00:00:00.000000Z',
@@ -126,45 +126,45 @@ test('un solo día de rango sigue siendo un tramo de 24 horas', () => {
 });
 
 /**
- * La persona elige un día de su calendario, no un instante en UTC: acotar por medianoche UTC le
- * movería el corte una hora y le colaría —o le escondería— los registros del borde.
+ * The person picks a day on their calendar, not an instant in UTC: clipping by UTC midnight would
+ * move the cut by an hour and would slip in —or hide— the records on the edge.
  */
-test('las puntas son medianoches locales, convertidas al instante UTC que les toca', () => {
+test('the ends are local midnights, converted to the UTC instant that matches them', () => {
     assert.deepEqual(customRange('2026-03-03', '2026-03-03', MADRID_WINTER), {
         from: '2026-03-02T23:00:00.000000Z',
         to: '2026-03-03T23:00:00.000000Z',
     });
 });
 
-test('el fin de mes y el de año pasan al día siguiente de verdad', () => {
+test('the end of a month and of a year really move to the next day', () => {
     assert.equal(customRange('2026-01-31', '2026-01-31', UTC).to, '2026-02-01T00:00:00.000000Z');
     assert.equal(customRange('2026-12-31', '2026-12-31', UTC).to, '2027-01-01T00:00:00.000000Z');
     assert.equal(customRange('2028-02-28', '2028-02-28', UTC).to, '2028-02-29T00:00:00.000000Z');
 });
 
-test('un rango del revés se rechaza en vez de devolver la lista vacía sin explicación', () => {
+test('a reversed range is rejected instead of returning an empty list with no explanation', () => {
     assert.throws(() => customRange('2026-03-10', '2026-03-03', UTC), DateRangeError);
 });
 
-test('con una sola fecha no se adivina la otra', () => {
+test('with a single date the other one is not guessed', () => {
     assert.throws(() => customRange('2026-03-10', '', UTC), DateRangeError);
     assert.throws(() => customRange('', '2026-03-10', UTC), DateRangeError);
     assert.throws(() => customRange(undefined, undefined, UTC), DateRangeError);
 });
 
-test('un día imposible se rechaza en vez de normalizarse al mes siguiente', () => {
+test('an impossible day is rejected instead of being normalized to the next month', () => {
     assert.throws(() => localDayStartToCanonical('2026-13-01', UTC), DateRangeError);
     assert.throws(() => localDayStartToCanonical('2026-02-32', UTC), DateRangeError);
     assert.throws(() => localDayStartToCanonical('03/03/2026', UTC), DateRangeError);
 });
 
-test('la forma canónica del ADR 0004 sale con sus seis dígitos de fracción y su Z', () => {
+test('the ADR 0004 canonical form comes out with its six fraction digits and its Z', () => {
     assert.match(localDayStartToCanonical('2026-03-03', UTC), /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/);
 });
 
-// --- Resolución del control ---------------------------------------------------------------------
+// --- Resolution of the control -------------------------------------------------------------------
 
-test('resolveRange lee las dos fechas solo con el atajo a medida', () => {
+test('resolveRange reads both dates only with the custom shortcut', () => {
     const withDays = { fromDay: '2026-03-03', toDay: '2026-03-10', referenceInstant: REFERENCE, ...UTC };
 
     assert.deepEqual(resolveRange({ preset: 'custom', ...withDays }), {
@@ -172,14 +172,14 @@ test('resolveRange lee las dos fechas solo con el atajo a medida', () => {
         to: '2026-03-11T00:00:00.000000Z',
     });
 
-    /** Con un atajo relativo, lo tecleado en los dos campos se ignora: manda el atajo. */
+    /** With a relative shortcut, what is typed in the two fields is ignored: the shortcut rules. */
     assert.deepEqual(resolveRange({ preset: 'all', ...withDays }), { from: null, to: null });
     assert.equal(resolveRange({ preset: 'week', ...withDays }).from, '2026-03-13T10:30:00.000000Z');
 });
 
-// --- Estado del control -------------------------------------------------------------------------
+// --- State of the control -------------------------------------------------------------------------
 
-test('el control arranca acotado al periodo por defecto y sin error', () => {
+test('the control starts clipped to the default period and with no error', () => {
     const control = dateRangeControl();
 
     assert.equal(control.rangePreset, DEFAULT_RANGE_PRESET);
@@ -187,7 +187,7 @@ test('el control arranca acotado al periodo por defecto y sin error', () => {
     assert.equal(control.rangeToDay, '');
     assert.equal(control.rangeError, '');
 
-    /** Acotado de verdad: hay punta inferior, y la superior sigue abierta. */
+    /** Really clipped: there is a lower end, and the upper one is still open. */
     const range = control.historyRange();
 
     assert.notEqual(range.from, null);
@@ -195,22 +195,22 @@ test('el control arranca acotado al periodo por defecto y sin error', () => {
 });
 
 /**
- * La pantalla de compartir arranca en «último mes» porque allí el rango es lo que se va a compartir,
- * no una comodidad de lectura: son dos decisiones distintas sobre el mismo control, y el parámetro
- * es lo que evita escribir un segundo.
+ * The share screen starts at "last month" because there the range is what is going to be shared,
+ * not a reading convenience: they are two different decisions about the same control, and the
+ * parameter is what avoids writing a second one.
  */
-test('la pantalla puede elegir con qué atajo arranca el control', () => {
+test('the screen can choose which shortcut the control starts with', () => {
     assert.equal(dateRangeControl({ preset: 'month' }).rangePreset, 'month');
     assert.equal(dateRangeControl({ preset: 'all' }).rangePreset, 'all');
     assert.equal(dateRangeControl().rangePreset, DEFAULT_RANGE_PRESET);
 });
 
 /**
- * La salida del recorte puesto de oficio. Como el historial ya no arranca en `all`, quitar el
- * filtro tiene que costar un gesto: el botón del aviso de periodo llama aquí, y esto deja el rango
- * abierto, limpia las fechas a medida y recarga sin más intervención.
+ * The way out of the clip applied by default. Since the history no longer starts at `all`,
+ * removing the filter has to cost one gesture: the button of the period notice calls here, and
+ * this leaves the range open, clears the custom dates and reloads with no further intervention.
  */
-test('«ver todos los registros» quita el recorte de un gesto y recarga el historial', () => {
+test('"see every record" removes the clip in one gesture and reloads the history', () => {
     let reloads = 0;
 
     const page = {
@@ -233,13 +233,13 @@ test('«ver todos los registros» quita el recorte de un gesto y recarga el hist
     assert.equal(reloads, 1);
 });
 
-test('un rango mal tecleado deja el historial entero y explica por qué', () => {
+test('a badly typed range leaves the whole history and explains why', () => {
     const control = dateRangeControl();
 
     control.rangePreset = 'custom';
     control.rangeFromDay = '2026-03-10';
 
-    /** Sin fecha de fin: se enseña todo con un aviso, no una pantalla en blanco. */
+    /** With no end date: everything is shown with a warning, not a blank screen. */
     assert.deepEqual(control.historyRange(), { from: null, to: null });
     assert.notEqual(control.rangeError, '');
 
@@ -251,7 +251,7 @@ test('un rango mal tecleado deja el historial entero y explica por qué', () => 
     assert.notEqual(range.to, null);
 });
 
-test('aplicar el rango recarga el historial de la pantalla que lo mezcla', () => {
+test('applying the range reloads the history of the screen that mixes it in', () => {
     let reloads = 0;
 
     const page = {

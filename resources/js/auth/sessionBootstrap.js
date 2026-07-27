@@ -30,12 +30,41 @@ function announceReady() {
 }
 
 /**
+ * Bootstrap already under way, so a second call joins it instead of starting another one.
+ *
+ * On an F5 inside the panel, `app.js` calls this twice: once through the `readyState` branch and
+ * once through `livewire:navigated`, which also fires on the initial load. Without this guard both
+ * calls found no key in memory and both fired `POST /phr/auth/session-secret`. That second request
+ * is not free: with `SESSION_DRIVER=database` the two serialise on the session lock, so it is a
+ * full extra round trip on the slowest path of a reload.
+ *
+ * It is cleared when the recovery settles, so a later navigation with the key already lost —an
+ * expired session, a closed tab— still gets a fresh attempt.
+ *
+ * @type {Promise<void>|null}
+ */
+let inFlight = null;
+
+/**
  * Leaves the master key ready in memory or sends to the login. It does not throw: any unexpected
  * failure also ends at the login, never on a broken screen (ADR 0003).
  *
  * @returns {Promise<void>}
  */
-export async function bootstrapSession() {
+export function bootstrapSession() {
+    inFlight ??= run().finally(() => {
+        inFlight = null;
+    });
+
+    return inFlight;
+}
+
+/**
+ * The bootstrap itself. Always reached through {@see bootstrapSession}, never directly.
+ *
+ * @returns {Promise<void>}
+ */
+async function run() {
     /** The authentication screens (login, set-password) have no session to bootstrap. */
     if (document.querySelector('[data-phr-page]') !== null) {
         return;

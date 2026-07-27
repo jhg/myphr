@@ -202,7 +202,7 @@ it('agrees with the client mirror of the 3DH exchange', function (): void {
 
     $serverPublicKeyshare = $result->ke2->authResponse->serverPublicKeyshare;
 
-    // Espejo del cliente, RFC 9807 §6.4.3.
+    // Client mirror, RFC 9807 §6.4.3.
     $clientIkm = BinaryCodec::concat(
         Ristretto255::scalarMultiply($scenario['clientEphemeralPrivateKey'], $serverPublicKeyshare),
         Ristretto255::scalarMultiply($scenario['clientEphemeralPrivateKey'], $scenario['serverPublicKey']),

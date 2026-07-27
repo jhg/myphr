@@ -10,7 +10,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 uses(RefreshDatabase::class);
 
 /**
- * Las dos pantallas propias de autenticación (Spec 0001 §5, §6.1, §7 y §10; ADR 0001 y 0002).
+ * The two authentication screens of our own (Spec 0001 §5, §6.1, §7 and §10; ADR 0001 and 0002).
  */
 it('serves the login page to a visitor without a session', function (): void {
     $this->get(route('filament.phr.auth.login'))
@@ -24,9 +24,9 @@ it('registers our own login page as the panel login route', function (): void {
 });
 
 /**
- * El guardarraíl de ADR 0002: la contraseña no puede estar ligada al estado de Livewire. Con un
- * `wire:model` viajaría en cada `snapshot` y quedaría en la instantánea de DOM que el componente
- * retiene, que es justo lo que este diseño evita.
+ * The ADR 0002 guardrail: the password cannot be bound to Livewire state. With a `wire:model` it
+ * would travel in every `snapshot` and stay in the DOM snapshot the component keeps, which is
+ * exactly what this design avoids.
  */
 it('never binds the password field to Livewire state', function (string $routeName): void {
     $html = $this->get(route($routeName))->assertOk()->getContent();
@@ -54,7 +54,7 @@ it('serves the set-password page without authentication and without a token in t
     expect($response->headers->get('Cache-Control'))->toContain('no-store')
         ->and($response->headers->get('Referrer-Policy'))->toBe('no-referrer');
 
-    /** El token viaja en el fragmento (§4.1): la ruta no puede tener parámetros. */
+    /** The token travels in the fragment (§4.1): the route cannot have parameters. */
     expect(RegistrationLinks::SET_PASSWORD_PATH)->not->toContain('{');
 });
 

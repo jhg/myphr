@@ -1,9 +1,9 @@
 /**
- * Lectura clínica de un recorte (`resources/js/reader/clinicalReport.js`, ADR 0011).
+ * Clinical reading of a clipping (`resources/js/reader/clinicalReport.js`, ADR 0011).
  *
- * Lo que estos tests fijan no es el aspecto de la tabla, sino lo que un profesional necesita para no
- * leer mal un dato: valor **con** unidad, método de medición, término LOINC sin traducir, y ninguna
- * fila que desaparezca en silencio.
+ * What these tests fix is not the look of the table, but what a professional needs so as not to
+ * misread a datum: value **with** unit, measurement method, untranslated LOINC term, and no row
+ * disappearing in silence.
  *
  *     npm test
  */
@@ -29,7 +29,7 @@ afterEach(() => {
     setLocale(DEFAULT_LOCALE);
 });
 
-/** Recorte del catálogo que emite `App\Sharing\ReaderCatalog`, con los dos idiomas que se afirman. */
+/** Slice of the catalog `App\Sharing\ReaderCatalog` emits, with the two languages asserted here. */
 const CATALOG = {
     locales: [{ code: 'en', label: 'English' }, { code: 'es', label: 'Español' }],
     labels: {
@@ -77,35 +77,35 @@ function event(type, data, extra = {}) {
     };
 }
 
-// --- Vocabulario ---------------------------------------------------------------------------------
+// --- Vocabulary ----------------------------------------------------------------------------------
 
-test('resolveCatalog: un idioma que el catálogo no trae cae al inglés y no deja la tabla en blanco', () => {
+test('resolveCatalog: a language the catalog does not bring falls back to English and does not leave the table blank', () => {
     assert.equal(resolveCatalog(CATALOG, 'zh_CN').labels.types.glucose, 'Blood glucose');
 });
 
-test('labelFor: un token desconocido se enseña tal cual, nunca se calla', () => {
+test('labelFor: an unknown token is shown as is, it is never hidden', () => {
     assert.equal(labelFor(EN, 'glucoseMethods', 'venous'), 'venous');
     assert.equal(labelFor(EN, 'glucoseMethods', undefined), null);
 });
 
-test('unitLabel: el código UCUM se enseña como se lee, no como se intercambia', () => {
+test('unitLabel: the UCUM code is shown as it is read, not as it is interchanged', () => {
     assert.equal(unitLabel(EN, 'Cel'), '°C');
     assert.equal(unitLabel(EN, '/min'), 'bpm');
-    /** Un código que la tabla no conoce se enseña crudo antes que desaparecer. */
+    /** A code the table does not know is shown raw rather than disappearing. */
     assert.equal(unitLabel(EN, '[oz_av]'), '[oz_av]');
 });
 
-test('measurement: valor y unidad juntos, y el valor sin reformatear', () => {
+test('measurement: value and unit together, and the value unformatted', () => {
     /**
-     * El valor viaja como cadena dentro del sobre (ADR 0004) y aquí no se convierte: `7.8` es lo
-     * que marcó el aparato, y reescribirlo como `7,8` por estar en castellano sería reinterpretar
-     * una medida.
+     * The value travels as a string inside the envelope (ADR 0004) and it is not converted here:
+     * `7.8` is what the device showed, and rewriting it as `7,8` because the language is Spanish
+     * would be reinterpreting a measurement.
      */
     setLocale('es');
     assert.equal(measurement(EN, '7.8', 'mg/dL'), '7.8 mg/dL');
 });
 
-test('loincEntries: una cadena y un objeto de varias magnitudes salen con la misma forma', () => {
+test('loincEntries: a string and an object of several quantities come out in the same shape', () => {
     assert.deepEqual(loincEntries(EN, '41653-7'), [
         { code: '41653-7', name: 'Glucose [Mass/volume] in Capillary blood by Glucometer' },
     ]);
@@ -115,13 +115,13 @@ test('loincEntries: una cadena y un objeto de varias magnitudes salen con la mis
         ['8480-6', '8462-4'],
     );
 
-    /** Un código que el catálogo no conoce se enseña sin término, nunca se omite. */
+    /** A code the catalog does not know is shown with no term, it is never left out. */
     assert.deepEqual(loincEntries(EN, '99999-9'), [{ code: '99999-9', name: null }]);
 });
 
-// --- Una fila por tipo ---------------------------------------------------------------------------
+// --- One row per type ------------------------------------------------------------------------------
 
-test('glucemia: valor con unidad, método, contexto y término LOINC', () => {
+test('glucose: value with unit, method, context and LOINC term', () => {
     const row = describeEvent(EN, event('glucose', {
         value: '112',
         unit: 'mg/dL',
@@ -138,7 +138,7 @@ test('glucemia: valor con unidad, método, contexto y término LOINC', () => {
     assert.equal(row.unreadable, false);
 });
 
-test('tensión: sistólica/diastólica con unidad, pulso, brazo y postura', () => {
+test('blood pressure: systolic/diastolic with unit, pulse, arm and posture', () => {
     const row = describeEvent(EN, event('bloodPressure', {
         systolic: '128',
         diastolic: '82',
@@ -156,7 +156,7 @@ test('tensión: sistólica/diastólica con unidad, pulso, brazo y postura', () =
     assert.equal(row.loinc.length, 3);
 });
 
-test('insulina: dosis con unidad, tipo, producto y zona', () => {
+test('insulin: dose with unit, type, product and site', () => {
     const row = describeEvent(EN, event('insulin', {
         insulinType: 'rapid',
         dose: '6',
@@ -169,7 +169,7 @@ test('insulina: dosis con unidad, tipo, producto y zona', () => {
     assert.deepEqual(row.details.slice(0, 3), ['Rapid-acting', 'NovoRapid', 'Abdomen']);
 });
 
-test('comida: tipo de comida y la lista de alimentos legible', () => {
+test('meal: meal type and the readable food list', () => {
     const row = describeEvent(EN, event('meal', {
         mealType: 'lunch',
         foods: [{ name: 'Rice', quantity: '80', unit: 'g' }],
@@ -179,7 +179,7 @@ test('comida: tipo de comida y la lista de alimentos legible', () => {
     assert.ok(row.details.includes('Rice · 80 grams'));
 });
 
-test('peso: valor con unidad y la estatura cuando la hay', () => {
+test('weight: value with unit and the height when there is one', () => {
     const row = describeEvent(EN, event('bodyWeight', {
         value: '71.4',
         unit: 'kg',
@@ -191,7 +191,7 @@ test('peso: valor con unidad y la estatura cuando la hay', () => {
     assert.ok(row.details.includes('Height 172 cm'));
 });
 
-test('temperatura: valor con unidad y sitio de medición', () => {
+test('temperature: value with unit and measurement site', () => {
     const row = describeEvent(EN, event('temperature', { value: '37.2', unit: 'Cel', loinc: '8331-1', site: 'oral' }));
 
     assert.equal(row.value, '37.2 °C');
@@ -199,10 +199,10 @@ test('temperatura: valor con unidad y sitio de medición', () => {
 });
 
 /**
- * Quién apuntó el registro se dice siempre, también cuando es la propia persona: un dato apuntado
- * por quien cuida a alguien y uno apuntado por esa persona no valen lo mismo en consulta.
+ * Who wrote the record down is always said, including when it is the person themselves: a datum
+ * written by a carer and one written by that person are not worth the same in an appointment.
  */
-test('cada fila dice quién lo apuntó y con qué aparato', () => {
+test('every row says who wrote it down and with which device', () => {
     const row = describeEvent(EN, event(
         'glucose',
         { value: '90', unit: 'mg/dL', loinc: '41653-7', method: 'capillary' },
@@ -215,11 +215,11 @@ test('cada fila dice quién lo apuntó y con qué aparato', () => {
 });
 
 /**
- * Un registro con forma inesperada se pinta como fila de error y **nunca** se omite (ADR 0004): en
- * un recorte que va a leer otra persona, un registro que falta es indistinguible de un registro que
- * no existió, y esa diferencia es clínica.
+ * A record with an unexpected shape is painted as an error row and is **never** left out (ADR
+ * 0004): in a clipping somebody else is going to read, a missing record is indistinguishable from
+ * a record that never existed, and that difference is clinical.
  */
-test('un evento ilegible sale como fila marcada, con su fecha, y no desaparece', () => {
+test('an unreadable event comes out as a flagged row, with its date, and does not disappear', () => {
     for (const broken of [event('glucose', null), event('unicornio', { value: '1' })]) {
         const row = describeEvent(EN, broken);
 
@@ -229,9 +229,9 @@ test('un evento ilegible sale como fila marcada, con su fecha, y no desaparece',
     }
 });
 
-// --- Cabecera y orden ----------------------------------------------------------------------------
+// --- Header and order ------------------------------------------------------------------------------
 
-test('ordena de lo más reciente a lo más antiguo', () => {
+test('it sorts from the most recent to the oldest', () => {
     const sorted = sortByDateDescending([
         { occurredAt: '2026-07-01T10:00:00.000000Z' },
         { occurredAt: '2026-07-20T10:00:00.000000Z' },
@@ -242,10 +242,10 @@ test('ordena de lo más reciente a lo más antiguo', () => {
 });
 
 /**
- * La cabecera es lo que hace visible un recorte truncado: quien lee compara el número que anuncia
- * con las filas que tiene delante. Por eso el recuento sale **siempre**, también con cero eventos.
+ * The header is what makes a truncated clipping visible: the reader compares the number it
+ * announces with the rows in front of them. So the count comes out **always**, even with zero events.
  */
-test('la cabecera dice siempre cuántos, de cuándo a cuándo y cuándo se generó', () => {
+test('the header always says how many, from when to when and when it was generated', () => {
     const headline = reportHeadline({
         eventCount: 0,
         events: [],
@@ -258,17 +258,17 @@ test('la cabecera dice siempre cuántos, de cuándo a cuándo y cuándo se gener
     assert.match(headline.generatedAt, /^Generated on /);
 });
 
-test('un rango abierto se dice con palabras, no con un hueco', () => {
+test('an open range is said with words, not with a gap', () => {
     assert.equal(rangeText(null, null), 'Covering the whole history');
     assert.match(rangeText('2026-06-01T00:00:00.000000Z', null), /^Covering from /);
     assert.match(rangeText(null, '2026-07-01T00:00:00.000000Z'), /^Covering up to /);
 });
 
 /**
- * Los tipos excluidos se dicen en voz alta: una ausencia se lee como un cero clínico, y «no apunta
- * comidas» no es lo mismo que «no me las enseñó».
+ * The excluded types are said out loud: an absence reads as a clinical zero, and "they do not
+ * record meals" is not the same as "they did not show me any".
  */
-test('la cabecera nombra los tipos incluidos y los excluidos', () => {
+test('the header names the included and the excluded types', () => {
     const summary = typeSummary(EN, { includedTypes: ['glucose'], excludedTypes: ['meal', 'insulin'] });
 
     assert.equal(summary.included, 'Includes: Blood glucose');
@@ -277,7 +277,7 @@ test('la cabecera nombra los tipos incluidos y los excluidos', () => {
     assert.equal(typeSummary(EN, { includedTypes: ['glucose'], excludedTypes: [] }).excluded, null);
 });
 
-test('el idioma del lector cambia las etiquetas pero nunca el término LOINC', () => {
+test('the reader language changes the labels but never the LOINC term', () => {
     setLocale('es');
 
     const spanish = resolveCatalog(CATALOG, 'es');
@@ -290,6 +290,6 @@ test('el idioma del lector cambia las etiquetas pero nunca el término LOINC', (
 
     assert.equal(row.typeLabel, 'Glucemia');
     assert.ok(row.details.includes('Sangre capilar'));
-    /** ADR 0005: el término oficial LOINC no se traduce. */
+    /** ADR 0005: the official LOINC term is not translated. */
     assert.equal(row.loinc[0].name, 'Glucose [Mass/volume] in Capillary blood by Glucometer');
 });

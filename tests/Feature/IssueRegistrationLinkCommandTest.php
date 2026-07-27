@@ -17,7 +17,7 @@ beforeEach(function (): void {
     app()->instance(Terminal::class, new FakeTerminal);
 });
 
-it('crea la cuenta con el email normalizado y emite un enlace', function (): void {
+it('creates the account with the normalized email and issues a link', function (): void {
     $this->artisan('phr:issue-registration-link', ['email' => '  ÁLVARO@Example.COM ', '--name' => 'Álvaro'])
         ->assertSuccessful();
 
@@ -29,7 +29,7 @@ it('crea la cuenta con el email normalizado y emite un enlace', function (): voi
         ->and($user->registrationLinks()->count())->toBe(1);
 });
 
-it('reutiliza la cuenta existente en vez de duplicarla', function (): void {
+it('reuses the existing account instead of duplicating it', function (): void {
     $user = User::factory()->create(['email' => 'alice@example.com']);
 
     $this->artisan('phr:issue-registration-link', ['email' => 'ALICE@example.com'])->assertSuccessful();
@@ -38,14 +38,14 @@ it('reutiliza la cuenta existente en vez de duplicarla', function (): void {
         ->and($user->registrationLinks()->count())->toBe(1);
 });
 
-it('usa el email como nombre cuando no se pasa --name', function (): void {
+it('uses the email as the name when --name is not passed', function (): void {
     $this->artisan('phr:issue-registration-link', ['email' => 'alice@example.com'])->assertSuccessful();
 
     expect(User::query()->sole()->name)->toBe('alice@example.com');
 });
 
-/** ADR 0009: la URL solo se imprime; si la salida no es un terminal, no se emite nada. */
-it('aborta si la salida no es un terminal interactivo', function (): void {
+/** ADR 0009: the URL is only printed; if the output is not a terminal, nothing is issued. */
+it('aborts if the output is not an interactive terminal', function (): void {
     app()->instance(Terminal::class, new FakeTerminal(interactive: false));
 
     $this->artisan('phr:issue-registration-link', ['email' => 'alice@example.com'])->assertFailed();
@@ -54,14 +54,14 @@ it('aborta si la salida no es un terminal interactivo', function (): void {
         ->and(UserRegistrationLink::query()->count())->toBe(0);
 });
 
-it('rechaza un email inválido sin crear nada', function (): void {
+it('rejects an invalid email without creating anything', function (): void {
     $this->artisan('phr:issue-registration-link', ['email' => 'no-es-un-email'])->assertFailed();
 
     expect(User::query()->count())->toBe(0);
 });
 
-/** Spec 0001 §3.4: la reemisión sobre una cuenta con acceso exige teclear su email. */
-it('emite la reemisión solo si se teclea el email de la cuenta', function (): void {
+/** Spec 0001 §3.4: reissuing on an account with access requires typing its email. */
+it('only reissues if the account email is typed', function (): void {
     $user = User::factory()->registered()->create(['email' => 'alice@example.com']);
 
     $this->artisan('phr:issue-registration-link', ['email' => 'alice@example.com'])
@@ -77,8 +77,8 @@ it('emite la reemisión solo si se teclea el email de la cuenta', function (): v
     expect($user->registrationLinks()->count())->toBe(1);
 });
 
-/** `--no-interaction` no puede saltarse la confirmación (Spec 0001 §3.4). */
-it('no reemite con --no-interaction sobre una cuenta registrada', function (): void {
+/** `--no-interaction` cannot skip the confirmation (Spec 0001 §3.4). */
+it('does not reissue with --no-interaction on a registered account', function (): void {
     $user = User::factory()->registered()->create(['email' => 'alice@example.com']);
 
     $this->artisan('phr:issue-registration-link', ['email' => 'alice@example.com', '--no-interaction' => true])
@@ -87,7 +87,7 @@ it('no reemite con --no-interaction sobre una cuenta registrada', function (): v
     expect($user->registrationLinks()->count())->toBe(0);
 });
 
-it('imprime la URL con el token en el fragmento', function (): void {
+it('prints the URL with the token in the fragment', function (): void {
     $this->artisan('phr:issue-registration-link', ['email' => 'alice@example.com'])
         ->expectsOutputToContain(url('phr/set-password').'#')
         ->assertSuccessful();

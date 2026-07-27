@@ -49,7 +49,43 @@ import { zeroize } from '../crypto/zeroize.js';
 import { decodeBase64Url, encodeBase64Url } from '../crypto/base64url.js';
 import { setLocale, t } from '../i18n/index.js';
 import { resolveCatalog } from './clinicalReport.js';
-import { renderClippingExplorer } from './clippingExplorer.js';
+
+/**
+ * The clipping view —and with it Chart.js, which is the bulk of it— is **not** imported here at the
+ * top. Statically it lands in the same chunk as this file, and the browser would have to download
+ * and evaluate 391 KB before painting a PIN field that needs none of it: the professional stares at
+ * a card with no title on a mobile connection, which is the first of the "slow steps" they report.
+ *
+ * Loading it starts as soon as the screen mounts, so it travels **while the PIN is being typed and
+ * while Argon2id runs** — time that is already being spent — and by the time the package is
+ * decrypted it is normally here. `renderReport()` awaits it, so it is correct even if it is not.
+ *
+ * @type {Promise<typeof import('./clippingExplorer.js')>|null}
+ */
+let explorerModule = null;
+
+/** @returns {Promise<typeof import('./clippingExplorer.js')>} */
+function loadExplorer() {
+    explorerModule ??= import('./clippingExplorer.js');
+
+    return explorerModule;
+}
+
+/**
+ * Waits for the browser to actually paint.
+ *
+ * Two frames, not one: the first is scheduled before the DOM change has been laid out, so only the
+ * second guarantees that what reached the screen includes it. It is used before the one stretch of
+ * this screen that still blocks the thread on purpose —building the charts— so that the state
+ * announced just before it is seen rather than skipped.
+ *
+ * @returns {Promise<void>}
+ */
+function nextPaint() {
+    return new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    });
+}
 
 /** Error of this screen: caused by what was typed or by what the server answered. */
 export class ReaderError extends Error {
@@ -191,6 +227,32 @@ async function post(url, body) {
 }
 
 /**
+ * First step of ADR 0011: asks for the salt the PIN is stretched with.
+ *
+ * It is its own function because it does not depend on the PIN, and that is worth exploiting: the
+ * screen fires it while the page is still loading, so by the time the professional has typed six
+ * digits the salt is already here and one full round trip has left the critical path. Nothing about
+ * the request changes by happening earlier — it takes no PIN, consumes no attempt, and the server
+ * answers the same 16 bytes to anyone who asks (`ShareLinkGate::challenge()`), a deterministic
+ * decoy when the link is dead. What changes is only *when* it happens.
+ *
+ * The salt always arrives, whether the link exists or not, so this screen cannot tell a live link
+ * from a dead one: Argon2id runs all the same and the failure arrives later, in `open`.
+ *
+ * @param {{challenge: string}} endpoints
+ * @returns {Promise<Uint8Array>} 16 bytes.
+ */
+export async function requestPinSalt(endpoints) {
+    const challenge = await post(endpoints.challenge, {});
+
+    if (challenge.status !== 200 || typeof challenge.data?.pinSalt !== 'string') {
+        throw new ReaderError(t('reader.error.network'));
+    }
+
+    return decodeBase64Url(challenge.data.pinSalt, 'pin salt');
+}
+
+/**
  * Opens the whole clipping: PIN → salt → Argon2id → proof → package → content in the clear.
  *
  * All key material is wiped in the `finally` with `zeroize` (ADR 0004): the PIN stretching opens
@@ -204,9 +266,10 @@ async function post(url, body) {
  * @param {Uint8Array} params.sendKey `S`, from the fragment.
  * @param {Date} params.generatedAt Generation instant, from the fragment.
  * @param {(fraction: number) => void} [params.onProgress] Real Argon2id progress.
+ * @param {Promise<Uint8Array>} [params.pinSalt] Salt already being fetched by {@see requestPinSalt}.
  * @returns {Promise<object>} Package body in the clear.
  */
-export async function openClipping({ endpoints, linkId, pin, sendKey, generatedAt, onProgress }) {
+export async function openClipping({ endpoints, linkId, pin, sendKey, generatedAt, onProgress, pinSalt: pending }) {
     /** @type {Uint8Array|null} */
     let stretched = null;
     /** @type {Uint8Array|null} */
@@ -217,18 +280,7 @@ export async function openClipping({ endpoints, linkId, pin, sendKey, generatedA
     let contentKey = null;
 
     try {
-        const challenge = await post(endpoints.challenge, {});
-
-        if (challenge.status !== 200 || typeof challenge.data?.pinSalt !== 'string') {
-            throw new ReaderError(t('reader.error.network'));
-        }
-
-        /**
-         * The salt always arrives, whether the link exists or not: for a dead link the server
-         * returns a deterministic decoy, so this screen cannot tell them apart. Here that means
-         * Argon2id runs all the same and the failure arrives later, in `open`.
-         */
-        const pinSalt = decodeBase64Url(challenge.data.pinSalt, 'pin salt');
+        const pinSalt = await (pending ?? requestPinSalt(endpoints));
 
         stretched = await stretchPinAsync({ pin, pinSalt, onProgress });
         pinTag = derivePinTag({ stretched, pinSalt, linkId });
@@ -315,6 +367,8 @@ export function startReaderPage(document, window) {
         busy: false,
         /** @type {{sendKey: Uint8Array, generatedAt: Date}|null} */
         fragment: null,
+        /** Salt request already in flight ({@see requestPinSalt}). */
+        pinSalt: null,
         error: '',
     };
 
@@ -335,6 +389,30 @@ export function startReaderPage(document, window) {
     renderStaticText();
     renderLocaleChoices();
     renderError();
+
+    /**
+     * Two things start now and are waited on later, so that the two idle stretches of this
+     * screen —the person reading the card and typing six digits, and the seconds of Argon2id— are
+     * spent on the network instead of being spent twice.
+     *
+     * The salt is only asked for when the link came whole: with no fragment there is nothing to
+     * open, and a request for a link nobody can read is a request that says this identifier was
+     * visited, for no gain.
+     */
+    if (state.fragment !== null) {
+        state.pinSalt = requestPinSalt(config.endpoints);
+
+        /**
+         * A salt that failed to arrive is dropped, so the next attempt asks again instead of
+         * replaying the same rejection for ever. This handler is also what keeps the browser from
+         * logging it as unhandled, since nothing is awaiting the promise yet.
+         */
+        state.pinSalt.catch(() => {
+            state.pinSalt = null;
+        });
+    }
+
+    void loadExplorer().catch(() => {});
 
     nodes.form.addEventListener('submit', (event) => {
         event.preventDefault();
@@ -380,7 +458,7 @@ export function startReaderPage(document, window) {
                 renderStaticText();
                 renderLocaleChoices();
                 renderError();
-                renderReport();
+                void renderReport();
             });
 
             nodes.locales.appendChild(button);
@@ -436,16 +514,24 @@ export function startReaderPage(document, window) {
                 endpoints: config.endpoints,
                 linkId: config.linkId,
                 pin,
+                pinSalt: state.pinSalt ?? undefined,
                 sendKey: state.fragment.sendKey,
                 generatedAt: state.fragment.generatedAt,
                 onProgress: (fraction) => renderProgress(t('reader.stage.deriving'), 0.05 + fraction * 0.85),
             });
 
-            renderProgress(t('reader.stage.decrypting'), 1);
-
+            /**
+             * The full bar is painted **before** the report is built, and we wait for the paint.
+             * Building it is a synchronous stretch of Chart.js work, so without this wait the 100 %
+             * would be written to a DOM that goes straight into that stretch and never gets shown:
+             * the bar would stop at 90 % and the screen would sit there with no explanation.
+             */
             state.body = body;
+            renderProgress(t('reader.stage.rendering'), 1);
+            await nextPaint();
+
             nodes.unlock.hidden = true;
-            renderReport();
+            await renderReport();
         } catch (failure) {
             /**
              * A `ReaderError` with no message is the generic server failure: it does not exist, it
@@ -474,10 +560,12 @@ export function startReaderPage(document, window) {
      * previous view is unmounted before mounting the new one: without the `destroy()`, the Chart.js
      * instance of the previous language would stay tied to a canvas no longer in the document.
      */
-    function renderReport() {
+    async function renderReport() {
         if (state.body === null) {
             return;
         }
+
+        const { renderClippingExplorer } = await loadExplorer();
 
         state.explorer?.destroy();
 

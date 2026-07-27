@@ -44,6 +44,22 @@ export function loginForm() {
         busy: false,
         error: '',
 
+        /**
+         * Starts downloading and compiling the OPAQUE WebAssembly as soon as the form mounts.
+         *
+         * It is the one piece of the sign-in path that depends on nothing the person types, so
+         * waiting for the button press to fetch 310 KB of WebAssembly and compile it was time
+         * charged to the click for no reason. It normally finishes while the login and the password
+         * are still being typed; if it does not, `run()` awaits the very same promise, so nothing
+         * about the order of the protocol changes.
+         *
+         * A failure here is swallowed: `run()` will hit it again with a person in front of the
+         * screen to tell.
+         */
+        init() {
+            void opaqueReady().catch(() => {});
+        },
+
         /** @param {SubmitEvent} event */
         async submit(event) {
             if (this.busy) {
@@ -84,7 +100,7 @@ export function loginForm() {
 
             const pinned = opaqueParameters();
 
-            const { clientLoginState, startLoginRequest } = startLogin(password);
+            const { clientLoginState, startLoginRequest } = await startLogin(password);
 
             await this.advance(t('login.stage.contacting'), 0.25);
 
@@ -102,7 +118,7 @@ export function loginForm() {
              */
             await this.advance(t('login.stage.stretching'), 0.85, KEY_STRETCHING_SECONDS);
 
-            const finished = finishLogin({
+            const finished = await finishLogin({
                 password,
                 clientLoginState,
                 loginResponse: started.loginResponse,

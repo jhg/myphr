@@ -1,8 +1,8 @@
 /**
- * Comprobaciones de `health/statistics.js` (ADR 0004, ADR 0006, ADR 0007, ADR 0008).
+ * Checks of `health/statistics.js` (ADR 0004, ADR 0006, ADR 0007, ADR 0008).
  *
- * Lógica pura, sin DOM ni Chart.js: se llama directamente a las funciones exportadas.
- * Corredor incorporado de Node, como el resto de `tests/js` (ver `crypto.test.mjs`).
+ * Pure logic, with no DOM and no Chart.js: the exported functions are called directly.
+ * Node's built-in runner, like the rest of `tests/js` (see `crypto.test.mjs`).
  *
  *     npm test
  */
@@ -20,9 +20,9 @@ import {
 } from '../../resources/js/health/statistics.js';
 
 /**
- * Estas funciones ya no acotan por ventana: el periodo lo aplica el servidor al pedir los eventos
- * (`[from, to)` de `HealthEventPage::fetchEvents()`), así que aquí llegan los del periodo ya
- * elegido. Lo que se prueba es el cálculo, no el recorte.
+ * These functions no longer clip by window: the period is applied by the server when asking for
+ * the events (`[from, to)` of `HealthEventPage::fetchEvents()`), so the ones of the chosen period
+ * arrive here. What is tested is the computation, not the clipping.
  */
 
 /**
@@ -55,15 +55,15 @@ function bpEvent({ occurredAt, systolic, diastolic, pulse, method = 'left_sittin
     };
 }
 
-// --- Glucemia ----------------------------------------------------------------------------------
+// --- Glucose -----------------------------------------------------------------------------------
 
-test('summarizeGlucosePeriod: lista vacía da un resumen vacío bien formado', () => {
+test('summarizeGlucosePeriod: an empty list gives a well-formed empty summary', () => {
     const summary = summarizeGlucosePeriod([], { unit: 'mg/dL' });
 
     assert.deepEqual(summary, { byMethod: {}, excludedByUnit: 0, discarded: 0 });
 });
 
-test('summarizeGlucosePeriod: media y mediana con número impar de muestras', () => {
+test('summarizeGlucosePeriod: mean and median with an odd number of samples', () => {
     const events = [
         glucoseEvent({ occurredAt: 't1', value: '100' }),
         glucoseEvent({ occurredAt: 't2', value: '110' }),
@@ -74,12 +74,12 @@ test('summarizeGlucosePeriod: media y mediana con número impar de muestras', ()
 
     assert.equal(byMethod.capillary.count, 3);
     assert.equal(byMethod.capillary.mean, 100);
-    assert.equal(byMethod.capillary.median, 100); // muestra central de [90, 100, 110]
+    assert.equal(byMethod.capillary.median, 100); // central sample of [90, 100, 110]
     assert.equal(byMethod.capillary.min, 90);
     assert.equal(byMethod.capillary.max, 110);
 });
 
-test('summarizeGlucosePeriod: mediana con número par de muestras es el promedio de las dos centrales', () => {
+test('summarizeGlucosePeriod: the median with an even number of samples is the average of the two central ones', () => {
     const events = [
         glucoseEvent({ occurredAt: 't1', value: '80' }),
         glucoseEvent({ occurredAt: 't2', value: '90' }),
@@ -94,7 +94,7 @@ test('summarizeGlucosePeriod: mediana con número par de muestras es el promedio
     assert.equal(byMethod.capillary.mean, 95);
 });
 
-test('summarizeGlucosePeriod: separa de verdad por método de medición (ADR 0008)', () => {
+test('summarizeGlucosePeriod: it really separates by measurement method (ADR 0008)', () => {
     const events = [
         glucoseEvent({ occurredAt: '2026-07-25T09:00:00.000000Z', value: '100', method: 'capillary' }),
         glucoseEvent({ occurredAt: '2026-07-25T09:30:00.000000Z', value: '120', method: 'interstitial' }),
@@ -107,13 +107,13 @@ test('summarizeGlucosePeriod: separa de verdad por método de medición (ADR 000
     assert.equal(byMethod.capillary.count, 2);
     assert.equal(byMethod.interstitial.count, 1);
 
-    // La última lectura de cada método es la de ese método, no la global.
+    // The last reading of each method is the one of that method, not the global one.
     assert.equal(byMethod.capillary.last.value, 104);
     assert.equal(byMethod.capillary.last.occurredAt, '2026-07-25T10:00:00.000000Z');
     assert.equal(byMethod.interstitial.last.value, 120);
 });
 
-test('summarizeGlucosePeriod: excluye los eventos en otra unidad y los cuenta, sin mezclarlos', () => {
+test('summarizeGlucosePeriod: excludes the events in another unit and counts them, without mixing them in', () => {
     const events = [
         glucoseEvent({ occurredAt: 't1', value: '100', unit: 'mg/dL' }),
         glucoseEvent({ occurredAt: 't2', value: '5.5', unit: 'mmol/L' }),
@@ -126,7 +126,7 @@ test('summarizeGlucosePeriod: excluye los eventos en otra unidad y los cuenta, s
     assert.equal(byMethod.capillary.count, 2);
 });
 
-test('summarizeGlucosePeriod: sin rango objetivo configurado, no hay inRangePercent en ningún grupo', () => {
+test('summarizeGlucosePeriod: with no target range configured, there is no inRangePercent in any group', () => {
     const events = [glucoseEvent({ occurredAt: 't1', value: '100' })];
 
     const { byMethod } = summarizeGlucosePeriod(events, { unit: 'mg/dL' });
@@ -134,12 +134,12 @@ test('summarizeGlucosePeriod: sin rango objetivo configurado, no hay inRangePerc
     assert.equal('inRangePercent' in byMethod.capillary, false);
 });
 
-test('summarizeGlucosePeriod: con rango objetivo, calcula el porcentaje en rango correctamente', () => {
+test('summarizeGlucosePeriod: with a target range, it computes the in-range percentage correctly', () => {
     const events = [
-        glucoseEvent({ occurredAt: 't1', value: '70' }), // fuera (bajo)
-        glucoseEvent({ occurredAt: 't2', value: '100' }), // dentro
-        glucoseEvent({ occurredAt: 't3', value: '110' }), // dentro
-        glucoseEvent({ occurredAt: 't4', value: '200' }), // fuera (alto)
+        glucoseEvent({ occurredAt: 't1', value: '70' }), // outside (low)
+        glucoseEvent({ occurredAt: 't2', value: '100' }), // inside
+        glucoseEvent({ occurredAt: 't3', value: '110' }), // inside
+        glucoseEvent({ occurredAt: 't4', value: '200' }), // outside (high)
     ];
 
     const { byMethod } = summarizeGlucosePeriod(events, {
@@ -150,7 +150,7 @@ test('summarizeGlucosePeriod: con rango objetivo, calcula el porcentaje en rango
     assert.equal(byMethod.capillary.inRangePercent, 50);
 });
 
-test('summarizeGlucosePeriod: sin rango objetivo tampoco hay tramos de por debajo ni de por encima', () => {
+test('summarizeGlucosePeriod: with no target range there are no below or above bands either', () => {
     const events = [glucoseEvent({ occurredAt: 't1', value: '100' })];
 
     const { byMethod } = summarizeGlucosePeriod(events, { unit: 'mg/dL' });
@@ -160,16 +160,16 @@ test('summarizeGlucosePeriod: sin rango objetivo tampoco hay tramos de por debaj
 });
 
 /**
- * «68 % en rango» no dice si el 32 % restante son hipoglucemias o hiperglucemias, que son
- * situaciones clínicas opuestas. Los tres tramos reparten todas las lecturas y por eso se calculan
- * juntos, no por diferencia.
+ * "68% in range" does not say whether the remaining 32% are hypoglycaemias or hyperglycaemias,
+ * which are opposite clinical situations. The three bands split every reading and that is why they
+ * are computed together, not by difference.
  */
-test('summarizeGlucosePeriod: reparte las lecturas en los tres tramos del rango objetivo', () => {
+test('summarizeGlucosePeriod: it splits the readings into the three bands of the target range', () => {
     const events = [
-        glucoseEvent({ occurredAt: 't1', value: '60' }), // por debajo
-        glucoseEvent({ occurredAt: 't2', value: '79' }), // por debajo
-        glucoseEvent({ occurredAt: 't3', value: '100' }), // dentro
-        glucoseEvent({ occurredAt: 't4', value: '200' }), // por encima
+        glucoseEvent({ occurredAt: 't1', value: '60' }), // below
+        glucoseEvent({ occurredAt: 't2', value: '79' }), // below
+        glucoseEvent({ occurredAt: 't3', value: '100' }), // inside
+        glucoseEvent({ occurredAt: 't4', value: '200' }), // above
     ];
 
     const { byMethod } = summarizeGlucosePeriod(events, {
@@ -182,8 +182,8 @@ test('summarizeGlucosePeriod: reparte las lecturas en los tres tramos del rango 
     assert.equal(byMethod.capillary.aboveRangePercent, 25);
 });
 
-/** Los dos límites son parte del rango: una lectura clavada en el límite no está fuera. */
-test('summarizeGlucosePeriod: los límites del rango cuentan como dentro, no como fuera', () => {
+/** Both limits are part of the range: a reading exactly on the limit is not outside. */
+test('summarizeGlucosePeriod: the range limits count as inside, not as outside', () => {
     const events = [
         glucoseEvent({ occurredAt: 't1', value: '80' }),
         glucoseEvent({ occurredAt: 't2', value: '130' }),
@@ -200,11 +200,11 @@ test('summarizeGlucosePeriod: los límites del rango cuentan como dentro, no com
 });
 
 /**
- * Un rango en otra unidad no llega hasta aquí: `resolveGlucoseTargetRange` lo descarta antes
- * (ADR 0007, no se convierte). Lo que este test fija es la consecuencia, que es lo que la vista
- * necesita para saber que no hay barra que pintar: ninguna de las tres claves existe.
+ * A range in another unit does not reach here: `resolveGlucoseTargetRange` discards it first (ADR
+ * 0007, nothing is converted). What this test fixes is the consequence, which is what the view
+ * needs to know there is no bar to paint: none of the three keys exists.
  */
-test('summarizeGlucosePeriod: sin rango aplicable no hay ningún tramo que pintar', () => {
+test('summarizeGlucosePeriod: with no applicable range there is no band to paint', () => {
     const events = [glucoseEvent({ occurredAt: 't1', value: '100' })];
 
     const { byMethod } = summarizeGlucosePeriod(events, { unit: 'mg/dL', targetRange: undefined });
@@ -215,7 +215,7 @@ test('summarizeGlucosePeriod: sin rango aplicable no hay ningún tramo que pinta
     );
 });
 
-test('summarizeGlucosePeriod: descarta los resultados cualitativos (ADR 0008) sin tumbar el resumen', () => {
+test('summarizeGlucosePeriod: it discards the qualitative results (ADR 0008) without taking the summary down', () => {
     const events = [
         glucoseEvent({ occurredAt: 't1', value: '100' }),
         glucoseEvent({ occurredAt: 't2', result: 'positive', method: 'urine' }),
@@ -228,7 +228,7 @@ test('summarizeGlucosePeriod: descarta los resultados cualitativos (ADR 0008) si
     assert.equal(byMethod.capillary.count, 1);
 });
 
-test('summarizeGlucosePeriod: un valor no numérico se descarta y se cuenta, sin tumbar el resumen', () => {
+test('summarizeGlucosePeriod: a non-numeric value is discarded and counted, without taking the summary down', () => {
     const events = [
         glucoseEvent({ occurredAt: 't1', value: '100' }),
         glucoseEvent({ occurredAt: 't2', value: 'no-es-un-número' }),
@@ -241,15 +241,15 @@ test('summarizeGlucosePeriod: un valor no numérico se descarta y se cuenta, sin
     assert.equal(byMethod.capillary.count, 1);
 });
 
-// --- Tensión arterial ----------------------------------------------------------------------------
+// --- Blood pressure ------------------------------------------------------------------------------
 
-test('summarizeBloodPressurePeriod: lista vacía da un resumen vacío bien formado', () => {
+test('summarizeBloodPressurePeriod: an empty list gives a well-formed empty summary', () => {
     const summary = summarizeBloodPressurePeriod([]);
 
     assert.deepEqual(summary, { byMethod: {}, discarded: 0 });
 });
 
-test('summarizeBloodPressurePeriod: media, mediana, rango y última lectura por magnitud', () => {
+test('summarizeBloodPressurePeriod: mean, median, range and last reading per quantity', () => {
     const events = [
         bpEvent({ occurredAt: '2026-07-25T08:00:00.000000Z', systolic: '120', diastolic: '80', pulse: '70' }),
         bpEvent({ occurredAt: '2026-07-25T09:00:00.000000Z', systolic: '130', diastolic: '85', pulse: '75' }),
@@ -274,9 +274,9 @@ test('summarizeBloodPressurePeriod: media, mediana, rango y última lectura por 
     });
 });
 
-test('summarizeBloodPressurePeriod: un evento es una sola unidad con las tres magnitudes (ADR 0006)', () => {
-    // Tres eventos de una sola magnitud cada uno no deben tratarse como si fuesen un evento de
-    // tensión: no traen las otras dos magnitudes, así que se descartan enteros.
+test('summarizeBloodPressurePeriod: an event is one single unit with the three quantities (ADR 0006)', () => {
+    // Three events of a single quantity each must not be treated as if they were one blood
+    // pressure event: they do not bring the other two quantities, so they are discarded whole.
     const events = [
         { v: 1, type: 'bloodPressure', tz: '+00:00', occurredAt: 't1', data: { systolic: '120', method: 'left_sitting' } },
     ];
@@ -287,7 +287,7 @@ test('summarizeBloodPressurePeriod: un evento es una sola unidad con las tres ma
     assert.deepEqual(byMethod, {});
 });
 
-test('summarizeBloodPressurePeriod: separa por método (brazo y postura, ADR 0008)', () => {
+test('summarizeBloodPressurePeriod: it separates by method (arm and posture, ADR 0008)', () => {
     const events = [
         bpEvent({ occurredAt: 't1', systolic: '120', diastolic: '80', pulse: '70', method: 'left_sitting' }),
         bpEvent({ occurredAt: 't2', systolic: '110', diastolic: '70', pulse: '65', method: 'right_standing' }),
@@ -300,7 +300,7 @@ test('summarizeBloodPressurePeriod: separa por método (brazo y postura, ADR 000
     assert.equal(byMethod.right_standing.count, 1);
 });
 
-// --- Magnitudes simples: peso, temperatura e insulina --------------------------------------------
+// --- Simple quantities: weight, temperature and insulin ------------------------------------------
 
 /**
  * @param {string} type
@@ -312,7 +312,7 @@ function measurementEvent(type, occurredAt, data) {
     return { v: 1, type, tz: '+00:00', occurredAt, data };
 }
 
-test('summarizeMeasurementPeriod: sin campo de agrupación, todo cae en un único grupo sin nombre', () => {
+test('summarizeMeasurementPeriod: with no grouping field, everything falls into a single unnamed group', () => {
     const events = [
         measurementEvent('bodyWeight', 't1', { value: '72.4', unit: 'kg' }),
         measurementEvent('bodyWeight', 't2', { value: '71.6', unit: 'kg' }),
@@ -327,8 +327,8 @@ test('summarizeMeasurementPeriod: sin campo de agrupación, todo cae en un únic
     assert.equal(byGroup[''].max, 72.4);
 });
 
-/** El sitio de medición cambia lo que significa el número: una axilar y una rectal no se promedian. */
-test('summarizeMeasurementPeriod: la temperatura se separa por sitio de medición', () => {
+/** The measurement site changes what the number means: an axillary and a rectal are not averaged. */
+test('summarizeMeasurementPeriod: temperature is separated by measurement site', () => {
     const events = [
         measurementEvent('temperature', '2026-07-25T08:00:00.000000Z', { value: '36.5', unit: 'Cel', site: 'axillary' }),
         measurementEvent('temperature', '2026-07-25T09:00:00.000000Z', { value: '37.1', unit: 'Cel', site: 'oral' }),
@@ -343,7 +343,7 @@ test('summarizeMeasurementPeriod: la temperatura se separa por sitio de medició
     assert.equal(byGroup.oral.count, 1);
 });
 
-test('summarizeMeasurementPeriod: la insulina resume la dosis, agrupada por tipo de insulina', () => {
+test('summarizeMeasurementPeriod: insulin summarizes the dose, grouped by insulin type', () => {
     const events = [
         measurementEvent('insulin', 't1', { dose: '6', unit: '[iU]', insulinType: 'rapid' }),
         measurementEvent('insulin', 't2', { dose: '8', unit: '[iU]', insulinType: 'rapid' }),
@@ -361,8 +361,8 @@ test('summarizeMeasurementPeriod: la insulina resume la dosis, agrupada por tipo
     assert.equal(byGroup.long.count, 1);
 });
 
-/** ADR 0007: kilos y libras no se promedian juntos, igual que mg/dL y mmol/L. */
-test('summarizeMeasurementPeriod: lo que está en otra unidad se cuenta aparte, no se mezcla', () => {
+/** ADR 0007: kilos and pounds are not averaged together, just like mg/dL and mmol/L. */
+test('summarizeMeasurementPeriod: whatever is in another unit is counted apart, not mixed in', () => {
     const events = [
         measurementEvent('bodyWeight', 't1', { value: '72', unit: 'kg' }),
         measurementEvent('bodyWeight', 't2', { value: '160', unit: '[lb_av]' }),
@@ -374,7 +374,7 @@ test('summarizeMeasurementPeriod: lo que está en otra unidad se cuenta aparte, 
     assert.equal(byGroup[''].count, 1);
 });
 
-test('summarizeMeasurementPeriod: un valor no numérico se descarta y se cuenta', () => {
+test('summarizeMeasurementPeriod: a non-numeric value is discarded and counted', () => {
     const events = [
         measurementEvent('bodyWeight', 't1', { value: '72', unit: 'kg' }),
         measurementEvent('bodyWeight', 't2', { value: 'no-es-un-número', unit: 'kg' }),
@@ -389,11 +389,11 @@ test('summarizeMeasurementPeriod: un valor no numérico se descarta y se cuenta'
 // --- dominantUnit ---------------------------------------------------------------------------------
 
 /**
- * Peso, temperatura e insulina no tienen unidad de presentación configurable (la glucemia sí,
- * ADR 0007), así que se resume con la del registro más reciente: quien acaba de cambiar de báscula ve
- * el resumen en la unidad que está usando ahora, no en la que usaba hace meses.
+ * Weight, temperature and insulin have no configurable display unit (glucose does, ADR 0007), so
+ * they are summarized with the one of the most recent record: whoever has just changed scales sees
+ * the summary in the unit they are using now, not in the one they used months ago.
  */
-test('dominantUnit: la unidad es la del registro más reciente con valor numérico', () => {
+test('dominantUnit: the unit is the one of the most recent record with a numeric value', () => {
     const events = [
         measurementEvent('bodyWeight', '2026-07-01T08:00:00.000000Z', { value: '160', unit: '[lb_av]' }),
         measurementEvent('bodyWeight', '2026-07-20T08:00:00.000000Z', { value: '72', unit: 'kg' }),
@@ -402,7 +402,7 @@ test('dominantUnit: la unidad es la del registro más reciente con valor numéri
     assert.equal(dominantUnit(events, 'bodyWeight'), 'kg');
 });
 
-test('dominantUnit: sin ningún registro utilizable no inventa unidad', () => {
+test('dominantUnit: with no usable record it invents no unit', () => {
     assert.equal(dominantUnit([], 'bodyWeight'), null);
     assert.equal(
         dominantUnit([measurementEvent('bodyWeight', 't1', { value: '', unit: 'kg' })], 'bodyWeight'),
@@ -410,22 +410,22 @@ test('dominantUnit: sin ningún registro utilizable no inventa unidad', () => {
     );
 });
 
-test('dominantUnit: mira el campo de valor que se le diga (la insulina guarda la dosis)', () => {
+test('dominantUnit: it looks at the value field it is told to (insulin stores the dose)', () => {
     const events = [measurementEvent('insulin', 't1', { dose: '6', unit: '[iU]', insulinType: 'rapid' })];
 
     assert.equal(dominantUnit(events, 'insulin', 'dose'), '[iU]');
     assert.equal(dominantUnit(events, 'insulin'), null);
 });
 
-// --- majorityUnit y unitCount --------------------------------------------------------------------
+// --- majorityUnit and unitCount --------------------------------------------------------------------
 
 /**
- * `dominantUnit` elige por recencia y tiene razón en el panel del paciente, que sabe que acaba de
- * cambiar de báscula. En un recorte que lee otra persona no vale: dos lecturas nuevas en otra unidad
- * mandarían doscientas a una nota al pie y dejarían la tarjeta resumiendo dos registros con aspecto
- * de resumir el recorte entero.
+ * `dominantUnit` picks by recency and is right in the patient panel, which knows they have just
+ * changed scales. In a clipping somebody else reads it is no good: two new readings in another
+ * unit would send two hundred to a footnote and leave the card summarizing two records while
+ * looking like it summarizes the whole clipping.
  */
-test('majorityUnit: gana la unidad de la mayoría, no la de la lectura más reciente', () => {
+test('majorityUnit: the unit of the majority wins, not the one of the most recent reading', () => {
     const events = [
         { type: 'glucose', occurredAt: '2026-07-01T08:00:00.000000Z', data: { value: '110', unit: 'mg/dL' } },
         { type: 'glucose', occurredAt: '2026-07-02T08:00:00.000000Z', data: { value: '120', unit: 'mg/dL' } },
@@ -436,7 +436,7 @@ test('majorityUnit: gana la unidad de la mayoría, no la de la lectura más reci
     assert.equal(dominantUnit(events, 'glucose'), 'mmol/L');
 });
 
-test('majorityUnit: en empate manda la más reciente, para no depender del orden del array', () => {
+test('majorityUnit: on a tie the most recent one rules, so as not to depend on the array order', () => {
     const events = [
         { type: 'glucose', occurredAt: '2026-07-01T08:00:00.000000Z', data: { value: '110', unit: 'mg/dL' } },
         { type: 'glucose', occurredAt: '2026-07-03T08:00:00.000000Z', data: { value: '7.4', unit: 'mmol/L' } },
@@ -446,7 +446,7 @@ test('majorityUnit: en empate manda la más reciente, para no depender del orden
     assert.equal(majorityUnit([], 'glucose'), null);
 });
 
-test('unitCount: cuenta unidades distintas, que es lo que decide si hay algo que advertir', () => {
+test('unitCount: it counts different units, which is what decides whether there is anything to warn about', () => {
     const events = [
         { type: 'glucose', occurredAt: '2026-07-01T08:00:00.000000Z', data: { value: '110', unit: 'mg/dL' } },
         { type: 'glucose', occurredAt: '2026-07-03T08:00:00.000000Z', data: { value: '7.4', unit: 'mmol/L' } },

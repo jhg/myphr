@@ -190,7 +190,7 @@ final class OpaqueTestClient
 
     /**
      * `randomized_password = Extract("", oprf_output || Stretch(oprf_output))` (RFC 9807 §5.2.3),
-     * con `Stretch` = identidad.
+     * with `Stretch` = identity.
      */
     private static function randomizedPassword(string $password, string $blind, string $evaluatedMessage): string
     {

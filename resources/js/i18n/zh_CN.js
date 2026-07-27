@@ -67,7 +67,7 @@ export const ZH_CN = Object.freeze({
 
     // --- Sign in --------------------------------------------------------------------------------
     'login.stage.contacting': '正在核对你的信息…',
-    'login.stage.stretching': '正在本设备上派生你的密钥，需要几秒钟…',
+    'login.stage.stretching': '正在本设备上保护你的密码。这几秒钟的耗时是刻意设计的：正是这种缓慢让任何人都无法猜出你的密码，即便他们拿到了数据库副本。',
     'login.error.credentials': '无法用这些信息登录。',
 
     // --- Password set-up ------------------------------------------------------------------------
@@ -156,6 +156,7 @@ export const ZH_CN = Object.freeze({
     'insulin.missingInsulinType': '请选择胰岛素类型。',
     'insulin.yAxisTitle': '每日总剂量（{unit}）',
     'insulin.caption': { other: '有 {count} 天存在记录。按类型累计的剂量 — {totals}。' },
+    'insulin.omittedDays': { other: '为保持图表清晰，本时间段中较早的 {count} 天未绘制。' },
 
     // --- Body weight ----------------------------------------------------------------------------
     'bodyWeight.empty': '目前还没有体重记录。',
@@ -397,8 +398,9 @@ export const ZH_CN = Object.freeze({
     'reader.pin.label': 'PIN 码',
     'reader.pin.submit': '打开记录',
     'reader.print': '打印或保存为 PDF',
-    'reader.stage.deriving': '正在校验 PIN 码。这是设计上的耗时，需要几秒钟；页面并未卡住。',
+    'reader.stage.deriving': '正在本浏览器中推算 PIN 码。这几秒钟的耗时是刻意设计的：正是这种缓慢让任何人都无法逐一试遍所有 PIN 码。页面并未卡住，进度条显示的是真实进度。',
     'reader.stage.decrypting': '正在本浏览器中解密记录……',
+    'reader.stage.rendering': '记录已打开。正在准备图表和表格……',
     'reader.error.noFragment': '此链接不完整：# 之后的部分缺失，而那部分正是密钥。邮件过滤器和网络认证门户常会将其删除。请索取二维码，或请对方重新发送链接。',
     'reader.error.badFragment': '此链接不是有效的记录链接。请索取二维码，或请对方重新发送链接。',
     'reader.error.badPin': 'PIN 码为 {length} 位数字。',

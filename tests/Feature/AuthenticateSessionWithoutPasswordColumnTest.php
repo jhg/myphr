@@ -8,19 +8,19 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 uses(RefreshDatabase::class);
 
 /**
- * `Filament\Http\Middleware\AuthenticateSession` (montado en el panel `phr`) extiende
- * `Illuminate\Session\Middleware\AuthenticateSession` sin sobrescribir `handle()`. Esa clase guarda
- * `password_hash_web` en la sesión en la primera petición autenticada y la compara en las
- * siguientes; si no cuadra, cierra la sesión.
+ * `Filament\Http\Middleware\AuthenticateSession` (mounted on the `phr` panel) extends
+ * `Illuminate\Session\Middleware\AuthenticateSession` without overriding `handle()`. That class
+ * stores `password_hash_web` in the session on the first authenticated request and compares it on
+ * the following ones; if it does not match, it closes the session.
  *
- * Sin columna `password`, {@see User::getAuthPassword()} devuelve `''`, que es "falsy" en PHP. La
- * primera línea de `handle()` es
+ * With no `password` column, {@see User::getAuthPassword()} returns `''`, which is falsy in PHP. The
+ * first line of `handle()` is
  * `if (! $request->hasSession() || ! $request->user() || ! $request->user()->getAuthPassword())`,
- * así que el middleware se sale por ahí y nunca llega a comparar nada contra la sesión. Este test
- * demuestra que varias peticiones autenticadas seguidas no cierran la sesión sola, que es como se
- * manifestaría en producción si esto se rompiera.
+ * so the middleware bails out there and never gets to compare anything against the session. This
+ * test shows that several authenticated requests in a row do not close the session on their own,
+ * which is how it would show up in production if this broke.
  */
-it('no cierra la sesion en peticiones autenticadas sucesivas', function (): void {
+it('does not close the session on successive authenticated requests', function (): void {
     $user = User::factory()->registered()->create();
     $this->actingAs($user);
 

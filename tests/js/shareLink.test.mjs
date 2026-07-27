@@ -1,9 +1,9 @@
 /**
- * Comprobaciones del envoltorio del enlace y de las dos capas juntas (ADR 0011).
+ * Checks of the link wrapper and of both layers together (ADR 0011).
  *
- * No se pasa por Argon2id: la `wrapKey` se deriva de un `stretched` de prueba,
- * porque lo que se comprueba aquí es el emparejamiento entre las dos capas y no
- * el coste del KDF (eso está en `shareKeys.test.mjs`).
+ * Argon2id is not used: the `wrapKey` is derived from a test `stretched`,
+ * because what is checked here is the pairing between the two layers and not
+ * the cost of the KDF (that is in `shareKeys.test.mjs`).
  *
  *     npm test
  */
@@ -30,7 +30,7 @@ const OTHER_LINK_ID = '00001111-2222-4444-8888-333344445555';
 const GENERATED_AT = '2026-07-27T08:15:00.000000Z';
 const EXPIRES_AT = '2026-07-28T08:15:00.000000Z';
 
-/** @returns {Uint8Array} `CK` determinista. */
+/** @returns {Uint8Array} Deterministic `CK`. */
 function contentKey(seed = 5) {
     return new Uint8Array(32).map((_, index) => (index + seed) & 0xff);
 }
@@ -38,7 +38,7 @@ function contentKey(seed = 5) {
 /**
  * @param {string} linkId
  * @param {Date|number|string} expiresAt
- * @returns {Uint8Array} `wrapKey` de ese enlace, sin ejecutar Argon2id.
+ * @returns {Uint8Array} `wrapKey` of that link, without running Argon2id.
  */
 function wrapKeyFor(linkId = LINK_ID, expiresAt = EXPIRES_AT) {
     return deriveWrapKey({
@@ -69,7 +69,7 @@ function body(count = 2, generatedAt = GENERATED_AT) {
 }
 
 /**
- * Un envío completo: paquete cifrado con su `CK` y envoltorio del enlace.
+ * A complete send: package encrypted with its `CK` and link wrapper.
  *
  * @param {object} [params]
  * @returns {Promise<{packageEnvelope: string, wrapper: string, contentKey: Uint8Array}>}
@@ -88,7 +88,7 @@ async function buildShare({ shareId = SHARE_ID, linkId = LINK_ID, seed = 5 } = {
     return { packageEnvelope, wrapper, contentKey: key };
 }
 
-test('las dos capas juntas: del envoltorio sale CK y de CK sale el recorte', async () => {
+test('both layers together: CK comes out of the wrapper and the clipping out of CK', async () => {
     const { packageEnvelope, wrapper } = await buildShare();
 
     const recovered = openShareWrapper({
@@ -111,15 +111,15 @@ test('las dos capas juntas: del envoltorio sale CK y de CK sale el recorte', asy
     assert.equal(opened.eventCount, 2);
 });
 
-test('el paquete de otro enlace no abre este envoltorio: es el hash del paquete', async () => {
+test('the package of another link does not open this wrapper: it is the package hash', async () => {
     const mine = await buildShare();
     const other = await buildShare({ shareId: OTHER_SHARE_ID, linkId: OTHER_LINK_ID, seed: 77 });
 
     /*
-     * El ataque que esto cierra: el servidor sirve mi envoltorio junto al
-     * paquete de otra persona. Sin el hash dentro del dato asociado, el
-     * envoltorio abriría igual y el profesional vería un historial que no es el
-     * que le enseñaron.
+     * The attack this closes: the server serves my wrapper next to somebody
+     * else's package. Without the hash inside the associated data, the wrapper
+     * would open all the same and the professional would see a history that is
+     * not the one they were shown.
      */
     assert.throws(
         () => openShareWrapper({
@@ -133,7 +133,7 @@ test('el paquete de otro enlace no abre este envoltorio: es el hash del paquete'
     );
 });
 
-test('cambiar un solo byte del paquete tumba el envoltorio', async () => {
+test('changing a single byte of the package takes the wrapper down', async () => {
     const { packageEnvelope, wrapper } = await buildShare();
     const tampered = `${packageEnvelope.slice(0, -1)}${packageEnvelope.endsWith('A') ? 'B' : 'A'}`;
 
@@ -149,7 +149,7 @@ test('cambiar un solo byte del paquete tumba el envoltorio', async () => {
     );
 });
 
-test('cambiar el identificador del enlace rompe el descifrado', async () => {
+test('changing the link identifier breaks the decryption', async () => {
     const { packageEnvelope, wrapper } = await buildShare();
 
     assert.throws(
@@ -164,11 +164,11 @@ test('cambiar el identificador del enlace rompe el descifrado', async () => {
     );
 });
 
-test('cambiar la fecha de caducidad rompe el descifrado', async () => {
+test('changing the expiry date breaks the decryption', async () => {
     const { packageEnvelope, wrapper } = await buildShare();
 
-    /* Con la `wrapKey` correcta y solo la fecha del dato asociado movida: aun
-     * así falla, porque la fecha entra en las dos partes. */
+    /* With the right `wrapKey` and only the date of the associated data moved: it
+     * still fails, because the date enters both parts. */
     assert.throws(
         () => openShareWrapper({
             wrapKey: wrapKeyFor(),
@@ -181,7 +181,7 @@ test('cambiar la fecha de caducidad rompe el descifrado', async () => {
     );
 });
 
-test('estirar la caducidad tampoco cuela por la vía de la clave', async () => {
+test('stretching the expiry does not get through the key route either', async () => {
     const { packageEnvelope, wrapper } = await buildShare();
 
     assert.throws(
@@ -196,7 +196,7 @@ test('estirar la caducidad tampoco cuela por la vía de la clave', async () => {
     );
 });
 
-test('un PIN distinto da otra wrapKey y el envoltorio no abre', async () => {
+test('a different PIN gives another wrapKey and the wrapper does not open', async () => {
     const { packageEnvelope, wrapper } = await buildShare();
     const wrongPinKey = deriveWrapKey({
         stretched: new Uint8Array(ARGON2_PARAMS.dkLen).fill(0x2b),
@@ -218,20 +218,20 @@ test('un PIN distinto da otra wrapKey y el envoltorio no abre', async () => {
     );
 });
 
-test('el envoltorio es un sobre v1. corriente y viaja como cualquier otro', async () => {
+test('the wrapper is a plain v1. envelope and travels like any other', async () => {
     const { wrapper } = await buildShare();
 
     assert.ok(wrapper.startsWith('v1.'));
 });
 
-test('sharePackageDigest: 64 bytes y solo sobre un paquete s1.', async () => {
+test('sharePackageDigest: 64 bytes and only over an s1. package', async () => {
     const { packageEnvelope } = await buildShare();
 
     assert.equal(sharePackageDigest(packageEnvelope).length, 64);
     assert.throws(() => sharePackageDigest('v1.abc'), ShareEnvelopeError);
 });
 
-test('encodeShareFragment/decodeShareFragment: clave e instante van y vuelven iguales', () => {
+test('encodeShareFragment/decodeShareFragment: key and instant go and come back the same', () => {
     const sendKey = new Uint8Array(SEND_KEY_LENGTH).map((_, index) => index * 5);
     const generatedAt = new Date('2026-07-27T08:15:00.123Z');
     const encoded = encodeShareFragment({ sendKey, generatedAt });
@@ -241,11 +241,11 @@ test('encodeShareFragment/decodeShareFragment: clave e instante van y vuelven ig
 });
 
 /**
- * El instante del fragmento entra en el dato asociado del paquete, así que lo que importa no es
- * que vuelva un `Date` parecido: es que `canonicalDate` dé la misma cadena byte a byte que dio al
- * cifrar. Un milisegundo perdido en el viaje es un paquete que no abre.
+ * The instant of the fragment enters the associated data of the package, so what matters is not
+ * that a similar `Date` comes back: it is that `canonicalDate` gives the same string byte for byte
+ * as it gave when encrypting. One millisecond lost on the way is a package that does not open.
  */
-test('decodeShareFragment conserva el instante hasta el milisegundo', () => {
+test('decodeShareFragment keeps the instant down to the millisecond', () => {
     const sendKey = new Uint8Array(SEND_KEY_LENGTH).fill(7);
     const generatedAt = new Date('2026-07-27T08:15:00.007Z');
 
@@ -254,6 +254,6 @@ test('decodeShareFragment conserva el instante hasta el milisegundo', () => {
     assert.equal(canonicalDate(roundTripped), canonicalDate(generatedAt));
 });
 
-test('decodeShareFragment rechaza un fragmento que no mide lo que tiene que medir', () => {
+test('decodeShareFragment rejects a fragment whose length is not the expected one', () => {
     assert.throws(() => decodeShareFragment('AAAA'), ShareEnvelopeError);
 });

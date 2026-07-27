@@ -21,25 +21,25 @@ use Illuminate\Support\Facades\Route;
 uses(RefreshDatabase::class);
 
 /**
- * Rutas equivalentes a las del panel para probar el middleware y el controlador sin depender del
- * registro que hace `PhrPanelProvider`, igual que en `UpdateSettingsTest`.
+ * Routes equivalent to the panel ones, to test the middleware and the controller without depending
+ * on the registration `PhrPanelProvider` does, the same as in `UpdateSettingsTest`.
  */
 beforeEach(function (): void {
     Route::middleware(['web', SetLocale::class])->get('/test/locale', fn (): string => App::getLocale());
     Route::middleware(['auth', SetLocale::class])->put('/test/locale/settings', UpdateSettingsController::class);
 });
 
-it('trae los tres idiomas configurados, con el inglés de serie', function (): void {
+it('carries the three configured languages, with English as the default', function (): void {
     expect(SupportedLocale::all())->toBe(['en', 'es', 'zh_CN'])
         ->and(config('app.locale'))->toBe('en')
         ->and(config('app.fallback_locale'))->toBe('en');
 });
 
 /**
- * La pantalla de acceso se pinta antes de que exista sesión y antes de que exista ninguna clave, así
- * que ahí lo único disponible es lo que el navegador ya manda en todas las peticiones.
+ * The login screen is painted before a session exists and before any key exists, so the only thing
+ * available there is what the browser already sends on every request.
  */
-it('negocia el idioma con Accept-Language cuando no hay usuario', function (
+it('negotiates the language with Accept-Language when there is no user', function (
     ?string $header,
     string $expected,
 ): void {
@@ -48,15 +48,15 @@ it('negocia el idioma con Accept-Language cuando no hay usuario', function (
         ->assertSee($expected);
 })->with([
     'chino simplificado con guion' => ['zh-CN,zh;q=0.9', 'zh_CN'],
-    'castellano regional' => ['es-AR,es;q=0.9,en;q=0.8', 'es'],
-    'inglés' => ['en-GB', 'en'],
+    'regional Spanish' => ['es-AR,es;q=0.9,en;q=0.8', 'es'],
+    'English' => ['en-GB', 'en'],
     'idioma no soportado' => ['fr-FR,fr;q=0.9', 'en'],
     'sin cabecera' => [null, 'en'],
     'factor de calidad manda sobre el orden' => ['fr;q=1.0,zh-CN;q=0.8,de;q=0.9', 'zh_CN'],
 ]);
 
-/** La elección guardada manda sobre lo que pida el navegador. */
-it('prefiere el idioma guardado en la cuenta a la cabecera del navegador', function (): void {
+/** The stored choice wins over whatever the browser asks for. */
+it('prefers the language stored on the account over the browser header', function (): void {
     $user = User::factory()->registered()->create(['locale' => 'zh_CN']);
 
     $this->actingAs($user)
@@ -65,8 +65,8 @@ it('prefiere el idioma guardado en la cuenta a la cabecera del navegador', funct
         ->assertSee('zh_CN');
 });
 
-/** Un valor obsoleto en la columna no debe dejar la pantalla en blanco: se negocia como si no hubiera. */
-it('ignora un idioma guardado que ya no está soportado', function (): void {
+/** A stale value in the column must not leave the screen blank: it is negotiated as if it were absent. */
+it('ignores a stored language that is no longer supported', function (): void {
     $user = User::factory()->registered()->create(['locale' => 'gl']);
 
     $this->actingAs($user)
@@ -76,10 +76,10 @@ it('ignora un idioma guardado que ya no está soportado', function (): void {
 });
 
 /**
- * ADR 0007: el idioma es la excepción y viaja en claro, fuera del sobre, en la misma petición que
- * ya guarda los ajustes cifrados.
+ * ADR 0007: the language is the exception and travels in the clear, outside the envelope, in the
+ * same request that already stores the encrypted settings.
  */
-it('guarda el idioma en claro junto al sobre cifrado', function (): void {
+it('stores the language in the clear next to the encrypted envelope', function (): void {
     $user = User::factory()->registered()->create(['encrypted_settings' => null, 'locale' => null]);
     $envelope = envelopeCipherText();
 
@@ -95,8 +95,8 @@ it('guarda el idioma en claro junto al sobre cifrado', function (): void {
         ->and($user->encrypted_settings)->toBe($envelope);
 });
 
-/** Lista cerrada: el valor acaba en `App::setLocale()`, así que nadie elige fichero de traducción. */
-it('rechaza un idioma que no está en la lista cerrada', function (): void {
+/** A closed list: the value ends up in `App::setLocale()`, so nobody picks a translation file. */
+it('rejects a language that is not on the closed list', function (): void {
     $user = User::factory()->registered()->create(['locale' => null]);
 
     $this->actingAs($user)
@@ -111,10 +111,10 @@ it('rechaza un idioma que no está en la lista cerrada', function (): void {
 });
 
 /**
- * El idioma se escribe después de validar el sobre y la precondición: un 412 no puede dejar el
- * idioma cambiado y los ajustes sin cambiar.
+ * The language is written after validating the envelope and the precondition: a 412 must not leave
+ * the language changed and the settings unchanged.
  */
-it('no cambia el idioma si el sobre no pasa la precondición', function (): void {
+it('does not change the language if the envelope fails the precondition', function (): void {
     $user = User::factory()->registered()->create([
         'encrypted_settings' => envelopeCipherText(),
         'locale' => 'es',
@@ -132,11 +132,11 @@ it('no cambia el idioma si el sobre no pasa la precondición', function (): void
 });
 
 /**
- * Las claves de traducción están en inglés, que es el idioma de serie, así que una clave que falte
- * en un catálogo no se ve: la pantalla sale en inglés y nadie se entera. Este test es la única forma
- * de que un hueco de traducción falle en integración continua y no delante del usuario.
+ * The translation keys are in English, which is the default language, so a key missing from a
+ * catalog does not show: the screen comes out in English and nobody notices. This test is the only
+ * way a translation hole fails in continuous integration and not in front of the user.
  */
-it('mantiene el mismo juego de claves en todos los catálogos de traducción', function (): void {
+it('keeps the same key set across every translation catalog', function (): void {
     $catalogs = [];
 
     foreach (SupportedLocale::all() as $locale) {
@@ -162,13 +162,13 @@ it('mantiene el mismo juego de claves en todos los catálogos de traducción', f
         $keys = array_keys($entries);
         sort($keys);
 
-        expect($keys)->toBe($reference, sprintf('El catálogo de "%s" no tiene las mismas claves.', $locale));
+        expect($keys)->toBe($reference, sprintf('The "%s" catalog does not have the same keys.', $locale));
         expect(array_filter($entries, static fn (string $text): bool => trim($text) === ''))->toBe([]);
     }
 });
 
-/** El selector del perfil ofrece los tres idiomas, cada nombre escrito en su propio idioma. */
-it('ofrece los tres idiomas en el perfil, cada uno en su propio idioma', function (): void {
+/** The profile selector offers the three languages, each name written in its own language. */
+it('offers the three languages in the profile, each one in its own language', function (): void {
     expect((new Profile)->locales())->toBe([
         ['code' => 'en', 'label' => 'English'],
         ['code' => 'es', 'label' => 'Español'],
@@ -177,15 +177,15 @@ it('ofrece los tres idiomas en el perfil, cada uno en su propio idioma', functio
 });
 
 /**
- * El test anterior compara los catálogos entre sí, así que da verde aunque el código entero esté sin
- * traducir: es el hueco por el que se colaron `__('Entrar')` —una clave castellana que no existía en
- * ningún catálogo— y las seis etiquetas de navegación escritas a mano. Este recorre las llamadas
- * reales a `__()` y exige que cada clave literal esté en los dos catálogos.
+ * The previous test compares the catalogs against each other, so it goes green even if the whole
+ * codebase is untranslated: that is the gap `__('Entrar')` slipped through —a Spanish key that
+ * existed in no catalog— along with the six hand-written navigation labels. This one walks the real
+ * `__()` calls and requires every literal key to be in both catalogs.
  *
- * Solo mira claves literales: `__($variable)` no se puede resolver leyendo el fichero y se ignora a
- * propósito, en vez de fingir que se comprueba.
+ * It only looks at literal keys: `__($variable)` cannot be resolved by reading the file and is
+ * deliberately ignored, instead of pretending it is checked.
  */
-it('tiene traducida en todos los catálogos cada clave que el código usa con __()', function (): void {
+it('has every key the code uses with __() translated in every catalog', function (): void {
     $sources = [app_path(), resource_path('views/phr'), resource_path('views/layouts')];
 
     $usedKeys = [];
@@ -226,7 +226,7 @@ it('tiene traducida en todos los catálogos cada clave que el código usa con __
 
         foreach ($usedKeys as $key => $origin) {
             expect(array_key_exists($key, $entries))->toBeTrue(sprintf(
-                'Falta "%s" en el catálogo de "%s" (se usa en %s).',
+                '"%s" is missing from the "%s" catalog (it is used in %s).',
                 $key,
                 $locale,
                 $origin,
@@ -236,11 +236,11 @@ it('tiene traducida en todos los catálogos cada clave que el código usa con __
 });
 
 /**
- * Los literales visibles que no pasan por `__()` no los ve el test de arriba: no hay clave que
- * buscar. Esta comprobación va por el otro lado —el idioma efectivo de la pantalla— y fija lo que
- * más se ve del panel: el título de la página y su entrada de menú, en los tres idiomas.
+ * Visible literals that do not go through `__()` are invisible to the test above: there is no key to
+ * look for. This check comes from the other side —the effective language of the screen— and pins
+ * down what is most visible in the panel: the page title and its menu entry, in all three languages.
  */
-it('traduce el título y la etiqueta de navegación de todas las páginas del panel', function (): void {
+it('translates the title and the navigation label of every panel page', function (): void {
     $pages = [
         Dashboard::class,
         Glucose::class,
@@ -260,7 +260,7 @@ it('traduce el título y la etiqueta de navegación de todas las páginas del pa
             $byLocale[$locale] = [(string) (new $page)->getTitle(), $page::getNavigationLabel()];
         }
 
-        expect($byLocale['en'])->not->toBe($byLocale['es'], $page.': el inglés sale igual que el castellano.')
-            ->and($byLocale['zh_CN'])->not->toBe($byLocale['es'], $page.': el chino sale igual que el castellano.');
+        expect($byLocale['en'])->not->toBe($byLocale['es'], $page.': English comes out the same as Spanish.')
+            ->and($byLocale['zh_CN'])->not->toBe($byLocale['es'], $page.': Chinese comes out the same as Spanish.');
     }
 });

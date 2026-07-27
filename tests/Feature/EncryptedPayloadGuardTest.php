@@ -10,9 +10,9 @@ use Livewire\Component;
 use Livewire\Livewire;
 
 /**
- * Componente Livewire mínimo que implementa {@see HandlesEncryptedPayloads}, solo para ejercitar el
- * guardarraíl de servidor (Spec 0001 §9, ADR 0002) sin depender de que exista ya una pantalla real
- * con datos cifrados (fuera de alcance de la Spec 0001, §1).
+ * Minimal Livewire component implementing {@see HandlesEncryptedPayloads}, only to exercise the
+ * server-side guardrail (Spec 0001 §9, ADR 0002) without depending on a real screen with encrypted
+ * data already existing (out of scope of Spec 0001, §1).
  */
 final class EncryptedPayloadGuardTestComponent extends Component implements HandlesEncryptedPayloads
 {
@@ -27,8 +27,8 @@ final class EncryptedPayloadGuardTestComponent extends Component implements Hand
 }
 
 /**
- * Componente Livewire mínimo que NO implementa {@see HandlesEncryptedPayloads}, para comprobar que
- * el guardarraíl solo vigila los componentes que sí la implementan.
+ * Minimal Livewire component that does NOT implement {@see HandlesEncryptedPayloads}, to check that
+ * the guardrail only watches the components that do.
  */
 final class EncryptedPayloadGuardUnmarkedTestComponent extends Component
 {
@@ -40,14 +40,14 @@ final class EncryptedPayloadGuardUnmarkedTestComponent extends Component
     }
 }
 
-it('rechaza en servidor una propiedad larga sin el prefijo del sobre cifrado', function (): void {
+it('rejects on the server a long property without the encrypted envelope prefix', function (): void {
     $plaintext = str_repeat('a', 300);
 
     expect(fn () => Livewire::test(EncryptedPayloadGuardTestComponent::class)->set('envelope', $plaintext))
         ->toThrow(EncryptedPayloadGuardViolationException::class);
 });
 
-it('acepta un sobre cifrado con el prefijo v1.', function (): void {
+it('accepts an encrypted envelope with the v1. prefix', function (): void {
     $envelope = 'v1.'.str_repeat('a', 300);
 
     Livewire::test(EncryptedPayloadGuardTestComponent::class)
@@ -55,13 +55,13 @@ it('acepta un sobre cifrado con el prefijo v1.', function (): void {
         ->assertSet('envelope', $envelope);
 });
 
-it('deja pasar metadatos cortos aunque no lleven el prefijo', function (): void {
+it('lets short metadata through even without the prefix', function (): void {
     Livewire::test(EncryptedPayloadGuardTestComponent::class)
         ->set('metadata', 'short-id')
         ->assertSet('metadata', 'short-id');
 });
 
-it('no vigila componentes que no implementan la interfaz marcadora', function (): void {
+it('does not watch components that do not implement the marker interface', function (): void {
     $plaintext = str_repeat('a', 300);
 
     Livewire::test(EncryptedPayloadGuardUnmarkedTestComponent::class)
@@ -70,11 +70,11 @@ it('no vigila componentes que no implementan la interfaz marcadora', function ()
 });
 
 /**
- * Test de snapshot que pide la Spec 0001 §9/§11: falla si alguna propiedad pública de un componente
- * que maneja datos cifrados contiene algo que no sea metadato corto o sobre cifrado con prefijo
- * `v1.`.
+ * The snapshot test Spec 0001 §9/§11 asks for: it fails if any public property of a component that
+ * handles encrypted data holds something other than short metadata or an encrypted envelope with the
+ * `v1.` prefix.
  */
-it('el snapshot de un componente cifrado solo contiene metadatos cortos o sobres v1.', function (): void {
+it('the snapshot of an encrypted component only contains short metadata or v1. envelopes', function (): void {
     $envelope = 'v1.'.base64_encode(random_bytes(64));
 
     $test = Livewire::test(EncryptedPayloadGuardTestComponent::class)

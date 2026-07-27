@@ -11,7 +11,7 @@ use Tests\Support\OpaqueTestClient;
 uses(RefreshDatabase::class);
 
 /**
- * `POST /phr/auth/opaque/registration/public/start` — alta pública, sin invitación.
+ * `POST /phr/auth/opaque/registration/public/start` — public signup, no invitation.
  */
 const PUBREG_PASSWORD = 'CorrectHorseBatteryStaple';
 
@@ -20,7 +20,7 @@ beforeEach(function (): void {
 });
 
 /**
- * Ejercita `registration/public/start` + `registration/finish`, tal cual haría el navegador.
+ * Exercises `registration/public/start` + `registration/finish`, exactly as the browser would.
  *
  * @return array{start: TestResponse, finish: TestResponse}
  */
@@ -55,7 +55,7 @@ function pubregRegister(string $login, string $name = 'Alicia'): array
     return ['start' => $start, 'finish' => $finish];
 }
 
-/** Login OPAQUE completo contra la cuenta recién dada de alta. */
+/** Full OPAQUE login against the freshly created account. */
 function pubregLogin(string $login): TestResponse
 {
     $started = OpaqueTestClient::startLogin(PUBREG_PASSWORD);
@@ -78,7 +78,7 @@ function pubregLogin(string $login): TestResponse
     ]);
 }
 
-it('permite darse de alta sin invitacion y entrar despues con la contraseña elegida', function (): void {
+it('allows signing up without an invitation and logging in afterwards with the chosen password', function (): void {
     $result = pubregRegister('alicia@example.com');
 
     $result['start']->assertOk();
@@ -97,7 +97,7 @@ it('permite darse de alta sin invitacion y entrar despues con la contraseña ele
         ->and($login->json('userId'))->toBe($user->id);
 });
 
-it('responde 409 login_taken si el correo ya tiene cuenta, y no crea fila ni toca la existente', function (): void {
+it('answers 409 login_taken if the email already has an account, and creates no row and touches no existing one', function (): void {
     $existing = User::factory()->create(['email' => 'ocupado@example.com'])->refresh();
     $before = $existing->getAttributes();
     ksort($before);
@@ -120,7 +120,7 @@ it('responde 409 login_taken si el correo ya tiene cuenta, y no crea fila ni toc
         ->and($after)->toBe($before);
 });
 
-it('normaliza el login: mayusculas y espacios producen la misma cuenta y colisionan igual', function (): void {
+it('normalizes the login: capitals and whitespace produce the same account and collide the same way', function (): void {
     $result = pubregRegister('  Alicia@Example.COM  ');
 
     $result['start']->assertOk();
@@ -129,7 +129,7 @@ it('normaliza el login: mayusculas y espacios producen la misma cuenta y colisio
     $user = User::query()->sole();
     expect($user->email)->toBe('alicia@example.com');
 
-    // Un segundo intento con otra variación de mayúsculas/espacios choca con la misma cuenta.
+    // A second attempt with another capitalization/whitespace variation hits the same account.
     $started = OpaqueTestClient::startRegistration(PUBREG_PASSWORD);
 
     $second = test()->postJson(route('filament.phr.auth.opaque.registration.public-start'), [
@@ -142,7 +142,7 @@ it('normaliza el login: mayusculas y espacios producen la misma cuenta y colisio
     expect(User::query()->count())->toBe(1);
 });
 
-it('corta la alta pública tras superar el límite de intentos por IP', function (): void {
+it('cuts public signup off once the per-IP attempt limit is exceeded', function (): void {
     for ($i = 0; $i < 10; $i++) {
         $started = OpaqueTestClient::startRegistration(PUBREG_PASSWORD);
 

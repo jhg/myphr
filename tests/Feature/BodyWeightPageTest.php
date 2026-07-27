@@ -13,14 +13,14 @@ use Livewire\Livewire;
 uses(RefreshDatabase::class);
 
 /**
- * Tests del transporte de la pantalla de peso corporal (ADR 0002, ADR 0004, ADR 0006) y del
- * contrato entre la plantilla, el módulo de Alpine y esta página.
+ * Transport tests for the body weight screen (ADR 0002, ADR 0004, ADR 0006) and for the contract
+ * between the template, the Alpine module and this page.
  *
- * El servidor no puede fabricar un sobre cifrado real porque no tiene la clave del cliente. Los
- * tests que necesitan un payload válido usan `envelopeCipherText()` y `canonicalOccurredAtNow()`,
- * los ayudantes GLOBALES de `tests/Pest.php`.
+ * The server cannot build a real encrypted envelope because it has no client key. The tests that
+ * need a valid payload use `envelopeCipherText()` and `canonicalOccurredAtNow()`, the GLOBAL helpers
+ * from `tests/Pest.php`.
  */
-it('guarda un evento con un sobre bien formado y una fecha canónica', function (): void {
+it('stores an event with a well formed envelope and a canonical date', function (): void {
     $user = User::factory()->registered()->create();
     $envelope = envelopeCipherText();
     $occurredAt = canonicalOccurredAtNow();
@@ -41,20 +41,20 @@ it('guarda un evento con un sobre bien formado y una fecha canónica', function 
     ]);
 });
 
-it('rechaza un payload mal formado y no crea ninguna fila', function (): void {
+it('rejects a malformed payload and creates no row', function (): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user);
 
     expect(fn () => Livewire::test(BodyWeight::class)
         ->instance()
-        ->storeEvent('esto no es un sobre cifrado', canonicalOccurredAtNow()))
+        ->storeEvent('this is not an encrypted envelope', canonicalOccurredAtNow()))
         ->toThrow(ValidationException::class);
 
     expect(Event::query()->count())->toBe(0);
 });
 
-it('rechaza una fecha sin microsegundos', function (): void {
+it('rejects a date without microseconds', function (): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user);
@@ -67,7 +67,7 @@ it('rechaza una fecha sin microsegundos', function (): void {
     expect(Event::query()->count())->toBe(0);
 });
 
-it('fetchEvents solo devuelve los eventos del usuario autenticado', function (): void {
+it('fetchEvents only returns the events of the authenticated user', function (): void {
     $user = User::factory()->registered()->create();
     $otherUser = User::factory()->registered()->create();
 
@@ -85,10 +85,10 @@ it('fetchEvents solo devuelve los eventos del usuario autenticado', function ():
 });
 
 /**
- * El test que exige el ADR 0002: el ciphertext baja como valor de retorno y sube como parámetro,
- * nunca por una propiedad pública, así que el snapshot del componente no puede contenerlo.
+ * The test ADR 0002 requires: the ciphertext comes down as a return value and goes up as a
+ * parameter, never through a public property, so the component snapshot cannot contain it.
  */
-it('el snapshot del componente no contiene ningún sobre cifrado', function (): void {
+it('the component snapshot contains no encrypted envelope', function (): void {
     $user = User::factory()->registered()->create();
     $envelope = envelopeCipherText();
 
@@ -97,9 +97,9 @@ it('el snapshot del componente no contiene ningún sobre cifrado', function (): 
     $this->actingAs($user);
 
     /**
-     * Las llamadas van por `call()` y no por `instance()`: invocar el método sobre la instancia se
-     * salta el ciclo de hidratación y deshidratación de Livewire, y entonces el snapshot que se
-     * inspecciona es el de antes de la llamada.
+     * The calls go through `call()` and not `instance()`: invoking the method on the instance skips
+     * Livewire's hydration and dehydration cycle, and then the snapshot being inspected is the one
+     * from before the call.
      */
     $test = Livewire::test(BodyWeight::class)
         ->call('storeEvent', $envelope, canonicalOccurredAtNow())
@@ -111,7 +111,7 @@ it('el snapshot del componente no contiene ningún sobre cifrado', function (): 
     expect($snapshotJson)->not->toContain('v1.');
 });
 
-it('el catálogo trae el código LOINC verificado y las dos unidades UCUM del ADR 0005', function (): void {
+it('the catalog carries the verified LOINC code and the two UCUM units from ADR 0005', function (): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user);
@@ -120,7 +120,7 @@ it('el catálogo trae el código LOINC verificado y las dos unidades UCUM del AD
         ->instance()
         ->catalog();
 
-    /** 3141-9 «Body weight Measured», verificado contra LOINC; no depende de la unidad. */
+    /** 3141-9 "Body weight Measured", verified against LOINC; it does not depend on the unit. */
     expect($catalog['loinc'])->toBe('3141-9');
 
     expect($catalog['units'])->toBe([
@@ -129,13 +129,13 @@ it('el catálogo trae el código LOINC verificado y las dos unidades UCUM del AD
     ]);
 
     /**
-     * El código UCUM de la libra lleva corchetes y la etiqueta no: es la distinción del ADR 0005
-     * entre lo que se guarda (código de intercambio) y lo que se enseña.
+     * The UCUM code for the pound carries brackets and the label does not: it is the ADR 0005
+     * distinction between what is stored (an exchange code) and what is shown.
      */
     expect(collect($catalog['units'])->pluck('label')->all())->not->toContain('[lb_av]');
 });
 
-it('el catálogo trae el código LOINC de estatura y sus dos unidades UCUM', function (): void {
+it('the catalog carries the height LOINC code and its two UCUM units', function (): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user);
@@ -145,9 +145,8 @@ it('el catálogo trae el código LOINC de estatura y sus dos unidades UCUM', fun
         ->catalog();
 
     /**
-     * 8302-2 «Body height», el genérico: la pantalla no pregunta postura (de pie / tumbado) ni
-     * método (medida / declarada), así que no puede afirmar ninguno de los dos. Ver
-     * `App\Catalog\BodyHeightLoincCode`.
+     * 8302-2 "Body height", the generic one: the screen asks neither posture (standing / lying) nor
+     * method (measured / stated), so it can assert neither. See `App\Catalog\BodyHeightLoincCode`.
      */
     expect($catalog['heightLoinc'])->toBe(BodyHeightLoincCode::Generic->value);
     expect($catalog['heightLoinc'])->toBe('8302-2');
@@ -157,49 +156,49 @@ it('el catálogo trae el código LOINC de estatura y sus dos unidades UCUM', fun
         ['code' => '[in_i]', 'label' => 'in'],
     ]);
 
-    /** La pulgada se guarda como `[in_i]` (UCUM la distingue de la US survey) y se enseña como `in`. */
+    /** The inch is stored as `[in_i]` (UCUM tells it from the US survey one) and shown as `in`. */
     expect(collect($catalog['heightUnits'])->pluck('label')->all())->not->toContain('[in_i]');
 });
 
-it('el término oficial LOINC de la estatura no se traduce (ADR 0005)', function (): void {
+it('the official LOINC term for height is not translated (ADR 0005)', function (): void {
     expect(BodyHeightLoincCode::Generic->officialName())->toBe('Body height');
 });
 
 /*
 |--------------------------------------------------------------------------
-| Contrato entre cliente y servidor
+| Contract between client and server
 |--------------------------------------------------------------------------
 |
-| Los contratos de esta pantalla son de texto, no de tipos: nombres de método que el cliente escribe
-| como cadena, y `x-ref` que la plantilla declara y el módulo lee. Ninguno de los dos falla al
-| compilar ni al desplegar: fallan al pulsar. Se leen los ficheros y se cruzan. Es el mismo barrido
-| que hace `BloodPressurePageTest`, tras el `MethodNotFoundException` que llegó a producción.
+| The contracts of this screen are textual, not typed: method names the client writes as strings, and
+| `x-ref`s the template declares and the module reads. Neither fails at compile time or at deploy
+| time: they fail on click. The files are read and cross-checked. It is the same sweep
+| `BloodPressurePageTest` does, after the `MethodNotFoundException` that reached production.
 |
 */
 
-/** @return string Código fuente del módulo Alpine de la pantalla. */
+/** @return string Source code of the screen's Alpine module. */
 function bodyWeightModuleSource(): string
 {
     return file_get_contents(resource_path('js/health/bodyWeightPage.js'));
 }
 
-/** @return string Código fuente de la plantilla Blade de la pantalla. */
+/** @return string Source code of the screen's Blade template. */
 function bodyWeightTemplateSource(): string
 {
     return file_get_contents(resource_path('views/phr/pages/body-weight.blade.php'));
 }
 
 /**
- * La plantilla sin sus comentarios Blade. Las reglas del ADR 0002 se comprueban sobre el marcado
- * que llega al navegador: los comentarios citan `wire:model` o `@island` para explicar por qué se
- * usan o no, y contarlos daría un falso positivo.
+ * The template without its Blade comments. The ADR 0002 rules are checked against the markup that
+ * reaches the browser: the comments quote `wire:model` or `@island` to explain why they are or are
+ * not used, and counting them would give a false positive.
  */
 function bodyWeightTemplateMarkup(): string
 {
     return preg_replace('/\{\{--.*?--\}\}/s', '', bodyWeightTemplateSource());
 }
 
-it('cada $wire.<metodo> del modulo existe como metodo publico de la pagina', function (): void {
+it('every $wire.<method> in the module exists as a public method of the page', function (): void {
     preg_match_all('/\$wire\.(\w+)\(/', bodyWeightModuleSource(), $matches);
 
     expect($matches[1])->not->toBeEmpty();
@@ -209,12 +208,12 @@ it('cada $wire.<metodo> del modulo existe como metodo publico de la pagina', fun
 
     foreach (array_unique($matches[1]) as $method) {
         expect($publicMethods->has($method))->toBeTrue(
-            sprintf('El módulo llama a $wire.%s() y esa página no tiene ese método público.', $method)
+            sprintf('The module calls $wire.%s() and that page has no such public method.', $method)
         );
     }
 });
 
-it('el cliente solo lee campos que storeEvent y fetchEvents devuelven de verdad', function (): void {
+it('the client only reads fields storeEvent and fetchEvents really return', function (): void {
     $user = User::factory()->registered()->create();
     $this->actingAs($user);
 
@@ -223,13 +222,13 @@ it('el cliente solo lee campos que storeEvent y fetchEvents devuelven de verdad'
     $stored = $page->storeEvent(envelopeCipherText(), canonicalOccurredAtNow());
     expect(array_keys($stored))->toBe(['id', 'occurredAt']);
 
-    /** `loadHistory()` lee estos tres campos de cada fila; si faltase uno, el sobre no abriría. */
+    /** `loadHistory()` reads these three fields from every row; if one were missing, the envelope would not open. */
     $fetched = $page->fetchEvents();
     expect($fetched)->toHaveCount(1);
     expect(array_keys($fetched[0]))->toBe(['id', 'occurredAt', 'payload']);
 });
 
-it('cada this.$refs del modulo tiene su x-ref en la plantilla', function (): void {
+it('every this.$refs in the module has its x-ref in the template', function (): void {
     preg_match_all('/this\.\$refs\.(\w+)/', bodyWeightModuleSource(), $usedMatches);
     preg_match_all('/x-ref="(\w+)"/', bodyWeightTemplateSource(), $declaredMatches);
 
@@ -240,46 +239,46 @@ it('cada this.$refs del modulo tiene su x-ref en la plantilla', function (): voi
 
     foreach ($used as $ref) {
         expect(in_array($ref, $declared, true))->toBeTrue(
-            sprintf('El módulo lee this.$refs.%s y la plantilla no declara ese x-ref.', $ref)
+            sprintf('The module reads this.$refs.%s and the template does not declare that x-ref.', $ref)
         );
     }
 });
 
-it('la plantilla no declara ningun x-ref huerfano', function (): void {
+it('the template declares no orphan x-ref', function (): void {
     preg_match_all('/this\.\$refs\.(\w+)/', bodyWeightModuleSource(), $usedMatches);
     preg_match_all('/x-ref="(\w+)"/', bodyWeightTemplateSource(), $declaredMatches);
 
     /**
-     * `form` y `error` los declaran todas las pantallas de eventos y ninguna los lee desde
-     * JavaScript: el formulario se maneja con `@submit.prevent` y el error con `x-text`. Se dejan
-     * porque quitarlos solo aquí rompería la simetría entre pantallas, pero se nombran de una en
-     * una para que un `x-ref` nuevo y no usado sí haga fallar este test.
+     * `form` and `error` are declared by every event screen and none of them reads them from
+     * JavaScript: the form is handled with `@submit.prevent` and the error with `x-text`. They are
+     * left in place because removing them here alone would break the symmetry between screens, but
+     * they are named one by one so that a new, unused `x-ref` does make this test fail.
      */
     $knownUnused = ['form', 'error'];
 
     $orphans = array_diff(array_unique($declaredMatches[1]), $usedMatches[1], $knownUnused);
 
-    expect($orphans)->toBe([], 'x-ref declarados en la plantilla que nadie lee: '.implode(', ', $orphans));
+    expect($orphans)->toBe([], 'x-refs declared in the template that nobody reads: '.implode(', ', $orphans));
 });
 
 /*
 |--------------------------------------------------------------------------
-| Reglas del ADR 0002 y del envoltorio de página
+| ADR 0002 rules and the page wrapper
 |--------------------------------------------------------------------------
 */
 
-it('la plantilla va envuelta en el componente de pagina de Filament', function (): void {
-    /** Sin él se pierde `fi-page-header-main-ctn` y la primera tarjeta queda pegada a la barra. */
+it('the template is wrapped in the Filament page component', function (): void {
+    /** Without it, `fi-page-header-main-ctn` is lost and the first card sticks to the top bar. */
     expect(bodyWeightTemplateSource())->toContain('<x-filament-panels::page>');
 });
 
-it('el historial va en un island y la grafica solo con wire:ignore', function (): void {
+it('the history goes in an island and the chart only with wire:ignore', function (): void {
     $template = bodyWeightTemplateMarkup();
 
     /**
-     * El historial lleva las dos capas del ADR 0002: `@island` fuera y `wire:ignore` dentro. La
-     * gráfica NO lleva island, y es deliberado: el servidor emite el island vacío tras cualquier
-     * petición de Livewire, el `<canvas>` desaparece y `$refs.chart` queda indefinido.
+     * The history carries both ADR 0002 layers: `@island` outside and `wire:ignore` inside. The
+     * chart does NOT carry an island, and that is deliberate: the server emits the island empty
+     * after any Livewire request, the `<canvas>` disappears and `$refs.chart` becomes undefined.
      */
     expect($template)->toContain("@island(name: 'body-weight-list')");
     expect($template)->not->toContain("@island(name: 'body-weight-chart')");
@@ -292,28 +291,28 @@ it('el historial va en un island y la grafica solo con wire:ignore', function ()
     expect(substr_count($template, '@island('))->toBe(1);
 });
 
-it('el canvas tiene nombre accesible y un pie que lo describe en texto', function (): void {
+it('the canvas has an accessible name and a caption describing it in text', function (): void {
     $template = bodyWeightTemplateMarkup();
 
-    /** Do's #3: la tendencia no puede comunicarse solo por el color de la línea. */
+    /** Do's #3: the trend cannot be communicated by the line colour alone. */
     expect($template)->toContain('aria-describedby="body-weight-chart-caption"');
     expect($template)->toContain('id="body-weight-chart-caption"');
     expect(substr_count($template, 'role="img"'))->toBe(1);
 });
 
-it('la plantilla no usa wire:model en ninguna variante', function (): void {
+it('the template does not use wire:model in any form', function (): void {
     expect(bodyWeightTemplateMarkup())->not->toContain('wire:model');
 });
 
-it('los option de unidad los renderiza Blade, no Alpine', function (): void {
+it('the unit options are rendered by Blade, not Alpine', function (): void {
     expect(bodyWeightTemplateSource())->toContain("@foreach (\$catalog['units'] as \$unit)");
 
-    /** Si Alpine creara `<option>`, el morph los borraría en la primera petición (ADR 0002). */
+    /** If Alpine created `<option>`s, the morph would wipe them on the first request (ADR 0002). */
     expect(bodyWeightModuleSource())->not->toContain("createElement('option')");
 });
 
-it('el historial hereda el filtro por rango de fechas', function (): void {
-    /** El control común vive en una sola plantilla; la pantalla la incluye, no la copia. */
+it('the history inherits the date range filter', function (): void {
+    /** The shared control lives in a single template; the screen includes it, it does not copy it. */
     expect(bodyWeightTemplateSource())
         ->toContain("@include('phr.partials.date-range', ['idPrefix' => 'body-weight'])");
 
@@ -321,11 +320,11 @@ it('el historial hereda el filtro por rango de fechas', function (): void {
 
     expect($module)->toContain("from './dateRange.js'");
     expect($module)->toContain('...dateRangeControl()');
-    /** El rango viaja como argumento de `fetchEvents`, nunca como propiedad de Livewire (ADR 0002). */
+    /** The range travels as an argument of `fetchEvents`, never as a Livewire property (ADR 0002). */
     expect($module)->toContain('this.$wire.fetchEvents(null, HISTORY_FETCH_LIMIT, range.from, range.to)');
 });
 
-it('el campo numerico sigue la convencion de .ai/guidelines/ai.md', function (): void {
+it('the numeric field follows the convention in .ai/guidelines/ai.md', function (): void {
     $field = str(bodyWeightTemplateSource())->after('id="body-weight-value"')->before('>')->toString();
 
     expect($field)->toContain('type="number"');
@@ -335,63 +334,63 @@ it('el campo numerico sigue la convencion de .ai/guidelines/ai.md', function ():
     expect($field)->toContain('font-mono');
     expect($field)->toContain('min-h-11');
 
-    /** El límite de dos decimales y la normalización de coma a punto son de `numericValue.js`. */
+    /** The two-decimal limit and the comma-to-dot normalization come from `numericValue.js`. */
     expect(bodyWeightModuleSource())->toContain("from './numericValue.js'");
 });
 
-it('cada campo del formulario tiene una etiqueta visible asociada', function (): void {
+it('every form field has a visible label associated with it', function (): void {
     $template = bodyWeightTemplateSource();
 
     preg_match_all('/<label for="([\w-]+)"/', $template, $labels);
-    /** Solo controles: el `id` del pie de la gráfica existe para `aria-describedby`, no es campo. */
+    /** Controls only: the `id` of the chart caption exists for `aria-describedby`, it is not a field. */
     preg_match_all('/<(?:input|select|textarea)\s+id="([\w-]+)"/', $template, $fields);
 
-    /** DESIGN.md: la etiqueta siempre visible, nunca un placeholder haciendo de etiqueta. */
+    /** DESIGN.md: the label is always visible, never a placeholder acting as a label. */
     expect(array_diff($fields[1], $labels[1]))->toBe([]);
 });
 
-it('el campo de estatura es opcional, numerico y esta explicado en la propia pantalla', function (): void {
+it('the height field is optional, numeric and explained on the screen itself', function (): void {
     $template = bodyWeightTemplateSource();
 
     $field = str($template)->after('id="body-weight-height"')->before('>')->toString();
 
-    /** Convención de todo campo de medida del proyecto (.ai/guidelines/ai.md). */
+    /** The convention for every measurement field in the project (.ai/guidelines/ai.md). */
     expect($field)->toContain('type="number"');
     expect($field)->toContain('min="0"');
     expect($field)->toContain('step="any"');
     expect($field)->toContain('inputmode="decimal"');
 
-    /** Opcional de verdad: ni `aria-required`, ni el asterisco que llevan peso y fecha. */
+    /** Genuinely optional: no `aria-required` and none of the asterisk weight and date carry. */
     expect($field)->not->toContain('aria-required');
 
     /**
-     * Y explicado donde se ve, no solo en el código: sin ese texto, el campo vacío se lee como un
-     * olvido y se acaba rellenando de memoria cada semana.
+     * And explained where it shows, not only in the code: without that text, an empty field reads as
+     * an oversight and ends up being filled in from memory every week.
      */
     expect($template)->toContain('The height is optional');
 });
 
-it('la pantalla advierte de que el IMC no es un diagnostico y no lo categoriza', function (): void {
+it('the screen warns that BMI is not a diagnosis and does not categorize it', function (): void {
     $template = bodyWeightTemplateMarkup();
 
     expect($template)->toContain('not a diagnosis');
     expect($template)->toContain('percentiles for age and sex');
 
-    /** Ni categorías ni colores de juicio en ninguna parte de la pantalla ni del módulo. */
+    /** No categories and no judgement colours anywhere in the screen or in the module. */
     foreach (['Overweight', 'Obese', 'Underweight', 'Normal weight'] as $verdict) {
         expect($template)->not->toContain($verdict);
         expect(bodyWeightModuleSource())->not->toContain($verdict);
     }
 });
 
-it('el titulo y la etiqueta de navegacion nombran las dos magnitudes', function (): void {
+it('the title and the navigation label name both quantities', function (): void {
     expect((new BodyWeight)->getTitle())->toBe(__('Weight and height'));
     expect(BodyWeight::getNavigationLabel())->toBe(__('Weight and height'));
 
     /**
-     * El nombre interno NO se renombra con la etiqueta: el componente Alpine vive en
-     * `resources/js/app.js`, que está vetado mientras haya trabajo concurrente. Este test fija esa
-     * decisión para que nadie la deshaga a medias y deje la pantalla muda.
+     * The internal name is NOT renamed along with the label: the Alpine component lives in
+     * `resources/js/app.js`, which is off limits while there is concurrent work. This test pins that
+     * decision down so nobody undoes it halfway and leaves the screen mute.
      */
     expect(bodyWeightTemplateSource())->toContain('x-data="phrBodyWeightPage"');
 });

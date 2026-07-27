@@ -6,7 +6,6 @@
  * single axis from 0 to 24 h, one translucent line per day, and on top the median of each hour in
  * a thick stroke. It is the format of the standard clinic report, and it reveals what repeats
  * every day —the dawn rise, the post-meal peak— which in a continuous timeline is dissolved among weeks.
- * disuelto entre semanas.
  *
  * Pure logic: no DOM and no Chart.js (`tests/js/dayOverlay.test.mjs`). `health/dayOverlayChart.js`
  * paints it.

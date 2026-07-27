@@ -1,12 +1,12 @@
 /**
- * Comprobaciones de la lógica pura de `health/sharePage.js` y de `health/shareDescriptor.js`
+ * Checks of the pure logic of `health/sharePage.js` and of `health/shareDescriptor.js`
  * (ADR 0011).
  *
- * No se monta Alpine ni el DOM del panel: lo que se prueba aquí es lo que decide qué acaba dentro
- * del recorte, que es lo único de esta pantalla que puede equivocarse en silencio. Que un botón
- * llame a `generate()` lo comprueba `tests/Feature/SharingPageTest.php` sobre el marcado.
+ * Neither Alpine nor the panel DOM is mounted: what is tested here is what decides what ends up
+ * inside the clipping, which is the only thing on this screen that can go wrong in silence. That a
+ * button calls `generate()` is checked by `tests/Feature/SharingPageTest.php` over the markup.
  *
- * Corredor incorporado de Node, como el resto de `tests/js` (ver `crypto.test.mjs`).
+ * Node's built-in runner, like the rest of `tests/js` (see `crypto.test.mjs`).
  *
  *     npm test
  */
@@ -40,7 +40,7 @@ import {
 } from '../../resources/js/health/sharePage.js';
 import { openShareDescriptor, sealShareDescriptor } from '../../resources/js/health/shareDescriptor.js';
 
-/** Como el resto de tests que afirman texto: el idioma se fija, no se supone. */
+/** Like the rest of the tests that assert text: the language is set, not assumed. */
 setLocale('es');
 
 const USER_ID = '9c8f2e2a-2222-4444-8888-abcdefabcdef';
@@ -48,7 +48,7 @@ const OTHER_USER_ID = '00000000-1111-4444-8888-000000000000';
 const SHARE_ID = 'c0ffee00-1111-4444-8888-222233334444';
 const OTHER_SHARE_ID = 'deadbeef-1111-4444-8888-222233334444';
 
-/** @returns {Uint8Array} Clave maestra de prueba, 32 bytes deterministas. */
+/** @returns {Uint8Array} Test master key, 32 deterministic bytes. */
 function testMasterKey() {
     return new Uint8Array(MASTER_KEY_LENGTH).map((_, index) => index + 1);
 }
@@ -66,36 +66,36 @@ afterEach(() => {
     forget();
 });
 
-// --- Selección de tipos --------------------------------------------------------------------------
+// --- Type selection --------------------------------------------------------------------------------
 
-test('defaultTypeSelection: arranca con todos los tipos marcados', () => {
+test('defaultTypeSelection: it starts with every type ticked', () => {
     const selection = defaultTypeSelection();
 
     assert.deepEqual(Object.keys(selection), [...SHAREABLE_TYPES]);
     assert.ok(Object.values(selection).every((value) => value === true));
 });
 
-test('partitionTypes: los excluidos se escriben, no se dan por implícitos', () => {
+test('partitionTypes: the excluded ones are written out, not taken as implicit', () => {
     const { included, excluded } = partitionTypes({ glucose: true, insulin: true });
 
     assert.deepEqual(included, ['glucose', 'insulin']);
 
     /**
-     * Que los cuatro restantes aparezcan en `excluded` es la parte que importa: el paquete tiene
-     * que poder decirle al profesional que las comidas no se enviaron, en vez de dejar que lea la
-     * ausencia como un cero clínico.
+     * The four remaining ones appearing in `excluded` is the part that matters: the package has to
+     * be able to tell the professional that the meals were not sent, instead of letting them read
+     * the absence as a clinical zero.
      */
     assert.deepEqual(excluded, ['bloodPressure', 'meal', 'bodyWeight', 'temperature']);
 });
 
-test('partitionTypes: una selección vacía no incluye nada y excluye todo', () => {
+test('partitionTypes: an empty selection includes nothing and excludes everything', () => {
     const { included, excluded } = partitionTypes({});
 
     assert.deepEqual(included, []);
     assert.deepEqual(excluded, [...SHAREABLE_TYPES]);
 });
 
-// --- Caducidad -----------------------------------------------------------------------------------
+// --- Expiry ------------------------------------------------------------------------------------
 
 const TTL_CATALOG = Object.freeze([
     { token: '1h', hours: 1 },
@@ -103,7 +103,7 @@ const TTL_CATALOG = Object.freeze([
     { token: '7d', hours: 24 * 7 },
 ]);
 
-test('expiryFor: la caducidad se cuenta desde ahora y en horas exactas', () => {
+test('expiryFor: the expiry is counted from now and in exact hours', () => {
     const now = new Date('2026-07-27T10:00:00.000Z');
 
     assert.equal(expiryFor('1h', TTL_CATALOG, now).toISOString(), '2026-07-27T11:00:00.000Z');
@@ -111,13 +111,13 @@ test('expiryFor: la caducidad se cuenta desde ahora y en horas exactas', () => {
     assert.equal(expiryFor('7d', TTL_CATALOG, now).toISOString(), '2026-08-03T10:00:00.000Z');
 });
 
-test('expiryFor: un TTL fuera de la lista cerrada no se inventa', () => {
+test('expiryFor: a TTL outside the closed list is not invented', () => {
     assert.throws(() => expiryFor('30d', TTL_CATALOG, new Date()), /caducidad/i);
 });
 
-// --- Cuerpo del paquete --------------------------------------------------------------------------
+// --- Package body --------------------------------------------------------------------------------
 
-test('buildSharePackageBody: lleva rango, fecha, recuento y las dos listas de tipos', () => {
+test('buildSharePackageBody: it carries range, date, count and the two type lists', () => {
     const events = [eventOf('glucose', '2026-07-20T08:00:00.000000Z'), eventOf('insulin', '2026-07-19T08:00:00.000000Z')];
 
     const body = buildSharePackageBody({
@@ -138,12 +138,12 @@ test('buildSharePackageBody: lleva rango, fecha, recuento y las dos listas de ti
     assert.deepEqual(body.events[0], events[0]);
 });
 
-test('buildSharePackageBody: el cuerpo cierra y abre con el sobre `s1.` de verdad', async () => {
+test('buildSharePackageBody: the body seals and opens with the real `s1.` envelope', async () => {
     /**
-     * El compromiso `eventCount === events.length` es lo que sustituye al manifiesto que haría
-     * falta si el paquete se trocease, y quien lo comprueba es `assertShareBody()` dentro del
-     * módulo del sobre. Este test existe para que la forma que construye la pantalla y la que exige
-     * el sobre no puedan divergir sin que falle algo.
+     * The `eventCount === events.length` commitment is what replaces the manifest that would be
+     * needed if the package were chunked, and what checks it is `assertShareBody()` inside the
+     * envelope module. This test exists so that the shape the screen builds and the shape the
+     * envelope demands cannot diverge without something failing.
      */
     const contentKey = generateContentKey();
     const generatedAt = new Date('2026-07-27T10:00:00.000Z');
@@ -172,7 +172,7 @@ test('buildSharePackageBody: el cuerpo cierra y abre con el sobre `s1.` de verda
 
 // --- Descriptor ----------------------------------------------------------------------------------
 
-test('buildShareDescriptor: lleva CK y lo que la lista necesita, y ningún evento', () => {
+test('buildShareDescriptor: it carries CK and what the list needs, and no event', () => {
     const contentKey = generateContentKey();
     const body = buildSharePackageBody({
         events: [eventOf('glucose', '2026-07-20T08:00:00.000000Z')],
@@ -195,11 +195,11 @@ test('buildShareDescriptor: lleva CK y lo que la lista necesita, y ningún event
     assert.deepEqual(descriptor.excludedTypes, ['meal']);
     assert.equal(descriptor.eventCount, 1);
 
-    /** Los eventos NO entran en el descriptor: la lista no los necesita y ocuparían por nada. */
+    /** The events do NOT enter the descriptor: the list does not need them and they would weigh for nothing. */
     assert.equal(descriptor.events, undefined);
 });
 
-test('sealShareDescriptor/openShareDescriptor: ida y vuelta bajo la clave maestra', () => {
+test('sealShareDescriptor/openShareDescriptor: round trip under the master key', () => {
     adoptMasterKey(testMasterKey(), USER_ID);
 
     const descriptor = { v: 1, contentKey: 'AAAA', includedTypes: ['glucose'] };
@@ -209,7 +209,7 @@ test('sealShareDescriptor/openShareDescriptor: ida y vuelta bajo la clave maestr
     assert.deepEqual(openShareDescriptor({ userId: USER_ID, shareId: SHARE_ID, envelope }), descriptor);
 });
 
-test('openShareDescriptor: el sobre está atado a su usuario y a su recorte', () => {
+test('openShareDescriptor: the envelope is tied to its user and to its clipping', () => {
     adoptMasterKey(testMasterKey(), USER_ID);
 
     const envelope = sealShareDescriptor({
@@ -219,8 +219,8 @@ test('openShareDescriptor: el sobre está atado a su usuario y a su recorte', ()
     });
 
     /**
-     * Cambiar cualquiera de las dos mitades del dato asociado tiene que **fallar**, no devolver el
-     * descriptor de otro recorte: es lo que impide que el servidor mueva un descriptor de fila.
+     * Changing either half of the associated data has to **fail**, not return the descriptor of
+     * another clipping: it is what stops the server moving a descriptor between rows.
      */
     assert.throws(
         () => openShareDescriptor({ userId: USER_ID, shareId: OTHER_SHARE_ID, envelope }),
@@ -232,11 +232,11 @@ test('openShareDescriptor: el sobre está atado a su usuario y a su recorte', ()
     );
 });
 
-test('openShareDescriptor: el identificador en mayúsculas abre el mismo sobre', () => {
+test('openShareDescriptor: the identifier in uppercase opens the same envelope', () => {
     /**
-     * El `id` lo genera `crypto.randomUUID()` en minúsculas, pero el que vuelve del listado podría
-     * no estarlo. Si el contexto no normalizara, la lista dejaría de poder abrir sus propios
-     * descriptores el día que el servidor cambiara de mayúsculas.
+     * The `id` is generated by `crypto.randomUUID()` in lowercase, but the one coming back from
+     * the listing might not be. If the context did not normalize, the list would stop being able
+     * to open its own descriptors the day the server changed the case.
      */
     adoptMasterKey(testMasterKey(), USER_ID);
 
@@ -252,12 +252,12 @@ test('openShareDescriptor: el identificador en mayúsculas abre el mismo sobre',
     );
 });
 
-// --- Enlace y QR ---------------------------------------------------------------------------------
+// --- Link and QR ---------------------------------------------------------------------------------
 
 const TEMPLATE = 'https://phr.example.org/s/{link}';
 const LINK_ID = '8f14e45f-ceea-4a7a-9f2c-cbd9e4d38ab7';
 
-test('shareUrlFor: la clave de envío y el instante van en el fragmento y vuelven enteros', () => {
+test('shareUrlFor: the send key and the instant go in the fragment and come back whole', () => {
     const sendKey = generateSendKey();
     const generatedAt = new Date('2026-07-27T10:00:00.000Z');
     const url = shareUrlFor({ template: TEMPLATE, linkId: LINK_ID, sendKey, generatedAt });
@@ -265,45 +265,45 @@ test('shareUrlFor: la clave de envío y el instante van en el fragmento y vuelve
     assert.ok(url.startsWith(`https://phr.example.org/s/${LINK_ID}#`));
 
     /**
-     * El fragmento no viaja al servidor, y es la mitad que hace que un volcado de la base de datos
-     * no baste. Que vuelva byte a byte es lo que hace que el enlace sirva para algo; el instante
-     * viaja con él porque el lector lo necesita para reconstruir el dato asociado del paquete.
+     * The fragment does not travel to the server, and it is the half that makes a database dump
+     * not enough. That it comes back byte for byte is what makes the link useful; the instant
+     * travels with it because the reader needs it to rebuild the associated data of the package.
      */
     assert.deepEqual(decodeShareFragment(url.slice(url.indexOf('#') + 1)), { sendKey, generatedAt });
 });
 
-test('el QR codifica el enlace COMPLETO y cabe con holgura', () => {
+test('the QR encodes the COMPLETE link and fits with room to spare', () => {
     const sendKey = generateSendKey();
     const url = shareUrlFor({ template: TEMPLATE, linkId: LINK_ID, sendKey, generatedAt: new Date() });
 
     const encoded = encode(url, { ecc: 'M' });
 
     /**
-     * Versión 6 (43x43 módulos) con corrección M admite 134 bytes en modo byte. Una URL típica son
-     * ~106 caracteres, así que quedan casi treinta de margen para un dominio más largo antes de
-     * subir de versión. Se afirma el techo, no el valor exacto: subir de versión no es un fallo,
-     * pero pasar de la 10 sí querría decir que la URL creció sin que nadie lo mirara.
+     * Version 6 (43x43 modules) with correction M takes 134 bytes in byte mode. A typical URL is
+     * ~106 characters, so almost thirty are left for a longer domain before going up a version.
+     * The ceiling is asserted, not the exact value: going up a version is not a failure, but going
+     * past 10 would mean the URL grew with nobody looking.
      */
     assert.ok(encoded.version <= 10, `el QR necesitó la versión ${encoded.version}`);
     assert.ok(url.length < 134, `la URL mide ${url.length} caracteres`);
 
     const svg = qrSvgFor(url);
 
-    /** Fondo blanco dentro del propio SVG: el QR no conmuta con el tema oscuro. */
+    /** White background inside the SVG itself: the QR does not switch with the dark theme. */
     assert.match(svg, /<rect fill="#FFFFFF"/);
     assert.match(svg, /fill="#000000"/);
 
     /**
-     * Zona tranquila de cuatro módulos y lado mínimo de 400 px: los dos son requisitos de lectura
-     * desde el otro lado de una mesa, no decisiones de estilo.
+     * Quiet zone of four modules and a minimum side of 400 px: both are requirements for reading
+     * from across a table, not style decisions.
      */
     assert.equal(QR_BORDER_MODULES, 4);
     assert.ok(QR_MIN_SIDE_PX >= 400);
 
     /**
-     * `size` de `uqr` ya cuenta el borde, así que la zona tranquila se comprueba viendo cuánto
-     * crece el lado al pedir cuatro módulos en vez del uno que trae por defecto: seis módulos más
-     * (tres por lado) es exactamente la diferencia entre 1 y 4 a cada lado.
+     * The `size` of `uqr` already counts the border, so the quiet zone is checked by seeing how
+     * much the side grows when asking for four modules instead of the default one: six modules
+     * more (three per side) is exactly the difference between 1 and 4 on each side.
      */
     const bordered = encode(url, { ecc: 'M', border: QR_BORDER_MODULES });
 
@@ -313,9 +313,9 @@ test('el QR codifica el enlace COMPLETO y cabe con holgura', () => {
     assert.match(svg, new RegExp(`viewBox="0 0 ${side} ${side}"`));
 });
 
-// --- Texto de la lista ---------------------------------------------------------------------------
+// --- Text of the list ---------------------------------------------------------------------------
 
-test('describeRange: un rango abierto se dice con palabras, no con un hueco', () => {
+test('describeRange: an open range is said with words, not with a gap', () => {
     assert.equal(describeRange({ from: null, to: null }), 'Todo tu historial');
     assert.match(describeRange({ from: '2026-07-01T00:00:00.000000Z', to: null }), /^Desde /);
     assert.match(describeRange({ from: null, to: '2026-07-31T00:00:00.000000Z' }), /^Hasta /);
@@ -325,38 +325,38 @@ test('describeRange: un rango abierto se dice con palabras, no con un hueco', ()
     );
 });
 
-// --- Qué se le dice a quien comparte cuando algo falla -------------------------------------------
+// --- What whoever shares is told when something fails --------------------------------------------
 
 /**
  * A read that fails is not an encryption that fails, and the screen used to say the second.
  *
  * Livewire rejects with a bare `{status, body, json, errors}`, which is not an `Error`, so it fell
- * through every named case of `describeShareError` and landed on «no se ha podido crear el recorte».
+ * through every named case of `describeShareError` and landed on "the clipping could not be created".
  * That sentence blames the clipping — the part that never ran — and leaves the person unsure whether
  * anything was sent. This is the regression test of the message, not of the transport: the transport
  * is `tests/Feature/SharingFlowTest.php`.
  */
-test('describeReadError: un fallo de lectura dice que no se ha compartido nada, no que falló el cifrado', () => {
+test('describeReadError: a read failure says nothing was shared, not that the encryption failed', () => {
     assert.equal(
         describeReadError({ status: 500, body: null, json: null, errors: null }),
         'No se han podido leer tus registros, así que no se ha creado ningún recorte ni se ha compartido nada.',
     );
 });
 
-test('describeReadError: un 404 o un 419 se dicen como pestaña caducada, con la recarga por delante', () => {
+test('describeReadError: a 404 or a 419 are said as a stale tab, with the reload up front', () => {
     for (const status of [404, 419]) {
         assert.match(describeReadError({ status }), /^Esta página está desactualizada/);
     }
 });
 
-test('describeReadError: una petición que no llegó a contestar es la red, no los datos', () => {
+test('describeReadError: a request that never got an answer is the network, not the data', () => {
     assert.equal(
         describeReadError({ status: null }),
         'No hemos podido contactar con el servidor. Inténtalo de nuevo.',
     );
 });
 
-test('describeShareError: el rechazo de Livewire no cae en el mensaje genérico', () => {
+test('describeShareError: the Livewire rejection does not fall into the generic message', () => {
     const message = describeShareError({ status: 404, body: null, json: null, errors: null });
 
     assert.match(message, /^Esta página está desactualizada/);

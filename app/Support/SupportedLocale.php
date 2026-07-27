@@ -151,7 +151,7 @@ final class SupportedLocale
         return count($matches) === 1 ? $matches[0] : null;
     }
 
-    /** Idioma por defecto. */
+    /** Default language. */
     private static function fallback(): string
     {
         return self::Fallback;

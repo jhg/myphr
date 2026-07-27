@@ -37,7 +37,7 @@ final class DeterministicByteStream
     }
 
     /**
-     * Entero uniforme en `[$min, $max]`, derivado del propio flujo.
+     * Uniform integer in `[$min, $max]`, derived from the stream itself.
      */
     public function intBetween(int $min, int $max): int
     {

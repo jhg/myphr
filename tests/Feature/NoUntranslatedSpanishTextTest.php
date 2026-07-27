@@ -3,19 +3,18 @@
 declare(strict_types=1);
 
 /**
- * Guardarraíl: ningún literal de cadena en `app/Filament/` ni en `app/Providers/` puede contener
- * texto en castellano (detectado por caracteres propios del idioma) fuera de una llamada a `__()`.
- * Usa el tokenizer de
- * PHP en vez de una regex sobre el fichero crudo para poder ignorar con seguridad comentarios,
- * PHPDoc y el propio argumento de `__()`.
+ * Guardrail: no string literal in `app/Filament/` or in `app/Providers/` may contain Spanish text
+ * (detected by characters specific to the language) outside a call to `__()`. It uses PHP's
+ * tokenizer instead of a regex over the raw file so it can safely ignore comments, PHPDoc and the
+ * argument of `__()` itself.
  *
- * La única excepción deliberada es el nombre nativo de un idioma en su propio selector
- * (`app/Filament/Pages/Profile.php`), que no se traduce nunca: mostrar «Español» traducido dejaría
- * de identificar el idioma para quien no lee el idioma en curso.
+ * The only deliberate exception is the native name of a language in its own selector
+ * (`app/Filament/Pages/Profile.php`), which is never translated: showing a translated "Español"
+ * would stop identifying the language for anyone who does not read the current one.
  *
- * `app/Providers/` entra en el barrido porque el menú de usuario del panel se declara ahí
- * (`PhrPanelProvider::userMenuItems()`), y por ese hueco pasó `->label('Mi perfil')`, visible desde
- * cualquier pantalla y en castellano para los tres idiomas.
+ * `app/Providers/` is in the sweep because the panel user menu is declared there
+ * (`PhrPanelProvider::userMenuItems()`), and `->label('Mi perfil')` slipped through that gap,
+ * visible from every screen and in Spanish for all three languages.
  */
 test('no Spanish text is hardcoded outside __() in app/Filament and app/Providers', function () {
     $spanishCharsPattern = '/[áéíóúñÁÉÍÓÚÑ¿¡]/u';
@@ -124,5 +123,5 @@ test('no Spanish text is hardcoded outside __() in app/Filament and app/Provider
     }
 
     expect($violations)
-        ->toBe([], "Se encontró texto en castellano sin envolver en __():\n".implode("\n", $violations));
+        ->toBe([], "Found Spanish text not wrapped in __():\n".implode("\n", $violations));
 });

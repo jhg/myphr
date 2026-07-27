@@ -29,10 +29,10 @@ final readonly class PasswordChangeTickets
     /** Key of the ticket inside the session payload. */
     public const string SESSION_KEY = 'phr.password_change_ticket';
 
-    /** Clave de la caducidad, como marca de tiempo Unix. */
+    /** Key of the expiry, as a Unix timestamp. */
     public const string EXPIRY_SESSION_KEY = 'phr.password_change_ticket_expires_at';
 
-    /** Longitud del ticket, en bytes. */
+    /** Ticket length, in bytes. */
     public const int TICKET_BYTES = 32;
 
     /**

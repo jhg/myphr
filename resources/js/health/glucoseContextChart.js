@@ -5,12 +5,11 @@
  * labelled— and returns the Chart.js instance. It computes nothing and reads no events: that is
  * why the same chart comes out in the patient panel, in the professional's reader and in the share preview.
  *
- * **The X axis is linear, not category and not time.** Time it cannot be: no Chart.js date adapter
- * is installed (same reason as in `medianBandChart.js`). And category it must not be either,
- * because here distances mean something: two readings ten minutes apart and two ten hours apart
- * cannot end up equally far, or the post-meal rise would read as an invented slope. The axis values
- * are wall clock times (`eventWallClockMs`), so the labels are formatted in UTC
- * ({@see wallClockFormat}) so as not to shift them twice.
+ * **The X axis is linear, not category and not time.** It is the shared axis of `timeAxis.js`, the
+ * same one every screen of readings over time uses: distances mean something here, so two readings
+ * ten minutes apart and two ten hours apart cannot end up equally far, or the post-meal rise would
+ * read as an invented slope. The axis values are wall clock times (`eventWallClockMs`), which is
+ * why the labels are formatted in UTC.
  *
  * **The markers live on their own vertical axis, invisible and fixed from 0 to 1.** That way they
  * stay stuck at the bottom whatever the glucose does: hanging them off the mg/dL axis would move
@@ -22,7 +21,7 @@ import Chart from 'chart.js/auto';
 import { formatNumber, t } from '../i18n/index.js';
 import { legendElementFor, legendItems, renderLegend } from './chartLegend.js';
 import { chartColors, CHART_FONTS } from './chartTheme.js';
-import { wallClockFormat } from './chartTime.js';
+import { chartTimeFormat, timeAxisBounds, timeAxisScale, timeAxisTooltipTitle } from './timeAxis.js';
 
 /**
  * Height of each marker kind on the auxiliary axis (0 bottom, 1 top).
@@ -206,7 +205,7 @@ export function renderGlucoseContextChart(canvas, { series, markers, unit, legen
         return null;
     }
 
-    const timeFormat = wallClockFormat({ month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const timeFormat = chartTimeFormat();
 
     const datasets = [
         ...described.map((entry, index) => ({
@@ -246,18 +245,15 @@ export function renderGlucoseContextChart(canvas, { series, markers, unit, legen
             /** Interaction by proximity: the markers are small and are tapped with a finger. */
             interaction: { mode: 'nearest', intersect: false },
             scales: {
-                x: {
-                    type: 'linear',
-                    grid: { color: colors.grid },
-                    border: { color: colors.tick },
-                    ticks: {
-                        color: colors.tick,
-                        font: { family: CHART_FONTS.mono, size: 12 },
-                        maxRotation: 0,
-                        autoSkipPadding: 16,
-                        callback: (value) => timeFormat.format(new Date(value)),
-                    },
-                },
+                x: timeAxisScale({
+                    colors,
+                    format: timeFormat,
+                    /** The markers count too: a meal with no reading beside it still has to fit. */
+                    bounds: timeAxisBounds([
+                        ...series.flatMap((entry) => entry.points.map((point) => point.x)),
+                        ...markers.map((marker) => marker.x),
+                    ]),
+                }),
                 y: {
                     grid: { color: colors.grid },
                     border: { color: colors.tick },
@@ -286,7 +282,7 @@ export function renderGlucoseContextChart(canvas, { series, markers, unit, legen
                 legend: { display: false },
                 tooltip: {
                     callbacks: {
-                        title: (items) => timeFormat.format(new Date(items[0].parsed.x)),
+                        title: timeAxisTooltipTitle(timeFormat),
                         label: (item) => {
                             const marker = item.dataset.markers?.[item.dataIndex];
 

@@ -1,15 +1,15 @@
 /**
- * Comprobaciones de `health/dailyBands.js` (ADR 0004, ADR 0006, ADR 0007, ADR 0008).
+ * Checks of `health/dailyBands.js` (ADR 0004, ADR 0006, ADR 0007, ADR 0008).
  *
- * Lógica pura, sin DOM ni Chart.js: se llama directamente a las funciones exportadas. Corredor
- * incorporado de Node, como el resto de `tests/js`.
+ * Pure logic, with no DOM and no Chart.js: the exported functions are called directly. Node's
+ * built-in runner, like the rest of `tests/js`.
  *
  *     npm test
  *
- * Lo que más importa aquí son las tres reglas de la banda, porque las tres son formas de mentir con
- * una gráfica si se implementan mal: un día sin lecturas dibujado como cero, un día con una sola
- * lectura disfrazado de recorrido, y el día de un evento calculado con la zona horaria de quien
- * mira en vez de la de quien lo registró.
+ * What matters most here are the three rules of the band, because all three are ways of lying with
+ * a chart if implemented badly: a day with no readings drawn as a zero, a day with a single
+ * reading disguised as a range, and the day of an event computed with the time zone of whoever
+ * looks instead of that of whoever recorded it.
  */
 
 import assert from 'node:assert/strict';
@@ -31,34 +31,34 @@ function glucoseEvent({ occurredAt, value, unit = 'mg/dL', method = 'capillary',
     return { v: 1, type: 'glucose', tz, occurredAt, data: { value, unit, method, loinc: '41653-7' } };
 }
 
-// --- El día es el del evento, no el del navegador ------------------------------------------------
+// --- The day is the one of the event, not of the browser ------------------------------------------
 
-test('eventDayKey usa el desfase con el que se registró el evento', () => {
-    /** Las 23:30 del día 4 en Madrid en verano son las 21:30 UTC: el día de la persona es el 4. */
+test('eventDayKey uses the offset the event was recorded with', () => {
+    /** 23:30 on the 4th in Madrid in summer is 21:30 UTC: the person's day is the 4th. */
     assert.equal(eventDayKey('2026-07-04T21:30:00.000000Z', '+02:00'), '2026-07-04');
 
-    /** Y las 20:30 del día 4 en Nueva York son ya el día 5 en UTC: el día de la persona sigue siendo el 4. */
+    /** And 20:30 on the 4th in New York is already the 5th in UTC: the person's day is still the 4th. */
     assert.equal(eventDayKey('2026-07-05T00:30:00.000000Z', '-04:00'), '2026-07-04');
 });
 
-test('eventDayKey cae a UTC cuando el sobre no trae un desfase utilizable', () => {
+test('eventDayKey falls back to UTC when the envelope brings no usable offset', () => {
     assert.equal(eventDayKey('2026-07-05T00:30:00.000000Z'), '2026-07-05');
     assert.equal(eventDayKey('2026-07-05T00:30:00.000000Z', 'Z'), '2026-07-05');
     assert.equal(eventDayKey('2026-07-05T00:30:00.000000Z', 'Europe/Madrid'), '2026-07-05');
 });
 
-test('eventDayKey devuelve cadena vacía si el instante no se entiende, en vez de inventar un día', () => {
+test('eventDayKey returns an empty string if the instant cannot be read, instead of inventing a day', () => {
     assert.equal(eventDayKey('no es una fecha', '+02:00'), '');
 });
 
-test('tzOffsetMinutes entiende el signo y los minutos, y no adivina nada más', () => {
+test('tzOffsetMinutes understands the sign and the minutes, and guesses nothing else', () => {
     assert.equal(tzOffsetMinutes('+02:00'), 120);
     assert.equal(tzOffsetMinutes('-05:30'), -330);
     assert.equal(tzOffsetMinutes(undefined), 0);
     assert.equal(tzOffsetMinutes('+2:00'), 0);
 });
 
-test('dos eventos del mismo instante caen en días distintos según el desfase de cada uno', () => {
+test('two events of the same instant fall on different days depending on each offset', () => {
     const { days, series } = buildDailyBands(
         [
             glucoseEvent({ occurredAt: '2026-07-05T00:30:00.000000Z', value: '100', tz: '-04:00' }),
@@ -71,9 +71,9 @@ test('dos eventos del mismo instante caen en días distintos según el desfase d
     assert.deepEqual(series[0].points.map((point) => point?.median ?? null), [100, 200]);
 });
 
-// --- Huecos ------------------------------------------------------------------------------------
+// --- Gaps -----------------------------------------------------------------------------------------
 
-test('un día sin lecturas es un hueco, nunca un cero', () => {
+test('a day with no readings is a gap, never a zero', () => {
     const { days, series } = buildDailyBands(
         [
             glucoseEvent({ occurredAt: '2026-07-01T09:00:00.000000Z', value: '110' }),
@@ -82,7 +82,7 @@ test('un día sin lecturas es un hueco, nunca un cero', () => {
         { type: 'glucose', groupBy: 'method', unit: 'mg/dL' },
     );
 
-    /** El eje cubre el tramo entero: si no, los dos días con datos saldrían pegados. */
+    /** The axis covers the whole stretch: otherwise the two days with data would come out adjacent. */
     assert.deepEqual(days, ['2026-07-01', '2026-07-02', '2026-07-03', '2026-07-04']);
     assert.deepEqual(series[0].points, [
         { median: 110, min: 110, max: 110, count: 1 },
@@ -92,7 +92,7 @@ test('un día sin lecturas es un hueco, nunca un cero', () => {
     ]);
 });
 
-test('un método que no midió un día deja hueco en su serie, no un cero heredado del otro', () => {
+test('a method that did not measure one day leaves a gap in its series, not a zero inherited from the other', () => {
     const { series } = buildDailyBands(
         [
             glucoseEvent({ occurredAt: '2026-07-01T09:00:00.000000Z', value: '110', method: 'capillary' }),
@@ -106,15 +106,15 @@ test('un método que no midió un día deja hueco en su serie, no un cero hereda
     assert.deepEqual(series[1].points.map((point) => point?.median ?? null), [null, 95]);
 });
 
-test('sin ninguna lectura no hay eje ni series, y no se inventa un día', () => {
+test('with no reading at all there is no axis and no series, and no day is invented', () => {
     const bands = buildDailyBands([], { type: 'glucose', groupBy: 'method', unit: 'mg/dL' });
 
     assert.deepEqual(bands, { days: [], series: [], excludedByUnit: 0, discarded: 0, omittedDays: 0 });
 });
 
-// --- Un solo dato ------------------------------------------------------------------------------
+// --- A single datum ---------------------------------------------------------------------------------
 
-test('un día con una sola lectura colapsa la banda a un punto', () => {
+test('a day with a single reading collapses the band into a point', () => {
     const { series } = buildDailyBands(
         [glucoseEvent({ occurredAt: '2026-07-01T09:00:00.000000Z', value: '117.5' })],
         { type: 'glucose', groupBy: 'method', unit: 'mg/dL' },
@@ -123,7 +123,7 @@ test('un día con una sola lectura colapsa la banda a un punto', () => {
     assert.deepEqual(series[0].points, [{ median: 117.5, min: 117.5, max: 117.5, count: 1 }]);
 });
 
-test('un día con varias lecturas da mediana y extremos del propio día', () => {
+test('a day with several readings gives median and extremes of that day', () => {
     const { series } = buildDailyBands(
         [
             glucoseEvent({ occurredAt: '2026-07-01T08:00:00.000000Z', value: '80' }),
@@ -136,9 +136,9 @@ test('un día con varias lecturas da mediana y extremos del propio día', () => 
     assert.deepEqual(series[0].points, [{ median: 120, min: 80, max: 200, count: 3 }]);
 });
 
-// --- Exclusiones, siempre contadas --------------------------------------------------------------
+// --- Exclusions, always counted -----------------------------------------------------------------
 
-test('las lecturas en otra unidad se cuentan aparte y no entran en la banda (ADR 0007)', () => {
+test('the readings in another unit are counted apart and do not enter the band (ADR 0007)', () => {
     const { series, excludedByUnit } = buildDailyBands(
         [
             glucoseEvent({ occurredAt: '2026-07-01T09:00:00.000000Z', value: '110' }),
@@ -151,7 +151,7 @@ test('las lecturas en otra unidad se cuentan aparte y no entran en la banda (ADR
     assert.deepEqual(series[0].points, [{ median: 110, min: 110, max: 110, count: 1 }]);
 });
 
-test('lo que no trae número se descarta y se cuenta, sin tumbar la serie', () => {
+test('whatever brings no number is discarded and counted, without taking the series down', () => {
     const qualitative = glucoseEvent({ occurredAt: '2026-07-01T10:00:00.000000Z', value: undefined });
     delete qualitative.data.value;
     qualitative.data.result = 'negative';
@@ -165,7 +165,7 @@ test('lo que no trae número se descarta y se cuenta, sin tumbar la serie', () =
     assert.equal(series[0].points[0].count, 1);
 });
 
-test('los eventos de otro tipo ni se cuentan ni se descartan: no son de esta gráfica', () => {
+test('events of another type are neither counted nor discarded: they are not of this chart', () => {
     const bands = buildDailyBands(
         [{ v: 1, type: 'meal', tz: '+00:00', occurredAt: '2026-07-01T09:00:00.000000Z', data: { mealType: 'lunch' } }],
         { type: 'glucose', groupBy: 'method', unit: 'mg/dL' },
@@ -174,9 +174,9 @@ test('los eventos de otro tipo ni se cuentan ni se descartan: no son de esta gr�
     assert.deepEqual(bands, { days: [], series: [], excludedByUnit: 0, discarded: 0, omittedDays: 0 });
 });
 
-// --- Varias magnitudes del mismo evento (tensión) -----------------------------------------------
+// --- Several quantities of the same event (blood pressure) ---------------------------------------
 
-test('la tensión sale con una serie por magnitud dentro de cada método, en el orden pedido', () => {
+test('blood pressure comes out with one series per quantity inside each method, in the requested order', () => {
     const events = [
         {
             v: 1,
@@ -206,7 +206,7 @@ test('la tensión sale con una serie por magnitud dentro de cada método, en el 
     assert.deepEqual(series[1].points, [{ median: 85, min: 80, max: 90, count: 2 }]);
 });
 
-test('a un evento de tensión al que le falta una magnitud se le descarta entero', () => {
+test('a blood pressure event missing one quantity is discarded whole', () => {
     const { series, discarded } = buildDailyBands(
         [{
             v: 1,
@@ -222,9 +222,9 @@ test('a un evento de tensión al que le falta una magnitud se le descarta entero
     assert.deepEqual(series, []);
 });
 
-// --- Tipos sin agrupación y tope del eje ---------------------------------------------------------
+// --- Types with no grouping and the axis cap ------------------------------------------------------
 
-test('un tipo que no agrupa cae en una única serie con el grupo vacío', () => {
+test('a type that does not group falls into a single series with an empty group', () => {
     const { series } = buildDailyBands(
         [{
             v: 1,
@@ -240,7 +240,7 @@ test('un tipo que no agrupa cae en una única serie con el grupo vacío', () => 
     assert.equal(series[0].group, '');
 });
 
-test('un tramo más largo que el tope conserva los días recientes y dice cuántos deja fuera', () => {
+test('a stretch longer than the cap keeps the recent days and states how many it leaves out', () => {
     const events = [
         glucoseEvent({ occurredAt: '2020-01-01T09:00:00.000000Z', value: '100' }),
         glucoseEvent({ occurredAt: '2026-07-01T09:00:00.000000Z', value: '120' }),
@@ -253,7 +253,7 @@ test('un tramo más largo que el tope conserva los días recientes y dice cuánt
     assert.ok(omittedDays > 0);
 });
 
-test('enumerateDays cubre los dos extremos y cruza el cambio de mes', () => {
+test('enumerateDays covers both ends and crosses the month change', () => {
     assert.deepEqual(enumerateDays('2026-02-27', '2026-03-02'), [
         '2026-02-27',
         '2026-02-28',

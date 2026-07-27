@@ -181,7 +181,7 @@ export async function changePassword({ currentPassword, newPassword, urls, onSta
     const pinned = opaqueParameters();
 
     /** Step 3: `startLogin` without `keyStretching`. */
-    const { clientLoginState, startLoginRequest } = startLogin(currentPassword);
+    const { clientLoginState, startLoginRequest } = await startLogin(currentPassword);
 
     await onStage('reauth');
 
@@ -194,7 +194,7 @@ export async function changePassword({ currentPassword, newPassword, urls, onSta
     await onStage('stretchingOld');
 
     /** Step 6: first Argon2id. */
-    const reauthenticated = finishLogin({
+    const reauthenticated = await finishLogin({
         password: currentPassword,
         clientLoginState,
         loginResponse: reauthStarted.loginResponse,
@@ -228,7 +228,7 @@ export async function changePassword({ currentPassword, newPassword, urls, onSta
     await onStage('registering');
 
     /** Step 12: `startRegistration` without `keyStretching`. */
-    const { clientRegistrationState, registrationRequest } = startRegistration(newPassword);
+    const { clientRegistrationState, registrationRequest } = await startRegistration(newPassword);
 
     /** Step 13: the ticket is checked, not consumed. */
     const registrationStarted = await postJson(urls.registrationStartUrl, {
@@ -242,7 +242,7 @@ export async function changePassword({ currentPassword, newPassword, urls, onSta
     await onStage('stretching');
 
     /** Step 15: second Argon2id. */
-    const registered = finishRegistration({
+    const registered = await finishRegistration({
         password: newPassword,
         clientRegistrationState,
         registrationResponse: registrationStarted.registrationResponse,

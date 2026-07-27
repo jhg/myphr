@@ -7,16 +7,16 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 
 /**
- * Limitadores de las rutas de OPAQUE (Spec 0001 §4.2 y §4.4).
+ * Limiters for the OPAQUE routes (Spec 0001 §4.2 and §4.4).
  *
- * Un limitador que se apoya en un campo que la ruta nunca recibe deja de limitar por petición y
- * pasa a ser un único cubo compartido: quien lo agote deja el endpoint fuera de servicio para todo
- * el mundo. `registration/finish` es exactamente ese caso, porque el cliente solo manda
- * `registrationId`, `registrationRecord`, `wrappedUserMasterKey` y `encryptedSettings`.
+ * A limiter that leans on a field the route never receives stops limiting per request and becomes a
+ * single shared bucket: whoever drains it takes the endpoint out of service for everybody.
+ * `registration/finish` is exactly that case, because the client only sends `registrationId`,
+ * `registrationRecord`, `wrappedUserMasterKey` and `encryptedSettings`.
  */
 
 /**
- * Cuerpo JSON contra una ruta del panel, con IP fija.
+ * JSON body against a panel route, with a fixed IP.
  *
  * @param  array<string, mixed>  $body
  */
@@ -36,7 +36,7 @@ function opaqueRequest(string $path, array $body, string $ip = '203.0.113.9'): R
 }
 
 /**
- * Claves de los cubos que un limitador aplica a una petición.
+ * Keys of the buckets a limiter applies to a request.
  *
  * @return list<string>
  */
@@ -55,7 +55,7 @@ function rateLimitKeys(string $limiter, Request $request): array
     ));
 }
 
-it('separa por registro cada petición de registration/finish', function (): void {
+it('separates every registration/finish request by pending registration', function (): void {
     $first = rateLimitKeys('opaque-registration-finish', opaqueRequest(
         '/phr/auth/opaque/registration/finish',
         ['registrationId' => '11111111-1111-4111-8111-111111111111'],
@@ -69,18 +69,18 @@ it('separa por registro cada petición de registration/finish', function (): voi
     expect($first)->not->toBe($second)
         ->and(array_diff($first, $second))->not->toBeEmpty();
 
-    /** Y el login en claro nunca es clave: aquí ni siquiera hay un campo que lo sea. */
+    /** And the plaintext login is never a key: there is not even a field here that could be one. */
     foreach ([...$first, ...$second] as $key) {
         expect($key)->not->toContain('@');
     }
 });
 
 /**
- * El defecto que este fichero persigue: `opaque-registration` construye su segunda clave con
- * `registrationToken`, que `registration/finish` no envía nunca. Todas sus peticiones caerían en el
- * mismo cubo de 15/min, así que esa ruta no puede usar ese limitador.
+ * The defect this file chases: `opaque-registration` builds its second key from
+ * `registrationToken`, which `registration/finish` never sends. All of its requests would fall into
+ * the same 15/min bucket, so that route cannot use that limiter.
  */
-it('no monta registration/finish sobre un limitador que no distingue sus peticiones', function (): void {
+it('does not mount registration/finish on a limiter that cannot tell its requests apart', function (): void {
     $first = rateLimitKeys('opaque-registration', opaqueRequest(
         '/phr/auth/opaque/registration/finish',
         ['registrationId' => '11111111-1111-4111-8111-111111111111'],
@@ -99,7 +99,7 @@ it('no monta registration/finish sobre un limitador que no distingue sus peticio
         ->and($middleware)->not->toContain('throttle:opaque-registration');
 });
 
-it('sigue separando por token las peticiones de registration/start', function (): void {
+it('keeps separating registration/start requests by token', function (): void {
     $first = rateLimitKeys('opaque-registration', opaqueRequest(
         '/phr/auth/opaque/registration/start',
         ['registrationToken' => 'token-uno'],

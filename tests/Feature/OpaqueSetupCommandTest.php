@@ -13,15 +13,15 @@ use Tests\Unit\Security\Opaque\Support\QueuedRandomSource;
 /**
  * `php artisan opaque:setup` (`docs/OPAQUE.md` §12.1).
  *
- * La fuente de aleatoriedad se sustituye por una determinista que comprueba
- * además el tamaño de cada petición: si el comando pidiera un número de bytes
- * distinto del que exige el perfil, la fuente falla antes que la aserción.
+ * The source of randomness is replaced with a deterministic one that also
+ * checks the size of every request: if the command asked for a different number
+ * of bytes than the profile requires, the source fails before the assertion.
  */
 
 /**
- * Registra la fuente determinista y devuelve sus bloques, en el orden en que
- * el comando los consume: `oprf_seed`, semilla estática, semilla del registro
- * ficticio, `masking_key` falsa y clave de enumeración.
+ * Registers the deterministic source and returns its blocks, in the order the
+ * command consumes them: `oprf_seed`, static seed, fake record seed, fake
+ * `masking_key` and enumeration key.
  *
  * @return list<string>
  */
@@ -41,7 +41,7 @@ function bindDeterministicRandomSource(): array
 }
 
 /**
- * Valores que el comando debe imprimir para esa cola determinista.
+ * Values the command must print for that deterministic queue.
  *
  * @return array<string, string>
  */

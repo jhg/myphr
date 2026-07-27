@@ -12,7 +12,7 @@ use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
 
-/** Módulo Alpine de la pantalla, fuente del contrato con el servidor y con el DOM. */
+/** The screen's Alpine module, the source of the contract with the server and with the DOM. */
 function sharingModuleSource(): string
 {
     return file_get_contents(base_path('resources/js/health/sharePage.js'));
@@ -24,9 +24,9 @@ function sharingViewSource(): string
 }
 
 /**
- * La plantilla sin sus comentarios `{{-- --}}`: los contratos se comprueban contra el marcado que
- * llega al navegador, no contra la prosa que lo explica, que nombra a propósito `wire:model` y
- * `bg-white` para decir por qué están o no están.
+ * The template without its `{{-- --}}` comments: the contracts are checked against the markup that
+ * reaches the browser, not against the prose explaining it, which deliberately names `wire:model`
+ * and `bg-white` to say why they are or are not there.
  */
 function sharingViewMarkup(): string
 {
@@ -34,14 +34,14 @@ function sharingViewMarkup(): string
 }
 
 /**
- * Tests de la pantalla de compartición (ADR 0011).
+ * Tests for the sharing screen (ADR 0011).
  *
- * Lo que se comprueba aquí es lo que puede romperse en silencio: que el catálogo que publica el
- * servidor y la lista de tipos que filtra el cliente no diverjan, que el componente Alpine esté
- * registrado, y que el marcado siga cumpliendo las dos reglas que el ADR pone por escrito (el PIN
- * y el QR nunca a la vez, y ningún `wire:model`).
+ * What is checked here is what can break silently: that the catalog the server publishes and the
+ * list of types the client filters by do not drift apart, that the Alpine component is registered,
+ * and that the markup still honours the two rules the ADR writes down (the PIN and the QR code never
+ * at once, and no `wire:model`).
  */
-it('se pinta para una sesión autenticada', function (): void {
+it('is painted for an authenticated session', function (): void {
     $this->actingAs(User::factory()->registered()->create());
 
     Livewire::test(Sharing::class)
@@ -49,12 +49,12 @@ it('se pinta para una sesión autenticada', function (): void {
         ->assertSee('phrSharePage', escape: false);
 });
 
-it('publica los tipos compartibles que el módulo del cliente sabe filtrar', function (): void {
+it('publishes the shareable types the client module knows how to filter', function (): void {
     /**
-     * Este es el test que más importa de este fichero. El servidor pinta las casillas y el cliente
-     * filtra por el campo `type` que va **dentro** del sobre; si las dos listas dejan de coincidir,
-     * la pantalla ofrece un tipo que nunca acaba dentro del recorte, y el resultado es un historial
-     * al que le falta algo sin que nada falle.
+     * This is the test that matters most in this file. The server paints the checkboxes and the
+     * client filters by the `type` field that goes **inside** the envelope; if the two lists stop
+     * matching, the screen offers a type that never ends up inside the clipping, and the result is a
+     * history missing something with nothing failing.
      */
     preg_match('/export const SHAREABLE_TYPES = Object\.freeze\(\[(.*?)\]\)/s', sharingModuleSource(), $matches);
 
@@ -65,7 +65,7 @@ it('publica los tipos compartibles que el módulo del cliente sabe filtrar', fun
     expect($tokens[1])->toBe(Sharing::SHAREABLE_TYPES);
 });
 
-it('publica las tres caducidades de la lista cerrada, con 24 horas por defecto', function (): void {
+it('publishes the three expiries on the closed list, with 24 hours by default', function (): void {
     $this->actingAs(User::factory()->registered()->create());
 
     $catalog = Livewire::test(Sharing::class)->instance()->catalog();
@@ -75,13 +75,13 @@ it('publica las tres caducidades de la lista cerrada, con 24 horas por defecto',
     expect(array_column($catalog['ttls'], 'hours'))->toBe([1, 24, 168]);
     expect($catalog['defaultTtl'])->toBe(ShareTtl::Day->value);
 
-    /** Toda etiqueta visible tiene que estar traducida, nunca el token crudo. */
+    /** Every visible label has to be translated, never the raw token. */
     foreach ($catalog['ttls'] as $ttl) {
         expect($ttl['label'])->not->toBe($ttl['token']);
     }
 });
 
-it('publica los endpoints y la plantilla de la URL del lector', function (): void {
+it('publishes the endpoints and the reader URL template', function (): void {
     $this->actingAs(User::factory()->registered()->create());
 
     $catalog = Livewire::test(Sharing::class)->instance()->catalog();
@@ -89,8 +89,8 @@ it('publica los endpoints y la plantilla de la URL del lector', function (): voi
     expect($catalog['endpoints']['shares'])->toBe(route('filament.phr.shares.index'));
 
     /**
-     * La plantilla lleva `{link}` sin rellenar y la construye `route()`: el prefijo público de la
-     * página del lector puede cambiar, y el día que cambie tiene que cambiar en un solo sitio.
+     * The template carries an unfilled `{link}` and `route()` builds it: the public prefix of the
+     * reader page can change, and the day it changes it has to change in a single place.
      */
     expect($catalog['readerUrlTemplate'])->toContain('{link}');
     expect(str_replace('{link}', 'x', $catalog['readerUrlTemplate']))->toBe(route('share.reader', ['link' => 'x']));
@@ -101,11 +101,11 @@ it('publica los endpoints y la plantilla de la URL del lector', function (): voi
     ]);
 });
 
-it('no publica ningún dato del contenido en el catálogo', function (): void {
+it('publishes no content data in the catalog', function (): void {
     /**
-     * El catálogo lo emite el servidor en claro dentro del HTML. Solo puede llevar cosas públicas:
-     * tipos, caducidades y URL. Si alguna vez alguien metiera aquí algo del historial, sería el
-     * servidor sabiendo lo que este diseño existe para que no sepa.
+     * The catalog is emitted by the server in the clear inside the HTML. It may only carry public
+     * things: types, expiries and URLs. If anyone ever put something from the history in here, that
+     * would be the server knowing what this design exists to keep it from knowing.
      */
     $this->actingAs(User::factory()->registered()->create());
 
@@ -115,21 +115,21 @@ it('no publica ningún dato del contenido en el catálogo', function (): void {
         ->toBe(['types', 'ttls', 'defaultTtl', 'endpoints', 'readerUrlTemplate', 'limits', 'readerCatalog']);
 
     /**
-     * `readerCatalog` es el mismo vocabulario público que recibe la página del lector: tokens de
-     * catálogo con su etiqueta, términos LOINC y unidades (ADR 0005). Nada de ahí depende de ninguna
-     * cuenta ni dice qué contiene ningún recorte, y es lo que permite que la vista previa se pinte
-     * con las mismas palabras que verá el profesional sin una sola petición de más.
+     * `readerCatalog` is the same public vocabulary the reader page receives: catalog tokens with
+     * their labels, LOINC terms and units (ADR 0005). Nothing in it depends on any account or says
+     * what any clipping contains, and it is what lets the preview be painted with the same words the
+     * professional will see without a single extra request.
      */
     expect($catalog['readerCatalog'])->toBe((new ReaderCatalog)->toArray());
     expect(array_keys($catalog['readerCatalog']))->toBe(['locales', 'labels', 'loinc', 'units']);
 });
 
-it('previsualiza el recorte con la misma pantalla que verá el profesional', function (): void {
+it('previews the clipping with the same screen the professional will see', function (): void {
     /**
-     * La vista previa no puede ser una versión resumida: lo que sale de aquí no se puede deshacer
-     * —revocar un enlace no borra lo que la otra persona ya descargó—, así que «lo que vas a enviar»
-     * tiene que ser literalmente lo que la otra persona verá. Por eso monta el mismo módulo que la
-     * página del lector, sobre el mismo cuerpo de paquete que se cifraría al generar.
+     * The preview cannot be an abridged version: what leaves here cannot be undone —revoking a link
+     * does not delete what the other person already downloaded—, so "what you are about to send" has
+     * to be literally what the other person will see. That is why it mounts the same module as the
+     * reader page, over the same package body that would be encrypted on generate.
      */
     expect(sharingModuleSource())
         ->toContain("import { renderClippingExplorer } from '../reader/clippingExplorer.js';")
@@ -137,19 +137,19 @@ it('previsualiza el recorte con la misma pantalla que verá el profesional', fun
         ->toContain('buildSharePackageBody({');
 
     /**
-     * La región la construye entera el cliente: `wire:ignore` con `wire:key` estable y sin
-     * `@island`, por el mismo motivo que la gráfica de glucemia (ADR 0002). El servidor reemite un
-     * island tras cualquier petición de Livewire y se llevaría por delante el `<canvas>`.
+     * The region is built entirely by the client: `wire:ignore` with a stable `wire:key` and no
+     * `@island`, for the same reason as the blood glucose chart (ADR 0002). The server re-emits an
+     * island after any Livewire request and would take the `<canvas>` with it.
      */
     expect(sharingViewSource())
         ->toContain('x-ref="preview"')
         ->toContain('wire:key="sharing-preview-region"');
 });
 
-it('registra el componente Alpine en app.js', function (): void {
+it('registers the Alpine component in app.js', function (): void {
     /**
-     * Sin esta línea la pantalla se pinta entera y ningún botón responde, sin ningún error visible:
-     * es el fallo silencioso contra el que avisa el propio `app.js`.
+     * Without this line the screen paints in full and no button responds, with no visible error: it
+     * is the silent failure `app.js` itself warns about.
      */
     $app = file_get_contents(base_path('resources/js/app.js'));
 
@@ -158,25 +158,25 @@ it('registra el componente Alpine en app.js', function (): void {
     expect(sharingViewMarkup())->toContain('x-data="phrSharePage"');
 });
 
-it('no usa wire:model en ninguna parte de la pantalla', function (): void {
-    /** ADR 0002: nada de lo que se elige aquí puede entrar en el snapshot de Livewire. */
+it('does not use wire:model anywhere on the screen', function (): void {
+    /** ADR 0002: nothing chosen here may enter the Livewire snapshot. */
     expect(sharingViewMarkup())->not->toContain('wire:model');
 });
 
-it('reutiliza el control de rango común y no escribe otro', function (): void {
+it('reuses the shared range control instead of writing another one', function (): void {
     /**
-     * Dos controles de rango con criterios distintos discreparían justo en el borde del día, que es
-     * donde un registro entra o se queda fuera de lo que ve el médico.
+     * Two range controls with different criteria would disagree exactly at the day boundary, which
+     * is where a record either makes it into what the doctor sees or does not.
      */
     expect(sharingViewSource())->toContain("@include('phr.partials.date-range'");
     expect(sharingModuleSource())->toContain("dateRangeControl({ preset: 'month' })");
 });
 
-it('nunca enseña el PIN y el QR a la vez', function (): void {
+it('never shows the PIN and the QR code at the same time', function (): void {
     /**
-     * ADR 0011: «el PIN nunca aparece en la misma pantalla [que el QR], para que una sola foto no
-     * contenga las dos mitades». Se comprueba sobre el marcado porque es ahí donde vive la regla:
-     * el bloque del PIN se pinta solo con `! qrVisible` y el del QR solo con `qrVisible`.
+     * ADR 0011: "the PIN never appears on the same screen [as the QR code], so a single photo cannot
+     * hold both halves". It is checked against the markup because that is where the rule lives: the
+     * PIN block is painted only with `! qrVisible` and the QR one only with `qrVisible`.
      */
     $markup = sharingViewMarkup();
 
@@ -189,11 +189,12 @@ it('nunca enseña el PIN y el QR a la vez', function (): void {
     expect(substr($markup, $pinBlock, 30))->toContain('x-show="! qrVisible"');
 });
 
-it('avisa de las tres renuncias del ADR sin letra pequeña', function (): void {
+it('warns about the three ADR trade-offs without small print', function (): void {
     /**
-     * Los tres avisos son los del apartado de consecuencias del ADR 0011 y tienen que estar a la
-     * vista, no detrás de un desplegable: quien comparte tiene que saber que el enlace más el PIN
-     * bastan, que revocar no recupera lo descargado, y que el servidor ve la frecuencia.
+     * The three warnings are the ones from the consequences section of ADR 0011 and they have to be
+     * in plain sight, not behind a disclosure: whoever shares has to know that the link plus the PIN
+     * are enough, that revoking does not recover what was downloaded, and that the server sees the
+     * frequency.
      */
     $markup = sharingViewMarkup();
 
@@ -201,19 +202,19 @@ it('avisa de las tres renuncias del ADR sin letra pequeña', function (): void {
     expect($markup)->toContain('Revoking blocks future readings only.');
     expect($markup)->toContain('The server never learns what you share, but it does learn that you shared, when, and how often.');
 
-    /** Nada de `<details>`: un aviso plegado es un aviso que se cuenta para poder decir que se contó. */
+    /** No `<details>`: a folded warning is a warning told so you can say it was told. */
     expect($markup)->not->toContain('<details');
 });
 
-it('avisa de que el PIN se enseña una sola vez', function (): void {
+it('warns that the PIN is shown only once', function (): void {
     expect(sharingViewMarkup())->toContain('This PIN is shown once and is not stored anywhere.');
 });
 
-it('tiene traducidos los textos de la pantalla en los dos catálogos', function (): void {
+it('has the screen copy translated in both catalogs', function (): void {
     /**
-     * El guardarraíl general (`LocaleTest`) ya barre todo el repositorio, pero estos tres textos
-     * son los que se leen antes de tomar la decisión de compartir: si se quedaran en inglés en una
-     * cuenta en castellano, quien más los necesita no los leería.
+     * The general guardrail (`LocaleTest`) already sweeps the whole repository, but these three
+     * pieces of copy are the ones read before deciding to share: if they stayed in English on a
+     * Spanish account, the people who need them most would not read them.
      */
     foreach (['es', 'zh_CN'] as $locale) {
         $catalog = json_decode(file_get_contents(base_path("lang/{$locale}.json")), true);

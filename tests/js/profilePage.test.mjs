@@ -1,11 +1,11 @@
 /**
- * Comprobaciones de la lógica pura de `auth/profilePage.js` (ADR 0004, ADR 0007).
+ * Checks of the pure logic of `auth/profilePage.js` (ADR 0004, ADR 0007).
  *
- * No se monta Alpine: `profilePage()` solo orquesta DOM y peticiones. Lo que se prueba es la
- * validación del rango objetivo de glucemia, que es donde un fallo silencioso se convierte en una
- * indicación clínica falsa: un rango a medias, del revés, o con un extremo inventado.
+ * Alpine is not mounted: `profilePage()` only orchestrates DOM and requests. What is tested is the
+ * validation of the glucose target range, which is where a silent failure turns into a false
+ * clinical instruction: a half range, a reversed one, or one with an invented end.
  *
- * Corredor incorporado de Node, como el resto de `tests/js` (ver `crypto.test.mjs`).
+ * Node's built-in runner, like the rest of `tests/js` (see `crypto.test.mjs`).
  *
  *     npm test
  */
@@ -21,19 +21,19 @@ import {
 import { setLocale } from '../../resources/js/i18n/index.js';
 
 /**
- * Estos tests afirman el texto **en castellano**, así que fijan el idioma en vez de darlo por
- * supuesto: el idioma por defecto del cliente es el inglés (igual que `config/app.php`), y en Node
- * no hay `<html lang>` del que deducirlo. Sin esta línea, las afirmaciones de texto de abajo
- * estarían comprobando el catálogo de respaldo sin decirlo.
+ * These tests assert the text **in Spanish**, so they set the language instead of assuming it: the
+ * client default language is English (as in `config/app.php`), and in Node there is no
+ * `<html lang>` to work it out from. Without this line, the text assertions below would be
+ * checking the fallback catalog without saying so.
  */
 setLocale('es');
 
-test('parseGlucoseTargetRange: los dos límites en blanco significan «sin configurar»', () => {
+test('parseGlucoseTargetRange: both limits blank mean "not configured"', () => {
     assert.equal(parseGlucoseTargetRange({ lowRaw: '', highRaw: '', unit: 'mg/dL' }), null);
     assert.equal(parseGlucoseTargetRange({ lowRaw: '   ', highRaw: '  ', unit: 'mg/dL' }), null);
 });
 
-test('parseGlucoseTargetRange: devuelve números y conserva la unidad con la que se escribió', () => {
+test('parseGlucoseTargetRange: returns numbers and keeps the unit it was written in', () => {
     assert.deepEqual(
         parseGlucoseTargetRange({ lowRaw: '70', highRaw: '180', unit: 'mg/dL' }),
         { low: 70, high: 180, unit: 'mg/dL' },
@@ -45,7 +45,7 @@ test('parseGlucoseTargetRange: devuelve números y conserva la unidad con la que
     );
 });
 
-test('parseGlucoseTargetRange: rechaza un rango a medias', () => {
+test('parseGlucoseTargetRange: rejects a half range', () => {
     assert.throws(
         () => parseGlucoseTargetRange({ lowRaw: '70', highRaw: '', unit: 'mg/dL' }),
         /los dos límites/i,
@@ -57,7 +57,7 @@ test('parseGlucoseTargetRange: rechaza un rango a medias', () => {
     );
 });
 
-test('parseGlucoseTargetRange: exige que el inferior sea menor que el superior', () => {
+test('parseGlucoseTargetRange: demands that the lower one is smaller than the upper one', () => {
     assert.throws(
         () => parseGlucoseTargetRange({ lowRaw: '180', highRaw: '70', unit: 'mg/dL' }),
         /menor que el superior/i,
@@ -69,14 +69,14 @@ test('parseGlucoseTargetRange: exige que el inferior sea menor que el superior',
     );
 });
 
-test('parseGlucoseTargetRange: rechaza el cero como límite', () => {
+test('parseGlucoseTargetRange: rejects zero as a limit', () => {
     assert.throws(
         () => parseGlucoseTargetRange({ lowRaw: '0', highRaw: '180', unit: 'mg/dL' }),
         /mayores que cero/i,
     );
 });
 
-test('parseGlucoseTargetRange: hereda la validación numérica de numericValue.js', () => {
+test('parseGlucoseTargetRange: inherits the numeric validation of numericValue.js', () => {
     assert.throws(
         () => parseGlucoseTargetRange({ lowRaw: '70.123', highRaw: '180', unit: 'mg/dL' }),
         /2 decimales/,
@@ -93,28 +93,28 @@ test('parseGlucoseTargetRange: hereda la validación numérica de numericValue.j
     );
 });
 
-test('parseGlucoseTargetRange: rechaza una unidad que no es UCUM', () => {
+test('parseGlucoseTargetRange: rejects a unit that is not UCUM', () => {
     assert.throws(
         () => parseGlucoseTargetRange({ lowRaw: '70', highRaw: '180', unit: 'mg/l' }),
         /unidad válida/i,
     );
 });
 
-test('buildSettingsPatch: sin rango, la clave se borra con null', () => {
+test('buildSettingsPatch: with no range, the key is deleted with null', () => {
     assert.deepEqual(
         buildSettingsPatch({ glucoseUnit: 'mg/dL', lowRaw: '', highRaw: '', rangeUnit: 'mg/dL' }),
         { glucoseUnit: 'mg/dL', glucoseTargetRange: null },
     );
 });
 
-test('buildSettingsPatch: con rango, lo incluye tal cual', () => {
+test('buildSettingsPatch: with a range, it is included as is', () => {
     assert.deepEqual(
         buildSettingsPatch({ glucoseUnit: 'mmol/L', lowRaw: '3.9', highRaw: '10', rangeUnit: 'mmol/L' }),
         { glucoseUnit: 'mmol/L', glucoseTargetRange: { low: 3.9, high: 10, unit: 'mmol/L' } },
     );
 });
 
-test('buildSettingsPatch: rechaza una unidad preferida que no es UCUM', () => {
+test('buildSettingsPatch: rejects a preferred unit that is not UCUM', () => {
     assert.throws(
         () => buildSettingsPatch({ glucoseUnit: 'mgdl', lowRaw: '', highRaw: '', rangeUnit: 'mg/dL' }),
         /unidad válida/i,
@@ -123,13 +123,13 @@ test('buildSettingsPatch: rechaza una unidad preferida que no es UCUM', () => {
 
 /*
 |--------------------------------------------------------------------------
-| Bloque de solo lectura: últimas medidas corporales
+| Read-only block: latest body measurements
 |--------------------------------------------------------------------------
 |
-| El perfil no registra nada: enseña el último peso, la última estatura y el IMC, calculados aquí a
-| partir de los sobres descifrados. Lo que se prueba es que el último peso y la última estatura
-| pueden venir de registros distintos —la estatura es opcional en cada uno— y que sin ninguna
-| estatura no aparece ningún IMC.
+| The profile records nothing: it shows the last weight, the last height and the BMI, computed here
+| from the decrypted envelopes. What is tested is that the last weight and the last height can come
+| from different records —height is optional in each one— and that with no height at all no BMI
+| appears.
 |
 */
 
@@ -149,7 +149,7 @@ function weightEvent(occurredAt, value, height = null) {
     return { occurredAt, content: { v: 1, type: 'bodyWeight', data } };
 }
 
-test('summarizeBodyMeasurements: el último peso y la última estatura pueden ser de registros distintos', () => {
+test('summarizeBodyMeasurements: the last weight and the last height may come from different records', () => {
     const summary = summarizeBodyMeasurements([
         weightEvent('2026-01-10T08:00:00.000000Z', '68', { value: '175', unit: 'cm' }),
         weightEvent('2026-05-10T08:00:00.000000Z', '70'),
@@ -163,20 +163,20 @@ test('summarizeBodyMeasurements: el último peso y la última estatura pueden se
     assert.equal(summary.bmi, 22.9);
 });
 
-test('summarizeBodyMeasurements: sin ninguna estatura registrada no hay IMC', () => {
+test('summarizeBodyMeasurements: with no height recorded there is no BMI', () => {
     const summary = summarizeBodyMeasurements([weightEvent('2026-05-10T08:00:00.000000Z', '70')]);
 
     assert.equal(summary.weight.value, '70');
     assert.equal(summary.height, null);
-    /** Ni cero ni cifra inventada: la pantalla no enseña IMC. */
+    /** No zero and no invented figure: the screen shows no BMI. */
     assert.equal(summary.bmi, null);
 });
 
-test('summarizeBodyMeasurements: sin ningún registro no inventa nada', () => {
+test('summarizeBodyMeasurements: with no record at all it invents nothing', () => {
     assert.deepEqual(summarizeBodyMeasurements([]), { weight: null, height: null, bmi: null });
 });
 
-test('summarizeBodyMeasurements: el IMC sale con libras y pulgadas igual que con kilos y centímetros', () => {
+test('summarizeBodyMeasurements: the BMI comes out with pounds and inches the same as with kilos and centimetres', () => {
     const imperial = summarizeBodyMeasurements([{
         occurredAt: '2026-05-10T08:00:00.000000Z',
         content: {

@@ -14,22 +14,22 @@ use Livewire\Livewire;
 uses(RefreshDatabase::class);
 
 /**
- * Gestión de usuarios desde el panel (Spec 0001 §10; ADR 0009).
+ * User management from the panel (Spec 0001 §10; ADR 0009).
  *
- * El recurso está **desactivado**: no aparece en la navegación y no responde por URL. Este fichero
- * pasó de comprobar que la pantalla funcionaba a comprobar que no se puede llegar a ella, que es lo
- * que hay que sostener ahora.
+ * The resource is **disabled**: it does not appear in the navigation and does not answer by URL.
+ * This file went from checking that the screen worked to checking that you cannot reach it, which is
+ * what has to be held up now.
  *
- * Las reglas de negocio que antes se ejercitaban a través de esta interfaz no se han perdido. La
- * guardia de confirmación al reemitir un enlace vive en `RegistrationLinks` y no en la interfaz,
- * precisamente para que no existan dos copias (Spec 0001 §3.4), y la cubre `RegistrationLinksTest`;
- * el alta por línea de comandos la cubre `IssueRegistrationLinkCommandTest`.
+ * The business rules that used to be exercised through this interface have not been lost. The
+ * confirmation guard when reissuing a link lives in `RegistrationLinks` and not in the interface,
+ * precisely so there are not two copies (Spec 0001 §3.4), and `RegistrationLinksTest` covers it;
+ * command-line signup is covered by `IssueRegistrationLinkCommandTest`.
  */
 beforeEach(function (): void {
     Filament::setCurrentPanel('phr');
 });
 
-it('no deja acceder al recurso ni siquiera a una cuenta registrada', function (): void {
+it('does not let even a registered account reach the resource', function (): void {
     expect(UserResource::canAccess())->toBeFalse();
 
     $this->actingAs(User::factory()->registered()->create())
@@ -37,23 +37,23 @@ it('no deja acceder al recurso ni siquiera a una cuenta registrada', function ()
         ->assertForbidden();
 });
 
-it('deja fuera del panel a una cuenta sin registro OPAQUE', function (): void {
+it('keeps an account without an OPAQUE registration out of the panel', function (): void {
     $this->actingAs(User::factory()->create())
         ->get(UserResource::getUrl('index'))
         ->assertForbidden();
 });
 
-it('no lo cuelga de la navegación', function (): void {
+it('does not hang it off the navigation', function (): void {
     $this->actingAs(User::factory()->registered()->create());
 
     expect(UserResource::shouldRegisterNavigation())->toBeFalse();
 });
 
 /**
- * La política es la puerta de verdad y `canAccess()` la segunda vuelta de llave: si alguien reabriera
- * solo una de las dos, esta comprobación seguiría fallando hasta que se decida reabrir ambas.
+ * The policy is the real gate and `canAccess()` is the second turn of the key: if somebody reopened
+ * only one of the two, this check would still fail until reopening both is decided.
  */
-it('deniega todos los permisos de gestión de usuarios', function (): void {
+it('denies every user management permission', function (): void {
     $registered = User::factory()->registered()->create();
     $other = User::factory()->registered()->create();
 
@@ -63,8 +63,8 @@ it('deniega todos los permisos de gestión de usuarios', function (): void {
         ->and(Gate::forUser($registered)->allows('issueRegistrationLink', $other))->toBeFalse();
 });
 
-/** ADR 0009: el login queda fijo y no hay edición ni borrado de cuentas. */
-it('no permite editar ni borrar cuentas', function (): void {
+/** ADR 0009: the login is fixed and there is no editing or deleting of accounts. */
+it('does not allow editing or deleting accounts', function (): void {
     $admin = User::factory()->registered()->create();
     $other = User::factory()->registered()->create();
 
@@ -73,13 +73,13 @@ it('no permite editar ni borrar cuentas', function (): void {
 });
 
 /**
- * ADR 0009: el alta pide nombre y login, nunca una contraseña.
+ * ADR 0009: signup asks for a name and a login, never a password.
  *
- * Se comprueba sobre el esquema del recurso, sin llegar a la pantalla, que ya no es accesible. Sigue
- * mereciendo la pena: si el recurso se reabre algún día, conviene que un campo de contraseña no se
- * haya colado mientras estaba apagado.
+ * It is checked against the resource schema, without reaching the screen, which is no longer
+ * accessible. It is still worth it: if the resource is ever reopened, a password field had better
+ * not have slipped in while it was switched off.
  */
-it('no ofrece ningún campo de contraseña en el alta', function (): void {
+it('offers no password field at signup', function (): void {
     $admin = User::factory()->registered()->create();
     $this->actingAs($admin);
 

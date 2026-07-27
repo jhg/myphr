@@ -29,8 +29,8 @@ beforeEach(function (): void {
 });
 
 /**
- * Cuerpo de creación con una caducidad que lleva fracción de segundo, como la que produce el
- * `new Date()` del navegador.
+ * Creation body with an expiry carrying a fraction of a second, like the one the browser's
+ * `new Date()` produces.
  *
  * @return array{body: array<string, mixed>, canonical: string, linkId: string, pinTag: string}
  */
@@ -62,17 +62,18 @@ function shareBodyWithFractionalExpiry(): array
 }
 
 /**
- * Reproduce el fallo real del lector: PIN correcto y aviso de «historial alterado o incompleto».
+ * Reproduces the real reader failure: correct PIN and a "history tampered with or incomplete"
+ * warning.
  *
- * `canonicalDate(expiresAt)` entra en el `info` de `wrapKey` y en el dato asociado del envoltorio
- * (ADR 0011). El cliente lo calcula sobre un `new Date()`, que lleva milisegundos, y lo manda tal
- * cual; `open` tiene que devolver **la misma cadena**, byte a byte, o el envoltorio no abre y el
- * lector enseña `reader.error.tampered`.
+ * `canonicalDate(expiresAt)` goes into the `info` of `wrapKey` and into the wrapper's associated
+ * data (ADR 0011). The client computes it over a `new Date()`, which carries milliseconds, and sends
+ * it as is; `open` has to return **the same string**, byte for byte, or the wrapper does not open
+ * and the reader shows `reader.error.tampered`.
  */
-it('devuelve en open el mismo expiresAt canónico que el cliente usó al cifrar', function (): void {
+it('returns in open the same canonical expiresAt the client encrypted with', function (): void {
     $user = User::factory()->registered()->create();
 
-    /** Instante con milisegundos, como el `new Date()` del navegador. */
+    /** An instant with milliseconds, like the browser's `new Date()`. */
     ['body' => $body, 'canonical' => $canonical, 'linkId' => $linkId, 'pinTag' => $pinTag] = shareBodyWithFractionalExpiry();
 
     $this->actingAs($user)->postJson('/test/phr/shares', $body)->assertCreated();
@@ -85,18 +86,18 @@ it('devuelve en open el mismo expiresAt canónico que el cliente usó al cifrar'
 });
 
 /**
- * Hermano del mismo fallo, un salto más allá: `open` no es el único sitio donde esa fecha vuelve
- * del motor para entrar en un AEAD.
+ * A sibling of the same failure, one hop further out: `open` is not the only place that date comes
+ * back from the engine to take part in an AEAD.
  *
- * Re-armar un enlace (`POST /phr/shares/{share}/links`) obliga al cliente a derivar `wrapKey` con
- * `canonicalDate(expiresAt)`, y esa caducidad no la tiene: la lee del listado, que la saca de la
- * base de datos. Si el listado la devolviese truncada, el enlace re-armado nacería cifrado con una
- * clave que el lector no puede derivar —el servidor le daría en `open` la fecha completa— y el
- * profesional vería «historial alterado» con el PIN correcto, igual que en el fallo original. La
- * pantalla de re-armar todavía no existe en el cliente, así que este test es lo único que sostiene
- * hoy esa costura.
+ * Re-arming a link (`POST /phr/shares/{share}/links`) forces the client to derive `wrapKey` with
+ * `canonicalDate(expiresAt)`, and it does not have that expiry: it reads it from the listing, which
+ * gets it from the database. If the listing returned it truncated, the re-armed link would be born
+ * encrypted with a key the reader cannot derive —the server would hand it the full date in `open`—
+ * and the professional would see "history tampered with" with the correct PIN, just as in the
+ * original bug. The re-arm screen does not exist in the client yet, so this test is the only thing
+ * holding that seam up today.
  */
-it('devuelve la misma caducidad canónica en el listado y en el enlace re-armado', function (): void {
+it('returns the same canonical expiry in the listing and in the re-armed link', function (): void {
     $user = User::factory()->registered()->create();
 
     ['body' => $body, 'canonical' => $canonical] = shareBodyWithFractionalExpiry();
@@ -110,7 +111,7 @@ it('devuelve la misma caducidad canónica en el listado y en el enlace re-armado
     expect($listed['expiresAt'])->toBe($canonical)
         ->and($listed['links'][0]['expiresAt'])->toBe($canonical);
 
-    /** El enlace nuevo hereda la caducidad del recorte releído, así que es el mismo viaje. */
+    /** The new link inherits the expiry of the re-read clipping, so it is the same round trip. */
     $this->actingAs($user)
         ->postJson("/test/phr/shares/{$body['id']}/links", ['link' => shareBodyWithFractionalExpiry()['body']['link']])
         ->assertCreated()

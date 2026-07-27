@@ -1,12 +1,12 @@
 /**
- * Comprobaciones de `health/bodyMassIndex.js` (ADR 0004, ADR 0005, ADR 0006).
+ * Checks of `health/bodyMassIndex.js` (ADR 0004, ADR 0005, ADR 0006).
  *
- * Lo que se prueba aquí no es aritmética por gusto: es la cifra que la pantalla de peso y el perfil
- * enseñan al lado de un dato clínico. Los tres casos que importan son el IMC con las dos parejas de
- * unidades, la ausencia de estatura —que tiene que dar «no hay IMC» y nunca un cero— y la elección
- * de la última estatura conocida cuando el registro no la trae.
+ * What is tested here is not arithmetic for its own sake: it is the figure the weight screen and
+ * the profile show next to a clinical datum. The three cases that matter are BMI with both pairs
+ * of units, the absence of a height —which has to give "there is no BMI" and never a zero— and
+ * the choice of the last known height when the record does not bring one.
  *
- * Corredor incorporado de Node, como el resto de `tests/js`.
+ * Node's built-in runner, like the rest of `tests/js`.
  *
  *     npm test
  */
@@ -23,7 +23,7 @@ import {
 } from '../../resources/js/health/bodyMassIndex.js';
 
 /**
- * Un evento de peso descifrado, con la forma del ADR 0006. El valor viaja como cadena.
+ * A decrypted weight event, with the shape of ADR 0006. The value travels as a string.
  *
  * @param {string} occurredAt
  * @param {string} value
@@ -40,18 +40,18 @@ function weightEvent(occurredAt, value, height = null) {
     return { occurredAt, content: { v: 1, type: 'bodyWeight', data } };
 }
 
-test('bodyMassIndex: kilogramos y centímetros', () => {
-    /** 70 / 1,75² = 22,857… → 22,9 con un decimal. */
+test('bodyMassIndex: kilograms and centimetres', () => {
+    /** 70 / 1.75² = 22.857… → 22.9 with one decimal. */
     assert.equal(
         bodyMassIndex({ weight: { value: '70', unit: 'kg' }, height: { value: '175', unit: 'cm' } }),
         22.9,
     );
 });
 
-test('bodyMassIndex: libras y pulgadas dan la misma cifra que su equivalente métrico', () => {
+test('bodyMassIndex: pounds and inches give the same figure as their metric equivalent', () => {
     /**
-     * 154,324 lb y 68,898 in son 70 kg y 175 cm. Que las dos parejas de unidades caigan en la misma
-     * cifra es lo que prueba que la conversión usa los factores exactos y no un redondeo casero.
+     * 154.324 lb and 68.898 in are 70 kg and 175 cm. Both pairs of units landing on the same figure
+     * is what proves the conversion uses the exact factors and not a homemade rounding.
      */
     const metric = bodyMassIndex({ weight: { value: '70', unit: 'kg' }, height: { value: '175', unit: 'cm' } });
     const imperial = bodyMassIndex({
@@ -62,7 +62,7 @@ test('bodyMassIndex: libras y pulgadas dan la misma cifra que su equivalente mé
     assert.equal(imperial, metric);
 });
 
-test('bodyMassIndex: sin estatura registrada no hay IMC, y no es cero', () => {
+test('bodyMassIndex: with no height recorded there is no BMI, and it is not zero', () => {
     for (const height of [null, undefined]) {
         const bmi = bodyMassIndex({ weight: { value: '70', unit: 'kg' }, height });
 
@@ -71,11 +71,11 @@ test('bodyMassIndex: sin estatura registrada no hay IMC, y no es cero', () => {
     }
 });
 
-test('bodyMassIndex: sin peso tampoco hay IMC', () => {
+test('bodyMassIndex: with no weight there is no BMI either', () => {
     assert.equal(bodyMassIndex({ weight: null, height: { value: '175', unit: 'cm' } }), null);
 });
 
-test('bodyMassIndex: un valor inutilizable da null en vez de NaN o Infinity', () => {
+test('bodyMassIndex: an unusable value gives null instead of NaN or Infinity', () => {
     const cases = [
         { weight: { value: '0', unit: 'kg' }, height: { value: '175', unit: 'cm' } },
         { weight: { value: '70', unit: 'kg' }, height: { value: '0', unit: 'cm' } },
@@ -89,14 +89,14 @@ test('bodyMassIndex: un valor inutilizable da null en vez de NaN o Infinity', ()
     }
 });
 
-test('las conversiones usan los factores exactos', () => {
+test('the conversions use the exact factors', () => {
     assert.equal(weightInKilograms('1', '[lb_av]'), 0.45359237);
     assert.equal(heightInMeters('1', '[in_i]'), 0.0254);
     assert.equal(heightInMeters('180', 'cm'), 1.8);
     assert.equal(weightInKilograms('70', 'kg'), 70);
 });
 
-test('heightKnownAt: toma la última estatura que no sea posterior al registro', () => {
+test('heightKnownAt: takes the last height that is not later than the record', () => {
     const events = [
         weightEvent('2026-01-10T08:00:00.000000Z', '70', { value: '170', unit: 'cm' }),
         weightEvent('2026-03-10T08:00:00.000000Z', '71'),
@@ -105,25 +105,25 @@ test('heightKnownAt: toma la última estatura que no sea posterior al registro',
 
     const known = heightKnownAt(events, '2026-04-01T08:00:00.000000Z');
 
-    /** La de enero, no la de mayo: quien crece no medía en abril lo que mide en mayo. */
+    /** The one of January, not the one of May: a growing person did not measure in April what they measure in May. */
     assert.equal(known.value, '170');
     assert.equal(known.occurredAt, '2026-01-10T08:00:00.000000Z');
 });
 
-test('heightKnownAt: el mismo instante cuenta, que es el caso de peso y estatura en un solo registro', () => {
+test('heightKnownAt: the same instant counts, which is the case of weight and height in one record', () => {
     const events = [weightEvent('2026-01-10T08:00:00.000000Z', '70', { value: '170', unit: 'cm' })];
 
     assert.equal(heightKnownAt(events, '2026-01-10T08:00:00.000000Z').value, '170');
 });
 
-test('heightKnownAt: sin ninguna estatura anterior devuelve null', () => {
+test('heightKnownAt: with no earlier height it returns null', () => {
     const events = [weightEvent('2026-05-10T08:00:00.000000Z', '72', { value: '174', unit: 'cm' })];
 
     assert.equal(heightKnownAt(events, '2026-01-01T08:00:00.000000Z'), null);
     assert.equal(heightKnownAt([weightEvent('2026-01-01T08:00:00.000000Z', '70')], '2026-06-01T08:00:00.000000Z'), null);
 });
 
-test('el IMC de un registro sin estatura sale de la última conocida', () => {
+test('the BMI of a record with no height comes from the last known one', () => {
     const events = [
         weightEvent('2026-01-10T08:00:00.000000Z', '68', { value: '175', unit: 'cm' }),
         weightEvent('2026-02-10T08:00:00.000000Z', '70'),
@@ -138,8 +138,8 @@ test('el IMC de un registro sin estatura sale de la última conocida', () => {
     );
 });
 
-/** Es lo que pide el perfil: `null` como cota, o sea la estatura más reciente de todas. */
-test('heightKnownAt con cota null: la más reciente de todas', () => {
+/** It is what the profile asks for: `null` as the bound, that is the most recent height of all. */
+test('heightKnownAt with a null bound: the most recent of all', () => {
     const events = [
         weightEvent('2026-01-10T08:00:00.000000Z', '70', { value: '170', unit: 'cm' }),
         weightEvent('2026-05-10T08:00:00.000000Z', '72', { value: '174', unit: 'cm' }),
@@ -150,10 +150,10 @@ test('heightKnownAt con cota null: la más reciente de todas', () => {
     assert.equal(heightKnownAt([weightEvent('2026-06-10T08:00:00.000000Z', '72')], null), null);
 });
 
-test('measurementUnitLabel: el código UCUM se guarda, la etiqueta se enseña', () => {
+test('measurementUnitLabel: the UCUM code is stored, the label is shown', () => {
     assert.equal(measurementUnitLabel('[lb_av]'), 'lb');
     assert.equal(measurementUnitLabel('[in_i]'), 'in');
     assert.equal(measurementUnitLabel('cm'), 'cm');
-    /** Un código desconocido se devuelve tal cual: feo, pero nunca esconde el dato. */
+    /** An unknown code is returned as is: ugly, but it never hides the datum. */
     assert.equal(measurementUnitLabel('furlong'), 'furlong');
 });

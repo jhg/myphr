@@ -35,7 +35,7 @@ function registrationSetup(): ServerSetup
     );
 }
 
-/** `credential_identifier` de 32 bytes, como exige §13.1. */
+/** A 32-byte `credential_identifier`, as §13.1 requires. */
 function registrationCredentialIdentifier(string $login = 'alice@example.test'): string
 {
     return hash_hmac('sha256', $login, str_repeat("\x2b", 32), true);

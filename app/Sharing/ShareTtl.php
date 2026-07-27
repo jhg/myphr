@@ -22,7 +22,7 @@ enum ShareTtl: string
     /** In-person use: you show the screen during the consultation and that is it. */
     case Hour = '1h';
 
-    /** Por defecto. */
+    /** The default. */
     case Day = '24h';
 
     /** Maximum. */

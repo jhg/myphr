@@ -37,7 +37,7 @@ use Illuminate\Support\ServiceProvider;
 final class OpaqueServiceProvider extends ServiceProvider
 {
     /**
-     * Registra el setup del servidor y la fuente de aleatoriedad.
+     * Registers the server setup and the source of randomness.
      */
     public function register(): void
     {

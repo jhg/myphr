@@ -13,18 +13,43 @@
  *    step 5): during registration there is no `server_mac` yet and nothing else authenticates the server.
  */
 
-import { client, ready } from '@serenity-kit/opaque';
+import { KEY_STRETCHING } from './opaqueProfile.js';
+
+export { KEY_STRETCHING };
 
 /**
- * Argon2id v0x13, m=64 MiB, t=3, p=4: the parameters named by the
- * `OPAQUE-R255-SHA512-A2ID-m65536-t3-p4-ctx0-v1` profile (`docs/OPAQUE.md` §2).
+ * The package is loaded with a **dynamic** `import()`, and that is the whole reason this cache
+ * exists.
  *
- * Frozen on purpose: if these numbers change without changing the profile name, everyone's login
- * behaves like a wrong password, with no hint that the problem is configuration (§7).
+ * `@serenity-kit/opaque` carries its WebAssembly inlined as base64: 413,647 characters, which was
+ * 78 % of the panel's main bundle. Statically imported it travelled on **every** panel screen —
+ * glucose, meals, the dashboard — and was decoded and compiled on each one, when the only four
+ * screens that derive keys are sign-in, registration, set-password and change-password. Loading it
+ * on demand takes it off the critical path of every other screen and off the first paint of the
+ * panel.
+ *
+ * There is no new waiting point: every caller already awaited `opaqueReady()` before touching any
+ * of this, because the WebAssembly always had to be compiled before the first call (§5, step 1).
+ * The download now happens inside that same wait.
+ *
+ * @type {Promise<typeof import('@serenity-kit/opaque')>|null}
  */
-export const KEY_STRETCHING = Object.freeze({
-    'argon2id-custom': Object.freeze({ iterations: 3, memory: 65536, parallelism: 4 }),
-});
+let loading = null;
+
+/**
+ * Loads the package once and keeps the module, never a copy of anything derived from it.
+ *
+ * @returns {Promise<typeof import('@serenity-kit/opaque')>}
+ */
+function load() {
+    loading ??= import('@serenity-kit/opaque').then(async (module) => {
+        await module.ready;
+
+        return module;
+    });
+
+    return loading;
+}
 
 /** Client configuration error. Told apart from "wrong password" on purpose. */
 export class OpaqueConfigurationError extends Error {
@@ -86,18 +111,27 @@ export function assertPinned(response, pinned) {
     }
 }
 
-/** Resolves when the package WebAssembly is loaded (§5, step 1). */
-export function opaqueReady() {
-    return ready;
+/**
+ * Resolves when the package and its WebAssembly are loaded and compiled (§5, step 1).
+ *
+ * Calling it early is free and worth it: it is the one part of the sign-in path that can be
+ * prepared **before** the person presses the button, since it depends on nothing they type.
+ *
+ * @returns {Promise<void>}
+ */
+export async function opaqueReady() {
+    await load();
 }
 
 /**
  * `startRegistration` — without `keyStretching` (§5, step 3).
  *
  * @param {string} password
- * @returns {{clientRegistrationState: string, registrationRequest: string}}
+ * @returns {Promise<{clientRegistrationState: string, registrationRequest: string}>}
  */
-export function startRegistration(password) {
+export async function startRegistration(password) {
+    const { client } = await load();
+
     return client.startRegistration({ password });
 }
 
@@ -109,14 +143,16 @@ export function startRegistration(password) {
  * @param {string} params.clientRegistrationState
  * @param {string} params.registrationResponse
  * @param {string} params.serverIdentity
- * @returns {{registrationRecord: string, exportKey: string, serverStaticPublicKey: string}}
+ * @returns {Promise<{registrationRecord: string, exportKey: string, serverStaticPublicKey: string}>}
  */
-export function finishRegistration({
+export async function finishRegistration({
     password,
     clientRegistrationState,
     registrationResponse,
     serverIdentity,
 }) {
+    const { client } = await load();
+
     return client.finishRegistration({
         password,
         clientRegistrationState,
@@ -130,9 +166,11 @@ export function finishRegistration({
  * `startLogin` — without `keyStretching` (§6.1, step 3).
  *
  * @param {string} password
- * @returns {{clientLoginState: string, startLoginRequest: string}}
+ * @returns {Promise<{clientLoginState: string, startLoginRequest: string}>}
  */
-export function startLogin(password) {
+export async function startLogin(password) {
+    const { client } = await load();
+
     return client.startLogin({ password });
 }
 
@@ -148,10 +186,12 @@ export function startLogin(password) {
  * @param {string} params.clientLoginState
  * @param {string} params.loginResponse
  * @param {string} params.serverIdentity
- * @returns {{finishLoginRequest: string, sessionKey: string, exportKey: string,
- *           serverStaticPublicKey: string}|undefined}
+ * @returns {Promise<{finishLoginRequest: string, sessionKey: string, exportKey: string,
+ *           serverStaticPublicKey: string}|undefined>}
  */
-export function finishLogin({ password, clientLoginState, loginResponse, serverIdentity }) {
+export async function finishLogin({ password, clientLoginState, loginResponse, serverIdentity }) {
+    const { client } = await load();
+
     return client.finishLogin({
         password,
         clientLoginState,

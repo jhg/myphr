@@ -3,13 +3,13 @@
 declare(strict_types=1);
 
 /**
- * Guardarraíl de configuración de
+ * Configuration guardrail from
  * `docs/specs/0001-account-provisioning-and-session-bootstrap.md` §9.
  *
- * Con el driver `cookie` el contenido de la sesión viaja al navegador en cada
- * petición, y el navegador pasaría a tener las dos mitades de la clave maestra
- * a la vez (ADR 0003). El secreto de sesión vive dentro de la carga útil de la
- * sesión, así que el driver no es un detalle de despliegue.
+ * With the `cookie` driver the session contents travel to the browser on every
+ * request, and the browser would end up holding both halves of the master key
+ * at once (ADR 0003). The session secret lives inside the session payload, so
+ * the driver is not a deployment detail.
  */
 it('never uses the cookie session driver', function (): void {
     expect(config('session.driver'))->not->toBe('cookie');

@@ -19,16 +19,16 @@ uses(RefreshDatabase::class);
 
 beforeEach(function (): void {
     /**
-     * La sal señuelo cuelga de una clave propia del servidor y no de `APP_KEY` (ADR 0011). En los
-     * tests se fija explícitamente, porque de eso depende que un enlace muerto sea indistinguible de
-     * uno vivo.
+     * The decoy salt hangs off a server key of its own and not off `APP_KEY` (ADR 0011). In the
+     * tests it is set explicitly, because a dead link being indistinguishable from a live one
+     * depends on it.
      */
     config()->set('share.decoy_salt_key', Base64Url::encode(str_repeat("\x2a", 32)));
 });
 
 /**
- * Enlace vivo con un comprobante conocido, para poder abrirlo. El tag real lo calcula el cliente con
- * Argon2id sobre el PIN; el servidor solo lo compara, así que aquí basta con 32 bytes fijos.
+ * A live link with a known proof, so it can be opened. The real tag is computed by the client with
+ * Argon2id over the PIN; the server only compares it, so 32 fixed bytes are enough here.
  *
  * @return array{0: ShareLink, 1: string}
  */
@@ -45,7 +45,7 @@ function openShare(string $linkId, string $pinTag): TestResponse
     return test()->postJson("/s/{$linkId}/open", ['pinTag' => $pinTag]);
 }
 
-it('devuelve el envoltorio y el paquete solo con el PIN correcto', function (): void {
+it('returns the wrapper and the package only with the correct PIN', function (): void {
     [$link, $tag] = liveShareLink();
 
     $body = json_decode(openShare($link->id, $tag)->assertOk()->getContent(), true);
@@ -55,11 +55,11 @@ it('devuelve el envoltorio y el paquete solo con el PIN correcto', function (): 
 });
 
 /**
- * El fallo crítico que este diseño corrigió: si el servidor entrega un solo byte del paquete antes
- * de validar el PIN, el ataque fuera de línea vuelve. Ni el `challenge` ni un `open` fallido pueden
- * contener nada del paquete ni del envoltorio.
+ * The critical flaw this design fixed: if the server hands over a single byte of the package before
+ * validating the PIN, the offline attack is back. Neither `challenge` nor a failed `open` may
+ * contain anything from the package or the wrapper.
  */
-it('no filtra un solo byte del paquete antes de validar el PIN', function (): void {
+it('leaks not a single byte of the package before validating the PIN', function (): void {
     [$link] = liveShareLink();
 
     $challenge = $this->postJson("/s/{$link->id}/challenge")->assertOk()->getContent();
@@ -74,12 +74,11 @@ it('no filtra un solo byte del paquete antes de validar el PIN', function (): vo
 });
 
 /**
- * La respuesta genérica única. Las cuatro causas —no existe, caducó, se revocó y PIN incorrecto—
- * tienen que producir exactamente la misma respuesta: mismo código, mismo cuerpo, mismas cabeceras
- * que dependan del caso. Si se distinguen, una lista de identificadores se convierte en un mapa de
- * qué recortes siguen vivos.
+ * The single generic response. All four causes —does not exist, expired, revoked and wrong PIN— have
+ * to produce exactly the same response: same status, same body, same case-dependent headers. If they
+ * differ, a list of identifiers becomes a map of which clippings are still alive.
  */
-it('responde lo mismo ante las cuatro causas de fallo', function (): void {
+it('answers the same for all four failure causes', function (): void {
     [$live] = liveShareLink();
     [$expired, $expiredTag] = liveShareLink(['expires_at' => now()->subMinute()]);
     [$revoked, $revokedTag] = liveShareLink();
@@ -108,10 +107,10 @@ it('responde lo mismo ante las cuatro causas de fallo', function (): void {
 });
 
 /**
- * En `challenge` no hay PIN que valorar todavía, así que un enlace muerto tiene que devolver una sal
- * con la misma forma que uno vivo, y la misma cada vez que se pregunte.
+ * At `challenge` there is no PIN to judge yet, so a dead link has to return a salt with the same
+ * shape as a live one, and the same one every time it is asked.
  */
-it('devuelve una sal señuelo estable e indistinguible para enlaces que no existen', function (): void {
+it('returns a stable, indistinguishable decoy salt for links that do not exist', function (): void {
     [$live] = liveShareLink();
     $ghost = (string) Str::uuid();
 
@@ -125,8 +124,8 @@ it('devuelve una sal señuelo estable e indistinguible para enlaces que no exist
         ->and($muerto)->not->toBe($vivo);
 });
 
-/** Caducado y revocado tampoco pueden distinguirse en el `challenge`. */
-it('da sal señuelo también a los enlaces caducados y revocados', function (): void {
+/** Expired and revoked cannot be told apart at `challenge` either. */
+it('gives a decoy salt to expired and revoked links too', function (): void {
     [$expired] = liveShareLink(['expires_at' => now()->subMinute()]);
     [$revoked] = liveShareLink();
     $revoked->share->delete();
@@ -140,15 +139,15 @@ it('da sal señuelo también a los enlaces caducados y revocados', function (): 
     }
 });
 
-/** Un enlace vivo cuyo recorte caducó no sirve nada, aunque el propio enlace siga vigente. */
-it('no sirve un enlace vivo si su recorte caducó', function (): void {
+/** A live link whose clipping expired serves nothing, even if the link itself is still current. */
+it('does not serve a live link if its clipping expired', function (): void {
     $share = Share::factory()->expired()->create();
     [$link, $tag] = liveShareLink(['share_id' => $share->id]);
 
     openShare($link->id, $tag)->assertStatus(403);
 });
 
-it('gasta un intento por cada PIN incorrecto y borra el enlace al agotarlos', function (): void {
+it('spends one attempt per wrong PIN and deletes the link when they run out', function (): void {
     [$link] = liveShareLink();
 
     for ($attempt = ShareLink::MAX_ATTEMPTS; $attempt > 0; $attempt--) {
@@ -159,13 +158,13 @@ it('gasta un intento por cada PIN incorrecto y borra el enlace al agotarlos', fu
         }
     }
 
-    /** Agotar los intentos borra solo la fila del enlace, nunca el paquete. */
+    /** Running out of attempts deletes only the link row, never the package. */
     expect(ShareLink::query()->whereKey($link->id)->exists())->toBeFalse()
         ->and(Share::query()->whereKey($link->share_id)->exists())->toBeTrue();
 });
 
-/** El PIN correcto devuelve el contador a su tope: los intentos acotan la fuerza bruta, no las lecturas. */
-it('rearma el contador tras una apertura correcta', function (): void {
+/** The correct PIN puts the counter back at its cap: attempts bound brute force, not reads. */
+it('re-arms the counter after a successful open', function (): void {
     [$link, $tag] = liveShareLink();
 
     openShare($link->id, Base64Url::encode(random_bytes(32)))->assertStatus(403);
@@ -176,11 +175,11 @@ it('rearma el contador tras una apertura correcta', function (): void {
 });
 
 /**
- * El contador vive en columna y se consume con una escritura condicional atómica. Se simula la
- * carrera igual que `RegistrationLinksTest`: una petición rival vacía el contador justo antes de que
- * se ejecute nuestro `update`, y el nuestro tiene que afectar a cero filas.
+ * The counter lives in a column and is consumed with an atomic conditional write. The race is
+ * simulated like in `RegistrationLinksTest`: a rival request empties the counter just before our
+ * `update` runs, and ours has to affect zero rows.
  */
-it('es atómico: dos peticiones simultáneas no comparten el mismo intento', function (): void {
+it('is atomic: two simultaneous requests do not share the same attempt', function (): void {
     [$link, $tag] = liveShareLink(['attempts_remaining' => 1]);
     $intercepted = false;
 
@@ -200,17 +199,17 @@ it('es atómico: dos peticiones simultáneas no comparten el mismo intento', fun
         ->and(DB::table('share_links')->where('id', $link->id)->value('attempts_remaining'))->toBe(0);
 });
 
-/** `lockForUpdate()` es un no-op en SQLite: un contador apoyado en él pasaría los tests sin proteger nada. */
-it('no usa lockForUpdate en la puerta de lectura', function (): void {
+/** `lockForUpdate()` is a no-op on SQLite: a counter relying on it would pass the tests without protecting anything. */
+it('does not use lockForUpdate in the reading gate', function (): void {
     expect(file_get_contents(app_path('Sharing/ShareLinkGate.php')))
         ->not->toContain('->lockForUpdate(');
 });
 
 /**
- * `opened_at` es la marca del primer acceso, redondeada a la hora y escrita una sola vez. No hay
- * contador de descargas ni historial.
+ * `opened_at` is the mark of the first access, rounded to the hour and written only once. There is
+ * no download counter and no history.
  */
-it('marca el primer acceso una sola vez y redondeado a la hora', function (): void {
+it('marks the first access once and rounded to the hour', function (): void {
     [$link, $tag] = liveShareLink();
 
     $this->travelTo(now()->startOfHour()->addMinutes(37));
@@ -231,10 +230,10 @@ it('marca el primer acceso una sola vez y redondeado a la hora', function (): vo
 });
 
 /**
- * La respuesta no lleva validadores de caché ni nombre de fichero descriptivo, y sí `no-store`. El
- * nombre de un adjunto es metadato clínico.
+ * The response carries no cache validators and no descriptive filename, and it does carry
+ * `no-store`. An attachment name is clinical metadata.
  */
-it('sirve el paquete sin caché, sin ETag y sin Content-Disposition', function (): void {
+it('serves the package with no cache, no ETag and no Content-Disposition', function (): void {
     [$link, $tag] = liveShareLink();
 
     $response = openShare($link->id, $tag)->assertOk();
@@ -246,8 +245,8 @@ it('sirve el paquete sin caché, sin ETag y sin Content-Disposition', function (
         ->and($response->headers->has('Content-Disposition'))->toBeFalse();
 });
 
-/** Las rutas del lector no llevan sesión: quien las usa no tiene cuenta y no debe recibir cookies. */
-it('lee sin sesión, sin CSRF y sin dejar cookies', function (): void {
+/** The reader routes carry no session: whoever uses them has no account and must get no cookies. */
+it('reads with no session, no CSRF and leaving no cookies', function (): void {
     [$link, $tag] = liveShareLink();
 
     $response = openShare($link->id, $tag)->assertOk();
@@ -255,8 +254,8 @@ it('lee sin sesión, sin CSRF y sin dejar cookies', function (): void {
     expect($response->headers->getCookies())->toBeEmpty();
 });
 
-/** Ninguna descarga deja rastro de actividad: sería el historial de accesos que el ADR 0006 descarta. */
-it('no anota nada al abrir un recorte', function (): void {
+/** No download leaves an activity trail: it would be the access history ADR 0006 rules out. */
+it('records nothing when a clipping is opened', function (): void {
     [$link, $tag] = liveShareLink();
 
     openShare($link->id, $tag)->assertOk();

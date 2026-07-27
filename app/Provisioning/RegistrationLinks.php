@@ -215,7 +215,7 @@ final readonly class RegistrationLinks
     }
 
     /**
-     * Spec 0001 §3.3: `sha256` binario del token en claro, 32 bytes.
+     * Spec 0001 §3.3: binary `sha256` of the plaintext token, 32 bytes.
      */
     private function hash(string $token): string
     {

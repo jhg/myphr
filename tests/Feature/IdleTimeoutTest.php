@@ -11,21 +11,21 @@ use Illuminate\Support\Facades\Auth;
 uses(RefreshDatabase::class);
 
 /**
- * Caducidad por inactividad contada en el servidor (Spec 0001 §8; ADR 0009).
+ * Idle timeout counted on the server (Spec 0001 §8; ADR 0009).
  *
- * El temporizador de `lock.js` no cuenta: no se ejecuta en una pestaña descartada por memoria, ni
- * en un portátil cerrado, ni sin JavaScript, ni si la llamada de cierre no llega a salir. Estos
- * tests simulan justo eso, un navegador que nunca llamó a `POST /phr/auth/lock`, y comprueban que
- * la sesión muere igual.
+ * The `lock.js` timer does not count: it does not run in a tab discarded for memory, nor on a closed
+ * laptop, nor without JavaScript, nor if the lock call never manages to leave. These tests simulate
+ * exactly that, a browser that never called `POST /phr/auth/lock`, and check that the session dies
+ * anyway.
  */
 
-/** Deja la última actividad tantos segundos atrás como se pida. */
+/** Pushes the last activity as many seconds into the past as asked. */
 function ageSession(int $secondsAgo): void
 {
     session()->put(EnforceIdleTimeout::SESSION_KEY, time() - $secondsAgo);
 }
 
-it('cierra la sesión entera tras quince minutos sin ninguna petición', function (): void {
+it('closes the whole session after fifteen minutes with no request', function (): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user);
@@ -38,8 +38,8 @@ it('cierra la sesión entera tras quince minutos sin ninguna petición', functio
         ->and(session()->get(SessionSecrets::SESSION_KEY))->toBeNull();
 });
 
-/** `recovery.js` ya sabe llevar un 401 a la pantalla de acceso (§6.2). */
-it('responde 401 a las peticiones JSON de una sesión caducada', function (): void {
+/** `recovery.js` already knows how to take a 401 to the login screen (§6.2). */
+it('answers 401 to the JSON requests of an expired session', function (): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user);
@@ -52,7 +52,7 @@ it('responde 401 a las peticiones JSON de una sesión caducada', function (): vo
         ->and(session()->get(SessionSecrets::SESSION_KEY))->toBeNull();
 });
 
-it('no cierra nada mientras haya actividad dentro del límite', function (): void {
+it('closes nothing while there is activity within the limit', function (): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user);
@@ -65,8 +65,8 @@ it('no cierra nada mientras haya actividad dentro del límite', function (): voi
         ->and(session()->get(SessionSecrets::SESSION_KEY))->toBe('not-a-real-secret');
 });
 
-/** Cada petición autenticada reinicia la cuenta: la caducidad es por inactividad, no absoluta. */
-it('reinicia la cuenta en cada petición autenticada', function (): void {
+/** Every authenticated request restarts the count: the timeout is idle-based, not absolute. */
+it('restarts the count on every authenticated request', function (): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user);
@@ -79,10 +79,10 @@ it('reinicia la cuenta en cada petición autenticada', function (): void {
 });
 
 /**
- * El bloqueo del cliente queda exento: es el camino que ya destruye la sesión, y un 401 ahí dejaría
- * a `lock.js` reintentando en bucle contra un endpoint que nunca le respondería que sí.
+ * The client lock is exempt: it is the path that already destroys the session, and a 401 there would
+ * leave `lock.js` retrying in a loop against an endpoint that would never say yes.
  */
-it('deja pasar el bloqueo del cliente aunque la sesión ya haya caducado', function (): void {
+it('lets the client lock through even when the session has already expired', function (): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user);
@@ -95,13 +95,13 @@ it('deja pasar el bloqueo del cliente aunque la sesión ya haya caducado', funct
         ->and(session()->get(SessionSecrets::SESSION_KEY))->toBeNull();
 });
 
-/** El límite es el del ADR 0009, no el `session.lifetime` de Laravel. */
-it('mantiene el límite de quince minutos y lo separa del lifetime de la sesión', function (): void {
+/** The limit is the ADR 0009 one, not Laravel's `session.lifetime`. */
+it('keeps the fifteen minute limit and separates it from the session lifetime', function (): void {
     expect(EnforceIdleTimeout::IDLE_LIMIT_SECONDS)->toBe(15 * 60)
         ->and(config('session.lifetime') * 60)->toBeGreaterThanOrEqual(EnforceIdleTimeout::IDLE_LIMIT_SECONDS);
 });
 
-it('monta la caducidad en el middleware de autenticación del panel', function (): void {
+it('mounts the timeout in the panel authentication middleware', function (): void {
     $middleware = app('router')->getRoutes()->getByName('filament.phr.pages.dashboard')->gatherMiddleware();
 
     expect($middleware)->toContain(EnforceIdleTimeout::class);

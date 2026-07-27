@@ -5,10 +5,10 @@ declare(strict_types=1);
 use Illuminate\Console\Scheduling\Schedule;
 
 /**
- * `routes/console.php` (Spec 0001 §3.2, §11): la purga de handshakes OPAQUE debe estar
- * programada en el `Schedule` de Laravel.
+ * `routes/console.php` (Spec 0001 §3.2, §11): the OPAQUE handshake pruning has to be scheduled in
+ * Laravel's `Schedule`.
  */
-it('programa la purga de handshakes OPAQUE cada diez minutos', function (): void {
+it('schedules the OPAQUE handshake pruning every ten minutes', function (): void {
     $schedule = app(Schedule::class);
 
     $events = collect($schedule->events())

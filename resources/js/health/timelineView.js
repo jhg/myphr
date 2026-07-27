@@ -1,16 +1,16 @@
 /**
- * Línea temporal unificada de eventos ya descifrados.
+ * Unified timeline of already decrypted events.
  *
- * **Qué es y por qué es un módulo propio.** Es la única vista que enseña la relación entre comer,
- * pincharse insulina y lo que hace la glucosa después: ninguna pantalla por tipo puede hacerlo.
- * Vivía dentro de `dashboardPage.js`, atada al panel del paciente; ahora **recibe un array de
- * eventos descifrados y devuelve nodos**, sin tocar Livewire, ni `$wire`, ni ningún `x-ref`, para
- * que el médico que abre un recorte compartido vea exactamente la misma línea temporal que el
- * paciente, sin cuenta y sin sesión.
+ * **What it is and why it is a module of its own.** It is the only view that shows the relation
+ * between eating, injecting insulin and what the glucose does afterwards: no per-type screen can
+ * do it. It used to live inside `dashboardPage.js`, tied to the patient panel; now it **takes an
+ * array of decrypted events and returns nodes**, touching no Livewire, no `$wire` and no `x-ref`,
+ * so that the doctor opening a shared clipping sees exactly the same timeline as the patient,
+ * with no account and no session.
  *
- * Las dos exclusiones posibles —el tope de entradas y los tipos que este módulo no sabe describir—
- * se declaran siempre con su recuento exacto. Una línea temporal recortada que se presenta como
- * completa hace leer mal lo que sí aparece.
+ * The two possible exclusions —the entry cap and the types this module cannot describe— are always
+ * stated with their exact count. A clipped timeline presented as complete makes what does appear
+ * be read wrongly.
  */
 
 import { formatDayHeading, formatTimeOfDay, joinList, t } from '../i18n/index.js';
@@ -26,34 +26,34 @@ import {
 import { createCallout, renderEmptyState } from './eventVisuals.js';
 
 /**
- * Tope de entradas que se pintan.
+ * Cap on painted entries.
  *
- * **El descifrado no lo motiva**: los eventos llegan ya descifrados. Lo que cuesta es el DOM: un mes
- * de registro intensivo puede pasar del millar de filas, y pintarlas todas deja la pantalla pesada
- * en un móvil.
+ * **Decryption is not the reason**: the events arrive already decrypted. What costs is the DOM: a
+ * month of intensive recording can go past a thousand rows, and painting them all leaves the
+ * screen heavy on a phone.
  *
- * Se recorta por lo más reciente, **nunca en silencio** ({@see renderTimelineSection}).
+ * It clips by the most recent, **never in silence** ({@see renderTimelineSection}).
  */
 export const TIMELINE_MAX_ENTRIES = 100;
 
 /**
- * Alimentos que se nombran en la línea de una comida antes de resumir el resto con `+N`.
+ * Foods named in the line of a meal before summarizing the rest with `+N`.
  *
- * Una comida de doce ingredientes ocuparía cinco líneas y rompería el «se lee de un vistazo»; los
- * nombres completos siguen estando en la pantalla de comidas.
+ * A meal of twelve ingredients would take five lines and break the "read at a glance"; the full
+ * names are still on the meals screen.
  */
 const TIMELINE_MAX_FOODS = 3;
 
 /**
- * Resumen de una línea de cada tipo de evento.
+ * One-line summary of each event type.
  *
- * Cada entrada devuelve `{summary, detail}`: `summary` es el dato (la cifra con su unidad) y
- * `detail` el contexto que evita leerlo mal —el método de medición, el sitio, el tipo de insulina—,
- * que la vista pinta en tinta secundaria. `detail` puede ser `null`: todos esos campos son
- * opcionales en el sobre (ADR 0006) y aquí no se inventa ninguno.
+ * Each entry returns `{summary, detail}`: `summary` is the datum (the figure with its unit) and
+ * `detail` the context that keeps it from being misread —the measurement method, the site, the
+ * insulin type—, which the view paints in secondary ink. `detail` may be `null`: all those fields
+ * are optional in the envelope (ADR 0006) and none is invented here.
  *
- * Las unidades salen del propio evento y son códigos UCUM (ADR 0005): no se traducen ni se
- * convierten (ADR 0007).
+ * The units come from the event itself and are UCUM codes (ADR 0005): they are neither translated
+ * nor converted (ADR 0007).
  *
  * @type {Record<string, (data: object) => {summary: string, detail: string|null}>}
  */
@@ -73,7 +73,7 @@ const TIMELINE_SUMMARIES = Object.freeze({
             unit: data.unit ?? '',
         });
 
-        /** El pulso es opcional (ADR 0006): sin él la línea no deja ningún hueco ni escribe un cero. */
+        /** The pulse is optional (ADR 0006): without it the line leaves no gap and writes no zero. */
         const pulse = typeof data.pulse === 'string' && data.pulse !== ''
             ? t('dashboard.timeline.pulse', {
                 pulse: formatMeasuredValue(data.pulse),
@@ -98,9 +98,9 @@ const TIMELINE_SUMMARIES = Object.freeze({
     }),
 
     /**
-     * En una comida el dato clínico no es una cifra sino qué se comió: el tipo de comida es el
-     * resumen y los alimentos, el detalle. Es justo el dato que permite leer la línea temporal como
-     * lo que persigue: comer, pincharse y lo que hace la glucosa después.
+     * In a meal the clinical datum is not a figure but what was eaten: the meal type is the summary
+     * and the foods, the detail. It is exactly the datum that lets the timeline be read for what it
+     * is after: eating, injecting and what the glucose does afterwards.
      */
     meal: (data) => {
         const foods = Array.isArray(data.foods) ? data.foods : [];
@@ -138,15 +138,15 @@ const TIMELINE_SUMMARIES = Object.freeze({
 });
 
 /**
- * Trazo del icono de cada tipo, en el estilo de línea de los demás iconos (24×24, sin relleno,
+ * Stroke of the icon of each type, in the line style of the other icons (24×24, no fill,
  * `stroke-width` 1.5).
  *
- * **Por qué icono y no color propio.** Seis tipos exigirían seis colores, y DESIGN.md solo define
- * cuatro colores de serie —los dos últimos con significado de estado (Success, Warning) y el rojo
- * reservado a errores (Don'ts #4)—; inventar dos más sería exactamente la «paleta privada» que la
- * sección § Charts prohíbe. Además el color nunca puede ser el único portador del significado
- * (Do's #3). Con la silueta del icono más el nombre del tipo escrito, la distinción se sostiene
- * también en escala de grises y con el tema oscuro.
+ * **Why an icon and not a colour of its own.** Six types would need six colours, and DESIGN.md
+ * defines only four series colours —the last two with a state meaning (Success, Warning) and red
+ * reserved for errors (Don'ts #4)—; inventing two more would be exactly the "private palette"
+ * § Charts forbids. Besides, colour can never be the only carrier of meaning (Do's #3). With the
+ * silhouette of the icon plus the type name written out, the distinction holds in greyscale and
+ * with the dark theme too.
  *
  * @type {Record<string, string>}
  */
@@ -162,13 +162,13 @@ const TIMELINE_ICONS = Object.freeze({
 });
 
 /**
- * Resume un evento ya descifrado en una entrada de la línea temporal.
+ * Summarizes an already decrypted event into a timeline entry.
  *
- * Devuelve `null` para un tipo que este módulo no sabe describir —un tipo futuro, o un sobre cuyo
- * contenido no tiene la forma esperada—. Quien llame cuenta esos casos y los declara en pantalla
- * ({@see buildTimeline}).
+ * It returns `null` for a type this module cannot describe —a future type, or an envelope whose
+ * content does not have the expected shape—. The caller counts those cases and states them on
+ * screen ({@see buildTimeline}).
  *
- * @param {{type?: string, occurredAt: string, data?: object}} event Aplanado con
+ * @param {{type?: string, occurredAt: string, data?: object}} event Flattened with
  *        `flattenDecryptedEvent`.
  * @returns {{type: string, typeLabel: string, summary: string, detail: string|null, occurredAt: string}|null}
  */
@@ -184,10 +184,10 @@ export function describeTimelineEvent(event) {
     return {
         type: event.type,
         /**
-         * Clave compuesta con el token del tipo. Solo se alcanza para los tipos que están en
-         * `TIMELINE_SUMMARIES` (los demás han salido ya por `null`), así que la lista de claves
-         * `dashboard.timeline.type.*` que tienen que existir en los tres catálogos es exactamente la
-         * de ese objeto.
+         * Composite key with the type token. It is only reached for the types in
+         * `TIMELINE_SUMMARIES` (the others have already left through `null`), so the list of
+         * `dashboard.timeline.type.*` keys that have to exist in the three catalogs is exactly the
+         * one of that object.
          */
         typeLabel: typeLabel(event.type),
         summary,
@@ -197,13 +197,13 @@ export function describeTimelineEvent(event) {
 }
 
 /**
- * Clave de agrupación por día **en la zona del dispositivo**, no en UTC.
+ * Day grouping key **in the device zone**, not in UTC.
  *
- * Agrupar por la fecha UTC partiría en dos días una cena de las 23:30 en Madrid en verano, que es
- * justo la entrada que hay que ver junto a la glucemia de después.
+ * Grouping by the UTC date would split across two days a 23:30 dinner in Madrid in summer, which
+ * is exactly the entry that has to be seen next to the glucose reading afterwards.
  *
  * @param {string} occurredAt
- * @returns {string} `YYYY-MM-DD` local.
+ * @returns {string} Local `YYYY-MM-DD`.
  */
 export function localDayKey(occurredAt) {
     const date = new Date(occurredAt);
@@ -214,17 +214,17 @@ export function localDayKey(occurredAt) {
 }
 
 /**
- * Entradas de la línea temporal: los eventos que llegan, mezclados y del más reciente al más
- * antiguo.
+ * Timeline entries: the events that arrive, mixed and from the most recent to the
+ * oldest.
  *
- * No filtra por ventana ni por tipo: el periodo lo aplica el origen de datos (`eventSource.js`) y el
- * tipo quien llama (`filterBySelectedTypes`), así que aquí llega exactamente lo que hay que pintar.
+ * It filters neither by window nor by type: the period is applied by the data source and the type
+ * by the caller (`filterBySelectedTypes`), so exactly what has to be painted arrives here.
  *
- * `hidden` son las entradas que quedaron fuera por el tope de {@see TIMELINE_MAX_ENTRIES} y
- * `unsupported` las de un tipo que este módulo no sabe describir. Los dos recuentos salen a
- * pantalla: ninguna de las dos exclusiones es silenciosa.
+ * `hidden` are the entries left out by the {@see TIMELINE_MAX_ENTRIES} cap and `unsupported`
+ * those of a type this module cannot describe. Both counts reach the screen: neither exclusion
+ * is silent.
  *
- * @param {list<object>} events Eventos descifrados, aplanados y ya filtrados por periodo y por tipo.
+ * @param {list<object>} events Decrypted, flattened events, already filtered by period and type.
  * @returns {{entries: list<object>, hidden: number, unsupported: number}}
  */
 export function buildTimeline(events) {
@@ -253,9 +253,9 @@ export function buildTimeline(events) {
 }
 
 /**
- * Agrupa entradas ya ordenadas en días, conservando el orden de llegada.
+ * Groups already sorted entries into days, keeping the incoming order.
  *
- * @param {list<{occurredAt: string}>} entries Ordenadas de más reciente a más antigua.
+ * @param {list<{occurredAt: string}>} entries Sorted from most recent to oldest.
  * @returns {list<{dayKey: string, occurredAt: string, entries: list<object>}>}
  */
 export function groupEntriesByDay(entries) {
@@ -279,8 +279,8 @@ export function groupEntriesByDay(entries) {
 }
 
 /**
- * Icono del tipo de una entrada. Es decorativo (`aria-hidden`): el tipo va escrito al lado, y el
- * lector de pantalla ya lo lee ahí.
+ * Icon of the type of an entry. It is decorative (`aria-hidden`): the type is written next to it,
+ * and the screen reader already reads it there.
  *
  * @param {string} type
  * @returns {SVGSVGElement}
@@ -304,17 +304,17 @@ function createTimelineIcon(type) {
 }
 
 /**
- * Una entrada: hora, icono del tipo, y el dato en una línea.
+ * One entry: time, type icon, and the datum on one line.
  *
- * La hora va en IBM Plex Mono y con ancho fijo para que la columna quede alineada entre entradas:
- * un día con seis registros se recorre con la vista por esa columna.
+ * The time goes in IBM Plex Mono and with a fixed width so the column stays aligned between
+ * entries: a day with six records is scanned down that column.
  *
  * @param {{type: string, typeLabel: string, summary: string, detail: string|null, occurredAt: string}} entry
  * @returns {HTMLLIElement}
  */
 function createTimelineEntry(entry) {
     const row = document.createElement('li');
-    /** El mismo separador entre filas que el historial de las pantallas por tipo (`insulinPage.js`). */
+    /** The same row separator as the history of the per-type screens (`insulinPage.js`). */
     row.className = 'flex min-h-11 items-start gap-3 border-b border-border py-2 last:border-b-0';
 
     const time = document.createElement('span');
@@ -332,7 +332,7 @@ function createTimelineEntry(entry) {
     label.textContent = entry.typeLabel;
     line.appendChild(label);
 
-    /** El dato en el mismo renglón que el tipo: «Glucemia 112 mg/dL» se lee de una pasada. */
+    /** The datum on the same line as the type: "Glucose 112 mg/dL" reads in one pass. */
     if (entry.summary !== '') {
         const summary = document.createElement('span');
         summary.className = 'ml-2 font-mono';
@@ -341,8 +341,8 @@ function createTimelineEntry(entry) {
     }
 
     /**
-     * El contexto (método, sitio, tipo de insulina, alimentos) en tinta secundaria: acompaña al dato
-     * sin competir con él, pero está siempre, porque un número sin su método se lee mal (ADR 0008).
+     * The context (method, site, insulin type, foods) in secondary ink: it accompanies the datum
+     * without competing, but it is always there: a number without its method is misread (ADR 0008).
      */
     if (entry.detail !== null && entry.detail !== '') {
         const detail = document.createElement('span');
@@ -357,7 +357,7 @@ function createTimelineEntry(entry) {
 }
 
 /**
- * Un día: la fecha como encabezado y sus entradas debajo.
+ * One day: the date as a heading and its entries below.
  *
  * @param {{occurredAt: string, entries: list<object>}} day
  * @returns {HTMLDivElement}
@@ -384,19 +384,19 @@ function createTimelineDay(day) {
 }
 
 /**
- * Sección de la línea temporal, agrupada por día.
+ * Timeline section, grouped by day.
  *
- * `emptyStateUrl` es **opcional y llega como argumento**: en el panel del paciente lleva a crear el
- * primer registro (la ruta la decide Filament y viaja en un `data-*`), y en el lector del
- * profesional no hay ninguna pantalla a la que enviarle, así que sin ella se pinta solo la frase.
+ * `emptyStateUrl` is **optional and arrives as an argument**: in the patient panel it leads to
+ * creating the first record (Filament decides the route and it travels in a `data-*`), and in the
+ * professional's reader there is no screen to send anybody to, so without it only the sentence is painted.
  *
- * `emptyText` es igual de opcional y existe por un motivo más serio: la frase de serie —«todavía no
- * hay registros en este periodo»— afirma una ausencia clínica, y quien vacía la lista puede ser el
- * buscador. Decir «no hay registros» cuando lo que hay es un filtro puesto es exactamente la lectura
- * que este proyecto no puede permitirse, así que la pantalla que llama dice cuál de las dos cosas
- * está pasando.
+ * `emptyText` is just as optional and exists for a more serious reason: the default sentence —"no
+ * records in this period yet"— asserts a clinical absence, and what empties the list may be the
+ * search box. Saying "there are no records" when what there is is a filter in place is exactly the
+ * reading this project cannot afford, so the calling screen says which of the two things is
+ * happening.
  *
- * @param {list<object>} events Eventos descifrados y aplanados, ya filtrados por periodo y por tipo.
+ * @param {list<object>} events Decrypted and flattened events, already filtered by period and type.
  * @param {{emptyStateUrl?: string|null, emptyText?: string}} [options]
  * @returns {DocumentFragment}
  */

@@ -19,17 +19,17 @@ use Tests\Support\OpaqueTestClient;
 uses(RefreshDatabase::class);
 
 /**
- * Flujo completo de alta, de punta a punta (Spec 0001 §5 y §6.1, criterio de aceptación de §11).
+ * The full signup flow, end to end (Spec 0001 §5 and §6.1, acceptance criterion of §11).
  *
- * Se recorre el camino real y entero: un administrador ejecuta `phr:issue-registration-link`, la
- * persona abre la URL impresa, el navegador ejecuta el registro OPAQUE, hace nacer su UMK, la
- * envuelve bajo la KEK derivada del `exportKey`, sube el sobre y a continuación hace el login
- * inmediato del paso 13. Al final se comprueba lo que exige §11: que la UMK que devuelve el login
- * es exactamente la que nació en el registro.
+ * It walks the real path in full: an administrator runs `phr:issue-registration-link`, the person
+ * opens the printed URL, the browser runs the OPAQUE registration, gives birth to its UMK, wraps it
+ * under the KEK derived from the `exportKey`, uploads the envelope and then does the immediate login
+ * of step 13. At the end we check what §11 requires: that the UMK the login returns is exactly the
+ * one born during registration.
  *
- * El cliente OPAQUE es {@see OpaqueTestClient}. El sobre se cierra aquí con un espejo en PHP del
- * formato de `resources/js/crypto/envelope.js`; el servidor nunca lo abre, así que su único papel
- * es demostrar que lo que se sube es byte a byte lo que se recupera.
+ * The OPAQUE client is {@see OpaqueTestClient}. The envelope is sealed here with a PHP mirror of the
+ * `resources/js/crypto/envelope.js` format; the server never opens it, so its only role is to show
+ * that what goes up is byte for byte what comes back.
  */
 const E2E_PASSWORD = 'CorrectHorseBatteryStaple';
 
@@ -42,8 +42,8 @@ beforeEach(function (): void {
 });
 
 /**
- * `deriveKey()` de `resources/js/crypto/kdf.js`: `info = label || 0x00 || context`, sin el
- * separador ni el contexto cuando no se pasa ninguno.
+ * `deriveKey()` from `resources/js/crypto/kdf.js`: `info = label || 0x00 || context`, without the
+ * separator and without the context when none is passed.
  */
 function e2eDeriveKey(string $ikm, string $label, ?string $context = null, string $salt = ''): string
 {
@@ -52,7 +52,7 @@ function e2eDeriveKey(string $ikm, string $label, ?string $context = null, strin
     return HkdfSha512::expand(HkdfSha512::extract($salt, $ikm), $info, 32);
 }
 
-/** Espejo en PHP de `seal()` de `resources/js/crypto/envelope.js` (formato del ADR 0004). */
+/** PHP mirror of `seal()` from `resources/js/crypto/envelope.js` (ADR 0004 format). */
 function e2eSeal(string $key, string $plaintext, string $associatedData): string
 {
     $salt = random_bytes(32);
@@ -72,7 +72,7 @@ function e2eSeal(string $key, string $plaintext, string $associatedData): string
     return 'v1.'.Base64Url::encode($header.$sealed);
 }
 
-/** Espejo en PHP de `open()`. Devuelve el contenido sin relleno. */
+/** PHP mirror of `open()`. Returns the content without padding. */
 function e2eOpen(string $key, string $envelope, string $associatedData): string
 {
     $bytes = Base64Url::decode(substr($envelope, 3), 'envelope');
@@ -93,15 +93,15 @@ function e2eOpen(string $key, string $envelope, string $associatedData): string
     return substr((string) $padded, 4, $length[1]);
 }
 
-it('lleva a una cuenta desde el comando que emite el enlace hasta su UMK recuperable', function (): void {
-    // §10: el administrador emite el enlace. La URL solo existe en la salida del comando.
+it('takes an account from the command that issues the link all the way to a recoverable UMK', function (): void {
+    // §10: the administrator issues the link. The URL only exists in the command output.
     Artisan::call('phr:issue-registration-link', ['email' => E2E_EMAIL, '--name' => 'Alicia']);
 
-    // No usar `trim(...)` aquí: Collection::map() invoca el callback con
-    // ($valor, $clave), y el segundo parámetro de trim() es la lista de
-    // caracteres a eliminar, así que se comería caracteres del final de la
-    // URL según el índice de la línea. Se usa una closure explícita de un
-    // solo argumento para evitarlo.
+    // Do not use `trim(...)` here: Collection::map() calls the callback with
+    // ($value, $key), and the second parameter of trim() is the list of
+    // characters to strip, so it would eat characters off the end of the URL
+    // depending on the line index. An explicit single-argument closure is used
+    // to avoid that.
     $url = collect(explode("\n", Artisan::output()))
         ->map(fn (string $line): string => trim($line))
         ->first(fn (string $line): bool => str_contains($line, '/phr/set-password#'));
@@ -114,7 +114,7 @@ it('lleva a una cuenta desde el comando que emite el enlace hasta su UMK recuper
         ->and($user->opaque_registered_at)->toBeNull()
         ->and($user->currentMasterKeyEnvelope)->toBeNull();
 
-    // §4.1: la persona abre el enlace. La página es genérica y el token se queda en el fragmento.
+    // §4.1: the person opens the link. The page is generic and the token stays in the fragment.
     $token = Str::after((string) $url, '#');
 
     $this->get(Str::before((string) $url, '#'))
@@ -122,7 +122,7 @@ it('lleva a una cuenta desde el comando que emite el enlace hasta su UMK recuper
         ->assertSee('data-phr-page="set-password"', escape: false)
         ->assertDontSee($token);
 
-    // §5, pasos 2 y 3: la contraseña no sale del navegador; solo viaja el punto cegado.
+    // §5, steps 2 and 3: the password never leaves the browser; only the blinded point travels.
     $started = OpaqueTestClient::startRegistration(E2E_PASSWORD);
 
     $start = $this->postJson(route('filament.phr.auth.opaque.registration.start'), [
@@ -130,15 +130,15 @@ it('lleva a una cuenta desde el comando que emite el enlace hasta su UMK recuper
         'registrationToken' => $token,
     ])->assertOk();
 
-    // §5, paso 5: el cliente ancla perfil y clave pública antes de derivar nada.
+    // §5, step 5: the client pins the profile and the public key before deriving anything.
     expect($start->json('profile'))->toBe(OpaqueProfile::NAME)
         ->and($start->json('userId'))->toBe($user->id);
 
-    // §5, paso 4: el enlace sigue sin consumirse mientras corre el KSF en el navegador.
+    // §5, step 4: the link is still unconsumed while the KSF runs in the browser.
     expect(UserRegistrationLink::query()->whereNull('consumed_at')->count())->toBe(1)
         ->and(OpaqueRegistration::query()->count())->toBe(1);
 
-    // §5, paso 6.
+    // §5, step 6.
     $finished = OpaqueTestClient::finishRegistration(
         E2E_PASSWORD,
         $started['blind'],
@@ -148,7 +148,7 @@ it('lleva a una cuenta desde el comando que emite el enlace hasta su UMK recuper
 
     expect($finished['serverPublicKey'])->toBe(Base64Url::decode($start->json('serverPublicKey'), 'spk'));
 
-    // §5, pasos 7 a 10: KEK del exportKey, UMK aleatoria, sobre y configuración vacía.
+    // §5, steps 7 to 10: KEK from the exportKey, random UMK, envelope and empty settings.
     $umkContext = strtolower((string) $user->id).'/umk';
     $settingsContext = strtolower((string) $user->id).'/settings';
 
@@ -162,7 +162,7 @@ it('lleva a una cuenta desde el comando que emite el enlace hasta su UMK recuper
         $settingsContext,
     );
 
-    // §5, paso 12: una única petición transaccional.
+    // §5, step 12: a single transactional request.
     $this->postJson(route('filament.phr.auth.opaque.registration.finish'), [
         'registrationId' => $start->json('registrationId'),
         'registrationRecord' => $finished['registrationRecord'],
@@ -186,7 +186,7 @@ it('lleva a una cuenta desde el comando que emite el enlace hasta su UMK recuper
         ->and($envelopeRow->envelope)->toBe($wrappedUserMasterKey)
         ->and($envelopeRow->retired_at)->toBeNull();
 
-    // §5, paso 13: login inmediato con la misma contraseña, por el camino de un login normal.
+    // §5, step 13: immediate login with the same password, through the ordinary login path.
     $startedLogin = OpaqueTestClient::startLogin(E2E_PASSWORD);
 
     $loginStart = $this->postJson(route('filament.phr.auth.opaque.login.start'), [
@@ -210,7 +210,7 @@ it('lleva a una cuenta desde el comando que emite el enlace hasta su UMK recuper
         ->and($session->json('encryptedUserMasterKey'))->toBe($wrappedUserMasterKey)
         ->and($session->json('encryptedSettings'))->toBe($encryptedSettings);
 
-    // §5, pasos 15 y 16: la UMK que vuelve es la que nació en el registro.
+    // §5, steps 15 and 16: the UMK that comes back is the one born during registration.
     $recovered = e2eOpen(
         e2eDeriveKey($finishedLogin['exportKey'], 'myphr/kek/v1'),
         (string) $session->json('encryptedUserMasterKey'),
@@ -219,14 +219,14 @@ it('lleva a una cuenta desde el comando que emite el enlace hasta su UMK recuper
 
     expect($recovered)->toBe($userMasterKey);
 
-    // §6.2: y la configuración se abre con la clave derivada de esa misma UMK.
+    // §6.2: and the settings open with the key derived from that same UMK.
     expect(e2eOpen(
         e2eDeriveKey($recovered, 'myphr/settings/v1', $settingsContext),
         (string) $session->json('encryptedSettings'),
         $settingsContext,
     ))->toBe('{"v":1}');
 
-    // §6.2: tras una recarga, el secreto de sesión devuelve la UMK sin pedir la contraseña.
+    // §6.2: after a reload, the session secret returns the UMK without asking for the password.
     $this->postJson(route('filament.phr.auth.session-secret'))
         ->assertOk()
         ->assertJsonPath('sessionSecret', $session->json('sessionSecret'))

@@ -26,7 +26,7 @@ final class EnvelopeValidator
     /** Header: version, algorithm, KDF, flags, key identifier, salt and nonce. */
     public const int HEADER_BYTES = 64;
 
-    /** Tag del AEAD. */
+    /** AEAD tag. */
     public const int TAG_BYTES = 16;
 
     /**

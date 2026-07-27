@@ -51,7 +51,7 @@ function lalSeal(string $key, string $plaintext, string $associatedData): string
     return 'v1.'.Base64Url::encode($header.$sealed);
 }
 
-/** Ejecuta un login completo y devuelve la respuesta de `login/finish`. */
+/** Runs a full login and returns the `login/finish` response. */
 function lalLogin(): TestResponse
 {
     $started = OpaqueTestClient::startLogin(LAL_PASSWORD);
@@ -76,8 +76,8 @@ function lalLogin(): TestResponse
     ]);
 }
 
-it('permite volver a entrar despues de cerrar sesion', function (): void {
-    // Alta por el comando y registro completo, igual que hace una persona real.
+it('allows logging in again after logging out', function (): void {
+    // Signup through the command and full registration, just like a real person does.
     Artisan::call('phr:issue-registration-link', ['email' => LAL_EMAIL, '--name' => 'Alicia']);
     $url = collect(explode("\n", Artisan::output()))
         ->map(fn (string $l): string => trim($l))
@@ -115,31 +115,31 @@ it('permite volver a entrar despues de cerrar sesion', function (): void {
         ),
     ])->assertOk();
 
-    // Primer login (el inmediato del registro): funciona y da acceso al panel.
+    // First login (the immediate post-registration one): it works and gives access to the panel.
     expect(lalLogin()->status())->toBe(200);
     expect(auth()->id())->not->toBeNull();
 
     $panelPrimero = test()->get('/phr');
     expect($panelPrimero->status())->toBe(200);
 
-    // Cierre de sesion, como hace la persona.
+    // Logout, as the person does.
     test()->post('/phr/logout');
     test()->flushSession();
     auth()->forgetGuards();
 
     expect(auth()->check())->toBeFalse();
 
-    // Y ahora el login fresco: esto es lo que el usuario dice que falla.
+    // And now the fresh login: this is what the user reports as failing.
     $second = lalLogin();
 
     expect($second->status())->toBe(200)
         ->and(auth()->id())->toBe(User::query()->sole()->id);
 
-    // El cliente necesita el `userId` para construir el dato asociado del sobre de la clave
-    // maestra: sin el, `unwrapMasterKey` de `loginPage.js` lanza y el login no llega a navegar.
+    // The client needs the `userId` to build the associated data of the master key envelope:
+    // without it, `unwrapMasterKey` in `loginPage.js` throws and the login never navigates.
     expect($second->json('userId'))->toBe(User::query()->sole()->id);
 
-    // Y sobre todo: que pueda entrar al panel, que es lo que la persona percibe como "entrar".
+    // And above all: that they can enter the panel, which is what the person perceives as "getting in".
     $panelSegundo = test()->get('/phr');
 
     expect($panelSegundo->status())->toBe(200);

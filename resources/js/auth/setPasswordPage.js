@@ -119,7 +119,7 @@ export function setPasswordForm() {
             }
 
             /** §5, step 3: without `keyStretching`. */
-            const { clientRegistrationState, registrationRequest } = startRegistration(password);
+            const { clientRegistrationState, registrationRequest } = await startRegistration(password);
 
             await this.advance(t('setPassword.stage.contacting'), 0.1);
 
@@ -139,7 +139,7 @@ export function setPasswordForm() {
             await this.advance(t('setPassword.stage.stretching'), 0.4, KEY_STRETCHING_SECONDS);
 
             /** §5, step 6: Argon2id runs here. */
-            const registered = finishRegistration({
+            const registered = await finishRegistration({
                 password,
                 clientRegistrationState,
                 registrationResponse: started.registrationResponse,
@@ -198,7 +198,7 @@ export function setPasswordForm() {
             });
 
             /** §5, steps 13 and 14: the same login every future day will do. */
-            const { clientLoginState, startLoginRequest } = startLogin(password);
+            const { clientLoginState, startLoginRequest } = await startLogin(password);
 
             const loginStarted = await postJson(form.dataset.loginStartUrl, {
                 login,
@@ -210,7 +210,7 @@ export function setPasswordForm() {
             /** Second Argon2id, the one of the immediate login of step 13. */
             await this.advance(t('setPassword.stage.verifying'), 0.9, KEY_STRETCHING_SECONDS);
 
-            const loginFinished = finishLogin({
+            const loginFinished = await finishLogin({
                 password,
                 clientLoginState,
                 loginResponse: loginStarted.loginResponse,

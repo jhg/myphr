@@ -1,11 +1,11 @@
 /**
- * Comprobaciones de la lógica pura de `health/mealsPage.js` (ADR 0004, ADR 0006).
+ * Checks of the pure logic of `health/mealsPage.js` (ADR 0004, ADR 0006).
  *
- * No se monta Alpine: `mealsPage()` solo orquesta DOM, y esa orquestación no se prueba aquí. Lo que
- * se prueba es la lógica que no depende del navegador, exportada aparte para poder llamarla
- * directamente (mismo enfoque que `tests/js/glucosePage.test.mjs`).
+ * Alpine is not mounted: `mealsPage()` only orchestrates DOM, and that orchestration is not tested
+ * here. What is tested is the logic that does not depend on the browser, exported apart so it can
+ * be called directly (the same approach as `tests/js/glucosePage.test.mjs`).
  *
- * Corredor incorporado de Node, como el resto de `tests/js` (ver `crypto.test.mjs`).
+ * Node's built-in runner, like the rest of `tests/js` (see `crypto.test.mjs`).
  *
  *     npm test
  */
@@ -23,20 +23,20 @@ import { datetimeLocalToCanonical, formatTzOffset } from '../../resources/js/hea
 import { setLocale } from '../../resources/js/i18n/index.js';
 
 /**
- * Estos tests afirman el texto **en castellano**, así que fijan el idioma en vez de darlo por
- * supuesto: el idioma por defecto del cliente es el inglés (igual que `config/app.php`), y en Node
- * no hay `<html lang>` del que deducirlo. Sin esta línea, las afirmaciones de texto de abajo
- * estarían comprobando el catálogo de respaldo sin decirlo.
+ * These tests assert the text **in Spanish**, so they set the language instead of assuming it: the
+ * client default language is English (as in `config/app.php`), and in Node there is no
+ * `<html lang>` to work it out from. Without this line, the text assertions below would be
+ * checking the fallback catalog without saying so.
  */
 setLocale('es');
 
 /**
- * Campos comunes de prueba, con la forma que devuelve `buildCommonEventFields` cuando no se le pasa
- * `origin`: siempre `manual`, porque el formulario de comidas no pregunta el origen del dato.
+ * Test common fields, with the shape `buildCommonEventFields` returns when no `origin` is passed:
+ * always `manual`, because the meals form does not ask for the origin of the datum.
  */
 const COMMON_FIELDS = Object.freeze({ origin: 'manual', recordedBy: 'self' });
 
-/** Catálogo de prueba, con la forma que devuelve `Meals::catalog()` (ADR 0005). */
+/** Test catalog, with the shape `Meals::catalog()` returns (ADR 0005). */
 const CATALOG = Object.freeze({
     mealTypes: [
         { token: 'breakfast', label: 'Desayuno' },
@@ -48,7 +48,7 @@ const CATALOG = Object.freeze({
     ],
 });
 
-test('buildMealContent: forma exacta del ADR 0006, con los alimentos en el orden del DOM', () => {
+test('buildMealContent: exact ADR 0006 shape, with the foods in DOM order', () => {
     const content = buildMealContent({
         mealType: 'lunch',
         rawFoods: [
@@ -75,42 +75,42 @@ test('buildMealContent: forma exacta del ADR 0006, con los alimentos en el orden
     });
 });
 
-test('buildMealContent: sin tipo de comida es un error, no un valor por defecto', () => {
+test('buildMealContent: with no meal type it is an error, not a default value', () => {
     assert.throws(
         () => buildMealContent({ mealType: '', rawFoods: [], tz: '+02:00', common: COMMON_FIELDS }),
         /tipo de comida/
     );
 });
 
-test('normalizeFoods: la fila en blanco con la que arranca el formulario no cuenta como alimento', () => {
+test('normalizeFoods: the blank row the form starts with does not count as a food', () => {
     assert.deepEqual(normalizeFoods([{ name: '', quantity: '', unit: '' }]), []);
     assert.deepEqual(normalizeFoods([{ name: '  ', quantity: ' ', unit: '' }]), []);
 });
 
-test('normalizeFoods: una fila a medias es un error, nunca un alimento incompleto guardado', () => {
+test('normalizeFoods: a half-filled row is an error, never an incomplete food stored', () => {
     assert.throws(() => normalizeFoods([{ name: 'Arroz', quantity: '', unit: 'g' }]), /Completa el nombre/);
     assert.throws(() => normalizeFoods([{ name: '', quantity: '150', unit: 'g' }]), /Completa el nombre/);
 });
 
 /**
- * La cantidad es un campo numérico clínico: pasa por `numericValue.js` como el valor de glucemia o
- * la dosis de insulina (convención de `.ai/guidelines/ai.md`). Sin esto, «250,5» y «250.5» se
- * guardarían como dos cadenas distintas dentro de un sobre ya cifrado.
+ * The quantity is a clinical numeric field: it goes through `numericValue.js` like the glucose
+ * value or the insulin dose (convention of `.ai/guidelines/ai.md`). Without this, "250,5" and
+ * "250.5" would be stored as two different strings inside an already encrypted envelope.
  */
-test('normalizeFoods: la coma decimal se normaliza a punto y el valor sigue siendo cadena (ADR 0004)', () => {
+test('normalizeFoods: the decimal comma is normalized to a dot and the value is still a string (ADR 0004)', () => {
     const foods = normalizeFoods([{ name: 'Yogur', quantity: '125,5', unit: 'g' }]);
 
     assert.deepEqual(foods, [{ name: 'Yogur', quantity: '125.5', unit: 'g' }]);
     assert.equal(typeof foods[0].quantity, 'string');
 });
 
-test('normalizeFoods: rechaza cantidades negativas, no numéricas y de más de 2 decimales', () => {
+test('normalizeFoods: rejects negative, non-numeric and more-than-2-decimal quantities', () => {
     assert.throws(() => normalizeFoods([{ name: 'Arroz', quantity: '-1', unit: 'g' }]), /negativ/);
     assert.throws(() => normalizeFoods([{ name: 'Arroz', quantity: 'mucho', unit: 'g' }]), /número/);
     assert.throws(() => normalizeFoods([{ name: 'Arroz', quantity: '1.234', unit: 'g' }]), /2 decimales/);
 });
 
-test('buildMealContent: normaliza la cantidad de cada alimento antes de cifrar', () => {
+test('buildMealContent: it normalizes the quantity of each food before encrypting', () => {
     const content = buildMealContent({
         mealType: 'breakfast',
         rawFoods: [
@@ -124,7 +124,7 @@ test('buildMealContent: normaliza la cantidad de cada alimento antes de cifrar',
     assert.deepEqual(content.data.foods, [{ name: 'Leche', quantity: '200.25', unit: 'mL' }]);
 });
 
-test('filterMealEvents: descarta lo que no es una comida (el servidor no puede filtrar, ADR 0006)', () => {
+test('filterMealEvents: discards whatever is not a meal (the server cannot filter, ADR 0006)', () => {
     const events = [
         { id: '1', occurredAt: 'a', content: { type: 'meal' } },
         { id: '2', occurredAt: 'b', content: { type: 'glucose' } },
@@ -135,7 +135,7 @@ test('filterMealEvents: descarta lo que no es una comida (el servidor no puede f
     assert.deepEqual(filterMealEvents(events).map((event) => event.id), ['1', '4']);
 });
 
-test('describeMealEvent: traduce tokens a etiquetas del catálogo y deja fuera nota y aparato ausentes', () => {
+test('describeMealEvent: translates tokens into catalog labels and leaves out an absent note and device', () => {
     const described = describeMealEvent(CATALOG, {
         type: 'meal',
         data: { mealType: 'lunch', foods: [{ name: 'Arroz', quantity: '150', unit: 'g' }] },
@@ -149,7 +149,7 @@ test('describeMealEvent: traduce tokens a etiquetas del catálogo y deja fuera n
     });
 });
 
-test('describeMealEvent: un token que ya no está en el catálogo se muestra tal cual, sin romper la vista', () => {
+test('describeMealEvent: a token no longer in the catalog is shown as is, without breaking the view', () => {
     const described = describeMealEvent(CATALOG, {
         data: { mealType: 'brunch', foods: [{ name: 'Café', quantity: '1', unit: '[cup_us]' }] },
     });
@@ -159,10 +159,10 @@ test('describeMealEvent: un token que ya no está en el catálogo se muestra tal
 });
 
 /**
- * Un sobre que abre pero cuyo contenido no tiene la forma esperada no puede dejar el historial
- * entero en blanco: se pinta lo que haya, igual que un sobre que no abre se cuenta y se avisa.
+ * An envelope that opens but whose content does not have the expected shape cannot leave the
+ * whole history blank: whatever there is gets painted, just as an envelope that does not open.
  */
-test('describeMealEvent: tolera un contenido sin `data` y sin lista de alimentos', () => {
+test('describeMealEvent: tolerates content with no `data` and no food list', () => {
     assert.deepEqual(describeMealEvent(CATALOG, { type: 'meal' }), {
         mealTypeLabel: '',
         foods: [],
@@ -173,7 +173,7 @@ test('describeMealEvent: tolera un contenido sin `data` y sin lista de alimentos
     assert.deepEqual(describeMealEvent(CATALOG, { data: { mealType: 'lunch' } }).foods, []);
 });
 
-test('describeMealEvent: conserva nota y aparato cuando los hay', () => {
+test('describeMealEvent: keeps the note and the device when there are any', () => {
     const described = describeMealEvent(CATALOG, {
         data: { mealType: 'lunch', foods: [] },
         note: 'Comí fuera',
@@ -184,13 +184,13 @@ test('describeMealEvent: conserva nota y aparato cuando los hay', () => {
     assert.equal(described.device, 'Báscula');
 });
 
-test('formatTzOffset: signo positivo cuando la hora local va por delante de UTC (ADR 0006)', () => {
+test('formatTzOffset: positive sign when local time is ahead of UTC (ADR 0006)', () => {
     assert.equal(formatTzOffset(120), '+02:00');
     assert.equal(formatTzOffset(-330), '-05:30');
     assert.equal(formatTzOffset(0), '+00:00');
 });
 
-test('datetimeLocalToCanonical: forma canónica del ADR 0004 y desfase coherente', () => {
+test('datetimeLocalToCanonical: ADR 0004 canonical form and a coherent offset', () => {
     const { occurredAt, tz } = datetimeLocalToCanonical('2026-07-25T14:30:05', { timezoneOffsetMinutes: -120 });
 
     assert.equal(occurredAt, '2026-07-25T12:30:05.000000Z');

@@ -288,15 +288,10 @@ export function formatChartDay(value) {
     return chartDayFormat().format(new Date(value));
 }
 
-const chartDateFormat = memoizedFormatter(Intl.DateTimeFormat, { dateStyle: 'short', timeStyle: 'short' });
-
 /**
- * Abbreviated date and time for the category axis of the charts (no Chart.js date adapter is
- * installed: the labels are formatted here).
- *
- * @param {Date|string|number} value
- * @returns {string}
+ * There is no `formatChartDate()` here any more, and it is not an oversight. The axis of the charts
+ * that place each reading in time is the linear one of `health/timeAxis.js`, and it formats its own
+ * labels **in UTC**, because the value it draws is the wall clock time of whoever recorded the
+ * event (`eventWallClockMs`) and not an absolute instant. A formatter in the browser zone —which is
+ * what this one was— would shift that value a second time and move a 23:30 dinner to another hour.
  */
-export function formatChartDate(value) {
-    return chartDateFormat().format(new Date(value));
-}

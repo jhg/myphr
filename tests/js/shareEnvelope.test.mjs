@@ -1,7 +1,7 @@
 /**
- * Comprobaciones del sobre `s1.` del paquete de compartición (ADR 0011).
+ * Checks of the `s1.` envelope of the share package (ADR 0011).
  *
- * Corredor incorporado de Node, como el resto de `tests/js`.
+ * Node's built-in runner, like the rest of `tests/js`.
  *
  *     npm test
  */
@@ -29,14 +29,14 @@ const SHARE_ID = '3f0c1e2a-1111-4444-8888-0123456789ab';
 const OTHER_SHARE_ID = '11112222-3333-4444-8888-cccccccccccc';
 const GENERATED_AT = '2026-07-27T08:15:00.000000Z';
 
-/** @returns {Uint8Array} `CK` de prueba, determinista. */
+/** @returns {Uint8Array} Test `CK`, deterministic. */
 function contentKey(seed = 7) {
     return new Uint8Array(32).map((_, index) => (index + seed) & 0xff);
 }
 
 /**
  * @param {number} count
- * @returns {object} Cuerpo del recorte con el compromiso de recuento del ADR 0011.
+ * @returns {object} Clipping body with the count commitment of ADR 0011.
  */
 function body(count = 3) {
     return {
@@ -63,7 +63,7 @@ function rawBytes(envelope) {
     return decodeBase64Url(envelope.slice(SHARE_PREFIX.length), 'envelope');
 }
 
-test('sealSharePackage/openSharePackage: ida y vuelta devuelve el mismo cuerpo', async () => {
+test('sealSharePackage/openSharePackage: the round trip returns the same body', async () => {
     const key = contentKey();
     const envelope = await sealSharePackage({ contentKey: key, shareId: SHARE_ID, body: body() });
 
@@ -79,7 +79,7 @@ test('sealSharePackage/openSharePackage: ida y vuelta devuelve el mismo cuerpo',
     assert.deepEqual(opened, body());
 });
 
-test('el paquete no lleva el prefijo v1., que es lo que impide colarlo en un evento', async () => {
+test('the package carries no v1. prefix, which is what stops it being slipped into an event', async () => {
     const envelope = await sealSharePackage({ contentKey: contentKey(), shareId: SHARE_ID, body: body() });
 
     assert.ok(!envelope.startsWith('v1.'));
@@ -94,7 +94,7 @@ test('el paquete no lleva el prefijo v1., que es lo que impide colarlo en un eve
     );
 });
 
-test('cambiar el shareId hace fallar el descifrado', async () => {
+test('changing the shareId makes the decryption fail', async () => {
     const key = contentKey();
     const envelope = await sealSharePackage({ contentKey: key, shareId: SHARE_ID, body: body() });
 
@@ -104,7 +104,7 @@ test('cambiar el shareId hace fallar el descifrado', async () => {
     );
 });
 
-test('cambiar el instante de generación hace fallar el descifrado', async () => {
+test('changing the generation instant makes the decryption fail', async () => {
     const key = contentKey();
     const envelope = await sealSharePackage({ contentKey: key, shareId: SHARE_ID, body: body() });
 
@@ -119,7 +119,7 @@ test('cambiar el instante de generación hace fallar el descifrado', async () =>
     );
 });
 
-test('el paquete de otro recorte no descifra con esta clave de contenido', async () => {
+test('the package of another clipping does not decrypt with this content key', async () => {
     const envelope = await sealSharePackage({
         contentKey: contentKey(99),
         shareId: OTHER_SHARE_ID,
@@ -137,14 +137,14 @@ test('el paquete de otro recorte no descifra con esta clave de contenido', async
     );
 });
 
-test('un cuerpo que declara más eventos de los que trae se rechaza al abrir', async () => {
+test('a body declaring more events than it brings is rejected on opening', async () => {
     const key = contentKey();
     const truncated = body(3);
 
     /*
-     * Lo que un servidor hostil querría: entregar el historial al que le falta
-     * la semana mala. Aquí se fabrica con la propia clave de contenido, que es
-     * el peor caso posible, y aun así el compromiso del recuento lo detiene.
+     * What a hostile server would want: delivering the history missing the bad
+     * week. Here it is built with the content key itself, which is the worst
+     * possible case, and even so the count commitment stops it.
      */
     truncated.events.pop();
 
@@ -161,14 +161,14 @@ test('un cuerpo que declara más eventos de los que trae se rechaza al abrir', a
     );
 });
 
-test('sellar un cuerpo con el recuento mal ni siquiera llega a cifrarse', async () => {
+test('sealing a body with the wrong count does not even get to be encrypted', async () => {
     await assert.rejects(
         () => sealSharePackage({ contentKey: contentKey(), shareId: SHARE_ID, body: { ...body(3), eventCount: 4 } }),
         ShareEnvelopeError
     );
 });
 
-test('el instante de generación de dentro tiene que ser el anunciado por fuera', async () => {
+test('the generation instant inside has to be the one announced outside', async () => {
     const key = contentKey();
     const envelope = await sealSharePackageBytes({
         contentKey: key,
@@ -183,7 +183,7 @@ test('el instante de generación de dentro tiene que ser el anunciado por fuera'
     );
 });
 
-test('la escalera es multiplicativa y va de 64 KiB a 4 MiB', () => {
+test('the ladder is multiplicative and goes from 64 KiB to 4 MiB', () => {
     assert.deepEqual([...SHARE_PADDED_SIZES], [65536, 262144, 1048576, 4194304]);
 
     for (let index = 1; index < SHARE_PADDED_SIZES.length; index += 1) {
@@ -191,27 +191,27 @@ test('la escalera es multiplicativa y va de 64 KiB a 4 MiB', () => {
     }
 });
 
-test('un recorte pequeño ocupa exactamente el escalón de 64 KiB', async () => {
+test('a small clipping takes exactly the 64 KiB step', async () => {
     const envelope = await sealSharePackage({ contentKey: contentKey(), shareId: SHARE_ID, body: body(1) });
 
     assert.equal(rawBytes(envelope).length, HEADER_LENGTH + SHARE_PADDED_SIZES[0] + TAG_LENGTH);
 });
 
-test('tres eventos y trescientos caen en el mismo escalón: son indistinguibles', async () => {
+test('three events and three hundred fall in the same step: they are indistinguishable', async () => {
     const small = await sealSharePackage({ contentKey: contentKey(), shareId: SHARE_ID, body: body(3) });
     const large = await sealSharePackage({ contentKey: contentKey(), shareId: SHARE_ID, body: body(300) });
 
     assert.equal(rawBytes(small).length, rawBytes(large).length);
 });
 
-test('un recorte que no cabe comprimido en 64 KiB sube al escalón siguiente', async () => {
+test('a clipping that does not fit compressed in 64 KiB moves up to the next step', async () => {
     /*
-     * Contenido incompresible a propósito: gzip no lo reduce, así que fuerza el
-     * salto de escalón. Es el caso que el suelo alto no puede tapar.
+     * Deliberately incompressible content: gzip does not reduce it, so it forces
+     * the step jump. It is the case the high floor cannot cover.
      */
     const noise = new Uint8Array(120000);
 
-    /* `getRandomValues` no admite más de 65.536 bytes por llamada. */
+    /* `getRandomValues` accepts no more than 65,536 bytes per call. */
     for (let offset = 0; offset < noise.length; offset += 65536) {
         globalThis.crypto.getRandomValues(noise.subarray(offset, Math.min(offset + 65536, noise.length)));
     }
@@ -226,13 +226,13 @@ test('un recorte que no cabe comprimido en 64 KiB sube al escalón siguiente', a
     assert.equal(rawBytes(envelope).length, HEADER_LENGTH + SHARE_PADDED_SIZES[1] + TAG_LENGTH);
 });
 
-test('la cabecera marca comprimido, porque se comprime antes de rellenar', async () => {
+test('the header marks compressed, because it compresses before padding', async () => {
     const envelope = await sealSharePackage({ contentKey: contentKey(), shareId: SHARE_ID, body: body() });
 
     assert.equal(rawBytes(envelope)[3] & FLAG_COMPRESSED, FLAG_COMPRESSED);
 });
 
-test('el escalón se decide sobre lo comprimido, no sobre el claro', async () => {
+test('the step is decided over the compressed content, not over the clear one', async () => {
     const large = body(1200);
 
     assert.ok(JSON.stringify(large).length > SHARE_PADDED_SIZES[0]);
@@ -240,14 +240,14 @@ test('el escalón se decide sobre lo comprimido, no sobre el claro', async () =>
     const envelope = await sealSharePackage({ contentKey: contentKey(), shareId: SHARE_ID, body: large });
 
     /*
-     * En claro no cabría en 64 KiB; comprimido sí. Si se rellenase antes de
-     * comprimir, o se comprimiese el búfer ya rellenado, este paquete acabaría
-     * en otro escalón y el relleno dejaría de esconder nada.
+     * In the clear it would not fit in 64 KiB; compressed it does. If it were padded
+     * before compressing, or the already padded buffer were compressed, this package
+     * would end up in another step and the padding would stop hiding anything.
      */
     assert.equal(rawBytes(envelope).length, HEADER_LENGTH + SHARE_PADDED_SIZES[0] + TAG_LENGTH);
 });
 
-test('padToShareLadder/unpadFromShareLadder: ida y vuelta y tamaños de la escalera', () => {
+test('padToShareLadder/unpadFromShareLadder: round trip and ladder sizes', () => {
     const content = new Uint8Array(1000).fill(9);
     const padded = padToShareLadder(content);
 
@@ -255,10 +255,10 @@ test('padToShareLadder/unpadFromShareLadder: ida y vuelta y tamaños de la escal
     assert.deepEqual(unpadFromShareLadder(padded), content);
 });
 
-test('padToShareLadder rechaza lo que no cabe en el mayor escalón', () => {
+test('padToShareLadder rejects what does not fit in the biggest step', () => {
     assert.throws(() => padToShareLadder(new Uint8Array(MAX_SHARE_PADDED_CONTENT + 1)), ShareEnvelopeError);
 });
 
-test('unpadFromShareLadder rechaza un tamaño que no es de la escalera', () => {
+test('unpadFromShareLadder rejects a size that is not on the ladder', () => {
     assert.throws(() => unpadFromShareLadder(new Uint8Array(4096)), ShareEnvelopeError);
 });

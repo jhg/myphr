@@ -7,7 +7,7 @@ declare(strict_types=1);
  * distributed on a storage medium (ADR 0005). A licence obligation that only lives in a document
  * gets broken; this test ties it to the repository.
  */
-it('incluye el fichero NOTICE con el aviso literal de LOINC', function (): void {
+it('ships the NOTICE file with the verbatim LOINC notice', function (): void {
     $path = dirname(__DIR__, 2).'/NOTICE';
 
     expect(file_exists($path))->toBeTrue();

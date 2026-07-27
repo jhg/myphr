@@ -1,11 +1,11 @@
 /**
- * Comprobaciones de `settings.js` y `sessionBootstrap.js` (Spec 0001 §6.1 paso 10 y §6.2).
+ * Checks of `settings.js` and `sessionBootstrap.js` (Spec 0001 §6.1 step 10 and §6.2).
  *
- * A diferencia de `auth.test.mjs`, estos módulos sí tocan `document` (y, a través de `recovery.js`
- * y `keyring.js`, `window` y `sessionStorage`), así que cada prueba monta un DOM mínimo a mano: lo
- * justo que leen `http.js`, `recovery.js` y `sessionBootstrap.js` (`document.head`, un puñado de
- * `<meta>` y `document.querySelector('[data-phr-page]')`). Se restaura todo al final de cada
- * prueba para no filtrar estado entre ellas.
+ * Unlike `auth.test.mjs`, these modules do touch `document` (and, through `recovery.js` and
+ * `keyring.js`, `window` and `sessionStorage`), so each test mounts a minimal DOM by hand: exactly
+ * what `http.js`, `recovery.js` and `sessionBootstrap.js` read (`document.head`, a handful of
+ * `<meta>` and `document.querySelector('[data-phr-page]')`). Everything is restored at the end of
+ * each test so no state leaks between them.
  *
  *     npm test
  */
@@ -28,14 +28,14 @@ import { deriveKey, KDF_LABELS } from '../../resources/js/crypto/kdf.js';
 
 const USER_ID = '9c8f2e2a-2222-4444-8888-abcdefabcdef';
 
-/** @returns {Uint8Array} Clave maestra de prueba, 32 bytes deterministas. */
+/** @returns {Uint8Array} Test master key, 32 deterministic bytes. */
 function testMasterKey() {
     return new Uint8Array(MASTER_KEY_LENGTH).map((_, index) => index + 1);
 }
 
 /**
- * Sella `plaintext` como lo hace `setPasswordPage.js` (líneas 192-208): misma etiqueta, mismo
- * contexto como dato asociado.
+ * Seals `plaintext` the way `setPasswordPage.js` does (lines 192-208): same label, same context as
+ * associated data.
  *
  * @param {Uint8Array} masterKey
  * @param {string} plaintext
@@ -49,8 +49,8 @@ function sealSettings(masterKey, plaintext) {
 }
 
 /**
- * Monta un `document` mínimo. `metas` es un mapa nombre -> contenido; `dataPhrPage` simula la marca
- * de las pantallas de autenticación.
+ * Mounts a minimal `document`. `metas` is a name -> content map; `dataPhrPage` simulates the
+ * marker of the authentication screens.
  *
  * @param {{metas?: Record<string, string>, dataPhrPage?: boolean}} [options]
  */
@@ -91,8 +91,8 @@ function installFakeDom({ metas = {}, dataPhrPage = false } = {}) {
 }
 
 /**
- * `fetch` de mentira que anota las peticiones y responde 200. `settings.js` es lo único que lo usa
- * en estas pruebas, así que basta con el cuerpo que `putJson` sabe decodificar.
+ * Fake `fetch` that notes the requests and answers 200. `settings.js` is the only thing that uses
+ * it in these tests, so the body `putJson` can decode is enough.
  *
  * @returns {Array<{url: string, options: object, body: object}>}
  */
@@ -116,7 +116,7 @@ afterEach(() => {
     delete globalThis.fetch;
 });
 
-test('loadSettings abre un sobre sellado con la misma derivación y devuelve el objeto', () => {
+test('loadSettings opens an envelope sealed with the same derivation and returns the object', () => {
     const masterKey = testMasterKey();
 
     adoptMasterKey(masterKey, USER_ID);
@@ -129,12 +129,12 @@ test('loadSettings abre un sobre sellado con la misma derivación y devuelve el 
     assert.deepEqual(settings(), { v: 1, theme: 'dark' });
     assert.ok(hasSettings());
 
-    /** Lo devuelto es una copia: mutarlo no toca el estado del módulo. */
+    /** What is returned is a copy: mutating it does not touch the module state. */
     loaded.theme = 'light';
     assert.equal(settings().theme, 'dark');
 });
 
-test('loadSettings no hace nada cuando la cuenta todavía no tiene sobre', () => {
+test('loadSettings does nothing when the account has no envelope yet', () => {
     adoptMasterKey(testMasterKey(), USER_ID);
 
     assert.equal(loadSettings({ envelope: undefined, userId: USER_ID }), null);
@@ -142,12 +142,12 @@ test('loadSettings no hace nada cuando la cuenta todavía no tiene sobre', () =>
     assert.equal(hasSettings(), false);
 });
 
-test('loadSettings no silencia un sobre que no abre (ADR 0004)', () => {
+test('loadSettings does not silence an envelope that does not open (ADR 0004)', () => {
     const masterKey = testMasterKey();
 
     adoptMasterKey(masterKey, USER_ID);
 
-    /** Sellado con un contexto de otro usuario: el dato asociado no cuadra al abrir. */
+    /** Sealed with the context of another user: the associated data does not match on opening. */
     const envelope = sealSettings(masterKey, '{"v":1}');
 
     assert.throws(
@@ -157,7 +157,7 @@ test('loadSettings no silencia un sobre que no abre (ADR 0004)', () => {
     assert.equal(hasSettings(), false);
 });
 
-test('forgetSettings borra los ajustes cargados', () => {
+test('forgetSettings wipes the loaded settings', () => {
     const masterKey = testMasterKey();
 
     adoptMasterKey(masterKey, USER_ID);
@@ -172,11 +172,11 @@ test('forgetSettings borra los ajustes cargados', () => {
 });
 
 /**
- * La prueba que importa de la vía de escritura: lo que `saveSettings` sella lo abre `loadSettings`.
- * Si la derivación o el dato asociado divergieran, el sobre no volvería a abrirse nunca y no habría
- * forma de re-cifrarlo desde el servidor.
+ * The test that matters of the write path: what `saveSettings` seals is opened by `loadSettings`.
+ * If the derivation or the associated data diverged, the envelope would never open again and there
+ * would be no way to re-encrypt it from the server.
  */
-test('saveSettings sella un sobre que loadSettings vuelve a abrir con el mismo objeto', async () => {
+test('saveSettings seals an envelope that loadSettings opens again with the same object', async () => {
     installFakeDom();
     const requests = installFakeFetch();
 
@@ -199,7 +199,7 @@ test('saveSettings sella un sobre que loadSettings vuelve a abrir con el mismo o
     assert.deepEqual(loadSettings({ envelope, userId: USER_ID }), { v: 1, glucoseUnit: 'mmol/L' });
 });
 
-test('saveSettings mezcla sobre lo cargado y borra la clave que llega nula', async () => {
+test('saveSettings merges over what was loaded and deletes the key that arrives null', async () => {
     installFakeDom();
     const requests = installFakeFetch();
 
@@ -215,11 +215,11 @@ test('saveSettings mezcla sobre lo cargado y borra la clave que llega nula', asy
 
     assert.deepEqual(settings(), { v: 1, glucoseUnit: 'mg/dL' });
 
-    /** La precondición apunta al sobre que se cargó, no a `*`: la cuenta ya tenía uno. */
+    /** The precondition points at the envelope that was loaded, not at `*`: the account already had one. */
     assert.notEqual(requests[0].options.headers['If-Match'], '*');
 });
 
-test('saveSettings no toca la memoria si la petición falla', async () => {
+test('saveSettings does not touch memory if the request fails', async () => {
     installFakeDom();
 
     globalThis.fetch = async () => ({ ok: false, status: 412, json: async () => ({ error: 'settings_conflict' }) });
@@ -237,7 +237,7 @@ test('saveSettings no toca la memoria si la petición falla', async () => {
     assert.deepEqual(settings(), { v: 1 });
 });
 
-test('bootstrapSession no hace nada en una pantalla con data-phr-page', async () => {
+test('bootstrapSession does nothing on a screen with data-phr-page', async () => {
     const dispatched = installFakeDom({
         metas: { 'phr-user-id': USER_ID, 'phr-login-url': '/login' },
         dataPhrPage: true,
@@ -250,7 +250,7 @@ test('bootstrapSession no hace nada en una pantalla con data-phr-page', async ()
     assert.equal(isUnlocked(), false);
 });
 
-test('bootstrapSession no hace nada sin el meta phr-user-id: no hay sesión que recuperar', async () => {
+test('bootstrapSession does nothing without the phr-user-id meta: there is no session to recover', async () => {
     const dispatched = installFakeDom({ metas: { 'phr-login-url': '/login' } });
 
     await bootstrapSession();
@@ -259,8 +259,8 @@ test('bootstrapSession no hace nada sin el meta phr-user-id: no hay sesión que 
     assert.equal(globalThis.window.location.href, '');
 });
 
-test('bootstrapSession va al login cuando la recuperación dice NeedsLogin', async () => {
-    /** Sin `phr-session-secret-url`, `recoverMasterKey` devuelve NeedsLogin sin tocar la red. */
+test('bootstrapSession goes to the login when the recovery says NeedsLogin', async () => {
+    /** Without `phr-session-secret-url`, `recoverMasterKey` returns NeedsLogin without touching the network. */
     installFakeDom({ metas: { 'phr-user-id': USER_ID, 'phr-login-url': '/login' } });
 
     await bootstrapSession();
@@ -269,7 +269,7 @@ test('bootstrapSession va al login cuando la recuperación dice NeedsLogin', asy
     assert.equal(isUnlocked(), false);
 });
 
-test('bootstrapSession no vuelve a recuperar si ya hay clave en memoria', async () => {
+test('bootstrapSession does not recover again if there already is a key in memory', async () => {
     const dispatched = installFakeDom({
         metas: { 'phr-user-id': USER_ID, 'phr-login-url': '/login' },
     });
@@ -278,19 +278,76 @@ test('bootstrapSession no vuelve a recuperar si ya hay clave en memoria', async 
 
     await bootstrapSession();
 
-    /** No hubo redirección ni intento de red: `isUnlocked()` cortó antes de llamar a recuperar. */
+    /** There was no redirect and no network attempt: `isUnlocked()` cut in before calling recover. */
     assert.equal(globalThis.window.location.href, '');
     assert.equal(dispatched.length, 1);
     assert.equal(dispatched[0].type, SESSION_READY_EVENT);
 });
 
 /**
- * El idioma es el único campo que viaja fuera del sobre, en claro, porque el servidor tiene que
- * resolverlo para pintar el panel (ADR 0007). `saveSettings` lo recibía de la pantalla de perfil y
- * lo dejaba caer: el cuerpo solo llevaba el sobre, así que elegir idioma no cambiaba nada y el
- * formulario respondía correctamente. Sin esta prueba el fallo es invisible.
+ * On an F5 inside the panel, `app.js` calls `bootstrapSession()` twice: once through the
+ * `readyState` branch and once through `livewire:navigated`, which also fires on the initial load.
+ * Without the in-flight guard both calls found no key and both fired `POST /session-secret`, and
+ * with `SESSION_DRIVER=database` the second one waits on the session lock of the first: a whole
+ * round trip added to the slowest path of a reload, for a request whose answer was already coming.
  */
-test('saveSettings envía el idioma fuera del sobre cuando se le pasa', async () => {
+test('two simultaneous bootstrapSession share one single session-secret request', async () => {
+    installFakeDom({
+        metas: {
+            'phr-user-id': USER_ID,
+            'phr-login-url': '/login',
+            'phr-session-secret-url': '/phr/auth/session-secret',
+            'csrf-token': 'token',
+        },
+    });
+
+    const requests = [];
+
+    globalThis.fetch = async (url) => {
+        requests.push(url);
+
+        /** 401 is the normal answer when the session no longer holds the secret: it ends at the login. */
+        return { ok: false, status: 401, json: async () => ({}) };
+    };
+
+    await Promise.all([bootstrapSession(), bootstrapSession()]);
+
+    assert.deepEqual(requests, ['/phr/auth/session-secret']);
+    assert.equal(globalThis.window.location.href, '/login');
+});
+
+/** And a later navigation, with the key still missing, does get a fresh attempt. */
+test('the guard is released when the bootstrap ends, so a later navigation tries again', async () => {
+    installFakeDom({
+        metas: {
+            'phr-user-id': USER_ID,
+            'phr-login-url': '/login',
+            'phr-session-secret-url': '/phr/auth/session-secret',
+            'csrf-token': 'token',
+        },
+    });
+
+    const requests = [];
+
+    globalThis.fetch = async (url) => {
+        requests.push(url);
+
+        return { ok: false, status: 401, json: async () => ({}) };
+    };
+
+    await bootstrapSession();
+    await bootstrapSession();
+
+    assert.equal(requests.length, 2);
+});
+
+/**
+ * The language is the only field that travels outside the envelope, in the clear, because the
+ * server has to resolve it to paint the panel (ADR 0007). `saveSettings` used to receive it from
+ * the profile screen and drop it: the body only carried the envelope, so choosing a language
+ * changed nothing and the form answered correctly. Without this test the failure is invisible.
+ */
+test('saveSettings sends the language outside the envelope when it is passed', async () => {
     installFakeDom();
     const requests = installFakeFetch();
     adoptMasterKey(testMasterKey(), USER_ID);
@@ -308,10 +365,10 @@ test('saveSettings envía el idioma fuera del sobre cuando se le pasa', async ()
 });
 
 /**
- * Las pantallas que no tocan el idioma no deben reescribirlo: omitirlo del cuerpo es lo que
- * distingue «no lo cambio» de «ponlo a vacío».
+ * The screens that do not touch the language must not rewrite it: leaving it out of the body is
+ * what tells "I am not changing it" from "set it to empty".
  */
-test('saveSettings omite el idioma cuando no se le pasa', async () => {
+test('saveSettings leaves the language out when it is not passed', async () => {
     installFakeDom();
     const requests = installFakeFetch();
     adoptMasterKey(testMasterKey(), USER_ID);

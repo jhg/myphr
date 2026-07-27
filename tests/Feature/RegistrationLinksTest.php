@@ -19,7 +19,7 @@ uses(RefreshDatabase::class);
  */
 
 /**
- * Devuelve el servicio y el token en claro de un enlace recién emitido.
+ * Returns the service and the plaintext token of a freshly issued link.
  *
  * @return array{0: RegistrationLinks, 1: string, 2: User}
  */
@@ -32,8 +32,8 @@ function issuedLink(?User $user = null): array
     return [$links, Str::after($url, '#'), $user];
 }
 
-/** Spec 0001 §3.3: solo se persiste el hash, y la TTL es de 24 horas. */
-it('emite un enlace guardando solo el hash del token y con 24 horas de caducidad', function (): void {
+/** Spec 0001 §3.3: only the hash is persisted, and the TTL is 24 hours. */
+it('issues a link storing only the token hash and with a 24 hour expiry', function (): void {
     $this->freezeTime();
 
     $user = User::factory()->create();
@@ -53,8 +53,8 @@ it('emite un enlace guardando solo el hash del token y con 24 horas de caducidad
         ->and($link->token_hash)->toBe(hash('sha256', $token, true));
 });
 
-/** El token en claro no aparece en ninguna columna. */
-it('no persiste el token en claro', function (): void {
+/** The plaintext token appears in no column. */
+it('does not persist the plaintext token', function (): void {
     [, $token] = issuedLink();
 
     $row = (array) DB::table('user_registration_links')->sole();
@@ -65,7 +65,7 @@ it('no persiste el token en claro', function (): void {
 });
 
 /** Spec 0001 §5, paso 4: validar no consume. */
-it('valida sin consumir', function (): void {
+it('validates without consuming', function (): void {
     [$links, $token, $user] = issuedLink();
 
     $link = $links->validate($token);
@@ -75,7 +75,7 @@ it('valida sin consumir', function (): void {
         ->and($links->validate($token)->id)->toBe($link->id);
 });
 
-it('consume el enlace marcando la fecha', function (): void {
+it('consumes the link by marking the date', function (): void {
     [$links, $token] = issuedLink();
 
     $link = $links->consume($token);
@@ -84,7 +84,7 @@ it('consume el enlace marcando la fecha', function (): void {
         ->and(UserRegistrationLink::query()->sole()->consumed_at)->not->toBeNull();
 });
 
-it('rechaza un enlace ya consumido, tanto al validar como al volver a consumir', function (): void {
+it('rejects an already consumed link, both when validating and when consuming again', function (): void {
     [$links, $token] = issuedLink();
 
     $links->consume($token);
@@ -93,7 +93,7 @@ it('rechaza un enlace ya consumido, tanto al validar como al volver a consumir',
         ->and(fn () => $links->consume($token))->toThrow(InvalidRegistrationLinkException::class);
 });
 
-it('rechaza un enlace caducado', function (): void {
+it('rejects an expired link', function (): void {
     [$links, $token] = issuedLink();
 
     UserRegistrationLink::query()->sole()->forceFill(['expires_at' => now()->subSecond()])->save();
@@ -102,8 +102,8 @@ it('rechaza un enlace caducado', function (): void {
         ->and(fn () => $links->consume($token))->toThrow(InvalidRegistrationLinkException::class);
 });
 
-/** `docs/OPAQUE.md` §13.3: los tres motivos son indistinguibles. */
-it('da el mismo error para inexistente, caducado y consumido', function (): void {
+/** `docs/OPAQUE.md` §13.3: the three reasons are indistinguishable. */
+it('gives the same error for non-existent, expired and consumed', function (): void {
     $links = app(RegistrationLinks::class);
 
     [, $consumed] = issuedLink();
@@ -136,13 +136,12 @@ it('da el mismo error para inexistente, caducado y consumido', function (): void
 });
 
 /**
- * Spec 0001 §4.2: el consumo es una escritura condicional decidida por filas afectadas.
+ * Spec 0001 §4.2: consumption is a conditional write decided by affected rows.
  *
- * El gancho `beforeExecuting` simula la petición rival que gana la carrera justo antes
- * de nuestro `UPDATE`: la nuestra debe afectar a cero filas y fallar, sin pisar la fecha
- * que escribió la otra.
+ * The `beforeExecuting` hook simulates the rival request that wins the race just before our
+ * `UPDATE`: ours must affect zero rows and fail, without overwriting the date the other one wrote.
  */
-it('es atómico: si otra petición consume el enlace justo antes, la nuestra falla', function (): void {
+it('is atomic: if another request consumes the link just before, ours fails', function (): void {
     [$links, $token] = issuedLink();
 
     $rivalConsumedAt = now()->subMinute();
@@ -166,14 +165,14 @@ it('es atómico: si otra petición consume el enlace justo antes, la nuestra fal
         ->toBe($rivalConsumedAt->format('Y-m-d H:i:s'));
 });
 
-/** Spec 0001 §11: `lockForUpdate()` es un no-op en SQLite, así que está prohibido. */
-it('no usa lockForUpdate', function (): void {
+/** Spec 0001 §11: `lockForUpdate()` is a no-op on SQLite, so it is forbidden. */
+it('does not use lockForUpdate', function (): void {
     expect(file_get_contents(app_path('Provisioning/RegistrationLinks.php')))
         ->not->toContain('->lockForUpdate(');
 });
 
-/** Spec 0001 §3.4: reemitir sobre una cuenta con acceso exige teclear su email. */
-it('exige confirmación para reemitir sobre una cuenta ya registrada', function (): void {
+/** Spec 0001 §3.4: reissuing on an account with access requires typing its email. */
+it('requires confirmation to reissue on an already registered account', function (): void {
     $user = User::factory()->registered()->create();
     $links = app(RegistrationLinks::class);
 
@@ -191,8 +190,8 @@ it('exige confirmación para reemitir sobre una cuenta ya registrada', function 
         ->and(UserRegistrationLink::query()->count())->toBe(1);
 });
 
-/** La guardia también salta con un sobre vigente aunque el registro OPAQUE no esté completo. */
-it('exige confirmación si la cuenta conserva un sobre vigente de clave maestra', function (): void {
+/** The guard also fires with a current envelope even if the OPAQUE registration is not complete. */
+it('requires confirmation if the account still has a current master key envelope', function (): void {
     $user = User::factory()->create();
     UserMasterKeyEnvelope::create(['user_id' => $user->id, 'envelope' => 'v1.sobre']);
 
@@ -200,8 +199,8 @@ it('exige confirmación si la cuenta conserva un sobre vigente de clave maestra'
         ->toThrow(RegistrationLinkReissueRequiresConfirmationException::class);
 });
 
-/** Una cuenta sin acceso todavía no necesita confirmación ninguna. */
-it('no pide confirmación para una cuenta sin registro ni sobre', function (): void {
+/** An account without access does not need any confirmation yet. */
+it('asks for no confirmation for an account with no registration and no envelope', function (): void {
     $user = User::factory()->create();
 
     app(RegistrationLinks::class)->issueFor($user);
@@ -210,8 +209,8 @@ it('no pide confirmación para una cuenta sin registro ni sobre', function (): v
     expect(UserRegistrationLink::query()->count())->toBe(2);
 });
 
-/** Un sobre retirado no deja acceso: no bloquea la reemisión. */
-it('no pide confirmación si el único sobre está retirado', function (): void {
+/** A retired envelope grants no access: it does not block a reissue. */
+it('asks for no confirmation if the only envelope is retired', function (): void {
     $user = User::factory()->create();
     UserMasterKeyEnvelope::create(['user_id' => $user->id, 'envelope' => 'v1.sobre'])->retire();
 

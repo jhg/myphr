@@ -1,12 +1,12 @@
 /**
- * Comprobaciones de `health/chartLegend.js`, la leyenda que las tres pantallas con gráfica pintan
- * en HTML **fuera** del `<canvas>` (ver el JSDoc del módulo para el porqué).
+ * Checks of `health/chartLegend.js`, the legend the three screens with a chart paint in HTML
+ * **outside** the `<canvas>` (see the module JSDoc for the why).
  *
- * Como `sessionBootstrap.test.mjs`, este fichero monta un `document` mínimo: lo justo que el módulo
- * toca (`createElement`, `createElementNS`, `getElementById`) y nada más. No se monta Chart.js, ni
- * hace falta: `legendItems` es pura y `renderLegend` solo escribe DOM.
+ * Like `sessionBootstrap.test.mjs`, this file mounts a minimal `document`: exactly what the module
+ * touches (`createElement`, `createElementNS`, `getElementById`) and nothing else. Chart.js is not
+ * mounted, and it does not need to be: `legendItems` is pure and `renderLegend` only writes DOM.
  *
- * Corredor incorporado de Node, como el resto de `tests/js`.
+ * Node's built-in runner, like the rest of `tests/js`.
  *
  *     npm test
  */
@@ -16,7 +16,7 @@ import { afterEach, beforeEach, test } from 'node:test';
 
 import { legendElementFor, legendItems, renderLegend } from '../../resources/js/health/chartLegend.js';
 
-/** Nodo de mentira con lo justo que usa el módulo. */
+/** Fake node with exactly what the module uses. */
 class FakeElement {
     constructor(tagName, namespace = null) {
         this.tagName = tagName;
@@ -53,14 +53,14 @@ class FakeElement {
         }
     }
 
-    /** `after` inserta como hermano: aquí basta con anotarlo en el padre. */
+    /** `after` inserts as a sibling: here noting it on the parent is enough. */
     after(node) {
         if (this.parentElement !== null) {
             this.parentElement.appendChild(node);
         }
     }
 
-    /** Todos los descendientes con una etiqueta dada, en orden. */
+    /** All descendants with a given tag, in order. */
     find(tagName) {
         return this.children.flatMap((child) => [
             ...(child.tagName === tagName ? [child] : []),
@@ -88,7 +88,7 @@ afterEach(() => {
 
 // --- legendItems --------------------------------------------------------------------------------
 
-test('legendItems: conserva el orden y traslada color, trazo y forma de cada serie', () => {
+test('legendItems: keeps the order and carries over colour, dash and shape of each series', () => {
     const items = legendItems([
         { label: 'Capilar', color: '#0077b6', borderDash: [], pointStyle: 'circle' },
         { label: 'Intersticial', color: '#005280', borderDash: [6, 4], pointStyle: 'triangle' },
@@ -100,17 +100,17 @@ test('legendItems: conserva el orden y traslada color, trazo y forma de cada ser
     ]);
 });
 
-test('legendItems: una serie sin trazo ni forma declarados cae en línea continua y círculo', () => {
+test('legendItems: a series with no declared dash or shape falls back to a solid line and a circle', () => {
     assert.deepEqual(
         legendItems([{ label: 'Rápida', color: '#0077b6' }]),
         [{ text: 'Rápida', color: '#0077b6', dash: [], shape: 'circle', line: true }],
     );
 });
 
-test('legendItems: una serie declarada sin línea no la lleva en la leyenda', () => {
+test('legendItems: a series declared without a line does not carry one in the legend', () => {
     /**
-     * Las marcas de comida e insulina de la curva de glucemia son sucesos sueltos, no una serie
-     * continua: un trazo en su entrada de leyenda afirmaría una línea que la gráfica no dibuja.
+     * The meal and insulin markers of the glucose curve are loose events, not a continuous series:
+     * a stroke in their legend entry would assert a line the chart does not draw.
      */
     assert.deepEqual(
         legendItems([{ label: 'Comidas', color: '#059669', pointStyle: 'rectRot', lineless: true }]),
@@ -118,7 +118,7 @@ test('legendItems: una serie declarada sin línea no la lleva en la leyenda', ()
     );
 });
 
-test('legendItems: copia el trazo, no lo comparte con el descriptor de la serie', () => {
+test('legendItems: it copies the dash, it does not share it with the series descriptor', () => {
     const dash = [6, 4];
     const [item] = legendItems([{ label: 'Diastólica', color: '#005280', borderDash: dash }]);
 
@@ -129,7 +129,7 @@ test('legendItems: copia el trazo, no lo comparte con el descriptor de la serie'
 
 // --- renderLegend -------------------------------------------------------------------------------
 
-test('renderLegend: una entrada por serie, con su texto y su marca de forma', () => {
+test('renderLegend: one entry per series, with its text and its shape marker', () => {
     const list = new FakeElement('ul');
 
     renderLegend(list, legendItems([
@@ -145,14 +145,14 @@ test('renderLegend: una entrada por serie, con su texto y su marca de forma', ()
     );
 
     /**
-     * Do's #3: dos series del MISMO color se distinguen por la forma. Si esto deja de cumplirse, la
-     * leyenda vuelve a depender solo del color, que es el defecto que este módulo corrige.
+     * Do's #3: two series of the SAME colour are told apart by shape. If this stops holding, the
+     * legend depends on colour alone again, which is the defect this module fixes.
      */
     assert.deepEqual(list.children.map((entry) => entry.find('circle').length > 0), [true, false]);
     assert.deepEqual(list.children.map((entry) => entry.find('polygon').length > 0), [false, true]);
 });
 
-test('renderLegend: el patrón de trazo de la serie llega a la línea de la muestra', () => {
+test('renderLegend: the dash pattern of the series reaches the line of the sample', () => {
     const list = new FakeElement('ul');
 
     renderLegend(list, legendItems([
@@ -167,7 +167,7 @@ test('renderLegend: el patrón de trazo de la serie llega a la línea de la mues
     assert.equal(lines[1].getAttribute('stroke'), '#005280');
 });
 
-test('renderLegend: la tinta va por su papel, nunca por un tono de la rampa', () => {
+test('renderLegend: the ink goes by its role, never by a shade of the ramp', () => {
     const list = new FakeElement('ul');
 
     renderLegend(list, legendItems([{ label: 'Capilar', color: '#0077b6' }]));
@@ -180,7 +180,7 @@ test('renderLegend: la tinta va por su papel, nunca por un tono de la rampa', ()
     );
 });
 
-test('renderLegend: repintar sustituye, no acumula (el historial se repinta tras cada guardado)', () => {
+test('renderLegend: repainting replaces, it does not stack (the history repaints after every save)', () => {
     const list = new FakeElement('ul');
     const series = [{ label: 'Capilar', color: '#0077b6' }];
 
@@ -190,7 +190,7 @@ test('renderLegend: repintar sustituye, no acumula (el historial se repinta tras
     assert.equal(list.children.length, 1);
 });
 
-test('renderLegend: sin series deja el nodo vacío, no una leyenda huérfana', () => {
+test('renderLegend: with no series it leaves the node empty, not an orphan legend', () => {
     const list = new FakeElement('ul');
 
     renderLegend(list, legendItems([{ label: 'Capilar', color: '#0077b6' }]));
@@ -199,21 +199,21 @@ test('renderLegend: sin series deja el nodo vacío, no una leyenda huérfana', (
     assert.deepEqual(list.children, []);
 });
 
-test('renderLegend: sin nodo donde pintar no revienta (la plantilla puede no haberlo declarado)', () => {
+test('renderLegend: with no node to paint in it does not blow up (the template may not have declared it)', () => {
     assert.doesNotThrow(() => renderLegend(undefined, legendItems([{ label: 'Capilar', color: '#0077b6' }])));
     assert.doesNotThrow(() => renderLegend(null, []));
 });
 
 // --- legendElementFor ---------------------------------------------------------------------------
 
-test('legendElementFor: si el nodo ya existe con ese id, se reutiliza y no se crea otro', () => {
+test('legendElementFor: if the node already exists with that id, it is reused and no other is created', () => {
     const declared = new FakeElement('ul');
     byId.set('glucose-chart-legend', declared);
 
     assert.equal(legendElementFor(new FakeElement('canvas'), 'glucose-chart-legend'), declared);
 });
 
-test('legendElementFor: sin nodo declarado lo crea fuera del contenedor del lienzo', () => {
+test('legendElementFor: with no declared node it creates one outside the canvas container', () => {
     const container = new FakeElement('div');
     const canvas = container.appendChild(new FakeElement('canvas'));
     const region = new FakeElement('section');
@@ -224,13 +224,13 @@ test('legendElementFor: sin nodo declarado lo crea fuera del contenedor del lien
     assert.equal(list.tagName, 'ul');
     assert.equal(list.id, 'glucose-chart-legend');
     /**
-     * Hermano del contenedor de altura fija, nunca dentro: con `maintainAspectRatio: false`
-     * Chart.js exige que el padre del `<canvas>` sea suyo en exclusiva.
+     * Sibling of the fixed-height container, never inside: with `maintainAspectRatio: false`
+     * Chart.js demands that the parent of the `<canvas>` be exclusively its own.
      */
     assert.equal(list.parentElement, region);
 });
 
-test('legendElementFor: el nodo creado se añade al aria-describedby del lienzo, sin pisar el pie', () => {
+test('legendElementFor: the created node is added to the aria-describedby of the canvas, without treading on the caption', () => {
     const container = new FakeElement('div');
     const canvas = container.appendChild(new FakeElement('canvas'));
     new FakeElement('section').appendChild(container);
@@ -241,7 +241,7 @@ test('legendElementFor: el nodo creado se añade al aria-describedby del lienzo,
     assert.equal(canvas.getAttribute('aria-describedby'), 'glucose-chart-caption glucose-chart-legend');
 });
 
-test('legendElementFor: no duplica el nodo entre repintados', () => {
+test('legendElementFor: it does not duplicate the node between repaints', () => {
     const container = new FakeElement('div');
     const canvas = container.appendChild(new FakeElement('canvas'));
     const region = new FakeElement('section');

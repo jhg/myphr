@@ -50,7 +50,7 @@ dataset('wycheproof hkdf-sha512 invalid', function (): iterable {
     }
 });
 
-it('carga los 83 vectores de Wycheproof', function (): void {
+it('loads the 83 Wycheproof vectors', function (): void {
     expect(wycheproofHkdfSha512Vectors())->toHaveCount(83);
 });
 
@@ -92,7 +92,7 @@ it('defines Extract as HMAC-SHA-512 with the salt as key, per RFC 5869 §2.2', f
         ->toBe(hash_hmac('sha512', $ikm, $salt, true));
 });
 
-it('coincide con hash_hkdf() de PHP en longitudes y contextos variados', function (): void {
+it('agrees with PHP hash_hkdf() across assorted lengths and contexts', function (): void {
     // Cross-check, not an official vector: `hash_hkdf()` implements RFC 5869.
     foreach ([1, 31, 64, 65, 128, 200, 1024, 4096] as $length) {
         $ikm = random_bytes(32);
@@ -124,7 +124,7 @@ it('emits exactly the maximum allowed length', function (): void {
         ->toBe(255 * 64);
 });
 
-it('rechaza longitudes fuera de rango', function (int $length): void {
+it('rejects lengths out of range', function (int $length): void {
     $prk = HkdfSha512::extract('', random_bytes(32));
 
     expect(fn (): string => HkdfSha512::expand($prk, '', $length))

@@ -1,43 +1,43 @@
 /**
- * Componente Alpine de la pantalla de compartición (ADR 0011), el lado de quien es dueño de los
- * datos: elegir rango y tipos, generar el recorte, enseñar el enlace, el PIN y el QR, y listar y
- * revocar lo que sigue vivo.
+ * Alpine component of the sharing screen (ADR 0011), the side of whoever owns the data: pick
+ * range and types, generate the clipping, show the link, the PIN and the QR, and list and revoke
+ * what is still alive.
  *
- * El contrato del DOM lo fija `resources/views/phr/pages/sharing.blade.php`. Como en el resto del
- * panel: nada de `wire:model` y ningún sobre en una propiedad de Livewire (ADR 0002). Aquí hay
- * además un motivo extra y más duro: el paquete lleva prefijo `s1.` y los dos guardarraíles del
- * ADR 0002 —`livewirePayloadGuard.js` en el cliente y `EncryptedPayloadGuardHook` en el servidor—
- * abortan cualquier cadena de más de 256 caracteres que no empiece por `v1.`. Un paquete que
- * viajase por Livewire lo abortarían los dos. Por eso sube por `POST /phr/shares`, el endpoint HTTP
- * propio que el propio ADR 0002 reserva para los blobs grandes, mientras que **leer** los eventos
- * sigue yendo por `$wire.fetchEvents`, que es la vía de siempre y devuelve sobres `v1.`.
+ * The DOM contract is fixed by `resources/views/phr/pages/sharing.blade.php`. As in the rest of
+ * the panel: no `wire:model` and no envelope in a Livewire property (ADR 0002). Here there is also
+ * an extra and harder reason: the package carries the `s1.` prefix and both ADR 0002 guard rails
+ * —`livewirePayloadGuard.js` on the client and `EncryptedPayloadGuardHook` on the server— abort
+ * any string longer than 256 characters that does not start with `v1.`. A package travelling over
+ * Livewire would be aborted by both. That is why it goes up through `POST /phr/shares`, the
+ * dedicated HTTP endpoint ADR 0002 itself reserves for large blobs, while **reading** the events
+ * still goes through `$wire.fetchEvents`, the usual path, which returns `v1.` envelopes.
  *
- * **Lo que el servidor ve de todo esto**: un blob, dos fechas y un identificador. Ni el rango, ni
- * los tipos, ni cuántos eventos van dentro. El rango y los tipos viajan cifrados dos veces, en el
- * paquete (para el profesional) y en el descriptor (para esta misma pantalla, que se pinta
- * descifrándolo). El servidor sí sabe **quién** comparte, **cuándo** y **cuántas veces**, y la
- * pantalla lo dice sin adornos en vez de dejarlo en la letra pequeña de un ADR.
+ * **What the server sees of all this**: a blob, two dates and an identifier. Neither the range,
+ * nor the types, nor how many events go inside. The range and the types travel encrypted twice, in
+ * the package (for the professional) and in the descriptor (for this very screen, which paints
+ * itself by decrypting it). The server does know **who** shares, **when** and **how many times**,
+ * and the screen says so plainly instead of leaving it in the fine print of an ADR.
  *
- * **El orden de las operaciones importa** y no es negociable: primero se descifran los eventos
- * elegidos, luego se cifra el paquete con `CK`, luego se estira el PIN con Argon2id, y solo al final
- * sube todo. Estirar el PIN antes de saber si el paquete cabe regalaría varios segundos de espera
- * para acabar en un error de tamaño.
+ * **The order of the operations matters** and is not negotiable: first the chosen events are
+ * decrypted, then the package is encrypted with `CK`, then the PIN is stretched with Argon2id, and
+ * only at the end does everything go up. Stretching the PIN before knowing whether the package
+ * fits would give away several seconds of waiting only to end in a size error.
  *
- * **Una compartición incompleta es peor que ninguna.** Si el recorrido de páginas se queda corto, la
- * generación **falla**; no se comparte lo que se pudo bajar con un aviso al lado. Es el mismo
- * argumento con el que el ADR descarta trocear el paquete: un historial coherente al que le falta la
- * semana de las hipoglucemias no se distingue de uno completo, y quien lo lee concluye que esa
- * semana no pasó nada. Por el mismo motivo, un evento que no descifra aborta la generación en vez de
- * quedarse fuera en silencio (ADR 0004: un fallo de descifrado es siempre visible).
+ * **An incomplete share is worse than none.** If the page walk falls short, the generation
+ * **fails**; what could be downloaded is not shared with a warning next to it. It is the same
+ * argument with which the ADR rules out chunking the package: a coherent history missing the week
+ * of the hypoglycaemias cannot be told from a complete one, and whoever reads it concludes nothing
+ * happened that week. For the same reason, an event that does not decrypt aborts the generation
+ * instead of being left out in silence (ADR 0004: a decryption failure is always visible).
  *
- * **La vista previa enseña el recorte con la misma pantalla del profesional** y no con una versión
- * resumida: monta `reader/clippingExplorer.js` sobre el **mismo** cuerpo de paquete que se cifraría
- * al generar ({@see buildSharePackageBody}). Es la única forma de que «lo que vas a enviar» sea
- * literalmente lo que la otra persona verá, y no cuesta ninguna exposición nueva: son eventos que ya
- * están descifrados en este navegador, no sube nada y todavía no existe ningún enlace.
+ * **The preview shows the clipping with the same screen as the professional** and not with a
+ * summarized version: it mounts `reader/clippingExplorer.js` over the **same** package body that
+ * would be encrypted on generating ({@see buildSharePackageBody}). It is the only way for "what
+ * you are about to send" to be literally what the other person will see, and it costs no new
+ * exposure: they are events already decrypted in this browser, nothing goes up and no link exists yet.
  *
- * Las funciones exportadas antes de `sharePage()` son la lógica pura del componente, probable sin
- * Alpine ni DOM (`tests/js/sharePage.test.mjs`).
+ * The functions exported before `sharePage()` are the pure logic of the component, testable
+ * without Alpine and without a DOM (`tests/js/sharePage.test.mjs`).
  */
 
 import { renderSVG } from 'uqr';
@@ -67,13 +67,13 @@ import { progressMixin } from '../auth/progress.js';
 import { openShareDescriptor, sealShareDescriptor } from './shareDescriptor.js';
 
 /**
- * Tipos clínicos que se pueden compartir, en el orden en que se ofrecen.
+ * Clinical types that can be shared, in the order they are offered.
  *
- * Son los valores del campo `type` del contenido de un evento (ADR 0006), no etiquetas: el servidor
- * no puede filtrar por tipo, así que filtrar es exactamente comparar esta cadena con la que sale de
- * descifrar cada sobre. Las etiquetas traducidas las pinta el servidor desde `Sharing::catalog()`,
- * y `tests/Feature/SharingPageTest.php` comprueba que las dos listas siguen coincidiendo: una
- * pantalla que ofrece un tipo que este módulo no reconoce genera recortes vacíos sin decirlo.
+ * They are the values of the `type` field of the content of an event (ADR 0006), not labels: the
+ * server cannot filter by type, so filtering is exactly comparing this string with the one that
+ * comes out of decrypting each envelope. The translated labels are painted by the server from
+ * `Sharing::catalog()`, and `tests/Feature/SharingPageTest.php` checks that both lists still
+ * match: a screen offering a type this module does not know generates empty clippings without saying so.
  *
  * @type {Readonly<list<string>>}
  */
@@ -87,21 +87,21 @@ export const SHAREABLE_TYPES = Object.freeze([
 ]);
 
 /**
- * Tamaño de página del recorrido de eventos y tope de páginas.
+ * Page size of the event walk and cap on pages.
  *
- * El producto (5.000 eventos) es el techo duro de un recorte. No sale de ningún cálculo de bytes
- * —de eso ya se encarga la escalera de relleno, que rechaza lo que no cabe en 4 MiB—, sino del
- * tiempo: cinco mil sobres son varios minutos de descifrado en un móvil, y a partir de ahí lo
- * honesto es pedir un rango más corto en vez de dejar la pestaña colgada.
+ * The product (5,000 events) is the hard ceiling of a clipping. It comes from no byte computation
+ * —the padding ladder already takes care of that, rejecting whatever does not fit in 4 MiB— but
+ * from time: five thousand envelopes are several minutes of decryption on a phone, and past that
+ * the honest thing is to ask for a shorter range instead of leaving the tab hanging.
  */
 const FETCH_PAGE_SIZE = 250;
 const MAX_FETCH_PAGES = 20;
 
 /**
- * Tramos de la barra de progreso.
+ * Steps of the progress bar.
  *
- * El estiramiento del PIN se lleva el tramo largo porque es lo que de verdad tarda: Argon2id con
- * los parámetros del KSF de OPAQUE son entre uno y varios segundos, medidos (ADR 0011).
+ * The PIN stretching takes the long step because it is what really takes time: Argon2id with the
+ * OPAQUE KSF parameters is between one and several seconds, measured (ADR 0011).
  */
 const PROGRESS_FETCH = 0.15;
 const PROGRESS_DECRYPT = 0.35;
@@ -111,27 +111,27 @@ const PROGRESS_PIN_END = 0.9;
 const PROGRESS_UPLOAD = 0.95;
 
 /**
- * Lado mínimo del QR en píxeles CSS y borde en módulos (ADR 0011: corrección M, lado mínimo de
- * 400 px).
+ * Minimum side of the QR in CSS pixels and border in modules (ADR 0011: correction M, minimum side
+ * of 400 px).
  *
- * El borde es de cuatro módulos y no del que trae `uqr` por defecto (uno): la «zona tranquila» que
- * el estándar exige son cuatro módulos, y sin ella muchos lectores fallan cuando el QR queda pegado
- * a un borde de contraste, que es justo lo que pasa en una tarjeta clara.
+ * The border is four modules and not the one `uqr` ships by default (one): the "quiet zone" the
+ * standard demands is four modules, and without it many readers fail when the QR sits against a
+ * contrasting edge, which is exactly what happens on a light card.
  */
 export const QR_MIN_SIDE_PX = 400;
 export const QR_BORDER_MODULES = 4;
 
-/** Selección inicial de tipos: todos marcados. @returns {Record<string, boolean>} */
+/** Initial type selection: all ticked. @returns {Record<string, boolean>} */
 export function defaultTypeSelection() {
     return Object.fromEntries(SHAREABLE_TYPES.map((type) => [type, true]));
 }
 
 /**
- * Parte la selección en las dos listas que el ADR exige que viajen dentro del paquete.
+ * Splits the selection into the two lists the ADR demands travel inside the package.
  *
- * **Los excluidos van escritos, no implícitos.** «No hay comidas» y «las comidas no se
- * compartieron» son dos cosas distintas y la diferencia es clínica: una ausencia se lee como un
- * cero. El profesional tiene que poder ver que faltan porque no se enviaron.
+ * **The excluded ones are written out, not implicit.** "There are no meals" and "the meals were
+ * not shared" are two different things and the difference is clinical: an absence reads as a zero.
+ * The professional has to be able to see they are missing because they were not sent.
  *
  * @param {Record<string, boolean>} selection
  * @returns {{included: list<string>, excluded: list<string>}}
@@ -144,18 +144,18 @@ export function partitionTypes(selection) {
 }
 
 /**
- * Instante de caducidad de un recorte, a partir del TTL elegido.
+ * Expiry instant of a clipping, out of the chosen TTL.
  *
- * Lo calcula el cliente y no el servidor porque entra en la derivación de `wrapKey` y en el dato
- * asociado del envoltorio (`canonicalDate(expiresAt)`), así que hace falta **antes** de cifrar. El
- * servidor solo comprueba que corresponde a una de las tres opciones de la lista cerrada
- * (`App\Sharing\ShareTtl`), con quince minutos de holgura para el Argon2id y la subida.
+ * The client computes it and not the server because it enters the derivation of `wrapKey` and the
+ * associated data of the wrapper (`canonicalDate(expiresAt)`), so it is needed **before**
+ * encrypting. The server only checks that it matches one of the three options of the closed list
+ * (`App\Sharing\ShareTtl`), with fifteen minutes of slack for the Argon2id and the upload.
  *
- * @param {string} token Token del TTL (`1h`, `24h`, `7d`).
- * @param {list<{token: string, hours: number}>} catalog Lista cerrada que pinta el servidor.
+ * @param {string} token TTL token (`1h`, `24h`, `7d`).
+ * @param {list<{token: string, hours: number}>} catalog Closed list the server paints.
  * @param {Date} [referenceInstant]
  * @returns {Date}
- * @throws {ShareScreenError} Si el token no está en la lista.
+ * @throws {ShareScreenError} If the token is not in the list.
  */
 export function expiryFor(token, catalog, referenceInstant = new Date()) {
     const option = (catalog ?? []).find((candidate) => candidate.token === token);
@@ -168,16 +168,16 @@ export function expiryFor(token, catalog, referenceInstant = new Date()) {
 }
 
 /**
- * Cuerpo en claro del paquete (ADR 0011): rango exacto, instante de generación, número de eventos y
- * las dos listas de tipos.
+ * Package body in the clear (ADR 0011): exact range, generation instant, event count and the two
+ * type lists.
  *
- * `eventCount` no es redundante con `events.length`: es el compromiso que `assertShareBody()`
- * comprueba al abrir, y es lo que sustituye al manifiesto que haría falta si el paquete se
- * trocease.
+ * `eventCount` is not redundant with `events.length`: it is the commitment `assertShareBody()`
+ * checks on opening, and it is what replaces the manifest that would be needed if the package were
+ * chunked.
  *
  * @param {object} params
- * @param {list<{occurredAt: string, content: object}>} params.events Eventos ya descifrados y
- *        filtrados, del más reciente al más antiguo.
+ * @param {list<{occurredAt: string, content: object}>} params.events Events already decrypted and
+ *        filtered, from most recent to oldest.
  * @param {list<string>} params.included
  * @param {list<string>} params.excluded
  * @param {{from: string|null, to: string|null}} params.range
@@ -197,15 +197,15 @@ export function buildSharePackageBody({ events, included, excluded, range, gener
 }
 
 /**
- * Contenido del descriptor: lo mismo que el paquete cuenta de sí mismo, **sin los eventos** y con
- * `CK` dentro.
+ * Content of the descriptor: the same the package says about itself, **without the events** and
+ * with `CK` inside.
  *
- * `CK` vive aquí y en ningún otro sitio del servidor, y es lo que permitiría re-armar un enlace sin
- * rehacer el recorte. Va en base64url porque el descriptor es JSON.
+ * `CK` lives here and nowhere else on the server, and it is what would allow rebuilding a link
+ * without redoing the clipping. It goes in base64url because the descriptor is JSON.
  *
  * @param {object} params
  * @param {Uint8Array} params.contentKey
- * @param {object} params.body Cuerpo del paquete, del que se copian rango, tipos y fechas.
+ * @param {object} params.body Package body, from which range, types and dates are copied.
  * @param {Date|number|string} params.expiresAt
  * @returns {object}
  */
@@ -223,18 +223,18 @@ export function buildShareDescriptor({ contentKey, body, expiresAt }) {
 }
 
 /**
- * URL completa del enlace, con `S` y el instante de generación en el fragmento.
+ * Full URL of the link, with `S` and the generation instant in the fragment.
  *
- * El fragmento **no viaja al servidor**: es la mitad que hace que un volcado de la base de datos no
- * baste para leer el recorte. Sí acaba en el historial del navegador del profesional y en cualquier
- * captura que haga, y eso la pantalla lo dice.
+ * The fragment **does not travel to the server**: it is the half that makes a database dump not
+ * enough to read the clipping. It does end up in the professional's browser history and in any
+ * screenshot they take, and the screen says so.
  *
- * El instante de generación va ahí, y no lo pone el servidor, porque el lector lo necesita para
- * reconstruir el dato asociado del paquete **antes** de descifrar y ninguna columna lo guarda: el
- * porqué completo está en `SEND_FRAGMENT_LENGTH` (`crypto/shareLink.js`).
+ * The generation instant travels there, and is not set by the server, because the reader needs it
+ * to rebuild the associated data of the package **before** decrypting and no column stores it: the
+ * full why is in `SEND_FRAGMENT_LENGTH` (`crypto/shareLink.js`).
  *
  * @param {object} params
- * @param {string} params.template URL de la página del lector con `{link}` por rellenar.
+ * @param {string} params.template URL of the reader page with `{link}` to fill in.
  * @param {string} params.linkId
  * @param {Uint8Array} params.sendKey
  * @param {Date|number} params.generatedAt
@@ -245,40 +245,40 @@ export function shareUrlFor({ template, linkId, sendKey, generatedAt }) {
 }
 
 /**
- * SVG del QR del enlace **completo**, fragmento incluido: un QR con la mitad de la URL no abre
- * nada, y el fragmento es justo la mitad que los reescritores de URL del correo sanitario se comen,
- * que es la razón de ofrecer el QR.
+ * SVG of the QR of the **full** link, fragment included: a QR with half the URL opens nothing, and
+ * the fragment is exactly the half the URL rewriters of healthcare mail eat, which is the reason
+ * for offering the QR.
  *
- * Corrección de errores M (ADR 0011): aguanta un 15 % de daño, que es lo que cubre un reflejo o un
- * dedo en la pantalla, sin inflar el número de módulos como haría H. Con una URL de ~110 caracteres
- * salen 43x43 módulos (versión 6), y la capacidad de esa versión en modo byte son 134 bytes: queda
- * holgura para un dominio bastante más largo antes de subir de versión.
+ * Error correction M (ADR 0011): it takes 15% of damage, which covers a reflection or a finger on
+ * the screen, without inflating the number of modules the way H would. With a URL of ~110
+ * characters it comes out at 43x43 modules (version 6), and the capacity of that version in byte
+ * mode is 134 bytes: there is slack for a considerably longer domain before going up a version.
  *
  * @param {string} url
- * @returns {string} SVG completo, sin recursos externos.
+ * @returns {string} Complete SVG, with no external resources.
  */
 export function qrSvgFor(url) {
     return renderSVG(url, {
         ecc: 'M',
         border: QR_BORDER_MODULES,
         /**
-         * Tamaño intrínseco holgado por encima del mínimo del ADR: el SVG escala, pero partir de un
-         * lado grande evita que un navegador redondee los módulos a medio píxel y emborrone los
-         * bordes, que es lo que hace fallar una lectura a un metro.
+         * Intrinsic size generously above the ADR minimum: the SVG scales, but starting from a big
+         * side keeps a browser from rounding the modules to half a pixel and smudging the edges,
+         * which is what makes a read fail at a metre away.
          */
         pixelSize: 12,
         /**
-         * Blanco y negro literales, no tokens del tema. El QR **no** conmuta con el modo oscuro
-         * (ADR 0011): un código invertido lo leen algunos móviles y otros no, y el que falla lo hace
-         * en la consulta, con el profesional delante. El fondo blanco va dentro del propio SVG para
-         * que la tarjeta oscura no se vea a través.
+         * Literal black and white, not theme tokens. The QR does **not** switch with dark mode
+         * (ADR 0011): an inverted code is read by some phones and not by others, and the one that
+         * fails does so in the clinic, with the professional in front. The white background goes
+         * inside the SVG itself so the dark card does not show through.
          */
         whiteColor: '#FFFFFF',
         blackColor: '#000000',
     });
 }
 
-/** Error propio de esta pantalla: lo provoca lo elegido, no la criptografía ni la red. */
+/** Error of this screen: caused by what was chosen, not by the crypto and not by the network. */
 export class ShareScreenError extends Error {
     /** @param {string} message */
     constructor(message) {
@@ -331,10 +331,10 @@ function isWireFailure(failure) {
 }
 
 /**
- * Traduce un fallo a algo que se pueda leer.
+ * Translates a failure into something readable.
  *
- * Los tres casos con nombre propio existen porque tienen arreglo distinto: el tope se arregla
- * revocando, el tamaño acortando el rango y el descifrado volviendo a entrar.
+ * The three cases with a name of their own exist because they have different fixes: the cap is
+ * fixed by revoking, the size by shortening the range and the decryption by signing in again.
  *
  * @param {unknown} failure
  * @returns {string}
@@ -372,10 +372,10 @@ export function describeShareError(failure) {
 }
 
 /**
- * Texto del rango de un recorte, ya descifrado, para la lista.
+ * Range text of a clipping, already decrypted, for the list.
  *
- * Un rango abierto por arriba o por abajo se dice con palabras («todo el historial», «desde el …»)
- * en vez de dejar un hueco: un guion suelto no distingue «sin límite» de «no lo sé».
+ * A range open at the top or at the bottom is said with words ("the whole history", "from the …")
+ * instead of leaving a gap: a lone dash does not tell "no limit" from "I do not know".
  *
  * @param {{from: string|null, to: string|null}} range
  * @returns {string}
@@ -400,8 +400,8 @@ export function describeRange(range) {
 }
 
 /**
- * Factoría del componente Alpine. Se registra como `phrSharePage` en `resources/js/app.js`; si
- * falta allí, la pantalla se pinta y ningún botón responde, sin error visible.
+ * Alpine component factory. Registered as `phrSharePage` in `resources/js/app.js`; if it is
+ * missing there, the screen paints and no button responds, with no visible error.
  *
  * @returns {object}
  */
@@ -410,47 +410,47 @@ export function sharePage() {
         ...progressMixin(),
 
         /**
-         * El periodo arranca en «último mes», y se pide explícitamente en vez de heredar el defecto
-         * común del control: aquí lo que está en juego no es lo que se ve, sino lo que sale de
-         * casa. Un defecto que comparta el historial entero regalaría años de datos a quien solo
-         * quería enseñar las últimas semanas, y eso no se puede deshacer, porque revocar no borra lo
-         * que la otra persona ya se descargó. Un mes cubre el caso normal de una consulta; ampliar
-         * el rango cuesta un clic y el periodo en vigor está escrito en el propio control.
+         * The period starts at "last month", and it is asked for explicitly instead of inheriting
+         * the shared default of the control: what is at stake here is not what is seen, but what
+         * leaves home. A default sharing the whole history would give away years of data to somebody
+         * who only wanted to show the last few weeks, and that cannot be undone, because revoking
+         * does not erase what the other person already downloaded. A month covers the normal case
+         * of an appointment; widening the range costs one click and the period in force is written in the control itself.
          */
         ...dateRangeControl({ preset: 'month' }),
 
-        /** Catálogo público en claro que pinta el servidor: tipos, TTL, endpoints y topes. */
+        /** Public catalog in the clear the server paints: types, TTL, endpoints and caps. */
         config: null,
 
-        /** Tipos marcados. Es estado de interfaz, no dato clínico: puede ir con `x-model`. */
+        /** Ticked types. It is interface state, not clinical data: it may go with `x-model`. */
         types: defaultTypeSelection(),
 
-        /** TTL elegido; el por defecto lo dice el servidor (24 horas, ADR 0011). */
+        /** Chosen TTL; the server states the default (24 hours, ADR 0011). */
         ttl: '',
 
         error: '',
         busy: false,
 
         /**
-         * Resultado de la última generación: enlace, PIN y caducidad. Vive **solo** en memoria de
-         * esta pestaña y desaparece al recargar. El PIN no se guarda en ninguna parte, ni aquí ni
-         * en el servidor, que solo tiene un comprobante del que no se puede volver atrás sin
-         * romper Argon2id.
+         * Result of the last generation: link, PIN and expiry. It lives **only** in the memory of
+         * this tab and disappears on reload. The PIN is stored nowhere, neither here nor on the
+         * server, which only holds a proof that cannot be reversed without breaking
+         * Argon2id.
          *
          * @type {{shareId: string, url: string, pin: string, expiresAt: string,
          *         expiresAtLabel: string, eventCount: number}|null}
          */
         result: null,
 
-        /** Si el QR está en pantalla. Mientras lo esté, el PIN se esconde (ADR 0011). */
+        /** Whether the QR is on screen. While it is, the PIN is hidden (ADR 0011). */
         qrVisible: false,
 
         /**
-         * Vista previa: si está montada, y su controlador para poder desmontarla.
+         * Preview: whether it is mounted, and its controller so it can be unmounted.
          *
-         * El recorte previsualizado **no se guarda en ninguna propiedad**: se pinta y se olvida. Es
-         * lo mismo que hace el resto de esta pantalla con los eventos descifrados, y por el mismo
-         * motivo (ADR 0002): una propiedad de un componente Livewire acaba en el snapshot.
+         * The previewed clipping **is stored in no property**: it is painted and forgotten. It is
+         * the same thing the rest of this screen does with the decrypted events, and for the same
+         * reason (ADR 0002): a property of a Livewire component ends up in the snapshot.
          *
          * @type {{repaint: () => Promise<void>, destroy: () => void}|null}
          */
@@ -459,14 +459,14 @@ export function sharePage() {
         previewBusy: false,
         previewError: '',
 
-        /** Confirmación de copiado del enlace, efímera. */
+        /** Ephemeral confirmation that the link was copied. */
         copied: false,
         copiedTimer: null,
 
-        /** Identificador del recorte cuya revocación está pendiente de confirmar. */
+        /** Identifier of the clipping whose revocation is pending confirmation. */
         confirmingRevoke: '',
 
-        /** Recortes activos ya descifrados, para la lista. @type {list<object>} */
+        /** Active clippings already decrypted, for the list. @type {list<object>} */
         shares: [],
         sharesError: '',
         sharesLoading: false,
@@ -476,32 +476,32 @@ export function sharePage() {
             this.ttl = this.config.defaultTtl;
 
             /**
-             * **La vista previa se cae en cuanto deja de corresponder a lo que se enviaría.**
+             * **The preview drops as soon as it stops matching what would be sent.**
              *
-             * Es la única superficie de consentimiento informado de todo el flujo, y va bajo un
-             * encabezado que dice, con esas palabras, «esto es exactamente lo que verá el
-             * profesional». Sin esto, marcar «Comidas» o cambiar a tres meses después de haber
-             * previsualizado dejaba en pantalla el recorte anterior mientras se cifraba y se subía
-             * otro; y aquí no hay marcha atrás, porque revocar no borra lo que la otra persona ya
-             * descargó.
+             * It is the only informed-consent surface of the whole flow, and it sits under a
+             * heading that says, in those words, "this is exactly what the professional will see".
+             * Without this, ticking "Meals" or switching to three months after previewing left the
+             * previous clipping on screen while another one was encrypted and uploaded; and here
+             * there is no way back, because revoking does not erase what the other person already
+             * downloaded.
              *
-             * Se esconde en vez de repintarse: repintar cuesta segundos y una petición por cada
-             * casilla que alguien toque. Volver a pulsar el botón la trae de vuelta con lo de ahora.
+             * It is hidden instead of repainted: repainting costs seconds and one request per
+             * checkbox anybody touches. Pressing the button again brings it back with what is current.
              */
             for (const property of ['types', 'rangePreset', 'rangeFromDay', 'rangeToDay']) {
                 this.$watch(property, () => this.hidePreview());
             }
 
             /**
-             * El panel corre en modo SPA (`->spa()` en `PhrPanelProvider`), así que salir de esta
-             * pantalla por un enlace del menú no dispara `unload` y `hidePreview()` no llegaría a
-             * correr nunca. Livewire, además, copia `document.documentElement.outerHTML` a su caché
-             * del botón «atrás» justo antes de navegar: sin este oyente, ahí quedaría una copia del
-             * recorte descifrado —notas, valores, fechas— de una pantalla de la que ya se había ido.
+             * The panel runs in SPA mode (`->spa()` in `PhrPanelProvider`), so leaving this screen
+             * through a menu link does not fire `unload` and `hidePreview()` would never run.
+             * Livewire also copies `document.documentElement.outerHTML` into its back-button cache
+             * right before navigating: without this listener, a copy of the decrypted clipping
+             * —notes, values, dates— of a screen already left behind would stay there.
              *
-             * `once` porque al navegar este componente muere: el oyente tiene que durar exactamente
-             * hasta la primera salida, y dejarlo puesto acumularía uno por visita, cada uno atado a
-             * un componente ya difunto.
+             * `once` because this component dies on navigation: the listener has to last exactly
+             * until the first exit, and leaving it in place would stack one per visit, each tied to
+             * an already dead component.
              */
             document.addEventListener('livewire:navigating', () => this.hidePreview(), { once: true });
 
@@ -509,27 +509,27 @@ export function sharePage() {
         },
 
         /**
-         * Contrato de `dateRangeControl()`: el mixin llama a `loadHistory()` al aplicar el rango.
+         * Contract of `dateRangeControl()`: the mixin calls `loadHistory()` when the range is applied.
          *
-         * Aquí no hay historial que pintar —esta pantalla no enseña los registros, solo los
-         * empaqueta—, así que lo único que hace es revalidar lo tecleado, que es lo que rellena o
-         * limpia `rangeError`. Recortar de oficio al cambiar el rango sería peor: generar tarda
-         * segundos y cuesta un enlace de los que hay tope, así que solo se hace bajo pulsación.
+         * There is no history to paint here —this screen does not show the records, it only packages
+         * them—, so all it does is revalidate what was typed, which is what fills or clears
+         * `rangeError`. Clipping by default when the range changes would be worse: generating takes
+         * seconds and costs one of the capped links, so it only happens on a press.
          */
         async loadHistory() {
             this.historyRange();
         },
 
-        /** @returns {list<{token: string, label: string}>} Tipos marcados, con su etiqueta. */
+        /** @returns {list<{token: string, label: string}>} Ticked types, with their label. */
         selectedTypeOptions() {
             return (this.config?.types ?? []).filter((option) => this.types[option.token] === true);
         },
 
         /**
-         * Genera el recorte entero: descifra, empaqueta, estira el PIN, sube y enseña el resultado.
+         * Generates the whole clipping: decrypt, package, stretch the PIN, upload and show the result.
          *
-         * Cada `zeroize` de abajo borra material de clave de la memoria del proceso en cuanto deja
-         * de hacer falta (ADR 0004). No es cosmética: `CK` abre el paquete y `wrapKey` abre `CK`.
+         * Each `zeroize` below wipes key material from process memory as soon as it is no longer
+         * needed (ADR 0004). It is not cosmetic: `CK` opens the package and `wrapKey` opens `CK`.
          */
         async generate() {
             if (this.busy) {
@@ -586,10 +586,10 @@ export function sharePage() {
                 const expiresAt = expiryFor(this.ttl, this.config.ttls, generatedAt);
 
                 /**
-                 * Los identificadores los genera el cliente, y tienen que ser UUID**v4**: el v7
-                 * lleva el instante de creación en claro dentro de sí mismo, y estos acaban en la
-                 * URL que se enseña y en la foto que el profesional guarda. `crypto.randomUUID()`
-                 * es v4 por definición, y `App\Sharing\ClientUuid` comprueba la versión.
+                 * The identifiers are generated by the client, and they have to be UUID**v4**: v7
+                 * carries the creation instant in the clear inside itself, and these end up in the
+                 * URL that is shown and in the photo the professional keeps. `crypto.randomUUID()`
+                 * is v4 by definition, and `App\Sharing\ClientUuid` checks the version.
                  */
                 const shareId = globalThis.crypto.randomUUID();
                 const linkId = globalThis.crypto.randomUUID();
@@ -681,14 +681,14 @@ export function sharePage() {
         },
 
         /**
-         * Recorre el rango entero, página a página, con el mismo cursor que el panel de inicio: la
-         * fecha del evento más antiguo de la página, que el servidor aplica con `<` estricto.
+         * Walks the whole range, page by page, with the same cursor as the home dashboard: the date
+         * of the oldest event of the page, which the server applies with a strict `<`.
          *
-         * Quedarse corto **es un error**, no un aviso: ver la cabecera del módulo.
+         * Falling short **is an error**, not a warning: see the module header.
          *
          * @param {{from: string|null, to: string|null}} range
          * @returns {Promise<list<{id: string, occurredAt: string, payload: string}>>}
-         * @throws {ShareScreenError} Si el rango no cabe en el tope de páginas.
+         * @throws {ShareScreenError} If the range does not fit in the page cap.
          */
         async fetchRangeEvents(range) {
             const rawEvents = [];
@@ -698,7 +698,7 @@ export function sharePage() {
                 let pageEvents;
 
                 try {
-                    /** Mismo orden posicional que `HealthEventPage::fetchEvents(?string, int, ?string, ?string)`. */
+                    /** Same positional order as `HealthEventPage::fetchEvents(?string, int, ?string, ?string)`. */
                     pageEvents = await this.$wire.fetchEvents(cursor, FETCH_PAGE_SIZE, range.from, range.to);
                 } catch (failure) {
                     /**
@@ -723,17 +723,17 @@ export function sharePage() {
         },
 
         /**
-         * Descifra los sobres y se queda con los tipos elegidos.
+         * Decrypts the envelopes and keeps the chosen types.
          *
-         * Un sobre que no abre **aborta**: en el historial se cuenta y se sigue, porque ahí la
-         * persona ve la pantalla entera y el aviso al lado; en un recorte que va a viajar a otras
-         * manos, un registro que falta es indistinguible de un registro que no existió.
+         * An envelope that does not open **aborts**: in the history it is counted and the walk
+         * goes on, because there the person sees the whole screen and the notice next to it; in a
+         * clipping travelling into other hands, a missing record cannot be told from one that never existed.
          *
          * @param {list<{id: string, occurredAt: string, payload: string}>} rawEvents
          * @param {string} userId
          * @param {list<string>} included
          * @returns {list<{occurredAt: string, content: object}>}
-         * @throws {ShareScreenError} Si algún sobre no abre.
+         * @throws {ShareScreenError} If some envelope does not open.
          */
         decryptForSharing(rawEvents, userId, included) {
             const events = [];
@@ -767,20 +767,20 @@ export function sharePage() {
         },
 
         /**
-         * Enseña u oculta la vista previa: el recorte del rango y los tipos elegidos ahora mismo,
-         * pintado con la **misma** pantalla que verá el profesional.
+         * Shows or hides the preview: the clipping of the range and types chosen right now, painted
+         * with the **same** screen the professional will see.
          *
-         * Se hace bajo pulsación y no de oficio al cambiar el rango: descifrar un mes de eventos
-         * cuesta segundos, y hacerlo cada vez que alguien toca una casilla convertiría la pantalla
-         * en un tostador.
+         * It happens on a press and not by default when the range changes: decrypting a month of
+         * events costs seconds, and doing it every time somebody touches a checkbox would turn the
+         * screen into a toaster.
          *
-         * **No es gratis, y conviene no decir que lo es.** No se sube ningún paquete, no se crea
-         * ningún enlace y no se consume ninguno de los del tope; pero se leen los eventos del
-         * servidor exactamente igual que al generar, con el `from`/`to` en claro (`occurred_at` es
-         * columna en claro, ADR 0006). La diferencia con el panel es la atribución: el servidor sabe
-         * qué componente llama, así que una previsualización abandonada le dice «estuvo preparando un
-         * envío de este rango y al final no lo mandó». El descifrado, eso sí, sigue ocurriendo entero
-         * aquí.
+         * **It is not free, and it is best not to say it is.** No package is uploaded, no link is
+         * created and none of the capped ones is consumed; but the events are read from the server
+         * exactly as when generating, with the `from`/`to` in the clear (`occurred_at` is a column
+         * in the clear, ADR 0006). The difference with the panel is attribution: the server knows
+         * which component calls, so an abandoned preview tells it "they were preparing a send of
+         * this range and in the end did not send it". The decryption, though, still happens
+         * entirely here.
          */
         async togglePreview() {
             if (this.previewVisible) {
@@ -822,9 +822,9 @@ export function sharePage() {
                 }
 
                 /**
-                 * El **mismo** cuerpo que se cifraría al generar. Construirlo aquí de otra forma
-                 * dejaría la vista previa enseñando algo que no es lo que se envía, que es
-                 * exactamente lo que esta función existe para descartar.
+                 * The **same** body that would be encrypted on generating. Building it here in
+                 * another way would leave the preview showing something that is not what is sent,
+                 * which is exactly what this function exists to rule out.
                  */
                 const body = buildSharePackageBody({
                     events,
@@ -835,10 +835,10 @@ export function sharePage() {
                 });
 
                 /**
-                 * La sección se descubre **antes** de pintar, y con `$nextTick` para que Alpine haya
-                 * aplicado ya el `x-show`. Chart.js mide el ancho del contenedor al construirse, y
-                 * dentro de un elemento con `display: none` ese ancho es cero: el lienzo saldría de
-                 * un píxel y no se recuperaría al mostrarlo.
+                 * The section is revealed **before** painting, and with `$nextTick` so Alpine has
+                 * already applied the `x-show`. Chart.js measures the container width when it is
+                 * built, and inside an element with `display: none` that width is zero: the canvas
+                 * would come out one pixel wide and would not recover when shown.
                  */
                 this.previewVisible = true;
                 await this.$nextTick();
@@ -846,9 +846,9 @@ export function sharePage() {
                 this.preview = renderClippingExplorer(this.$refs.preview, {
                     body,
                     /**
-                     * El vocabulario del lector (tokens de catálogo, términos LOINC y unidades) lo
-                     * pinta el servidor en el catálogo de esta pantalla, en los tres idiomas, igual
-                     * que en la página del lector. Aquí se resuelve al idioma en vigor del panel.
+                     * The reader vocabulary (catalog tokens, LOINC terms and units) is painted by
+                     * the server in the catalog of this screen, in all three languages, as in the
+                     * reader page. Here it is resolved to the language in force in the panel.
                      */
                     resolved: resolveCatalog(this.config.readerCatalog, currentLocale()),
                     chartPrefix: 'share-preview',
@@ -862,8 +862,8 @@ export function sharePage() {
         },
 
         /**
-         * Desmonta la vista previa. Destruir las gráficas no es cosmética: dejarlas vivas sobre
-         * lienzos que ya no están en el documento mantiene en memoria los valores en claro que
+         * Unmounts the preview. Destroying the charts is not cosmetic: leaving them alive over
+         * canvases no longer in the document keeps in memory the values in the clear they drew.
          * dibujaron.
          */
         hidePreview() {
@@ -872,7 +872,7 @@ export function sharePage() {
             this.previewVisible = false;
         },
 
-        /** Enseña u oculta el QR. Al enseñarlo, el PIN desaparece de la pantalla (ADR 0011). */
+        /** Shows or hides the QR. On showing it, the PIN disappears from the screen (ADR 0011). */
         toggleQr() {
             this.qrVisible = !this.qrVisible;
 
@@ -883,8 +883,8 @@ export function sharePage() {
             }
 
             /**
-             * El SVG se inyecta como marcado y no con `x-html` sobre una propiedad: así el QR solo
-             * existe en el DOM mientras está a la vista, y ocultarlo lo borra de verdad.
+             * The SVG is injected as markup and not with `x-html` over a property: that way the QR
+             * only exists in the DOM while it is in sight, and hiding it really erases it.
              */
             this.$refs.qr.innerHTML = qrSvgFor(this.result.url);
 
@@ -899,11 +899,11 @@ export function sharePage() {
         },
 
         /**
-         * Copia **el enlace**, nunca el PIN.
+         * Copies **the link**, never the PIN.
          *
-         * No es un olvido: el portapapeles es lo que se pega en la misma conversación donde se
-         * acaba de pegar el enlace, y las dos mitades juntas en un mismo mensaje convierten el PIN
-         * en decoración. El PIN se dicta, se teclea o se dice en voz alta.
+         * It is no oversight: the clipboard is what gets pasted into the same conversation where the
+         * link has just been pasted, and both halves together in one message turn the PIN into
+         * decoration. The PIN is dictated, typed or said out loud.
          */
         async copyLink() {
             try {
@@ -921,10 +921,10 @@ export function sharePage() {
         },
 
         /**
-         * Carga la lista de recortes activos y la pinta descifrando cada descriptor.
+         * Loads the list of active clippings and paints it by decrypting each descriptor.
          *
-         * El servidor manda identificadores, fechas y sobres; el rango y los tipos salen de abrir el
-         * descriptor aquí, que es el único sitio donde existe la clave maestra.
+         * The server sends identifiers, dates and envelopes; the range and the types come from
+         * opening the descriptor here, which is the only place the master key exists.
          */
         async loadShares() {
             this.sharesLoading = true;
@@ -953,10 +953,10 @@ export function sharePage() {
                         };
                     } catch {
                         /**
-                         * Un descriptor que no abre no se omite (ADR 0004): ese recorte sigue vivo
-                         * en el servidor y sigue siendo legible por quien tenga enlace y PIN, así
-                         * que esconderlo sería esconder algo que sigue compartido. Se pinta como
-                         * fila de error, y con su botón de revocar, que es lo único que hace falta.
+                         * A descriptor that does not open is not left out (ADR 0004): that clipping
+                         * is still alive on the server and still readable by whoever has the link
+                         * and the PIN, so hiding it would be hiding something still shared. It is
+                         * painted as an error row, with its revoke button, which is all that is needed.
                          */
                         return { ...share, descriptor: null };
                     }
@@ -971,8 +971,8 @@ export function sharePage() {
         },
 
         /**
-         * Pide confirmación antes de revocar. Revocar es borrado físico e irreversible, así que un
-         * clic suelto no puede bastar.
+         * Asks for confirmation before revoking. Revoking is a physical and irreversible deletion,
+         * so a single click cannot be enough.
          *
          * @param {string} shareId
          */
@@ -996,9 +996,9 @@ export function sharePage() {
                 this.confirmingRevoke = '';
 
                 /**
-                 * Si el enlace recién generado es el que se acaba de revocar, el panel del
-                 * resultado desaparece: dejar en pantalla un enlace y un PIN que ya no abren nada
-                 * es peor que no enseñarlos, porque se dan por buenos.
+                 * If the link just generated is the one just revoked, the result panel disappears:
+                 * leaving on screen a link and a PIN that no longer open anything is worse than not
+                 * showing them, because they are taken for good.
                  */
                 if (this.result !== null && this.result.shareId === shareId) {
                     this.result = null;
@@ -1013,11 +1013,11 @@ export function sharePage() {
         },
 
         /**
-         * Pinta la lista en el DOM, como el resto de pantallas del panel: el contenido descifrado se
-         * escribe desde JavaScript dentro de una región `wire:ignore`, para que un re-render de
-         * Livewire no lo borre (ADR 0002).
+         * Paints the list in the DOM, like the rest of the panel screens: the decrypted content is
+         * written from JavaScript inside a `wire:ignore` region, so a Livewire re-render does not
+         * wipe it (ADR 0002).
          *
-         * @param {string|null} notice Mensaje que sustituye a la lista (sin clave, por ejemplo).
+         * @param {string|null} notice Message that replaces the list (no key, for example).
          */
         renderShares(notice) {
             const container = this.$refs.shares;
@@ -1045,7 +1045,7 @@ export function sharePage() {
         },
 
         /**
-         * Fila de un recorte activo, con la forma de DESIGN.md § Lists.
+         * Row of an active clipping, with the shape of DESIGN.md § Lists.
          *
          * @param {object} share
          * @returns {HTMLLIElement}
@@ -1089,8 +1089,8 @@ export function sharePage() {
             body.appendChild(expiry);
 
             /**
-             * `opened_at` es la marca del **primer** acceso, redondeada a la hora, y no un contador
-             * de descargas: no existe tal contador, y la pantalla no puede insinuar que lo hay.
+             * `opened_at` is the mark of the **first** access, rounded to the hour, and not a
+             * download counter: no such counter exists, and the screen cannot suggest there is one.
              */
             const opened = document.createElement('p');
             opened.className = 'text-caption text-ink-secondary';
@@ -1106,8 +1106,8 @@ export function sharePage() {
         },
 
         /**
-         * Botón de revocar, en dos tiempos. La confirmación no es un `confirm()` del navegador:
-         * ese diálogo no se puede traducir ni estilar, y en móvil se puede desactivar.
+         * Revoke button, in two steps. The confirmation is not a browser `confirm()`: that dialog
+         * cannot be translated or styled, and on mobile it can be disabled.
          *
          * @param {object} share
          * @returns {HTMLElement}
@@ -1152,8 +1152,8 @@ export function sharePage() {
         },
 
         /**
-         * Etiqueta traducida de un tipo. Un token que el catálogo no conoce se enseña tal cual en
-         * vez de desaparecer: un tipo compartido que no se nombra es un tipo que parece no estar.
+         * Translated label of a type. A token the catalog does not know is shown as is instead of
+         * disappearing: a shared type that is not named is a type that looks absent.
          *
          * @param {string} token
          * @returns {string}
@@ -1165,7 +1165,7 @@ export function sharePage() {
 }
 
 /**
- * Párrafo de aviso de la lista, en el texto secundario de DESIGN.md y nunca en un gris apagado
+ * Warning paragraph of the list, in the secondary text of DESIGN.md and never in a dull grey
  * (Don'ts #10).
  *
  * @param {string} message

@@ -1,14 +1,14 @@
 /**
- * Comprobaciones de `health/savedNotice.js`, el aviso de «registro guardado» que comparten las
- * cuatro pantallas de eventos.
+ * Checks of `health/savedNotice.js`, the "record saved" notice the four event screens
+ * share.
  *
- * Lo que importa aquí es el ciclo de vida del aviso, no su aspecto: que aparece, que se va solo, y
- * sobre todo que un guardado nuevo reinicia la cuenta en vez de heredar el temporizador del
- * anterior —si no, el aviso del segundo guardado se apagaría a mitad y quedaría un registro bueno
- * sin confirmar—. El reloj se simula con los temporizadores falsos del corredor de Node: esperar
- * cuatro segundos de verdad haría la suite lenta y frágil.
+ * What matters here is the life cycle of the notice, not its look: that it appears, that it goes
+ * away on its own, and above all that a new save restarts the count instead of inheriting the
+ * timer of the previous one —otherwise the notice of the second save would switch off half-way and
+ * a good record would be left unconfirmed—. The clock is faked with the fake timers of the Node
+ * runner: really waiting four seconds would make the suite slow and brittle.
  *
- * Corredor incorporado de Node, como el resto de `tests/js`.
+ * Node's built-in runner, like the rest of `tests/js`.
  *
  *     npm test
  */
@@ -18,14 +18,14 @@ import { test } from 'node:test';
 
 import { SAVED_NOTICE_MS, savedNotice } from '../../resources/js/health/savedNotice.js';
 
-test('savedNotice: arranca oculto', () => {
+test('savedNotice: starts hidden', () => {
     const component = savedNotice();
 
     assert.equal(component.saved, false);
     assert.equal(component.savedTimer, null);
 });
 
-test('savedNotice: confirmSaved muestra el aviso y lo retira solo al cumplirse el plazo', (t) => {
+test('savedNotice: confirmSaved shows the notice and removes it on its own when the time is up', (t) => {
     t.mock.timers.enable({ apis: ['setTimeout'] });
 
     const component = savedNotice();
@@ -34,7 +34,7 @@ test('savedNotice: confirmSaved muestra el aviso y lo retira solo al cumplirse e
 
     assert.equal(component.saved, true);
 
-    /** Un instante antes del plazo sigue visible: el aviso dura lo que dice durar. */
+    /** An instant before the deadline it is still visible: the notice lasts what it says it lasts. */
     t.mock.timers.tick(SAVED_NOTICE_MS - 1);
     assert.equal(component.saved, true);
 
@@ -43,7 +43,7 @@ test('savedNotice: confirmSaved muestra el aviso y lo retira solo al cumplirse e
     assert.equal(component.savedTimer, null);
 });
 
-test('savedNotice: guardar otra vez reinicia la cuenta en lugar de heredar el temporizador', (t) => {
+test('savedNotice: saving again restarts the count instead of inheriting the timer', (t) => {
     t.mock.timers.enable({ apis: ['setTimeout'] });
 
     const component = savedNotice();
@@ -51,12 +51,12 @@ test('savedNotice: guardar otra vez reinicia la cuenta en lugar de heredar el te
     component.confirmSaved();
     t.mock.timers.tick(SAVED_NOTICE_MS - 100);
 
-    /** Segundo guardado casi al final del primer aviso. */
+    /** Second save almost at the end of the first notice. */
     component.confirmSaved();
 
     /**
-     * Si el temporizador del primero siguiera vivo, aquí ya habría apagado el aviso del segundo,
-     * dejando un guardado bueno sin confirmar.
+     * If the timer of the first one were still alive, it would already have switched off the notice
+     * of the second, leaving a good save unconfirmed.
      */
     t.mock.timers.tick(100);
     assert.equal(component.saved, true);
@@ -65,7 +65,7 @@ test('savedNotice: guardar otra vez reinicia la cuenta en lugar de heredar el te
     assert.equal(component.saved, false);
 });
 
-test('savedNotice: clearSaved retira el aviso ya y cancela el temporizador', (t) => {
+test('savedNotice: clearSaved removes the notice right away and cancels the timer', (t) => {
     t.mock.timers.enable({ apis: ['setTimeout'] });
 
     const component = savedNotice();
@@ -76,7 +76,7 @@ test('savedNotice: clearSaved retira el aviso ya y cancela el temporizador', (t)
     assert.equal(component.saved, false);
     assert.equal(component.savedTimer, null);
 
-    /** Y el temporizador cancelado no puede resucitar el aviso más tarde. */
+    /** And the cancelled timer cannot bring the notice back later. */
     t.mock.timers.tick(SAVED_NOTICE_MS);
     assert.equal(component.saved, false);
 });

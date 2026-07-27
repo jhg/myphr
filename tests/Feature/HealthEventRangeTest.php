@@ -13,23 +13,23 @@ use Livewire\Livewire;
 uses(RefreshDatabase::class);
 
 /**
- * Filtro por rango de fechas de `HealthEventPage::fetchEvents()` (ADR 0004, ADR 0006).
+ * Date range filter of `HealthEventPage::fetchEvents()` (ADR 0004, ADR 0006).
  *
- * El rango se prueba sobre `Glucose` porque el método vive en la clase base y las cinco pantallas
- * lo heredan tal cual: repetir el fichero cuatro veces probaría cuatro veces el mismo código.
+ * The range is tested on `Glucose` because the method lives in the base class and the five screens
+ * inherit it as is: repeating the file four times would test the same code four times.
  *
- * `envelopeCipherText()` y `canonicalOccurredAtNow()` son globales de `tests/Pest.php`.
+ * `envelopeCipherText()` and `canonicalOccurredAtNow()` are globals from `tests/Pest.php`.
  */
 
-/** Fecha canónica del ADR 0004 a partir de un instante, la única forma que acepta el método. */
+/** Canonical ADR 0004 date from an instant, the only form the method accepts. */
 function canonicalAt(CarbonInterface $moment): string
 {
     return $moment->utc()->format('Y-m-d\TH:i:s.u\Z');
 }
 
 /**
- * Un evento por día, del más antiguo al más reciente, con la hora fijada para que el test no
- * dependa del momento en que se ejecute.
+ * One event per day, oldest to newest, with a fixed time so the test does not depend on when it
+ * runs.
  *
  * @param  list<int>  $daysAgo
  * @return array<int, Event>
@@ -48,7 +48,7 @@ function eventsDaysAgo(User $user, array $daysAgo): array
     return $events;
 }
 
-it('sin rango devuelve todos los eventos, como antes de existir el filtro', function (): void {
+it('without a range it returns every event, as before the filter existed', function (): void {
     $user = User::factory()->registered()->create();
     eventsDaysAgo($user, [1, 5, 40]);
 
@@ -57,7 +57,7 @@ it('sin rango devuelve todos los eventos, como antes de existir el filtro', func
     expect(Livewire::test(Glucose::class)->instance()->fetchEvents())->toHaveCount(3);
 });
 
-it('acota por el inicio del rango, que entra en el resultado', function (): void {
+it('bounds by the start of the range, which is included in the result', function (): void {
     $user = User::factory()->registered()->create();
     $events = eventsDaysAgo($user, [1, 5, 40]);
 
@@ -69,11 +69,11 @@ it('acota por el inicio del rango, que entra en el resultado', function (): void
         ->instance()
         ->fetchEvents(null, 100, $from);
 
-    /** El evento que está justo en `$from` entra: el inicio es inclusivo (`>=`). */
+    /** The event exactly at `$from` is included: the start is inclusive (`>=`). */
     expect(array_column($result, 'id'))->toEqualCanonicalizing([$events[1]->id, $events[5]->id]);
 });
 
-it('acota por el fin del rango, que queda fuera del resultado', function (): void {
+it('bounds by the end of the range, which is left out of the result', function (): void {
     $user = User::factory()->registered()->create();
     $events = eventsDaysAgo($user, [1, 5, 40]);
 
@@ -86,14 +86,13 @@ it('acota por el fin del rango, que queda fuera del resultado', function (): voi
         ->fetchEvents(null, 100, null, $to);
 
     /**
-     * El evento que está justo en `$to` NO entra: el rango es semiabierto `[from, to)`, que es lo
-     * que permite al cliente pasar la medianoche del día siguiente sin fabricar un
-     * `23:59:59.999999`.
+     * The event exactly at `$to` is NOT included: the range is half-open `[from, to)`, which is what
+     * lets the client pass the next day's midnight without making up a `23:59:59.999999`.
      */
     expect(array_column($result, 'id'))->toBe([$events[40]->id]);
 });
 
-it('con las dos puntas devuelve solo lo que cae dentro', function (): void {
+it('with both ends it returns only what falls inside', function (): void {
     $user = User::factory()->registered()->create();
     $events = eventsDaysAgo($user, [1, 5, 10, 40]);
 
@@ -112,10 +111,10 @@ it('con las dos puntas devuelve solo lo que cae dentro', function (): void {
 });
 
 /**
- * El punto delicado del ADR 0006 llevado al filtro: el rango no puede filtrar por tipo, pero sí
- * tiene que seguir aislando por usuario. Un rango no es una rendija para ver los eventos de otro.
+ * The delicate point of ADR 0006 applied to the filter: the range cannot filter by type, but it does
+ * have to keep isolating by user. A range is not a crack to peek at somebody else's events.
  */
-it('el rango sigue devolviendo solo los eventos del usuario autenticado', function (): void {
+it('the range still returns only the events of the authenticated user', function (): void {
     $user = User::factory()->registered()->create();
     $otherUser = User::factory()->registered()->create();
 
@@ -133,9 +132,9 @@ it('el rango sigue devolviendo solo los eventos del usuario autenticado', functi
 });
 
 /**
- * Rango y cursor conviven: el cursor recorta por arriba dentro del rango, pero nunca lo ensancha.
+ * Range and cursor coexist: the cursor trims from above inside the range, but never widens it.
  */
-it('el cursor pagina dentro del rango sin salirse de él', function (): void {
+it('the cursor pages inside the range without leaving it', function (): void {
     $user = User::factory()->registered()->create();
     $events = eventsDaysAgo($user, [1, 3, 5, 40]);
 
@@ -153,11 +152,11 @@ it('el cursor pagina dentro del rango sin salirse de él', function (): void {
         ->instance()
         ->fetchEvents($firstPage[1]['occurredAt'], 2, $from);
 
-    /** El evento de hace 40 días queda fuera por `$from`, aunque el cursor ya lo alcanzaría. */
+    /** The event from 40 days ago is left out by `$from`, even though the cursor would reach it. */
     expect(array_column($secondPage, 'id'))->toBe([$events[5]->id]);
 });
 
-it('un cursor anterior al inicio del rango no devuelve nada, en vez de ensancharlo', function (): void {
+it('a cursor before the start of the range returns nothing, instead of widening it', function (): void {
     $user = User::factory()->registered()->create();
     eventsDaysAgo($user, [1, 40]);
 
@@ -174,13 +173,13 @@ it('un cursor anterior al inicio del rango no devuelve nada, en vez de ensanchar
     expect($result)->toBe([]);
 });
 
-it('la punta más estricta manda cuando el cursor y el fin del rango compiten', function (): void {
+it('the stricter bound wins when the cursor and the end of the range compete', function (): void {
     $user = User::factory()->registered()->create();
     $events = eventsDaysAgo($user, [1, 5]);
 
     $this->actingAs($user);
 
-    /** `$to` es hoy (no recorta nada) y el cursor sí: gana el cursor. */
+    /** `$to` is today (it trims nothing) and the cursor does: the cursor wins. */
     $result = Livewire::test(Glucose::class)
         ->instance()
         ->fetchEvents(
@@ -194,10 +193,10 @@ it('la punta más estricta manda cuando el cursor y el fin del rango compiten', 
 });
 
 /**
- * Mismo criterio canónico que `storeEvent`, sin un segundo formato más laxo: es la única forma de
- * que las fechas del filtro no se desvíen de las que entran en el dato asociado del AEAD.
+ * The same canonical criterion as `storeEvent`, with no second looser format: it is the only way the
+ * filter dates do not drift from the ones that go into the AEAD associated data.
  */
-it('rechaza una punta del rango que no está en forma canónica', function (string $badDate, bool $isStart): void {
+it('rejects a range bound that is not in canonical form', function (string $badDate, bool $isStart): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user);
@@ -209,17 +208,17 @@ it('rechaza una punta del rango que no está en forma canónica', function (stri
 })->with([
     'inicio sin microsegundos' => ['2026-03-01T00:00:00Z', true],
     'inicio con desfase en vez de Z' => ['2026-03-01T00:00:00.000000+02:00', true],
-    'inicio solo con el día' => ['2026-03-01', true],
+    'start with the day only' => ['2026-03-01', true],
     'fin con mes imposible' => ['2026-13-01T00:00:00.000000Z', false],
     'fin sin microsegundos' => ['2026-03-01T00:00:00Z', false],
 ]);
 
 /**
- * Un rango del revés se rechaza en vez de devolver la lista vacía que produciría solo: sin error,
- * la pantalla diría «no hay registros en este periodo», que ante un historial clínico se lee como
- * «no tienes registros».
+ * A backwards range is rejected instead of returning the empty list it would produce on its own:
+ * without an error, the screen would say "no records in this period", which in front of a medical
+ * history reads as "you have no records".
  */
-it('rechaza un rango cuyo inicio va después del fin', function (): void {
+it('rejects a range whose start comes after its end', function (): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user);
@@ -235,7 +234,7 @@ it('rechaza un rango cuyo inicio va después del fin', function (): void {
         ->toThrow(ValidationException::class);
 });
 
-it('acepta un rango de anchura cero y devuelve la lista vacía', function (): void {
+it('accepts a zero-width range and returns the empty list', function (): void {
     $user = User::factory()->registered()->create();
     eventsDaysAgo($user, [1]);
 
@@ -248,11 +247,11 @@ it('acepta un rango de anchura cero y devuelve la lista vacía', function (): vo
 });
 
 /**
- * El contrato con el cliente: los cuatro parámetros, en el orden en que los pasa
- * `$wire.fetchEvents(null, HISTORY_FETCH_LIMIT, range.from, range.to)`, y todos opcionales, porque
- * el panel de inicio sigue llamando con dos.
+ * The contract with the client: the four parameters, in the order
+ * `$wire.fetchEvents(null, HISTORY_FETCH_LIMIT, range.from, range.to)` passes them, and all
+ * optional, because the home dashboard still calls with two.
  */
-it('fetchEvents acepta el cursor, el límite y las dos puntas del rango en ese orden', function (): void {
+it('fetchEvents accepts the cursor, the limit and both range bounds in that order', function (): void {
     $signature = new ReflectionMethod(Glucose::class, 'fetchEvents');
 
     $parameters = array_map(
@@ -265,12 +264,12 @@ it('fetchEvents acepta el cursor, el límite y las dos puntas del rango en ese o
 });
 
 /**
- * El rango no puede acabar en la barra de direcciones (Spec 0001 §9, ADR 0002): decir «del 3 al 10
- * de marzo» en la pantalla de insulina ya es información sobre la salud de quien mira, y una URL
- * queda en el historial del navegador, en el registro del proveedor y en el `Referer`. Por eso
- * viaja como argumento del método y no como propiedad de Livewire.
+ * The range must not end up in the address bar (Spec 0001 §9, ADR 0002): saying "3 to 10 March" on
+ * the insulin screen is already information about the health of whoever is looking, and a URL ends
+ * up in the browser history, in the provider's log and in the `Referer`. That is why it travels as a
+ * method argument and not as a Livewire property.
  */
-it('el rango no viaja en el snapshot del componente', function (): void {
+it('the range does not travel in the component snapshot', function (): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user);
@@ -282,8 +281,8 @@ it('el rango no viaja en el snapshot del componente', function (): void {
     expect(json_encode($test->snapshot))->not->toContain($from);
 });
 
-/** Las cuatro pantallas de historial piden el rango al servidor, no lo filtran tras descifrar. */
-it('los cuatro módulos de historial pasan el rango a fetchEvents', function (string $module): void {
+/** The four history screens ask the server for the range, they do not filter after decrypting. */
+it('the four history modules pass the range to fetchEvents', function (string $module): void {
     $source = file_get_contents(base_path("resources/js/health/{$module}.js"));
 
     expect($source)->toContain('$wire.fetchEvents(null, HISTORY_FETCH_LIMIT, range.from, range.to)');
@@ -291,25 +290,25 @@ it('los cuatro módulos de historial pasan el rango a fetchEvents', function (st
 })->with(['glucosePage', 'bloodPressurePage', 'insulinPage', 'mealsPage']);
 
 /**
- * Las cuatro pantallas de historial arrancan acotadas a las últimas 24 horas: sin acotar, abrirlas
- * descarga y descifra todo en el navegador de quien mira, y el coste solo crece con los años. El
- * atajo es el mismo que el del panel de inicio, para que dos pantallas que se abren solas no
- * discrepen sobre qué es «lo reciente».
+ * The four history screens start bounded to the last 24 hours: unbounded, opening them downloads and
+ * decrypts everything in the viewer's browser, and the cost only grows with the years. The shortcut
+ * is the same as the home dashboard's, so two screens that open on their own do not disagree about
+ * what "recent" means.
  */
-it('el historial arranca acotado al último día y no descifrando todo', function (): void {
+it('the history starts bounded to the last day and not decrypting everything', function (): void {
     $source = file_get_contents(base_path('resources/js/health/dateRange.js'));
 
     expect($source)->toContain("export const DEFAULT_RANGE_PRESET = 'day';");
 });
 
 /**
- * El precio de acotar de oficio, y lo que lo hace aceptable. En un historial clínico «no aparece»
- * se lee como «se ha perdido», así que un recorte que nadie ha pedido tiene que ser imposible de
- * no ver: el periodo en vigor se dice en palabras junto al historial, la frase aclara que lo que
- * falta está oculto y no borrado, y salir a todo el historial es un botón a la vista y no una
- * opción escondida en el desplegable.
+ * The price of bounding by default, and what makes it acceptable. In a medical history "it does not
+ * show" reads as "it has been lost", so a trim nobody asked for has to be impossible to miss: the
+ * period in force is spelled out in words next to the history, the sentence makes clear that what is
+ * missing is hidden and not deleted, and going out to the full history is a button in plain sight
+ * and not an option buried in the dropdown.
  */
-it('deja el periodo en vigor a la vista y la salida a todo el historial a un clic', function (): void {
+it('keeps the period in force in plain sight and the way out to the full history one click away', function (): void {
     $source = file_get_contents(resource_path('views/phr/partials/date-range.blade.php'));
 
     expect($source)->toContain("__('Showing:')");
@@ -318,13 +317,13 @@ it('deja el periodo en vigor a la vista y la salida a todo el historial a un cli
     expect($source)->toContain("__('Show all records')");
     expect($source)->toContain('@click="showAllRecords()"');
 
-    /** El aviso se ve siempre que el rango sea válido, no solo con el recorte puesto. */
+    /** The notice shows whenever the range is valid, not only when the trim is applied. */
     expect($source)->toContain('x-show="! rangeError"');
     expect($source)->toContain('role="status"');
 });
 
-/** El botón del aviso tiene que existir en el control, no solo en la plantilla. */
-it('el control ofrece la salida a todo el historial', function (): void {
+/** The notice button has to exist in the control, not only in the template. */
+it('the control offers the way out to the full history', function (): void {
     expect(file_get_contents(base_path('resources/js/health/dateRange.js')))
         ->toContain('showAllRecords()');
 });

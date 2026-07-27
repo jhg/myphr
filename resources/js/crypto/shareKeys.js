@@ -37,13 +37,13 @@
 
 import { argon2id, argon2idAsync } from '@noble/hashes/argon2.js';
 
+import { ARGON2_PARAMS } from './argon2Profile.js';
 import { canonicalDate } from './canonicalDate.js';
 import { deriveKey, KDF_LABELS, KEY_LENGTH } from './kdf.js';
 import { joinWithSeparator } from './shareEnvelope.js';
 import { zeroize } from './zeroize.js';
 
-/** Argon2id profile, identical to the OPAQUE KSF. Not touched without bumping the label version. */
-export const ARGON2_PARAMS = Object.freeze({ version: 0x13, m: 65536, t: 3, p: 4, dkLen: 32 });
+export { ARGON2_PARAMS };
 
 /** Bytes of the per-link salt (column `share_links.pin_salt`). */
 export const PIN_SALT_LENGTH = 16;
@@ -179,12 +179,19 @@ export function stretchPin({ pin, pinSalt }) {
 }
 
 /**
- * Same as `stretchPin`, yielding the thread between blocks so the progress
- * bar gets painted. `onProgress` receives the completed fraction, 0 to 1.
+ * Same as `stretchPin`, **off the main thread** and reporting real progress. `onProgress` receives
+ * the completed fraction, 0 to 1.
  *
  * On a clinic machine this is several seconds with someone waiting in front
  * of it (ADR 0011), so the alternative to showing progress is a frozen tab
  * that the professional takes for broken.
+ *
+ * It used to call `argon2idAsync` right here, and that was the bug: that function yields with a
+ * microtask, which the browser drains before it paints, so the "async" stretching blocked the tab
+ * just as hard as the sync one (measured: no macrotask runs during 1.7 s of it) and every one of
+ * its ten thousand progress callbacks landed on a DOM that would never be painted. The work now
+ * goes to `argon2Worker.js`; only if the platform has no `Worker` —server-side tests, and browsers
+ * too old for module workers— does it fall back to running here, which is slow but still correct.
  *
  * @param {object} params
  * @param {string} params.pin
@@ -193,9 +200,72 @@ export function stretchPin({ pin, pinSalt }) {
  * @returns {Promise<Uint8Array>} 32 bytes.
  */
 export async function stretchPinAsync({ pin, pinSalt, onProgress }) {
-    return argon2idAsync(TEXT_ENCODER.encode(normalizePin(pin)), assertPinSalt(pinSalt), {
-        ...ARGON2_PARAMS,
-        ...(onProgress === undefined ? {} : { onProgress }),
+    const password = TEXT_ENCODER.encode(normalizePin(pin));
+    const salt = assertPinSalt(pinSalt);
+
+    try {
+        return await stretchInWorker(password, salt, onProgress);
+    } catch {
+        /**
+         * Any worker-level failure —no `Worker` in this runtime, a browser without module workers,
+         * a Content-Security-Policy that refuses it— ends up here. Correctness beats speed: the
+         * same stretching runs in this thread, and the tab freezes as it did before, rather than
+         * the person being told their PIN is wrong when it is not.
+         */
+        return await argon2idAsync(password, salt, {
+            ...ARGON2_PARAMS,
+            ...(onProgress === undefined ? {} : { onProgress }),
+        });
+    } finally {
+        zeroize(password);
+    }
+}
+
+/**
+ * Runs one stretching in a dedicated worker and terminates it.
+ *
+ * One worker per stretching, not a pooled one: the worker holds a copy of the PIN, and terminating
+ * it is the only way to be sure that copy is gone from a heap we cannot reach. Spinning one up
+ * costs a fraction of a millisecond against the 1.5 s of work it is about to do.
+ *
+ * @param {Uint8Array} password Already normalized and encoded.
+ * @param {Uint8Array} salt
+ * @param {((progress: number) => void)|undefined} onProgress
+ * @returns {Promise<Uint8Array>}
+ */
+function stretchInWorker(password, salt, onProgress) {
+    if (typeof Worker !== 'function') {
+        throw new ShareKeyError('This runtime has no Worker.');
+    }
+
+    const worker = new Worker(new URL('./argon2Worker.js', import.meta.url), { type: 'module' });
+
+    return new Promise((resolve, reject) => {
+        worker.addEventListener('message', (event) => {
+            if (event.data.progress !== undefined) {
+                onProgress?.(event.data.progress);
+
+                return;
+            }
+
+            if (event.data.stretched !== undefined) {
+                resolve(event.data.stretched);
+            } else {
+                reject(new ShareKeyError(event.data.error ?? 'The stretching worker failed.'));
+            }
+
+            worker.terminate();
+        });
+
+        /** A worker that cannot even load reports here, and the caller falls back to this thread. */
+        worker.addEventListener('error', (event) => {
+            event.preventDefault();
+            reject(new ShareKeyError('The stretching worker could not start.'));
+            worker.terminate();
+        });
+
+        /** The copy the worker gets is structured-cloned; it wipes it and we wipe ours. */
+        worker.postMessage({ password, salt });
     });
 }
 

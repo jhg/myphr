@@ -1,11 +1,11 @@
 /**
- * Comprobaciones de `i18n/index.js` y de los tres catálogos.
+ * Checks of `i18n/index.js` and of the three catalogs.
  *
- * El test que más importa es el primero: **los tres catálogos tienen exactamente el mismo juego de
- * claves**. Es la única forma de que un hueco de traducción falle aquí y no en producción, donde se
- * vería como una frase en inglés suelta en medio de una pantalla en chino, sin ningún error.
+ * The test that matters most is the first one: **the three catalogs have exactly the same key
+ * set**. It is the only way for a translation gap to fail here and not in production, where it
+ * would show as a lone English sentence in the middle of a Chinese screen, with no error at all.
  *
- * Corredor incorporado de Node, como el resto de `tests/js`.
+ * Node's built-in runner, like the rest of `tests/js`.
  *
  *     npm test
  */
@@ -33,9 +33,9 @@ afterEach(() => {
     setLocale(DEFAULT_LOCALE);
 });
 
-// --- Integridad de los catálogos ----------------------------------------------------------------
+// --- Catalog integrity --------------------------------------------------------------------------
 
-test('los tres catálogos tienen exactamente las mismas claves', () => {
+test('the three catalogs have exactly the same keys', () => {
     const reference = Object.keys(EN).sort();
 
     for (const [locale, catalog] of Object.entries(CATALOGS)) {
@@ -43,7 +43,7 @@ test('los tres catálogos tienen exactamente las mismas claves', () => {
     }
 });
 
-test('ninguna traducción está vacía', () => {
+test('no translation is empty', () => {
     for (const [locale, catalog] of Object.entries(CATALOGS)) {
         for (const [key, entry] of Object.entries(catalog)) {
             const variants = typeof entry === 'object' ? Object.values(entry) : [entry];
@@ -56,7 +56,7 @@ test('ninguna traducción está vacía', () => {
     }
 });
 
-test('cada traducción usa los mismos marcadores que el inglés', () => {
+test('every translation uses the same placeholders as the English one', () => {
     const markersOf = (entry) => {
         const text = typeof entry === 'object' ? Object.values(entry).join(' ') : entry;
 
@@ -74,7 +74,7 @@ test('cada traducción usa los mismos marcadores que el inglés', () => {
     }
 });
 
-test('las entradas con recuento tienen las variantes que su idioma necesita', () => {
+test('the entries with a count have the variants their language needs', () => {
     for (const [key, entry] of Object.entries(EN)) {
         if (typeof entry !== 'object') {
             continue;
@@ -82,14 +82,14 @@ test('las entradas con recuento tienen las variantes que su idioma necesita', ()
 
         assert.ok(EN[key].one !== undefined && EN[key].other !== undefined, `en/${key}: faltan one y other`);
         assert.ok(ES[key].one !== undefined && ES[key].other !== undefined, `es/${key}: faltan one y other`);
-        /** El chino no pluraliza: `other` es su única categoría, y añadir `one` sería ruido. */
+        /** Chinese does not pluralize: `other` is its only category, and adding `one` would be noise. */
         assert.deepEqual(Object.keys(ZH_CN[key]), ['other'], `zh_CN/${key}: el chino solo necesita "other"`);
     }
 });
 
 // --- resolveLocale ------------------------------------------------------------------------------
 
-test('resolveLocale: acepta las dos formas del chino y cualquier región', () => {
+test('resolveLocale: accepts both forms of Chinese and any region', () => {
     for (const tag of ['zh_CN', 'zh-CN', 'zh', 'zh-Hans', 'ZH-cn']) {
         assert.equal(resolveLocale(tag), 'zh_CN', tag);
     }
@@ -99,26 +99,26 @@ test('resolveLocale: acepta las dos formas del chino y cualquier región', () =>
     assert.equal(resolveLocale('en-GB'), 'en');
 });
 
-test('resolveLocale: cualquier idioma no soportado cae en el de por defecto', () => {
+test('resolveLocale: any unsupported language falls back to the default one', () => {
     for (const tag of ['fr', 'pt-BR', '', '   ', null, undefined, 42]) {
         assert.equal(resolveLocale(tag), DEFAULT_LOCALE, String(tag));
     }
 });
 
-test('el idioma por defecto es el inglés, igual que config/app.php', () => {
+test('the default language is English, as in config/app.php', () => {
     assert.equal(DEFAULT_LOCALE, 'en');
     assert.equal(currentLocale(), 'en');
     assert.deepEqual(SUPPORTED_LOCALES, ['en', 'es', 'zh_CN']);
 });
 
-test('setLocale: un idioma que no existe no elige catálogo, cae en el de por defecto', () => {
+test('setLocale: a language that does not exist picks no catalog, it falls back to the default', () => {
     assert.equal(setLocale('fr'), 'en');
     assert.equal(setLocale('zh-CN'), 'zh_CN');
 });
 
 // --- t ------------------------------------------------------------------------------------------
 
-test('t: traduce en los tres idiomas', () => {
+test('t: translates in the three languages', () => {
     setLocale('en');
     assert.equal(t('glucose.missingValue'), 'Enter a value.');
     setLocale('es');
@@ -127,7 +127,7 @@ test('t: traduce en los tres idiomas', () => {
     assert.equal(t('glucose.missingValue'), '请填写数值。');
 });
 
-test('t: sustituye los marcadores, también el mismo dos veces', () => {
+test('t: replaces the placeholders, including the same one twice', () => {
     setLocale('es');
 
     assert.equal(
@@ -136,17 +136,17 @@ test('t: sustituye los marcadores, también el mismo dos veces', () => {
     );
 });
 
-test('t: un marcador sin valor se deja tal cual, no desaparece en silencio', () => {
+test('t: a placeholder with no value is left as is, it does not disappear in silence', () => {
     setLocale('es');
 
     assert.match(t('common.badDatetime'), /\{value\}/);
 });
 
-test('t: una clave que no existe se devuelve tal cual, para que el hueco se vea', () => {
+test('t: a key that does not exist is returned as is, so the gap is visible', () => {
     assert.equal(t('no.existe.esta.clave'), 'no.existe.esta.clave');
 });
 
-test('t: elige singular o plural de verdad, nunca «registro(s)»', () => {
+test('t: it really picks singular or plural, never "record(s)"', () => {
     setLocale('es');
     assert.match(t('common.recordsUndecrypted', { count: 1 }), /^1 registro no se pudo descifrar/);
     assert.match(t('common.recordsUndecrypted', { count: 3 }), /^3 registros no se pudieron descifrar/);
@@ -155,27 +155,27 @@ test('t: elige singular o plural de verdad, nunca «registro(s)»', () => {
     assert.match(t('common.recordsUndecrypted', { count: 1 }), /^1 record could not be decrypted/);
     assert.match(t('common.recordsUndecrypted', { count: 3 }), /^3 records could not be decrypted/);
 
-    /** El chino no pluraliza: la misma forma para uno y para muchos. */
+    /** Chinese does not pluralize: the same form for one and for many. */
     setLocale('zh_CN');
     assert.equal(t('common.recordsUndecrypted', { count: 1 }), '有 1 条记录无法解密，未予显示。');
     assert.equal(t('common.recordsUndecrypted', { count: 3 }), '有 3 条记录无法解密，未予显示。');
 });
 
-// --- Formato ------------------------------------------------------------------------------------
+// --- Formatting ---------------------------------------------------------------------------------
 
-test('formatNumber: la coma decimal es del castellano, no del dato', () => {
+test('formatNumber: the decimal comma belongs to Spanish, not to the datum', () => {
     setLocale('es');
     assert.equal(formatNumber(98.5), '98,5');
 
     setLocale('en');
     assert.equal(formatNumber(98.5), '98.5');
 
-    /** Un glucómetro chino dice 7.8, no 7,8: mostrar coma sería leer mal el valor. */
+    /** A Chinese glucose meter says 7.8, not 7,8: showing a comma would be misreading the value. */
     setLocale('zh_CN');
     assert.equal(formatNumber(7.8), '7.8');
 });
 
-test('joinList: el chino enumera con 、 y no con coma occidental', () => {
+test('joinList: Chinese enumerates with 、 and not with a Western comma', () => {
     setLocale('es');
     assert.equal(joinList(['Capilar', 'Intersticial']), 'Capilar, Intersticial');
 

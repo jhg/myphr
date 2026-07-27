@@ -61,7 +61,7 @@ export const ES = Object.freeze({
 
     // --- Sign in --------------------------------------------------------------------------------
     'login.stage.contacting': 'Comprobando tus datos…',
-    'login.stage.stretching': 'Derivando tu clave en este dispositivo. Tarda unos segundos…',
+    'login.stage.stretching': 'Protegiendo tu contraseña en este dispositivo. Tarda unos segundos a propósito: esa lentitud es lo que impide adivinar tu contraseña, incluso con una copia de la base de datos.',
     'login.error.credentials': 'No hemos podido entrar con esos datos.',
 
     // --- Password set-up ------------------------------------------------------------------------
@@ -162,6 +162,10 @@ export const ES = Object.freeze({
     'insulin.caption': {
         one: '{count} día con registro. Dosis acumulada por tipo — {totals}.',
         other: '{count} días con registro. Dosis acumulada por tipo — {totals}.',
+    },
+    'insulin.omittedDays': {
+        one: '{count} día más antiguo del periodo no se dibuja, para que la gráfica siga siendo legible.',
+        other: 'Los {count} días más antiguos del periodo no se dibujan, para que la gráfica siga siendo legible.',
     },
 
     // --- Body weight ----------------------------------------------------------------------------
@@ -456,8 +460,9 @@ export const ES = Object.freeze({
     'reader.pin.label': 'PIN',
     'reader.pin.submit': 'Abrir el historial',
     'reader.print': 'Imprimir o guardar en PDF',
-    'reader.stage.deriving': 'Comprobando el PIN. Tarda unos segundos por diseño; la página no se ha colgado.',
+    'reader.stage.deriving': 'Calculando el PIN en este navegador. Tarda unos segundos a propósito: esa lentitud es lo que impide probar todos los PIN. La página no se ha colgado; la barra es progreso real.',
     'reader.stage.decrypting': 'Descifrando el historial en este navegador…',
+    'reader.stage.rendering': 'Historial abierto. Preparando las gráficas y la tabla…',
     'reader.error.noFragment': 'Este enlace ha llegado incompleto: falta la parte posterior al #, y esa parte es la clave. Los filtros de correo y los portales cautivos suelen comérsela. Pide el código QR o que te manden el enlace otra vez.',
     'reader.error.badFragment': 'Este enlace no es un enlace de historial válido. Pide el código QR o que te manden el enlace otra vez.',
     'reader.error.badPin': 'El PIN son {length} dígitos.',

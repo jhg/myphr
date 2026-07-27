@@ -85,7 +85,7 @@ it('never falls back to Spanish for the Chinese label of any case', function (
  * English. An account with a stale preference or an odd browser header is somebody who does not
  * understand the interface, not an error we need to hear about through a 500.
  */
-it('cae al idioma por defecto ante un idioma desconocido', function (
+it('falls back to the default language for an unknown language', function (
     BackedEnum $case,
     string $method,
 ): void {

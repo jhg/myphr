@@ -27,6 +27,15 @@
     volver a pintarse. Lo único que sale de `__()` es lo que el navegador necesita antes de ejecutar
     un solo módulo: el `<title>` y el aviso de `<noscript>`.
 
+    The unlock card is the exception, and it is written **twice on purpose**: the server renders the
+    six strings of the card inside the very elements `data-phr-reader-text` overwrites later. The
+    markers stay, so the language selector keeps working exactly as before; what changes is that the
+    title, the explanation, the label and the button are readable from the first byte of HTML
+    instead of after the bundle has downloaded and evaluated. Before this, a slow connection showed
+    a card with no title, a field with no label and a button with no text — a page that looks broken
+    at the one moment there is nothing to do but read it. It costs no privacy: the whole public
+    catalog already travels inside this page in all three languages.
+
     Estilo: MediCare+ (DESIGN.md) con la hoja propia `resources/css/reader.css`, siempre por el
     PAPEL del token (`text-ink`, `bg-surface`, `border-border-strong`, `bg-accent` +
     `text-accent-ink`) y nunca por un tono de la rampa.
@@ -58,7 +67,7 @@
                 `form-action 'none'` porque el único formulario no se envía a ninguna parte: lo
                 intercepta JavaScript y todo ocurre en el navegador.
             --}}
-            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
+            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; worker-src 'self'; style-src 'self'; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
         @endproduction
 
         <title>{{ __('Shared health record') }}</title>
@@ -102,8 +111,8 @@
         <main class="mx-auto flex max-w-6xl flex-col gap-6 p-4 sm:p-8">
             <header class="flex flex-wrap items-start justify-between gap-4">
                 <div>
-                    <h1 data-phr-reader-text="reader.title" class="font-display text-headline text-ink"></h1>
-                    <p data-phr-reader-text="reader.intro" class="mt-1 text-body text-ink-secondary"></p>
+                    <h1 data-phr-reader-text="reader.title" class="font-display text-headline text-ink">{{ __('Shared health record') }}</h1>
+                    <p data-phr-reader-text="reader.intro" class="mt-1 text-body text-ink-secondary">{{ __('Someone shared a read-only extract of their own health record with you. It is encrypted: nobody but this browser, with the PIN, can read it.') }}</p>
                 </div>
 
                 {{--
@@ -126,8 +135,8 @@
                 data-phr-reader-screen-only
                 class="rounded-card border border-border bg-surface p-card shadow-sm"
             >
-                <h2 data-phr-reader-text="reader.pin.title" class="font-display text-subhead text-ink"></h2>
-                <p data-phr-reader-text="reader.pin.help" class="mt-2 text-body text-ink-secondary"></p>
+                <h2 data-phr-reader-text="reader.pin.title" class="font-display text-subhead text-ink">{{ __('Enter the PIN') }}</h2>
+                <p data-phr-reader-text="reader.pin.help" class="mt-2 text-body text-ink-secondary">{{ __('The six-digit PIN was given to you separately from this link. Working it out takes a few seconds on purpose, so that a stolen link is not enough by itself.') }}</p>
 
                 <form data-phr-reader-form class="mt-4 flex flex-wrap items-end gap-3">
                     <div>
@@ -136,7 +145,7 @@
                             for="reader-pin"
                             data-phr-reader-text="reader.pin.label"
                             class="mb-1.5 block text-body-sm font-semibold text-ink"
-                        ></label>
+                        >{{ __('PIN') }}</label>
 
                         {{--
                             Seis dígitos. `inputmode="numeric"` para que el móvil abra el teclado
@@ -164,7 +173,7 @@
                         data-phr-reader-submit
                         data-phr-reader-text="reader.pin.submit"
                         class="inline-flex min-h-11 items-center justify-center rounded-control bg-accent px-6 py-2.5 text-button text-accent-ink hover:bg-accent-hover focus-visible:shadow-focus-blue focus-visible:outline-none disabled:opacity-60"
-                    ></button>
+                    >{{ __('Open the record') }}</button>
                 </form>
 
                 {{--
@@ -184,7 +193,7 @@
                     <div class="h-2 overflow-hidden rounded-full bg-progress-track">
                         <div
                             data-phr-reader-progress-bar
-                            class="h-full w-full origin-left bg-accent transition-transform duration-300 ease-linear"
+                            class="h-full w-full origin-left bg-accent transition-transform duration-100 ease-linear"
                             style="transform: scaleX(0);"
                         ></div>
                     </div>

@@ -10,8 +10,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
 
-/** ADR 0011: la purga de recortes caducados va programada, como la de handshakes de OPAQUE. */
-it('programa la purga de recortes cada hora', function (): void {
+/** ADR 0011: the pruning of expired clippings is scheduled, like the OPAQUE handshake one. */
+it('schedules the clipping pruning every hour', function (): void {
     $events = collect(app(Schedule::class)->events())
         ->filter(fn ($event) => str_contains($event->command ?? '', 'shares:prune'));
 
@@ -19,7 +19,7 @@ it('programa la purga de recortes cada hora', function (): void {
         ->and($events->first()->expression)->toBe('0 * * * *');
 });
 
-it('borra los recortes y enlaces caducados y deja los vivos', function (): void {
+it('deletes expired clippings and links and leaves the live ones', function (): void {
     $live = Share::factory()->create();
     ShareLink::factory()->for($live)->create();
 
@@ -33,11 +33,11 @@ it('borra los recortes y enlaces caducados y deja los vivos', function (): void 
 });
 
 /**
- * La purga es solo higiene de almacenamiento: la caducidad ya se aplica en la consulta que sirve el
- * blob, así que un planificador caído no alarga la vida de nada. Este test lo fija: sin purgar, un
- * recorte caducado sigue sin poder leerse.
+ * Pruning is storage hygiene only: expiry is already enforced in the query that serves the blob, so
+ * a scheduler that is down extends nothing's lifetime. This test pins it down: without pruning, an
+ * expired clipping still cannot be read.
  */
-it('no alarga la vida de nada si la purga no llega a ejecutarse', function (): void {
+it('extends nothing lifetime if the pruning never runs', function (): void {
     config()->set('share.decoy_salt_key', Base64Url::encode(random_bytes(32)));
 
     $share = Share::factory()->expired()->create();

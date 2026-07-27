@@ -1,19 +1,19 @@
 /**
- * Dibujo de la superposición de días sobre un eje de 24 horas.
+ * Drawing of the overlay of days on a 24-hour axis.
  *
- * Recibe lo que construye `health/dayOverlay.js` y devuelve la instancia de Chart.js: ni calcula ni
- * lee eventos, por eso sale igual en el panel del paciente, en el lector del profesional y en la
- * vista previa de compartir.
+ * It takes what `health/dayOverlay.js` builds and returns the Chart.js instance: it neither
+ * computes nor reads events, which is why it comes out the same in the patient panel, in the
+ * professional's reader and in the share preview.
  *
- * **Qué se ve y por qué en dos pesos.** Cada día es una línea fina y translúcida: sola no dice nada,
- * y juntas dibujan la nube de lo que suele pasar a cada hora. Encima, la mediana horaria en trazo
- * grueso, que es la que se lee. Si las dos tuvieran el mismo peso, cuarenta líneas taparían la única
- * que resume, que es exactamente el fallo que hace ilegible este formato cuando se hace mal.
+ * **What is seen and why in two weights.** Each day is a thin translucent line: alone it says
+ * nothing, and together they draw the cloud of what usually happens at each hour. On top, the
+ * hourly median in a thick stroke, which is the one that is read. If both had the same weight,
+ * forty lines would cover the only one that summarizes, the failure that makes this format unreadable.
  *
- * **El rango objetivo va de banda de fondo** (ADR 0007), cuando la persona lo tiene configurado: es
- * lo que convierte una nube de puntos en información, porque dice de un vistazo qué parte del día se
- * pasa fuera. Nunca se dibuja un rango de otra unidad: eso lo decide quien llama, y aquí llega ya
- * resuelto o no llega.
+ * **The target range goes as a background band** (ADR 0007), when the person has it configured:
+ * it is what turns a cloud of points into information, because it says at a glance what part of
+ * the day is spent outside. A range of another unit is never drawn: the caller decides that, and
+ * here it arrives resolved or it does not arrive.
  */
 
 import Chart from 'chart.js/auto';
@@ -24,13 +24,13 @@ import { chartColors, CHART_FONTS } from './chartTheme.js';
 import { wallClockFormat } from './chartTime.js';
 import { withAlpha } from './medianBandChart.js';
 
-/** Opacidad de la línea de un día suelto: contexto, no dato. */
+/** Opacity of the line of a single day: context, not datum. */
 const DAY_ALPHA = 0.22;
 
-/** Opacidad de la banda del rango objetivo: tiene que dejar leer todo lo que pasa por encima. */
+/** Opacity of the target range band: it has to let everything above it be read. */
 const TARGET_ALPHA = 0.14;
 
-/** Formas de la mediana de cada grupo, la segunda codificación de Do's #3. */
+/** Shapes of the median of each group, the second encoding of Do's #3. */
 const MEDIAN_SHAPES = Object.freeze([
     Object.freeze({ borderDash: [], pointStyle: 'circle' }),
     Object.freeze({ borderDash: [6, 4], pointStyle: 'triangle' }),
@@ -38,13 +38,13 @@ const MEDIAN_SHAPES = Object.freeze([
 ]);
 
 /**
- * Hora del eje, escrita en el idioma activo.
+ * Hour of the axis, written in the active language.
  *
- * Se formatea sobre un instante de la época en UTC porque lo que se enseña es una hora del reloj de
- * pared, no un instante ({@see wallClockFormat}).
+ * It is formatted over an epoch instant in UTC because what is shown is a wall clock time, not an
+ * instant ({@see wallClockFormat}).
  *
  * @param {Intl.DateTimeFormat} format
- * @param {number} hour Entre 0 y 24, con decimales.
+ * @param {number} hour Between 0 and 24, with decimals.
  * @returns {string}
  */
 export function hourLabel(format, hour) {
@@ -52,10 +52,10 @@ export function hourLabel(format, hour) {
 }
 
 /**
- * Banda de fondo del rango objetivo.
+ * Background band of the target range.
  *
- * Va en `beforeDatasetsDraw` para quedar **debajo** de todas las líneas: pintada encima teñiría los
- * datos y cambiaría el color con el que se lee una glucemia.
+ * It goes in `beforeDatasetsDraw` so it stays **below** every line: painted on top it would tint
+ * the data and change the colour a glucose reading is read in.
  *
  * @param {{low: number, high: number}|undefined} targetRange
  * @param {{series: list<string>}} colors
@@ -74,11 +74,11 @@ function targetRangePlugin(targetRange, colors) {
             const bottom = scales.y.getPixelForValue(targetRange.low);
 
             ctx.save();
-            /** Se recorta al área de datos: fuera de ella la banda invadiría los rótulos del eje. */
+            /** Clipped to the data area: outside it the band would invade the axis labels. */
             ctx.beginPath();
             ctx.rect(chartArea.left, chartArea.top, chartArea.right - chartArea.left, chartArea.bottom - chartArea.top);
             ctx.clip();
-            /** Success con transparencia: el matiz de «dentro de rango», nunca un color inventado. */
+            /** Success with transparency: the shade of "in range", never an invented colour. */
             ctx.fillStyle = withAlpha(colors.series[2], TARGET_ALPHA);
             ctx.fillRect(chartArea.left, top, chartArea.right - chartArea.left, bottom - top);
             ctx.restore();
@@ -87,16 +87,16 @@ function targetRangePlugin(targetRange, colors) {
 }
 
 /**
- * Pinta la gráfica y devuelve la instancia, o `null` si no hay ningún día que superponer.
+ * Paints the chart and returns the instance, or `null` if there is no day to overlay.
  *
  * @param {HTMLCanvasElement} canvas
  * @param {object} params
  * @param {list<{group: string, label: string, days: list<object>, median: list<object>}>} params.groups
- *        Ya etiquetados y traducidos por quien llama.
- * @param {string} params.unit Código UCUM (ADR 0005: no se traduce).
+ *        Already labelled and translated by the caller.
+ * @param {string} params.unit UCUM code (ADR 0005: not translated).
  * @param {string} params.legendId
- * @param {{low: number, high: number, unit: string}} [params.targetRange] Ya comprobado que está en
- *        la misma unidad (ADR 0007: no se convierte).
+ * @param {{low: number, high: number, unit: string}} [params.targetRange] Already checked to be in
+ *        the same unit (ADR 0007: nothing is converted).
  * @returns {Chart|null}
  */
 export function renderDayOverlayChart(canvas, { groups, unit, legendId, targetRange }) {
@@ -123,8 +123,8 @@ export function renderDayOverlayChart(canvas, { groups, unit, legendId, targetRa
 
     const datasets = described.flatMap((group) => [
         /**
-         * Un conjunto por día. `order` alto los manda al fondo: Chart.js dibuja antes los de orden
-         * mayor, así que la mediana queda encima de su propia nube.
+         * One dataset per day. A high `order` sends them to the back: Chart.js draws the ones with
+         * a higher order first, so the median ends up above its own cloud.
          */
         ...group.days.map((day) => ({
             label: dayFormat.format(new Date(`${day.day}T00:00:00Z`)),
@@ -152,7 +152,7 @@ export function renderDayOverlayChart(canvas, { groups, unit, legendId, targetRa
             pointStyle: group.pointStyle,
             tension: 0.3,
             order: 1,
-            /** `spanGaps` de fábrica en falso: una hora sin lecturas no tiene mediana y se ve así. */
+            /** `spanGaps` false out of the box: an hour with no readings has no median and looks like it. */
         },
     ]);
 

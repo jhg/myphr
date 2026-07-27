@@ -1,14 +1,14 @@
 /**
- * Comprobaciones del origen de eventos (`health/eventSource.js`, ADR 0004, ADR 0006).
+ * Checks of the event source (`health/eventSource.js`, ADR 0004, ADR 0006).
  *
- * Lo que de verdad se prueba aquí es que **las dos implementaciones son intercambiables**: el panel
- * del paciente pide páginas al servidor y el lector del profesional sirve desde memoria, y las dos
- * tienen que devolver los mismos eventos del mismo rango en el mismo orden. Si no, el paciente y el
- * médico verían medias distintas del mismo periodo, que es justo lo que la abstracción impide.
+ * What is really tested here is that **the two implementations are interchangeable**: the patient
+ * panel asks the server for pages and the professional's reader serves from memory, and both have
+ * to return the same events of the same range in the same order. Otherwise patient and doctor
+ * would see different means for the same period, which is exactly what the abstraction prevents.
  *
- * `livewireEventSource` se prueba sin clave maestra en memoria a propósito: así todos los sobres
- * fallan al abrirse y se comprueba de paso que un sobre roto se cuenta y no tumba la carga
- * (ADR 0004). Lo que se afirma de esa implementación es la paginación, que es su trabajo.
+ * `livewireEventSource` is tested with no master key in memory on purpose: that way every envelope
+ * fails to open and it also checks that a broken envelope is counted and does not take the load
+ * down (ADR 0004). What is asserted of that implementation is the pagination, which is its job.
  *
  *     npm test
  */
@@ -28,15 +28,15 @@ import { livewireEventSource } from '../../resources/js/health/livewireEventSour
 /**
  * @param {string} occurredAt
  * @param {string} [type]
- * @returns {object} Evento ya descifrado y aplanado.
+ * @returns {object} Event already decrypted and flattened.
  */
 function decryptedEvent(occurredAt, type = 'glucose') {
     return { v: 1, type, tz: '+00:00', occurredAt, data: { value: '100', unit: 'mg/dL' } };
 }
 
-// --- Rangos --------------------------------------------------------------------------------------
+// --- Ranges --------------------------------------------------------------------------------------
 
-test('rangeEndMs: un rango abierto por arriba no pone techo', () => {
+test('rangeEndMs: a range open at the top sets no ceiling', () => {
     assert.equal(rangeEndMs({ to: null }), Infinity);
     assert.equal(rangeEndMs({}), Infinity);
     assert.equal(rangeEndMs({ to: 'no es una fecha' }), Infinity);
@@ -46,10 +46,10 @@ test('rangeEndMs: un rango abierto por arriba no pone techo', () => {
 // --- memoryEventSource ---------------------------------------------------------------------------
 
 /**
- * El mismo criterio que el servidor (`HealthEventPage::fetchEvents`): `>=` al inicio y `<` al final.
- * Un evento justo en el instante de corte no puede entrar en dos periodos ni caerse de los dos.
+ * The same criterion as the server (`HealthEventPage::fetchEvents`): `>=` at the start and `<` at
+ * the end. An event exactly on the cut instant cannot enter two periods or fall out of both.
  */
-test('memoryEventSource: acota [from, to) igual que el servidor', async () => {
+test('memoryEventSource: clips [from, to) like the server', async () => {
     const source = memoryEventSource([
         decryptedEvent('2026-07-23T12:00:00.000000Z'),
         decryptedEvent('2026-07-24T00:00:00.000000Z'),
@@ -65,7 +65,7 @@ test('memoryEventSource: acota [from, to) igual que el servidor', async () => {
     ]);
 });
 
-test('memoryEventSource: devuelve del más reciente al más antiguo, como el servidor', async () => {
+test('memoryEventSource: returns from most recent to oldest, like the server', async () => {
     const source = memoryEventSource([
         decryptedEvent('2026-07-20T09:00:00.000000Z'),
         decryptedEvent('2026-07-25T09:00:00.000000Z'),
@@ -79,13 +79,13 @@ test('memoryEventSource: devuelve del más reciente al más antiguo, como el ser
         '2026-07-22T09:00:00.000000Z',
         '2026-07-20T09:00:00.000000Z',
     ]);
-    /** No hay paginación que agotar: están todos delante. */
+    /** There is no pagination to exhaust: they are all right here. */
     assert.equal(truncated, false);
     assert.equal(failedToOpen, 0);
 });
 
-/** Esconder un registro es peor que enseñarlo mal colocado: una fecha ilegible no se descarta. */
-test('memoryEventSource: una fecha ilegible no hace desaparecer el registro', async () => {
+/** Hiding a record is worse than showing it badly placed: an unreadable date is not dropped. */
+test('memoryEventSource: an unreadable date does not make the record disappear', async () => {
     const source = memoryEventSource([decryptedEvent('no es una fecha')]);
 
     const { events } = await source({ from: '2026-07-24T00:00:00.000000Z', to: '2026-07-25T00:00:00.000000Z' });
@@ -93,8 +93,8 @@ test('memoryEventSource: una fecha ilegible no hace desaparecer el registro', as
     assert.equal(events.length, 1);
 });
 
-/** Los sobres del lector se abren al deshacer el paquete: el recuento tiene que llegar a la vista. */
-test('memoryEventSource: conserva cuántos sobres no abrieron (ADR 0004)', async () => {
+/** The reader envelopes are opened while unpacking: the count has to reach the view. */
+test('memoryEventSource: keeps how many envelopes did not open (ADR 0004)', async () => {
     const source = memoryEventSource([decryptedEvent('2026-07-25T09:00:00.000000Z')], { failedToOpen: 3 });
 
     const { failedToOpen } = await source({ from: null, to: null });
@@ -105,7 +105,7 @@ test('memoryEventSource: conserva cuántos sobres no abrieron (ADR 0004)', async
 // --- livewireEventSource -------------------------------------------------------------------------
 
 /**
- * @param {list<list<object>>} pages Lo que devuelve el servidor, en orden.
+ * @param {list<list<object>>} pages What the server returns, in order.
  * @returns {{fetchPage: Function, calls: list<object>}}
  */
 function fakeServer(pages) {
@@ -123,13 +123,13 @@ function fakeServer(pages) {
 
 /**
  * @param {string} occurredAt
- * @returns {{occurredAt: string, payload: string}} Como lo devuelve `fetchEvents`, sin descifrar.
+ * @returns {{occurredAt: string, payload: string}} As `fetchEvents` returns it, undecrypted.
  */
 function rawEvent(occurredAt) {
     return { id: occurredAt, occurredAt, payload: 'v1.no-abre' };
 }
 
-test('livewireEventSource: pasa el rango al servidor y pagina con el más antiguo como cursor', async () => {
+test('livewireEventSource: passes the range to the server and pages with the oldest as cursor', async () => {
     const server = fakeServer([
         [rawEvent('2026-07-25T09:00:00.000000Z'), rawEvent('2026-07-24T09:00:00.000000Z')],
         [rawEvent('2026-06-01T09:00:00.000000Z')],
@@ -146,15 +146,15 @@ test('livewireEventSource: pasa el rango al servidor y pagina con el más antigu
     assert.equal(server.calls[0].cursor, null);
     assert.equal(server.calls[0].limit, 2);
     assert.deepEqual(server.calls[0].range, range);
-    /** El cursor es el evento más antiguo de la página anterior; el servidor lo aplica con `<`. */
+    /** The cursor is the oldest event of the previous page; the server applies it with `<`. */
     assert.equal(server.calls[1].cursor, '2026-07-24T09:00:00.000000Z');
     assert.equal(truncated, false);
-    /** Sin clave maestra en memoria ningún sobre abre: se cuentan y la carga no se cae (ADR 0004). */
+    /** With no master key in memory no envelope opens: they are counted and the load survives (ADR 0004). */
     assert.equal(events.length, 0);
     assert.equal(failedToOpen, 3);
 });
 
-test('livewireEventSource: una página incompleta cierra la carga sin pedir más', async () => {
+test('livewireEventSource: an incomplete page closes the load without asking for more', async () => {
     const server = fakeServer([[rawEvent('2026-07-25T09:00:00.000000Z')]]);
 
     const { truncated } = await livewireEventSource({
@@ -168,11 +168,11 @@ test('livewireEventSource: una página incompleta cierra la carga sin pedir más
 });
 
 /**
- * Agotar el tope de páginas sin llegar al inicio del rango tiene que **decirse**: el resumen sigue
- * siendo el de los registros más recientes, y presentarlo como el del periodo entero es la clase de
- * recorte silencioso que hace leer mal todo lo demás.
+ * Exhausting the page cap without reaching the start of the range has to **be said**: the summary
+ * is still the one of the most recent records, and presenting it as the one of the whole period is
+ * the kind of silent clip that makes everything else be read wrongly.
  */
-test('livewireEventSource: al agotar el tope de páginas lo declara como truncado', async () => {
+test('livewireEventSource: on exhausting the page cap it declares the load truncated', async () => {
     const pages = Array.from({ length: 4 }, (unused, index) => [
         rawEvent(new Date(Date.parse('2026-07-25T09:00:00.000Z') - (index * 3_600_000)).toISOString()),
     ]);
@@ -189,14 +189,14 @@ test('livewireEventSource: al agotar el tope de páginas lo declara como truncad
     assert.equal(truncated, true);
 });
 
-// --- Piezas sueltas -------------------------------------------------------------------------------
+// --- Loose pieces ---------------------------------------------------------------------------------
 
-test('needsAnotherPage y rangeStartMs siguen gobernando el bucle de paginación', () => {
+test('needsAnotherPage and rangeStartMs still govern the pagination loop', () => {
     assert.equal(needsAnotherPage([{ occurredAt: '2026-07-25T09:00:00.000000Z' }], 2, -Infinity), false);
     assert.equal(rangeStartMs({ from: null }), -Infinity);
 });
 
-test('flattenDecryptedEvent: junta occurredAt con el contenido descifrado', () => {
+test('flattenDecryptedEvent: joins occurredAt with the decrypted content', () => {
     const flattened = flattenDecryptedEvent(
         { occurredAt: '2026-07-25T09:00:00.000000Z' },
         { v: 1, type: 'glucose', tz: '+00:00', data: { value: '100' } },

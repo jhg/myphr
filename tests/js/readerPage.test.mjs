@@ -1,13 +1,13 @@
 /**
- * Flujo de la página del lector (`resources/js/reader/readerPage.js`, ADR 0011).
+ * Flow of the reader page (`resources/js/reader/readerPage.js`, ADR 0011).
  *
- * El test que más pesa es el último: arma un recorte **exactamente como lo arma quien comparte** y
- * lo abre **exactamente como lo abre el profesional**, con un `fetch` de mentira en medio que hace
- * de servidor. Es la única forma de comprobar que las dos mitades reconstruyen el mismo dato
- * asociado, que es donde un descuido no produce un error de compilación sino un recorte que no abre
- * en la consulta.
+ * The test that weighs most is the last one: it builds a clipping **exactly as whoever shares
+ * builds it** and opens it **exactly as the professional opens it**, with a fake `fetch` in
+ * between acting as the server. It is the only way to check that both halves rebuild the same
+ * associated data, which is where an oversight produces no compilation error but a clipping that
+ * does not open in the appointment.
  *
- * Corre Argon2id de verdad (los parámetros del KSF de OPAQUE), así que tarda unos segundos.
+ * It runs Argon2id for real (the OPAQUE KSF parameters), so it takes a few seconds.
  *
  *     npm test
  */
@@ -32,6 +32,7 @@ import {
     attemptMessage,
     describeReaderError,
     openClipping,
+    requestPinSalt,
     readFragment,
     ReaderError,
     sanitizePin,
@@ -46,14 +47,14 @@ afterEach(() => {
     globalThis.fetch = originalFetch;
 });
 
-// --- El fragmento de la URL ----------------------------------------------------------------------
+// --- The URL fragment ------------------------------------------------------------------------------
 
 /**
- * Los reescritores de URL del correo sanitario y los portales cautivos se comen el fragmento, y sin
- * él no hay clave. Avisar **antes** de tocar el servidor evita gastar uno de los cinco intentos por
- * un problema que no es del PIN.
+ * The URL rewriters of healthcare mail and captive portals eat the fragment, and without it there
+ * is no key. Warning **before** touching the server avoids spending one of the five attempts on a
+ * problem that is not the PIN's.
  */
-test('un enlace sin fragmento se rechaza antes de tocar el servidor', () => {
+test('a link with no fragment is rejected before touching the server', () => {
     globalThis.fetch = () => assert.fail('no debería haber ninguna petición');
 
     for (const empty of ['', '#', '#   ']) {
@@ -63,26 +64,26 @@ test('un enlace sin fragmento se rechaza antes de tocar el servidor', () => {
     }
 });
 
-test('un fragmento que no tiene la forma esperada se rechaza igual', () => {
+test('a fragment that does not have the expected shape is rejected too', () => {
     assert.throws(() => readFragment('#no-es-base64url-de-40-bytes'), ReaderError);
 });
 
-test('un fragmento válido devuelve la clave de envío y el instante de generación', () => {
+test('a valid fragment returns the send key and the generation instant', () => {
     const sendKey = generateSendKey();
     const generatedAt = new Date('2026-07-20T08:00:00.000Z');
 
     assert.deepEqual(readFragment(`#${encodeShareFragment({ sendKey, generatedAt })}`), { sendKey, generatedAt });
 });
 
-// --- El PIN --------------------------------------------------------------------------------------
+// --- The PIN -------------------------------------------------------------------------------------
 
-/** Quien dicta un PIN lo dicta en dos mitades; rechazar el espacio sería gastar un intento por él. */
-test('el PIN se limpia de espacios y guiones antes de comprobarlo', () => {
+/** Whoever dictates a PIN dictates it in two halves; rejecting the space would spend an attempt on it. */
+test('the PIN is cleaned of spaces and dashes before checking it', () => {
     assert.equal(sanitizePin(' 421 803 '), '421803');
     assert.equal(sanitizePin('421-803'), '421803');
 });
 
-test('un PIN que no son seis dígitos no llega a salir del navegador', () => {
+test('a PIN that is not six digits never leaves the browser', () => {
     globalThis.fetch = () => assert.fail('no debería haber ninguna petición');
 
     for (const bad of ['4218', '4218031', 'abcdef', '']) {
@@ -90,23 +91,23 @@ test('un PIN que no son seis dígitos no llega a salir del navegador', () => {
     }
 });
 
-// --- Los mensajes ---------------------------------------------------------------------------------
+// --- The messages ----------------------------------------------------------------------------------
 
 /**
- * Las cuatro causas —inexistente, caducado, revocado y PIN incorrecto— dan el mismo mensaje. Lo que
- * sí se puede contar son los intentos hechos **desde este navegador**, y se dice con esas palabras:
- * el contador de verdad vive en una columna del servidor y no sale de ahí.
+ * The four causes —non-existent, expired, revoked and wrong PIN— give the same message. What can
+ * be counted are the attempts made **from this browser**, and it is said in those words: the real
+ * counter lives in a server column and never leaves it.
  */
-test('el mensaje de fallo no distingue causas y sí cuenta los intentos de este navegador', () => {
+test('the failure message does not tell causes apart and does count the attempts of this browser', () => {
     const message = attemptMessage(2, 5);
 
     assert.match(message, /2 of 5 failed attempts from this browser/);
     assert.match(attemptMessage(5, 5), /5 failed attempts from this browser/);
 
     /**
-     * El mensaje enumera las cuatro causas posibles precisamente porque no dice cuál es, y lo
-     * único que cambia entre dos fallos es el recuento de intentos: la parte que describe el fallo
-     * es idéntica, así que no hay nada en ella de lo que deducir si el enlace existe.
+     * The message lists the four possible causes precisely because it does not say which one it
+     * is, and the only thing that changes between two failures is the attempt count: the part
+     * describing the failure is identical, so there is nothing in it to deduce whether the link exists.
      */
     const [first, second] = [attemptMessage(1, 5), attemptMessage(2, 5)];
     const generic = (text) => text.slice(0, text.indexOf('That is'));
@@ -117,19 +118,19 @@ test('el mensaje de fallo no distingue causas y sí cuenta los intentos de este 
 });
 
 /**
- * Un fallo de integridad sí tiene mensaje propio: a esas alturas el PIN ya era correcto, así que lo
- * que falla es lo entregado, y eso no se calla ni se enseña a medias (ADR 0004).
+ * An integrity failure does get a message of its own: by then the PIN was already correct, so what
+ * fails is what was delivered, and that is neither silenced nor shown half-way (ADR 0004).
  */
-test('un fallo de descifrado se dice en voz alta y no se enseña nada parcial', () => {
+test('a decryption failure is said out loud and nothing partial is shown', () => {
     for (const failure of [new EnvelopeError('x'), new ShareEnvelopeError('x')]) {
         assert.match(describeReaderError(failure), /altered or incomplete/);
     }
 });
 
-// --- El recorrido completo -----------------------------------------------------------------------
+// --- The full walk -----------------------------------------------------------------------------------
 
 /**
- * Arma un recorte igual que `health/sharePage.js` y devuelve todo lo que hace falta para abrirlo.
+ * Builds a clipping just like `health/sharePage.js` and returns everything needed to open it.
  *
  * @param {object} [options]
  * @returns {Promise<object>}
@@ -166,8 +167,8 @@ async function buildClipping({ events = [] } = {}) {
 }
 
 /**
- * Servidor de mentira con las dos rutas públicas: `challenge` devuelve la sal siempre, y `open`
- * devuelve el paquete **solo** si el comprobante cuadra. Es el contrato del ADR 0011.
+ * Fake server with the two public routes: `challenge` always returns the salt, and `open` returns
+ * the package **only** if the proof matches. It is the contract of ADR 0011.
  *
  * @param {object} clipping
  * @returns {{calls: list<string>}}
@@ -201,7 +202,7 @@ function stubServer(clipping) {
 
 const ENDPOINTS = { challenge: `/s/${LINK_ID}/challenge`, open: `/s/${LINK_ID}/open` };
 
-test('abre el recorte de punta a punta y no pide el paquete antes de tener el comprobante', async () => {
+test('it opens the clipping end to end and does not ask for the package before having the proof', async () => {
     const glucose = {
         occurredAt: '2026-07-19T07:15:00.000000Z',
         content: {
@@ -231,15 +232,40 @@ test('abre el recorte de punta a punta y no pide el paquete antes de tener el co
     assert.equal(body.eventCount, 1);
     assert.deepEqual(body.excludedTypes, ['meal']);
 
-    /** El paquete se pide después del `challenge`, nunca antes: ese orden es el ADR entero. */
+    /** The package is asked for after the `challenge`, never before: that order is the whole ADR. */
     assert.deepEqual(calls, [ENDPOINTS.challenge, ENDPOINTS.open]);
 
-    /** El progreso es el real del estiramiento, no una animación: sube y termina. */
+    /** The progress is the real one of the stretching, not an animation: it rises and finishes. */
     assert.ok(progress.length > 0);
     assert.ok(progress[progress.length - 1] > progress[0]);
 }, { timeout: 60_000 });
 
-test('un PIN incorrecto no devuelve nada del paquete y sale por el fallo genérico', async () => {
+/**
+ * The salt depends on nothing the professional types, so the screen asks for it while the page is
+ * still loading and hands the promise to `openClipping`. What must not happen is a second request:
+ * that would put back the very round trip this exists to remove, and it would happen with someone
+ * already waiting with the PIN typed.
+ */
+test('a salt fetched in advance is used as is, without asking for the challenge again', async () => {
+    const clipping = await buildClipping();
+    const { calls } = stubServer(clipping);
+
+    const pinSalt = requestPinSalt(ENDPOINTS);
+
+    const body = await openClipping({
+        endpoints: ENDPOINTS,
+        linkId: LINK_ID,
+        pin: clipping.pin,
+        pinSalt,
+        sendKey: clipping.sendKey,
+        generatedAt: clipping.generatedAt,
+    });
+
+    assert.equal(body.eventCount, 0);
+    assert.deepEqual(calls, [ENDPOINTS.challenge, ENDPOINTS.open]);
+}, { timeout: 60_000 });
+
+test('a wrong PIN returns nothing of the package and leaves through the generic failure', async () => {
     const clipping = await buildClipping();
 
     stubServer(clipping);
@@ -257,11 +283,11 @@ test('un PIN incorrecto no devuelve nada del paquete y sale por el fallo genéri
 }, { timeout: 60_000 });
 
 /**
- * El instante de generación viaja en el fragmento, no lo pone el servidor. Si llegara otro —porque
- * alguien tocó el enlace o porque el servidor sirvió otro paquete—, el dato asociado deja de cuadrar
- * y el paquete **no abre**. Nunca se enseña un recorte que no verifica.
+ * The generation instant travels in the fragment, the server does not set it. If another one
+ * arrived —because somebody touched the link or the server served another package—, the
+ * associated data stops matching and the package **does not open**. Nothing unverified is shown.
  */
-test('un instante de generación distinto del que se cifró no abre el paquete', async () => {
+test('a generation instant different from the one encrypted does not open the package', async () => {
     const clipping = await buildClipping();
 
     stubServer(clipping);
@@ -279,11 +305,11 @@ test('un instante de generación distinto del que se cifró no abre el paquete',
 }, { timeout: 60_000 });
 
 /**
- * `S` es la mitad que no ve el servidor: con el paquete, el envoltorio y el PIN correctos, pero sin
- * la clave del fragmento, no se abre nada. Es lo que hace que un volcado de la base de datos no
+ * `S` is the half the server does not see: with the right package, wrapper and PIN, but without
+ * the key of the fragment, nothing opens. It is what makes a database dump not enough.
  * baste.
  */
-test('sin la clave del fragmento no se abre, aunque el PIN sea correcto', async () => {
+test('without the key of the fragment it does not open, even with the right PIN', async () => {
     const clipping = await buildClipping();
 
     stubServer(clipping);

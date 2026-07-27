@@ -114,7 +114,7 @@ it('rejects other alphabets entirely', function (string $input): void {
  */
 it('accepts only the canonical spelling when two strings decode to the same bytes', function (): void {
     $canonical = 'QQ';       // 0x41, bits sobrantes a cero
-    $nonCanonical = 'QR';    // mismos bytes, bits sobrantes a uno
+    $nonCanonical = 'QR';    // same bytes, leftover bits set to one
 
     expect(base64_decode($canonical, true))->toBe(base64_decode($nonCanonical, true))
         ->and(base64_decode($canonical, true))->toBe('A')
@@ -154,7 +154,7 @@ it('rejects leftover bits in the last character of a 32 byte message', function 
     $binary = random_bytes(32);
     $canonical = Base64Url::encode($binary);
 
-    // 43 caracteres * 6 bits = 258 bits para 256 bits de datos: 2 bits sobrantes.
+    // 43 characters * 6 bits = 258 bits for 256 bits of data: 2 leftover bits.
     $nonCanonical = nonCanonicalVariant($canonical, unusedBits: 2);
 
     expect(base64_decode(strtr($nonCanonical, '-_', '+/'), true))->toBe($binary)
@@ -169,7 +169,7 @@ it('rejects leftover bits in the last character of a 64 byte message', function 
     $binary = random_bytes(64);
     $canonical = Base64Url::encode($binary);
 
-    // 86 caracteres * 6 bits = 516 bits para 512 bits de datos: 4 bits sobrantes.
+    // 86 characters * 6 bits = 516 bits for 512 bits of data: 4 leftover bits.
     $nonCanonical = nonCanonicalVariant($canonical, unusedBits: 4);
 
     expect(base64_decode(strtr($nonCanonical, '-_', '+/'), true))->toBe($binary);

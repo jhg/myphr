@@ -13,7 +13,7 @@ use App\Security\Opaque\Ristretto255;
 const R255_SERVER_PRIVATE_KEY_HEX = '47451a85372f8b3537e249d7b54188091fb18edde78094b43e2ba42b5eb89f0d';
 const R255_SERVER_PUBLIC_KEY_HEX = 'b2fe7af9f48cc502d016729d2fe25cdd433f2c4bc904660b2a382c9b79df1a78';
 
-/** Orden `L` del grupo primo ristretto255, little-endian (RFC 9496 §4). */
+/** Order `L` of the ristretto255 prime group, little-endian (RFC 9496 §4). */
 const R255_GROUP_ORDER_HEX = 'edd3f55c1a631258d69cf7a2def9de1400000000000000000000000000000010';
 
 function r255Zeroes(int $length): string
@@ -127,7 +127,7 @@ describe('scalarMultiplyBase', function (): void {
     it('rejects a non-canonical scalar that libsodium would silently accept', function (): void {
         $nonCanonical = str_repeat("\xff", 32);
 
-        // libsodium no reduce la entrada: devuelve un punto sin protestar.
+        // libsodium does not reduce the input: it returns a point without complaining.
         expect(strlen(sodium_crypto_scalarmult_ristretto255_base($nonCanonical)))->toBe(32);
 
         expect(fn () => Ristretto255::scalarMultiplyBase($nonCanonical))

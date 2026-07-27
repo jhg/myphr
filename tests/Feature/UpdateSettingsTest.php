@@ -10,15 +10,15 @@ use Illuminate\Support\Facades\Route;
 uses(RefreshDatabase::class);
 
 /**
- * La ruta real vive en `PhrPanelProvider::sessionRoutes()`, que registra otro trabajo. Aquí se monta
- * una equivalente (mismo controlador, mismo middleware de autenticación) para probar el controlador
- * sin depender de ese registro.
+ * The real route lives in `PhrPanelProvider::sessionRoutes()`, registered by another piece of work.
+ * An equivalent one is mounted here (same controller, same authentication middleware) to test the
+ * controller without depending on that registration.
  */
 beforeEach(function (): void {
     Route::middleware('auth')->put('/test/phr/settings', UpdateSettingsController::class);
 });
 
-/** Precondición `If-Match` del sobre vigente de un usuario. */
+/** `If-Match` precondition for a user's current envelope. */
 function ifMatchFor(?string $envelope): string
 {
     return $envelope === null || $envelope === '' ? '*' : '"'.hash('sha256', $envelope).'"';
@@ -38,8 +38,8 @@ it('persists a well formed envelope and returns its tag', function (): void {
 });
 
 /**
- * El servidor solo valida la envoltura, pero la valida de verdad: un sobre que el cliente nunca
- * podría abrir no se almacena, porque sustituiría al único que sí abre.
+ * The server only validates the wrapper, but it validates it for real: an envelope the client could
+ * never open is not stored, because it would replace the only one that does open.
  */
 it('rejects a malformed envelope without writing anything', function (string $envelope): void {
     $original = envelopeCipherText();
@@ -53,12 +53,13 @@ it('rejects a malformed envelope without writing anything', function (string $en
     expect($user->refresh()->encrypted_settings)->toBe($original);
 })->with([
     'sin prefijo v1.' => fn (): string => substr(envelopeCipherText(), 3),
-    'base64url no canónico' => fn (): string => 'v1.no-es-base64url!!',
-    'tamaño que no es de relleno' => fn (): string => 'v1.'.rtrim(strtr(base64_encode(random_bytes(48)), '+/', '-_'), '='),
+    'non-canonical base64url' => fn (): string => 'v1.no-es-base64url!!',
+    'size that is not a padding size' => fn (): string => 'v1.'.rtrim(strtr(base64_encode(random_bytes(48)), '+/', '-_'), '='),
 ]);
 
 /**
- * El usuario sale de la sesión y nunca del cuerpo: no hay campo por el que apuntar a otra fila.
+ * The user comes from the session and never from the body: there is no field to point at another
+ * row.
  */
 it('never writes the settings of another user', function (): void {
     $other = User::factory()->registered()->create(['encrypted_settings' => $otherEnvelope = envelopeCipherText()]);
@@ -76,7 +77,7 @@ it('never writes the settings of another user', function (): void {
         ->and($user->refresh()->encrypted_settings)->toBe($mine);
 });
 
-/** Dos pestañas: la segunda escritura no puede pisar en silencio a la primera. */
+/** Two tabs: the second write must not silently overwrite the first. */
 it('rejects a stale If-Match instead of losing the other write', function (): void {
     $user = User::factory()->registered()->create(['encrypted_settings' => envelopeCipherText()]);
     $stale = ifMatchFor(envelopeCipherText());
@@ -99,12 +100,12 @@ it('requires the If-Match precondition', function (): void {
 });
 
 /**
- * El idioma es el único campo que viaja fuera del sobre, en claro, en `users.locale`: es la
- * excepción consciente del ADR 0007, porque el servidor tiene que resolverlo para pintar el panel y
- * no puede leer lo que va cifrado. Sin este test, que la elección de idioma no llegue a persistirse
- * es un fallo silencioso: el formulario responde 200 y la preferencia se pierde.
+ * The language is the only field that travels outside the envelope, in the clear, in `users.locale`:
+ * it is the deliberate exception in ADR 0007, because the server has to resolve it to paint the
+ * panel and cannot read what is encrypted. Without this test, the language choice failing to persist
+ * is a silent bug: the form answers 200 and the preference is lost.
  */
-it('guarda el idioma en claro junto al sobre cifrado', function (): void {
+it('stores the language in the clear next to the encrypted envelope', function (): void {
     $user = User::factory()->registered()->create(['encrypted_settings' => null, 'locale' => null]);
     $envelope = envelopeCipherText();
 
@@ -121,10 +122,10 @@ it('guarda el idioma en claro junto al sobre cifrado', function (): void {
 });
 
 /**
- * Lista cerrada: el valor acaba en `App::setLocale()` y elige un fichero de idioma, así que aceptar
- * cualquier cadena dejaría al panel sin traducir sin decir por qué.
+ * A closed list: the value ends up in `App::setLocale()` and picks a language file, so accepting any
+ * string would leave the panel untranslated without saying why.
  */
-it('rechaza un idioma que no está soportado y no escribe nada', function (): void {
+it('rejects an unsupported language and writes nothing', function (): void {
     $user = User::factory()->registered()->create(['encrypted_settings' => null, 'locale' => 'es']);
 
     $this->actingAs($user)
@@ -140,12 +141,12 @@ it('rechaza un idioma que no está soportado y no escribe nada', function (): vo
 });
 
 /**
- * Los tests de arriba montan una ruta equivalente para probar el controlador aislado, así que no
- * ven la ruta real ni su pila de middleware. Este sí: si el registro en el panel se pierde o cambia
- * de método, el resto seguiría en verde mientras la pantalla falla en el navegador, que es
- * exactamente lo que ocurrió con el idioma.
+ * The tests above mount an equivalent route to test the controller in isolation, so they do not see
+ * the real route or its middleware stack. This one does: if the panel registration is lost or
+ * changes method, the rest would stay green while the screen fails in the browser, which is exactly
+ * what happened with the language.
  */
-it('la ruta real del panel guarda los ajustes y el idioma', function (): void {
+it('the real panel route stores the settings and the language', function (): void {
     $user = User::factory()->registered()->create(['encrypted_settings' => null, 'locale' => null]);
     $envelope = envelopeCipherText();
 

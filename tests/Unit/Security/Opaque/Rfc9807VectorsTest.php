@@ -33,7 +33,7 @@ use Tests\Unit\Security\Opaque\Support\Rfc9807Vectors;
  */
 
 /**
- * Compara dos cadenas binarias mostrando el diff en hexadecimal.
+ * Compares two binary strings, showing the diff in hexadecimal.
  */
 function expectBytes(string $actual, string $expected, string $label): void
 {
@@ -246,7 +246,7 @@ it('reproduces RFC 9807 C.2.1 (fake record for an unregistered user)', function 
     $vector = Rfc9807Vectors::fakeVector1();
 
     // RFC 9807 §6.3.2.2: the fake registration envelope is Nn + Nm zero bytes;
-    // cero; el vector no lo lista precisamente por eso (`docs/OPAQUE.md` §13.2).
+    // the vector does not list it precisely because of that (`docs/OPAQUE.md` §13.2).
     $record = new RegistrationRecord(
         $vector['client_public_key'],
         $vector['masking_key'],

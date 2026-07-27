@@ -8,11 +8,11 @@ use Illuminate\Support\Facades\Route;
 use Livewire\Livewire;
 
 /**
- * ¿Esta ruta arranca sesión?
+ * Does this route start a session?
  *
- * `gatherMiddleware()` devuelve el grupo `web` sin desplegar y **no descuenta** lo que se le haya
- * retirado con `withoutMiddleware()`, así que las rutas del lector aparecerían con sesión. Lo que
- * decide es la resta.
+ * `gatherMiddleware()` returns the `web` group unexpanded and **does not subtract** whatever was
+ * removed with `withoutMiddleware()`, so the reader routes would show up as having a session. What
+ * decides is the subtraction.
  *
  * @param  Illuminate\Routing\Route  $route
  */
@@ -29,37 +29,38 @@ function startsSession($route): bool
 }
 
 /**
- * El alcance de la cookie de sesión (ADR 0011).
+ * Scope of the session cookie (ADR 0011).
  *
- * La lectura de un recorte compartido promete que nada identifica a quien lee: `routes/web.php` le
- * retira `StartSession`, `EncryptCookies` y `AddQueuedCookiesToResponse` a las rutas `/s`. Eso
- * gobierna lo que Laravel **lee y escribe**, y no lo que el navegador **manda**: con la cookie en
- * `path=/`, una navegación de nivel superior a `/s/{link}` la lleva igual si esa persona tiene sesión
- * abierta en el panel, y con ella el identificador del recorte y la cuenta quedan en la misma línea
- * de cualquier registro de acceso, proxy, WAF o CDN por delante de la aplicación. Es justo la
- * correlación que el ADR dice evitar.
+ * Reading a shared clipping promises that nothing identifies the reader: `routes/web.php` removes
+ * `StartSession`, `EncryptCookies` and `AddQueuedCookiesToResponse` from the `/s` routes. That
+ * governs what Laravel **reads and writes**, and not what the browser **sends**: with the cookie at
+ * `path=/`, a top-level navigation to `/s/{link}` carries it anyway if that person has a session
+ * open in the panel, and with it the clipping identifier and the account end up on the same line of
+ * any access log, proxy, WAF or CDN in front of the application. That is exactly the correlation the
+ * ADR says to avoid.
  *
- * Por eso la cookie se acota al prefijo del panel, y por eso el endpoint de Livewire —que de serie
- * vive fuera de `/phr`— se registra dentro. Estas comprobaciones son las que impiden que un cambio
- * futuro del prefijo, o una ruta nueva con sesión colgada de la raíz, reabran el agujero en silencio.
+ * That is why the cookie is scoped to the panel prefix, and why the Livewire endpoint —which by
+ * default lives outside `/phr`— is registered inside it. These checks are what stop a future change
+ * of the prefix, or a new route with a session hanging off the root, from silently reopening the
+ * hole.
  */
-test('la cookie de sesión está acotada al prefijo del panel', function (): void {
+test('the session cookie is scoped to the panel prefix', function (): void {
     expect(config('session.path'))->toBe('/'.Filament::getPanel('phr')->getPath());
 });
 
-test('el endpoint de Livewire cuelga del prefijo del panel, o la cookie no le llegaría', function (): void {
+test('the Livewire endpoint hangs off the panel prefix, or the cookie would not reach it', function (): void {
     expect(Livewire::getUpdateUri())->toStartWith('/'.Filament::getPanel('phr')->getPath().'/');
 });
 
 /**
- * Toda ruta propia que arranca sesión tiene que caber dentro del alcance de la cookie. Una que
- * quedara fuera no recibiría la cookie del navegador y fallaría en silencio con un 419, y arreglarlo
- * volviendo a poner `path=/` desharía lo de arriba sin que nadie lo relacione.
+ * Every route of ours that starts a session has to fit inside the cookie scope. One that fell
+ * outside would not receive the cookie from the browser and would fail silently with a 419, and
+ * fixing it by putting `path=/` back would undo the above without anyone connecting the two.
  *
- * Se miran solo las rutas propias: las de Livewire que no se usan (`upload-file`, `preview-file`) y
- * las de descarga de Filament siguen declarando `web`, y ninguna se llama desde esta aplicación.
+ * Only our own routes are examined: the unused Livewire ones (`upload-file`, `preview-file`) and the
+ * Filament download ones still declare `web`, and none of them is called from this application.
  */
-test('ninguna ruta propia con sesión queda fuera del alcance de la cookie', function (): void {
+test('no route of ours with a session falls outside the cookie scope', function (): void {
     $scope = trim((string) config('session.path'), '/');
 
     $outside = collect(Route::getRoutes()->getRoutes())
@@ -77,9 +78,9 @@ test('ninguna ruta propia con sesión queda fuera del alcance de la cookie', fun
 });
 
 /**
- * Y la otra mitad del perímetro, que ya estaba: las rutas del lector no arrancan sesión.
+ * And the other half of the perimeter, which was already there: the reader routes start no session.
  */
-test('las rutas del lector siguen sin sesión', function (): void {
+test('the reader routes stay without a session', function (): void {
     $readerRoutes = collect(Route::getRoutes()->getRoutes())
         ->filter(fn ($route): bool => str_starts_with($route->uri(), 's/'));
 

@@ -8,10 +8,10 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 uses(RefreshDatabase::class);
 
 /**
- * Cabecera `phr-user-id` (Spec 0001 §6.2): el dato asociado del sobre AEAD de la clave maestra que
- * la recuperación tras un F5 necesita y que un login en la misma carga ya trae por su cuenta.
+ * The `phr-user-id` header (Spec 0001 §6.2): the associated data of the master key AEAD envelope
+ * that recovery after a page refresh needs and that a login in the same load already brings itself.
  */
-it('el panel publica el identificador del usuario autenticado en la cabecera', function (): void {
+it('the panel publishes the authenticated user identifier in the head', function (): void {
     $user = User::factory()->registered()->create();
 
     $html = $this->actingAs($user)->get('/phr')->assertOk()->getContent();
@@ -19,7 +19,7 @@ it('el panel publica el identificador del usuario autenticado en la cabecera', f
     expect($html)->toContain('name="phr-user-id" content="'.$user->id.'"');
 });
 
-it('la pantalla de login no publica ningun identificador de usuario', function (): void {
+it('the login screen publishes no user identifier', function (): void {
     $html = $this->get('/phr/login')->assertOk()->getContent();
 
     expect($html)->not->toContain('phr-user-id');

@@ -15,23 +15,23 @@ use Spatie\Activitylog\Models\Activity;
 uses(RefreshDatabase::class);
 
 /**
- * Las rutas reales viven en `PhrPanelProvider` detrás de toda la pila del panel (secreto de sesión,
- * caducidad por inactividad). Aquí se montan equivalentes con el mismo controlador y solo `auth`,
- * como ya hace `UpdateSettingsTest`: lo que se prueba es el rastro, no el middleware.
+ * The real routes live in `PhrPanelProvider` behind the whole panel stack (session secret, idle
+ * timeout). Equivalents are mounted here with the same controller and only `auth`, as
+ * `UpdateSettingsTest` already does: what is under test is the trail, not the middleware.
  */
 beforeEach(function (): void {
     Route::middleware('auth')->put('/test/phr/settings', UpdateSettingsController::class);
-    /** El bloqueo necesita sesión de verdad: destruye el secreto y la invalida. */
+    /** Locking needs a real session: it destroys the secret and invalidates it. */
     Route::middleware(['web', 'auth'])->post('/test/phr/lock', LockController::class);
 });
 
 /**
- * Rastro de actividad: qué ocurrió y cuándo, nunca qué contenía.
+ * Activity trail: what happened and when, never what it contained.
  *
- * En una aplicación de conocimiento cero esto es lo único que el servidor puede contar, así que la
- * prueba que más importa de este fichero no es que se escriban las filas, sino la última: que
- * ninguna de ellas contenga texto cifrado. Un registro que copiase el sobre multiplicaría los
- * sitios de los que habría que borrarlo y no aportaría nada, porque el servidor no puede abrirlo.
+ * In a zero-knowledge application this is the only thing the server can tell, so the check that
+ * matters most in this file is not that the rows get written, but the last one: that none of them
+ * contains ciphertext. A log that copied the envelope would multiply the places you would have to
+ * delete it from and would add nothing, because the server cannot open it.
  */
 function lastActivity(): Activity
 {
@@ -53,7 +53,7 @@ function activityEvents(string $logName): array
         ->all();
 }
 
-it('anota la creación de un evento clínico sin copiar el sobre', function (): void {
+it('records the creation of a clinical event without copying the envelope', function (): void {
     $event = Event::factory()->create();
 
     $activity = lastActivity();
@@ -65,7 +65,7 @@ it('anota la creación de un evento clínico sin copiar el sobre', function (): 
         ->and($activity->properties->toArray())->toBe([]);
 });
 
-it('anota la actualización de un evento clínico', function (): void {
+it('records the update of a clinical event', function (): void {
     $event = Event::factory()->create();
 
     $event->forceFill(['payload' => envelopeCipherText(1024)])->save();
@@ -74,10 +74,10 @@ it('anota la actualización de un evento clínico', function (): void {
 });
 
 /**
- * Marcar para borrar y borrar de verdad son dos hechos distintos y se anotan por separado: el
- * primero es reversible y el segundo no.
+ * Marking for deletion and really deleting are two different facts and are recorded separately: the
+ * first is reversible and the second is not.
  */
-it('distingue el borrado reversible del definitivo', function (): void {
+it('tells a soft delete apart from a permanent one', function (): void {
     $event = Event::factory()->create();
 
     $event->delete();
@@ -94,10 +94,10 @@ it('distingue el borrado reversible del definitivo', function (): void {
 });
 
 /**
- * `forceDelete()` dispara `deleted` y después `forceDeleted`, así que sin la guardia del modelo una
- * sola acción dejaría dos filas y el historial contaría dos borrados donde hubo uno.
+ * `forceDelete()` fires `deleted` and then `forceDeleted`, so without the model guard a single
+ * action would leave two rows and the history would count two deletions where there was one.
  */
-it('no duplica la fila al borrar definitivamente un evento nunca marcado', function (): void {
+it('does not duplicate the row when permanently deleting an event that was never marked', function (): void {
     $event = Event::factory()->create();
 
     $event->forceDelete();
@@ -105,7 +105,7 @@ it('no duplica la fila al borrar definitivamente un evento nunca marcado', funct
     expect(activityEvents(Event::LOG_NAME))->toBe(['created', 'forceDeleted']);
 });
 
-it('anota el cambio de ajustes sin decir cuáles', function (): void {
+it('records the settings change without saying which ones', function (): void {
     $user = User::factory()->create(['encrypted_settings' => null]);
 
     $this->actingAs($user)
@@ -124,7 +124,7 @@ it('anota el cambio de ajustes sin decir cuáles', function (): void {
         ->and($activity->properties->toArray())->toBe([]);
 });
 
-it('anota el cierre de sesión antes de perder a quién atribuirlo', function (): void {
+it('records the logout before losing who to attribute it to', function (): void {
     $user = User::factory()->create();
 
     $this->actingAs($user)
@@ -137,7 +137,7 @@ it('anota el cierre de sesión antes de perder a quién atribuirlo', function ()
         ->and($activity->causer_id)->toBe($user->getKey());
 });
 
-it('no anota nada cuando la escritura de ajustes se rechaza', function (): void {
+it('records nothing when the settings write is rejected', function (): void {
     $user = User::factory()->create(['encrypted_settings' => envelopeCipherText()]);
 
     $this->actingAs($user)
@@ -151,10 +151,10 @@ it('no anota nada cuando la escritura de ajustes se rechaza', function (): void 
 });
 
 /**
- * La comprobación que sostiene todo lo demás: ninguna columna del registro puede contener texto
- * cifrado. Si alguna vez alguien añade `->logAll()` o mete el sobre en `properties`, esto falla.
+ * The check that holds everything else up: no column of the log may contain ciphertext. If somebody
+ * ever adds `->logAll()` or puts the envelope in `properties`, this fails.
  */
-it('nunca guarda texto cifrado en el registro de actividad', function (): void {
+it('never stores ciphertext in the activity log', function (): void {
     $user = User::factory()->create(['encrypted_settings' => null]);
     $settings = envelopeCipherText();
 

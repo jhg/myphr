@@ -23,9 +23,9 @@ use Spatie\Activitylog\Models\Activity;
 uses(RefreshDatabase::class);
 
 /**
- * Las rutas reales viven en `PhrPanelProvider::sessionRoutes()`, que arrastra todo el panel de
- * Filament. Aquí se montan equivalentes —mismos controladores, mismo middleware de autenticación—
- * para probar la lógica sin depender de ese registro, igual que hace `UpdateSettingsTest`.
+ * The real routes live in `PhrPanelProvider::sessionRoutes()`, which drags the whole Filament panel
+ * along. Equivalents are mounted here —same controllers, same authentication middleware— to test the
+ * logic without depending on that registration, as `UpdateSettingsTest` does.
  */
 beforeEach(function (): void {
     Route::middleware('auth')->group(function (): void {
@@ -37,8 +37,8 @@ beforeEach(function (): void {
 });
 
 /**
- * Cuerpo bien formado de creación. Todo lo que el servidor puede comprobar es forma, así que los
- * valores son bytes con la longitud correcta y ningún significado criptográfico.
+ * A well formed creation body. Everything the server can check is shape, so the values are bytes of
+ * the right length with no cryptographic meaning.
  *
  * @return array<string, mixed>
  */
@@ -66,7 +66,7 @@ function shareLinkBody(array $overrides = []): array
     ], $overrides);
 }
 
-it('crea el recorte y su primer enlace en una sola llamada', function (): void {
+it('creates the clipping and its first link in a single call', function (): void {
     $user = User::factory()->registered()->create();
     $body = shareCreationBody();
 
@@ -83,16 +83,16 @@ it('crea el recorte y su primer enlace en una sola llamada', function (): void {
         ->and($share->opened_at)->toBeNull()
         ->and($share->links()->count())->toBe(1)
         ->and($share->links()->sole()->attempts_remaining)->toBe(ShareLink::MAX_ATTEMPTS)
-        /** El enlace hereda la caducidad del recorte: no puede vivir más que el paquete que sirve. */
+        /** The link inherits the clipping expiry: it cannot outlive the package it serves. */
         ->and($share->links()->sole()->expires_at->equalTo($share->expires_at))->toBeTrue();
 });
 
 /**
- * ADR 0011: **ninguna columna en claro describe el contenido del recorte**. Este test es el que
- * cierra la promesa del esquema, y por eso enumera las columnas en lugar de comprobar ausencias
- * sueltas: añadir un `types` o un `range_from` en el futuro lo rompe.
+ * ADR 0011: **no plaintext column describes the clipping content**. This test is what closes the
+ * schema promise, and that is why it enumerates the columns instead of checking for isolated
+ * absences: adding a `types` or a `range_from` in the future breaks it.
  */
-it('no tiene ninguna columna en claro que describa el recorte', function (): void {
+it('has no plaintext column describing the clipping', function (): void {
     expect(Schema::getColumnListing('shares'))
         ->toEqualCanonicalizing(['id', 'user_id', 'expires_at', 'payload', 'descriptor', 'opened_at', 'created_at'])
         ->and(Schema::getColumnListing('share_links'))
@@ -102,15 +102,15 @@ it('no tiene ninguna columna en claro que describa el recorte', function (): voi
 });
 
 /**
- * Sin `updated_at` en ninguna de las dos, y sin `deleted_at`: revocar borra de verdad (excepción
- * consciente al patrón del ADR 0006).
+ * No `updated_at` on either of the two, and no `deleted_at`: revoking really deletes (a deliberate
+ * exception to the ADR 0006 pattern).
  */
-it('no lleva updated_at ni lápida de borrado', function (string $table): void {
+it('carries no updated_at and no deletion tombstone', function (string $table): void {
     expect(Schema::hasColumn($table, 'updated_at'))->toBeFalse()
         ->and(Schema::hasColumn($table, 'deleted_at'))->toBeFalse();
 })->with(['shares', 'share_links']);
 
-it('rechaza un paquete que no tiene forma de sobre s1.', function (mixed $payload): void {
+it('rejects a package that does not have the shape of an s1. envelope', function (mixed $payload): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user)
@@ -121,11 +121,11 @@ it('rechaza un paquete que no tiene forma de sobre s1.', function (mixed $payloa
     expect(Share::query()->count())->toBe(0);
 })->with([
     'sobre de evento' => fn (): string => ShareFactory::fakeEnvelope(),
-    'tamaño fuera de la escalera' => fn (): string => 's1.'.rtrim(strtr(base64_encode(random_bytes(4096)), '+/', '-_'), '='),
+    'size off the ladder' => fn (): string => 's1.'.rtrim(strtr(base64_encode(random_bytes(4096)), '+/', '-_'), '='),
     'texto suelto' => 'no es un sobre',
 ]);
 
-it('rechaza un descriptor que no tiene forma de sobre v1.', function (): void {
+it('rejects a descriptor that does not have the shape of a v1. envelope', function (): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user)
@@ -135,10 +135,10 @@ it('rechaza un descriptor que no tiene forma de sobre v1.', function (): void {
 });
 
 /**
- * El ADR descarta UUIDv7 para estos identificadores: llevan el instante de creación en claro dentro
- * del propio enlace y de la foto que el profesional guarde.
+ * The ADR rules out UUIDv7 for these identifiers: they carry the creation instant in the clear
+ * inside the link itself and inside the photo the professional keeps.
  */
-it('rechaza un identificador que no es UUIDv4', function (): void {
+it('rejects an identifier that is not a UUIDv4', function (): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user)
@@ -153,10 +153,10 @@ it('rechaza un identificador que no es UUIDv4', function (): void {
 });
 
 /**
- * La caducidad la fija el cliente porque entra en la derivación de `wrapKey`, pero sale de una lista
- * cerrada y el servidor lo comprueba: 1 hora, 24 horas y 7 días, con holgura para el Argon2id.
+ * The expiry is set by the client because it goes into the `wrapKey` derivation, but it comes from a
+ * closed list and the server checks it: 1 hour, 24 hours and 7 days, with slack for the Argon2id.
  */
-it('acepta solo las caducidades de la lista cerrada', function (string $expiresAt, bool $accepted): void {
+it('accepts only the expiries on the closed list', function (string $expiresAt, bool $accepted): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user)
@@ -164,15 +164,15 @@ it('acepta solo las caducidades de la lista cerrada', function (string $expiresA
         ->assertStatus($accepted ? 201 : 422);
 })->with([
     'una hora' => [fn (): string => CanonicalDate::format(now()->addHour()), true],
-    'un día' => [fn (): string => CanonicalDate::format(now()->addDay()), true],
-    'siete días' => [fn (): string => CanonicalDate::format(now()->addDays(7)), true],
-    'tres días' => [fn (): string => CanonicalDate::format(now()->addDays(3)), false],
+    'one day' => [fn (): string => CanonicalDate::format(now()->addDay()), true],
+    'seven days' => [fn (): string => CanonicalDate::format(now()->addDays(7)), true],
+    'three days' => [fn (): string => CanonicalDate::format(now()->addDays(3)), false],
     'un mes' => [fn (): string => CanonicalDate::format(now()->addMonth()), false],
     'en el pasado' => [fn (): string => CanonicalDate::format(now()->subHour()), false],
-    'no canónica' => ['2026-07-27T10:00:00Z', false],
+    'not canonical' => ['2026-07-27T10:00:00Z', false],
 ]);
 
-it('lista solo los recortes propios y vivos', function (): void {
+it('lists only the clippings that are ours and alive', function (): void {
     $user = User::factory()->registered()->create();
     $other = User::factory()->registered()->create();
 
@@ -188,11 +188,11 @@ it('lista solo los recortes propios y vivos', function (): void {
 });
 
 /**
- * Ni el paquete, ni la sal, ni el comprobante del PIN, ni el envoltorio salen por el listado. Es la
- * propia dueña quien pregunta, así que hoy no rompe nada; devolverlos convertiría cualquier fuga
- * futura de esta respuesta en el ataque fuera de línea que el ADR corrigió.
+ * Neither the package, nor the salt, nor the PIN proof, nor the wrapper comes out of the listing.
+ * The owner herself is the one asking, so it breaks nothing today; returning them would turn any
+ * future leak of this response into the offline attack the ADR fixed.
  */
-it('no devuelve en el listado el paquete ni el material del PIN', function (): void {
+it('does not return the package or the PIN material in the listing', function (): void {
     $user = User::factory()->registered()->create();
     $share = Share::factory()->for($user)->create();
     ShareLink::factory()->for($share)->create();
@@ -205,7 +205,7 @@ it('no devuelve en el listado el paquete ni el material del PIN', function (): v
         ->and($encoded)->not->toContain($share->payload);
 });
 
-it('no deja revocar ni re-armar el recorte de otra persona', function (): void {
+it('does not let anyone revoke or re-arm somebody else clipping', function (): void {
     $user = User::factory()->registered()->create();
     $other = User::factory()->registered()->create();
     $theirs = Share::factory()->for($other)->create();
@@ -221,8 +221,8 @@ it('no deja revocar ni re-armar el recorte de otra persona', function (): void {
     expect(Share::query()->whereKey($theirs->id)->exists())->toBeTrue();
 });
 
-/** Revocar es borrado físico, no una lápida: el paquete tiene que desaparecer de la tabla. */
-it('revocar borra el recorte y sus enlaces de verdad', function (): void {
+/** Revoking is a physical delete, not a tombstone: the package has to disappear from the table. */
+it('revoking really deletes the clipping and its links', function (): void {
     $user = User::factory()->registered()->create();
     $share = Share::factory()->for($user)->create();
     ShareLink::factory()->count(2)->for($share)->create();
@@ -234,9 +234,10 @@ it('revocar borra el recorte y sus enlaces de verdad', function (): void {
 });
 
 /**
- * Re-armar es la razón de ser de las dos capas: `S` y PIN nuevos sin volver a subir el paquete.
+ * Re-arming is the whole point of the two layers: a new `S` and PIN without re-uploading the
+ * package.
  */
-it('re-arma un enlace sobre el mismo paquete', function (): void {
+it('re-arms a link on the same package', function (): void {
     $user = User::factory()->registered()->create();
     $share = Share::factory()->for($user)->create();
     $payload = $share->payload;
@@ -249,7 +250,7 @@ it('re-arma un enlace sobre el mismo paquete', function (): void {
         ->and($share->links()->count())->toBe(1);
 });
 
-it('aplica el tope de recortes activos por usuario', function (): void {
+it('applies the cap of active clippings per user', function (): void {
     $user = User::factory()->registered()->create();
     Share::factory()->count(Shares::MAX_ACTIVE_SHARES)->for($user)->create();
 
@@ -259,7 +260,7 @@ it('aplica el tope de recortes activos por usuario', function (): void {
         ->assertJson(['error' => 'share_limit_reached']);
 });
 
-it('aplica el tope de enlaces vivos por recorte', function (): void {
+it('applies the cap of live links per clipping', function (): void {
     $user = User::factory()->registered()->create();
     $share = Share::factory()->for($user)->create();
     ShareLink::factory()->count(Shares::MAX_LINKS_PER_SHARE)->for($share)->create();
@@ -270,10 +271,10 @@ it('aplica el tope de enlaces vivos por recorte', function (): void {
 });
 
 /**
- * El rastro anota que hubo una compartición y cuándo, nunca de qué: ni rango, ni tipos, ni
- * identificador del recorte, que además se borra al revocarlo.
+ * The trail records that a share happened and when, never what of: no range, no types, no clipping
+ * identifier, which is deleted on revoke anyway.
  */
-it('anota crear y revocar sin contar nada del contenido', function (): void {
+it('records creating and revoking without saying anything about the content', function (): void {
     $user = User::factory()->registered()->create();
     $body = shareCreationBody();
 
@@ -295,8 +296,8 @@ it('anota crear y revocar sin contar nada del contenido', function (): void {
         });
 });
 
-/** No hay entrada de auditoría para las descargas: sería el historial de accesos que el ADR descarta. */
-it('no define ningún evento de auditoría para las descargas', function (): void {
+/** There is no audit entry for downloads: it would be the access history the ADR rules out. */
+it('defines no audit event for downloads', function (): void {
     $values = array_map(fn (AuditEvent $case): string => $case->value, AuditEvent::cases());
 
     expect($values)->not->toContain('share-opened')

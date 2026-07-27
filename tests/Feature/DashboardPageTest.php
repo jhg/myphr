@@ -11,23 +11,22 @@ use Livewire\Livewire;
 uses(RefreshDatabase::class);
 
 /**
- * Tests del panel de inicio (ADR 0002, ADR 0004, ADR 0006).
+ * Home dashboard tests (ADR 0002, ADR 0004, ADR 0006).
  *
- * El servidor no puede fabricar un sobre cifrado real, así que los tests que necesitan uno usan el
- * ayudante global `envelopeCipherText()` de `tests/Pest.php`, compartido con las demás pantallas de
- * eventos.
+ * The server cannot build a real encrypted envelope, so the tests that need one use the global
+ * `envelopeCipherText()` helper from `tests/Pest.php`, shared with the other event screens.
  */
 const DASHBOARD_MODULE = 'resources/js/health/dashboardPage.js';
 
 const DASHBOARD_VIEW = 'resources/views/phr/pages/dashboard.blade.php';
 
 /**
- * Módulos que pintan lo que se ve en esta pantalla.
+ * Modules that paint what is seen on this screen.
  *
- * La visualización ya no pertenece al panel: la línea temporal, las tarjetas y las gráficas viven en
- * módulos que reciben eventos descifrados y devuelven nodos, para que el lector del profesional
- * enseñe exactamente lo mismo sin sesión (ADR 0011). Las reglas de DESIGN.md se comprueban sobre
- * todos ellos, porque el marcado salió de `dashboardPage.js` y las reglas tenían que salir con él.
+ * Visualization no longer belongs to the dashboard: the timeline, the cards and the charts live in
+ * modules that take decrypted events and return nodes, so the professional's reader shows exactly
+ * the same thing without a session (ADR 0011). The DESIGN.md rules are checked over all of them,
+ * because the markup came out of `dashboardPage.js` and the rules had to come out with it.
  *
  * @var list<string>
  */
@@ -40,8 +39,8 @@ const DASHBOARD_RENDER_MODULES = [
 ];
 
 /**
- * Fuente sin comentarios, para que los tests que prohíben una clase no fallen por citarla en un
- * comentario que explica precisamente por qué no se usa.
+ * Source without comments, so the tests that forbid a class do not fail for quoting it in a comment
+ * that explains precisely why it is not used.
  */
 function dashboardSourceWithoutComments(string $path): string
 {
@@ -53,7 +52,7 @@ function dashboardSourceWithoutComments(string $path): string
     return (string) preg_replace('#(^|\s)//.*$#m', '', $contents);
 }
 
-it('carga para un usuario autenticado', function (): void {
+it('loads for an authenticated user', function (): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user);
@@ -61,7 +60,7 @@ it('carga para un usuario autenticado', function (): void {
     Livewire::test(Dashboard::class)->assertOk();
 });
 
-it('sigue siendo la página de inicio del panel, en /phr', function (): void {
+it('is still the panel home page, at /phr', function (): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user);
@@ -71,11 +70,11 @@ it('sigue siendo la página de inicio del panel, en /phr', function (): void {
 });
 
 /**
- * El test que exige el ADR 0002: el ciphertext solo baja como valor de retorno de `fetchEvents`,
- * nunca por una propiedad pública, así que el snapshot del componente no puede contenerlo. Sigue el
- * mismo enfoque que el test homónimo de `GlucosePageTest`.
+ * The test ADR 0002 requires: the ciphertext only comes down as the return value of `fetchEvents`,
+ * never through a public property, so the component snapshot cannot contain it. It follows the same
+ * approach as the test of the same name in `GlucosePageTest`.
  */
-it('el snapshot del componente no contiene ningún sobre cifrado', function (): void {
+it('the component snapshot contains no encrypted envelope', function (): void {
     $user = User::factory()->registered()->create();
     $envelope = envelopeCipherText();
 
@@ -84,8 +83,8 @@ it('el snapshot del componente no contiene ningún sobre cifrado', function (): 
     $this->actingAs($user);
 
     /**
-     * Igual que en `GlucosePageTest`: `call()` y no `instance()`, para pasar por la
-     * hidratación/deshidratación de Livewire y que el snapshot inspeccionado sea el real.
+     * Same as in `GlucosePageTest`: `call()` and not `instance()`, so it goes through Livewire's
+     * hydration/dehydration and the inspected snapshot is the real one.
      */
     $test = Livewire::test(Dashboard::class)->call('fetchEvents');
 
@@ -96,14 +95,14 @@ it('el snapshot del componente no contiene ningún sobre cifrado', function (): 
 });
 
 /**
- * ─── Contrato cliente/servidor ────────────────────────────────────────────────────────────────
+ * ─── Client/server contract ───────────────────────────────────────────────────────────────────
  *
- * El fallo de producción «Public method [storeBloodPressureEvent] not found on component» ocurrió
- * porque nada comprobaba que el nombre que llama el cliente exista en el servidor. Este test lo
- * comprueba: cada `$wire.<metodo>` del módulo tiene que existir como método público de la página
- * (propio o heredado de `HealthEventPage`).
+ * The production bug "Public method [storeBloodPressureEvent] not found on component" happened
+ * because nothing checked that the name the client calls exists on the server. This test checks it:
+ * every `$wire.<method>` in the module has to exist as a public method of the page (its own or
+ * inherited from `HealthEventPage`).
  */
-it('cada $wire.<metodo> del módulo existe como método público de la página', function (): void {
+it('every $wire.<method> in the module exists as a public method of the page', function (): void {
     $module = (string) file_get_contents(base_path(DASHBOARD_MODULE));
 
     preg_match_all('/\$wire\.(\w+)\s*\(/', $module, $matches);
@@ -122,15 +121,15 @@ it('cada $wire.<metodo> del módulo existe como método público de la página',
 });
 
 /**
- * El otro extremo del mismo contrato: el número y el orden de los argumentos. El panel pagina
- * pasando los cuatro por posición —cursor, límite y las dos puntas del periodo elegido—, así que el
- * orden de la firma es parte del contrato y no un detalle interno.
+ * The other end of the same contract: the number and order of the arguments. The dashboard paginates
+ * passing all four by position —cursor, limit and both ends of the chosen period— so the order of
+ * the signature is part of the contract and not an internal detail.
  *
- * El panel dejó de resumir dos ventanas fijas: ahora acota por rango en el servidor, que sí puede
- * filtrar por `occurred_at` (ADR 0006). Es la diferencia entre descifrar 24 horas de sobres y
- * descifrar un mes en cada visita a la pantalla de entrada.
+ * The dashboard stopped summarizing two fixed windows: it now bounds by range on the server, which
+ * can filter by `occurred_at` (ADR 0006). That is the difference between decrypting 24 hours of
+ * envelopes and decrypting a month on every visit to the entry screen.
  */
-it('fetchEvents acepta el cursor, el límite y el rango en el orden en que los pasa el módulo', function (): void {
+it('fetchEvents accepts the cursor, the limit and the range in the order the module passes them', function (): void {
     $signature = new ReflectionMethod(Dashboard::class, 'fetchEvents');
 
     $parameters = array_map(
@@ -143,31 +142,31 @@ it('fetchEvents acepta el cursor, el límite y el rango en el orden en que los p
 });
 
 /**
- * El panel tiene que pasar el rango de verdad, no solo poder hacerlo: si volviera a llamar con dos
- * argumentos, bajaría y descifraría todo el historial en cada visita sin que ningún test lo notara.
+ * The dashboard has to actually pass the range, not merely be able to: if it went back to calling
+ * with two arguments, it would download and decrypt the whole history on every visit without any
+ * test noticing.
  */
-it('el módulo pasa el rango elegido a fetchEvents, no solo el cursor y el límite', function (): void {
+it('the module passes the chosen range to fetchEvents, not just the cursor and the limit', function (): void {
     $module = (string) file_get_contents(base_path(DASHBOARD_MODULE));
 
     expect($module)->toMatch('/\$wire\.fetchEvents\([^)]*range\.from[^)]*range\.to[^)]*\)/');
 });
 
 /**
- * El periodo por defecto de esta pantalla es el último día, y es una decisión de producto, no un
- * detalle: es lo que hace que la pantalla de entrada abra rápido. El historial, en cambio, sigue
- * arrancando sin acotar.
+ * The default period of this screen is the last day, and that is a product decision, not a detail:
+ * it is what makes the entry screen open fast. The history, by contrast, still starts unbounded.
  */
-it('el panel arranca con el periodo del último día', function (): void {
+it('the dashboard starts with the last day as the period', function (): void {
     $module = (string) file_get_contents(base_path(DASHBOARD_MODULE));
 
     expect($module)->toContain("dateRangeControl({ preset: 'day' })");
 });
 
 /**
- * El contrato de datos: el cliente lee `occurredAt` y `payload` de cada elemento devuelto, y usa
- * el `occurredAt` del último como cursor de la página siguiente.
+ * The data contract: the client reads `occurredAt` and `payload` from every returned element, and
+ * uses the `occurredAt` of the last one as the cursor for the next page.
  */
-it('fetchEvents devuelve los campos que el cliente lee, y el cursor pagina hacia atrás', function (): void {
+it('fetchEvents returns the fields the client reads, and the cursor pages backwards', function (): void {
     $user = User::factory()->registered()->create();
 
     foreach ([1, 2, 3] as $daysAgo) {
@@ -193,13 +192,13 @@ it('fetchEvents devuelve los campos que el cliente lee, y el cursor pagina hacia
 });
 
 /**
- * ─── Contrato de DOM ──────────────────────────────────────────────────────────────────────────
+ * ─── DOM contract ─────────────────────────────────────────────────────────────────────────────
  *
- * Un `this.$refs.<algo>` sin su `x-ref` en la plantilla es `undefined` y revienta al usarse, sin
- * aviso previo; un `x-ref` que nadie usa es plomo muerto que confunde al siguiente. Los dos
- * conjuntos tienen que coincidir exactamente.
+ * A `this.$refs.<something>` without its `x-ref` in the template is `undefined` and blows up when
+ * used, with no warning; an `x-ref` nobody uses is dead weight that confuses whoever comes next. The
+ * two sets have to match exactly.
  */
-it('los $refs del módulo y los x-ref de la plantilla coinciden exactamente', function (): void {
+it('the module $refs and the template x-refs match exactly', function (): void {
     $module = (string) file_get_contents(base_path(DASHBOARD_MODULE));
     $view = (string) file_get_contents(base_path(DASHBOARD_VIEW));
 
@@ -217,21 +216,21 @@ it('los $refs del módulo y los x-ref de la plantilla coinciden exactamente', fu
 });
 
 /**
- * ─── Reglas del ADR 0002 en la plantilla ──────────────────────────────────────────────────────
+ * ─── ADR 0002 rules in the template ───────────────────────────────────────────────────────────
  */
-it('la plantilla no usa wire:model en ninguna variante', function (): void {
+it('the template does not use wire:model in any form', function (): void {
     expect(dashboardSourceWithoutComments(DASHBOARD_VIEW))->not->toContain('wire:model');
 });
 
-it('cada región que escribe Alpine va dentro de un island, con wire:ignore y wire:key', function (): void {
+it('every region Alpine writes to lives inside an island, with wire:ignore and wire:key', function (): void {
     $view = (string) file_get_contents(base_path(DASHBOARD_VIEW));
 
     preg_match_all("/@island\(name: '[\w-]+'\)(.*?)@endisland/s", $view, $islands, PREG_SET_ORDER);
 
     /**
-     * Avisos de carga, línea temporal y estadísticas: las tres regiones que escribe Alpine. Las
-     * tarjetas por tipo ya no son regiones de la plantilla, porque cuáles existen depende del filtro
-     * de tipos del cliente.
+     * Loading notices, timeline and statistics: the three regions Alpine writes to. The per-type
+     * cards are no longer regions of the template, because which ones exist depends on the client's
+     * type filter.
      */
     expect($islands)->toHaveCount(3);
 
@@ -246,10 +245,10 @@ it('cada región que escribe Alpine va dentro de un island, con wire:ignore y wi
 });
 
 /**
- * La página va envuelta en el componente de página de Filament: sin él se pierde el contenedor que
- * aporta el relleno vertical y la primera tarjeta queda pegada a la barra superior.
+ * The page is wrapped in the Filament page component: without it the container that provides the
+ * vertical padding is lost and the first card sticks to the top bar.
  */
-it('la plantilla va envuelta en el componente de página de Filament', function (): void {
+it('the template is wrapped in the Filament page component', function (): void {
     $view = (string) file_get_contents(base_path(DASHBOARD_VIEW));
 
     expect($view)->toContain('<x-filament-panels::page>');
@@ -259,12 +258,11 @@ it('la plantilla va envuelta en el componente de página de Filament', function 
 /**
  * ─── DESIGN.md ────────────────────────────────────────────────────────────────────────────────
  *
- * Ni la plantilla ni el módulo pueden pintar superficies con tonos de la rampa: `bg-white` no
- * conmuta con el tema y `gray-200` es la tinta en oscuro, no un borde (ver `theme.css`,
- * § Ramp Mapping — Dark). Las superficies van por su papel: `bg-surface`, `bg-background`,
- * `border-border`.
+ * Neither the template nor the module may paint surfaces with ramp shades: `bg-white` does not
+ * switch with the theme and `gray-200` is the ink in dark mode, not a border (see `theme.css`,
+ * § Ramp Mapping — Dark). Surfaces go by their role: `bg-surface`, `bg-background`, `border-border`.
  */
-it('las superficies usan papeles del tema y no tonos de la rampa gris', function (string $path): void {
+it('the surfaces use theme papers and not shades of the gray ramp', function (string $path): void {
     $contents = dashboardSourceWithoutComments($path);
 
     expect($contents)->not->toContain('bg-white');
@@ -273,13 +271,13 @@ it('las superficies usan papeles del tema y no tonos de la rampa gris', function
 })->with([DASHBOARD_VIEW, ...DASHBOARD_RENDER_MODULES]);
 
 /**
- * Los avisos usan los tokens `error-*` / `info-*`, que conmutan con el tema, y no las rampas de
- * acento, que no se reasignan en oscuro (`theme.css`, § Avisos y chips).
+ * The notices use the `error-*` / `info-*` tokens, which switch with the theme, and not the accent
+ * ramps, which are not remapped in dark mode (`theme.css`, § Notices and chips).
  *
- * El aviso lo construye `eventVisuals.js`, que es el módulo compartido por las tres pantallas que
- * enseñan eventos: un aviso con los colores mal puestos ahí saldría ilegible en las tres a la vez.
+ * The notice is built by `eventVisuals.js`, the module shared by the three screens that show events:
+ * a notice with the wrong colours there would come out unreadable on all three at once.
  */
-it('los avisos usan los tokens de aviso y no las rampas de acento', function (): void {
+it('the notices use the notice tokens and not the accent ramps', function (): void {
     $module = dashboardSourceWithoutComments('resources/js/health/eventVisuals.js');
 
     expect($module)->toContain('bg-error-surface');
@@ -292,14 +290,14 @@ it('los avisos usan los tokens de aviso y no las rampas de acento', function ():
 });
 
 /**
- * ─── Región de gráficas ───────────────────────────────────────────────────────────────────────
+ * ─── Chart region ─────────────────────────────────────────────────────────────────────────────
  *
- * Los lienzos **no** pueden vivir dentro de un `@island`: tras cualquier petición de Livewire el
- * servidor lo reemite y se lleva por delante lo que Alpine dibujó, que es el fallo que ya costó caro
- * en las pantallas de glucemia, tensión e insulina. Lo que protege la región es `wire:ignore` con
- * `wire:key` estable (ADR 0002).
+ * The canvases can **not** live inside an `@island`: after any Livewire request the server re-emits
+ * it and takes what Alpine drew with it, which is the bug that already cost dearly on the blood
+ * glucose, blood pressure and insulin screens. What protects the region is `wire:ignore` with a
+ * stable `wire:key` (ADR 0002).
  */
-it('los lienzos de las gráficas viven fuera de los islands, con wire:ignore y wire:key', function (): void {
+it('the chart canvases live outside the islands, with wire:ignore and wire:key', function (): void {
     $view = (string) file_get_contents(base_path(DASHBOARD_VIEW));
 
     $outsideIslands = (string) preg_replace("/@island\(name: '[\w-]+'\).*?@endisland/s", '', $view);
@@ -317,14 +315,14 @@ it('los lienzos de las gráficas viven fuera de los islands, con wire:ignore y w
 });
 
 /**
- * El módulo busca sus lienzos por `id` y no por `x-ref`, precisamente porque están fuera de los
- * islands. Los dos extremos de ese contrato tienen que coincidir: un `id` que la plantilla no emite
- * deja la gráfica sin dibujar y sin ningún error.
+ * The module looks for its canvases by `id` and not by `x-ref`, precisely because they are outside
+ * the islands. Both ends of that contract have to match: an `id` the template does not emit leaves
+ * the chart undrawn and raises no error.
  */
-it('cada tipo con gráfica trae en la plantilla los cuatro identificadores que busca el módulo', function (): void {
+it('every charted type carries in the template the four identifiers the module looks for', function (): void {
     $view = (string) file_get_contents(base_path(DASHBOARD_VIEW));
 
-    /** Las comidas no están: no tienen magnitud que promediar, así que no tienen gráfica. */
+    /** Meals are not here: they have no quantity to average, so they have no chart. */
     foreach (['glucose', 'bloodPressure', 'insulin', 'bodyWeight', 'temperature'] as $type) {
         foreach (['', '-canvas', '-caption', '-legend'] as $suffix) {
             expect($view)->toContain('id="dashboard-chart-{{ $token }}'.$suffix.'"');
@@ -335,14 +333,14 @@ it('cada tipo con gráfica trae en la plantilla los cuatro identificadores que b
 });
 
 /**
- * Las dos gráficas que no son de un tipo de evento —la curva de glucemia con marcas de comida e
- * insulina, y la superposición de los días del periodo sobre 24 horas— salen de un `@foreach`
- * distinto al de los tipos, así que el test de arriba no las cubre: sus tokens son los que
- * `chartsView.js` exporta en `CHART_BLOCKS` y sus identificadores los que escribe
- * `chartElementIds()`. Se comprueba sobre el HTML ya renderizado, que es lo que de verdad recibe el
- * navegador: un token mal escrito en la plantilla deja la gráfica sin dibujar y sin ningún error.
+ * The two charts that do not belong to a single event type —the blood glucose curve with meal and
+ * insulin markers, and the overlay of the days of the period onto 24 hours— come from a different
+ * `@foreach` than the types, so the test above does not cover them: their tokens are the ones
+ * `chartsView.js` exports in `CHART_BLOCKS` and their identifiers the ones `chartElementIds()`
+ * writes. It is checked against the rendered HTML, which is what the browser really receives: a
+ * mistyped token in the template leaves the chart undrawn and raises no error.
  */
-it('el panel emite los cuatro identificadores de las dos gráficas que cruzan tipos', function (): void {
+it('the dashboard emits the four identifiers of the two cross-type charts', function (): void {
     $user = User::factory()->registered()->create();
 
     $this->actingAs($user);
@@ -357,10 +355,11 @@ it('el panel emite los cuatro identificadores de las dos gráficas que cruzan ti
 });
 
 /**
- * El lienzo es un objeto gráfico sin texto: sin nombre accesible y sin un pie que diga en texto qué
- * series incluye, la tendencia solo llegaría por el color de las líneas (DESIGN.md Do's #3).
+ * A canvas is a graphical object with no text: without an accessible name and without a caption
+ * saying in text which series it includes, the trend would only come through the colour of the lines
+ * (DESIGN.md Do's #3).
  */
-it('cada lienzo lleva nombre accesible y apunta a su pie y a su leyenda', function (): void {
+it('every canvas carries an accessible name and points to its caption and its legend', function (): void {
     $view = (string) file_get_contents(base_path(DASHBOARD_VIEW));
 
     expect($view)->toContain('role="img"');

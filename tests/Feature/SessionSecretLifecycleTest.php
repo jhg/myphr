@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Auth;
 uses(RefreshDatabase::class);
 
 /**
- * El cierre de sesión y el bloqueo destruyen el secreto por el mismo camino (Spec 0001 §8).
+ * Logging out and locking destroy the secret through the same path (Spec 0001 §8).
  */
 it('destroys the session secret on any logout, not just the panel lock', function (): void {
     $session = app('session.store');

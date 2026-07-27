@@ -15,7 +15,7 @@ function sharePackageOfSize(int $paddedSize): string
     return ShareEnvelopeValidator::PREFIX.rtrim(strtr(base64_encode(random_bytes($bytes)), '+/', '-_'), '=');
 }
 
-it('acepta los cuatro escalones de la escalera propia', function (int $paddedSize): void {
+it('accepts the four steps of its own ladder', function (int $paddedSize): void {
     expect(ShareEnvelopeValidator::isValid(sharePackageOfSize($paddedSize)))->toBeTrue();
 })->with([
     '64 KiB' => 65536,
@@ -33,7 +33,7 @@ it('rejects any size that is not a ladder step', function (): void {
  * The different prefix is what stops a package being slipped into the `payload` column of an event,
  * or the other way round. Both validators have to reject each other, or the guardrail is worthless.
  */
-it('no cruza formatos con el validador de eventos', function (): void {
+it('does not cross formats with the events validator', function (): void {
     $package = sharePackageOfSize(65536);
     $event = 'v1.'.rtrim(strtr(base64_encode(random_bytes(64 + 16 + 256)), '+/', '-_'), '=');
 
@@ -45,7 +45,7 @@ it('no cruza formatos con el validador de eventos', function (): void {
  * The events ladder is not widened: if it were, it would stop bounding a single record, which is
  * exactly what it exists for (ADR 0004).
  */
-it('deja intacta la escalera de los eventos', function (): void {
+it('leaves the events ladder untouched', function (): void {
     expect(EnvelopeValidator::SIZES)->toBe([
         64 + 16 + 256,
         64 + 16 + 1024,

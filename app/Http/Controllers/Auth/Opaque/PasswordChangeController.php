@@ -119,11 +119,11 @@ final readonly class PasswordChangeController
     }
 
     /**
-     * Cuerpo transaccional del paso 20.
+     * Transactional body of step 20.
      *
      * @param  array{registrationId: string, ticket: string, registrationRecord: string, wrappedUserMasterKey: string}  $data
-     * @param  string  $serialized  `registrationRecord` binario de 192 bytes.
-     * @return string `changed`, `expired` o `inconsistent`.
+     * @param  string  $serialized  192-byte binary `registrationRecord`.
+     * @return string `changed`, `expired` or `inconsistent`.
      */
     private function commit(Request $request, User $user, array $data, string $serialized): string
     {

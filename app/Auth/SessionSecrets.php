@@ -28,7 +28,7 @@ final readonly class SessionSecrets
     /** Key inside the session payload. */
     public const string SESSION_KEY = 'phr.session_secret';
 
-    /** Longitud del secreto, en bytes. */
+    /** Secret length, in bytes. */
     public const int SECRET_BYTES = 32;
 
     public function __construct(private RandomSource $random) {}

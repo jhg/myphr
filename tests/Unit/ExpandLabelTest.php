@@ -11,7 +11,7 @@ use App\Security\Opaque\HkdfSha512;
  * here against literals written by hand from RFC 9807 §6.4.2.1 and from the
  * `HkdfLabel` struct in RFC 8446 §7.1.
  */
-it('construye CustomLabel exactamente como RFC 9807 §6.4.2.1', function (): void {
+it('builds CustomLabel exactly as RFC 9807 §6.4.2.1 says', function (): void {
     $secret = str_repeat("\x2a", 64);
     $context = str_repeat("\x01", 64);
 
@@ -46,7 +46,7 @@ it('encodes an empty context as uint8(0) with no extra bytes', function (): void
         ->toBe(HkdfSha512::expand($secret, $customLabel, 64));
 });
 
-it('antepone el prefijo OPAQUE- sin terminador nulo', function (): void {
+it('prepends the OPAQUE- prefix with no null terminator', function (): void {
     expect(ExpandLabel::LABEL_PREFIX)->toBe('OPAQUE-');
 
     $secret = str_repeat("\x07", 64);
@@ -66,7 +66,7 @@ it('deriveSecret returns Nx = 64 bytes with the OPAQUE labels', function (string
     expect($derived)->toBe(ExpandLabel::expandLabel($secret, $label, $transcriptHash, 64));
 })->with(['HandshakeSecret', 'SessionKey', 'ServerMAC', 'ClientMAC']);
 
-it('separa dominios: etiquetas o contextos distintos dan secretos distintos', function (): void {
+it('separates domains: different labels or contexts give different secrets', function (): void {
     $secret = str_repeat("\x11", 64);
     $transcriptHash = hash('sha512', 'preamble', true);
 
@@ -91,7 +91,7 @@ it('the length goes into CustomLabel, so outputs of different sizes are not pref
     expect($short)->not->toBe(substr($long, 0, 32));
 });
 
-it('usa big-endian en el campo de longitud', function (): void {
+it('uses big-endian in the length field', function (): void {
     $secret = str_repeat("\x2a", 64);
 
     // 256 = 0x0100 big-endian; little-endian it would be 0x0001.
@@ -101,10 +101,10 @@ it('usa big-endian en el campo de longitud', function (): void {
         ->toBe(HkdfSha512::expand($secret, $bigEndian, 256));
 });
 
-it('rechaza etiquetas y contextos que no caben en un uint8', function (): void {
+it('rejects labels and contexts that do not fit in a uint8', function (): void {
     $secret = str_repeat("\x2a", 64);
 
-    // "OPAQUE-" son 7 bytes: 249 + 7 = 256 > 255.
+    // "OPAQUE-" is 7 bytes: 249 + 7 = 256 > 255.
     expect(fn (): string => ExpandLabel::expandLabel($secret, str_repeat('a', 249), '', 64))
         ->toThrow(InvalidArgumentException::class);
 

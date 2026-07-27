@@ -63,7 +63,7 @@ export const EN = Object.freeze({
 
     // --- Sign in --------------------------------------------------------------------------------
     'login.stage.contacting': 'Checking your details…',
-    'login.stage.stretching': 'Deriving your key on this device. It takes a few seconds…',
+    'login.stage.stretching': 'Protecting your password on this device. It takes a few seconds on purpose: that slowness is what stops anyone from guessing your password, even with a copy of the database.',
     'login.error.credentials': 'We could not sign you in with those details.',
 
     // --- Password set-up ------------------------------------------------------------------------
@@ -161,6 +161,10 @@ export const EN = Object.freeze({
     'insulin.caption': {
         one: '{count} day with records. Cumulative dose by type — {totals}.',
         other: '{count} days with records. Cumulative dose by type — {totals}.',
+    },
+    'insulin.omittedDays': {
+        one: '{count} older day of the period is not drawn, to keep the chart readable.',
+        other: 'The {count} older days of the period are not drawn, to keep the chart readable.',
     },
 
     // --- Body weight ----------------------------------------------------------------------------
@@ -466,8 +470,9 @@ export const EN = Object.freeze({
     'reader.pin.label': 'PIN',
     'reader.pin.submit': 'Open the record',
     'reader.print': 'Print or save as PDF',
-    'reader.stage.deriving': 'Checking the PIN. This takes a few seconds by design; the page has not frozen.',
+    'reader.stage.deriving': 'Working out the PIN in this browser. It takes a few seconds on purpose: that slowness is what stops anyone from trying every PIN. The page has not frozen — the bar is real progress.',
     'reader.stage.decrypting': 'Decrypting the record in this browser…',
+    'reader.stage.rendering': 'Record opened. Preparing the charts and the table…',
     'reader.error.noFragment': 'This link arrived incomplete: the part after the # is missing, and that part is the key. Email filters and captive portals often strip it. Ask for the QR code or for the link to be sent again.',
     'reader.error.badFragment': 'This link is not a valid record link. Ask for the QR code or for the link to be sent again.',
     'reader.error.badPin': 'The PIN is {length} digits.',

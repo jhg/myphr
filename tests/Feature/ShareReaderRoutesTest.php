@@ -13,23 +13,23 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 
 /**
- * ADR 0011: las tres rutas del lector viven fuera del prefijo del panel y con su propia pila de
- * middleware. Todo lo que se monta bajo `phr` pasa por Filament, que lo envuelve con el grupo `web`
- * y por tanto con sesión y CSRF, incluidas sus rutas sin autenticar.
+ * ADR 0011: the three reader routes live outside the panel prefix and with a middleware stack of
+ * their own. Everything mounted under `phr` goes through Filament, which wraps it with the `web`
+ * group and therefore with session and CSRF, including its unauthenticated routes.
  */
-it('monta las tres rutas del lector fuera del panel', function (string $name, string $uri): void {
+it('mounts the three reader routes outside the panel', function (string $name, string $uri): void {
     $route = Route::getRoutes()->getByName($name);
 
     expect($route)->not->toBeNull()
         ->and($route->uri())->toBe($uri)
         ->and(Str::startsWith($route->uri(), 'phr'))->toBeFalse();
 })->with([
-    'página' => ['share.reader', 's/{link}'],
+    'page' => ['share.reader', 's/{link}'],
     'challenge' => ['share.challenge', 's/{link}/challenge'],
     'open' => ['share.open', 's/{link}/open'],
 ]);
 
-it('quita sesión y CSRF de las rutas del lector', function (string $name): void {
+it('strips session and CSRF from the reader routes', function (string $name): void {
     $middleware = Route::getRoutes()->getByName($name)->gatherMiddleware();
 
     expect($middleware)->not->toContain(StartSession::class)
@@ -38,8 +38,8 @@ it('quita sesión y CSRF de las rutas del lector', function (string $name): void
         ->not->toContain(AddQueuedCookiesToResponse::class);
 })->with(['share.reader', 'share.challenge', 'share.open']);
 
-/** El limitador por IP de la ruta, hermano de los de `OpaqueServiceProvider`. */
-it('limita por IP las dos rutas que tocan el servidor', function (string $name, string $limiter): void {
+/** The per-IP limiter of the route, a sibling of the ones in `OpaqueServiceProvider`. */
+it('rate limits by IP the two routes that touch the server', function (string $name, string $limiter): void {
     expect(Route::getRoutes()->getByName($name)->gatherMiddleware())
         ->toContain('throttle:'.$limiter);
 })->with([
@@ -48,11 +48,11 @@ it('limita por IP las dos rutas que tocan el servidor', function (string $name, 
 ]);
 
 /**
- * La sal señuelo tiene que ser estable entre despliegues, así que no puede colgar de `APP_KEY`. Si
- * no hay ninguna clave utilizable, esto falla en voz alta: una derivada de una clave vacía sería la
- * misma en todas las instalaciones del mundo y no protegería nada.
+ * The decoy salt has to be stable across deployments, so it cannot hang off `APP_KEY`. If there is
+ * no usable key, this fails loudly: one derived from an empty key would be the same on every install
+ * in the world and would protect nothing.
  */
-it('exige una clave propia para la sal señuelo', function (): void {
+it('requires a key of its own for the decoy salt', function (): void {
     config()->set('share.decoy_salt_key', null);
     config()->set('opaque.enumeration_key', null);
 
@@ -60,8 +60,8 @@ it('exige una clave propia para la sal señuelo', function (): void {
         ->toThrow(InvalidConfigurationException::class);
 });
 
-/** Si falta la entrada propia, cae en la clave de OPAQUE, que hace el mismo trabajo y es obligatoria. */
-it('cae en la clave de enumeración de OPAQUE cuando no hay entrada propia', function (): void {
+/** If the entry of its own is missing, it falls back to the OPAQUE key, which does the same job and is mandatory. */
+it('falls back to the OPAQUE enumeration key when there is no entry of its own', function (): void {
     $key = Base64Url::encode(random_bytes(32));
 
     config()->set('share.decoy_salt_key', null);
