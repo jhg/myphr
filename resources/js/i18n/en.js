@@ -187,9 +187,20 @@ export const EN = Object.freeze({
     'dashboard.addFirst': 'Add your first record',
     'dashboard.typeFilter.none': 'No event type is selected, so there is nothing to show. Tick at least one.',
     'dashboard.loadedCount': {
-        one: '{count} record in the selected period.',
-        other: '{count} records in the selected period.',
+        one: '{count} record of the ticked types in this period.',
+        other: '{count} records of the ticked types in this period.',
     },
+    /**
+     * Lo que la búsqueda deja fuera se dice siempre: una lista acortada sin explicación se lee como
+     * «no hay más registros», y en un historial clínico eso es una conclusión, no una omisión.
+     */
+    'dashboard.search.hidden': {
+        one: '{count} record in this period does not match what you searched for. It is still counted '
+            + 'in the charts and the statistics.',
+        other: '{count} records in this period do not match what you searched for. They are still '
+            + 'counted in the charts and the statistics.',
+    },
+    'dashboard.empty.search': 'No record in this period matches what you searched for.',
     'dashboard.targetRangeUnitMismatch': 'Your target range is saved in a different unit, so time in range '
         + 'cannot be calculated over readings in {unit}. Change either the range unit or the display unit in '
         + 'the settings.',
@@ -324,6 +335,79 @@ export const EN = Object.freeze({
     'dashboard.chart.seriesMagnitude': '{group} \u00b7 {magnitude}',
     'dashboard.chart.tooltip': '{label}: median {median} {unit} (from {min} to {max})',
     'dashboard.chart.tooltipSingle': '{label}: {value} {unit} (a single reading)',
+    /**
+     * Nombre accesible del lienzo. En el panel lo escribe Blade; en el lector y en la vista previa lo
+     * escribe `clippingExplorer.js`, porque allí el marcado de la gráfica no lo emite ningún
+     * servidor.
+     */
+    'dashboard.chart.ariaLabel': 'Daily median and daily range for {type}',
+
+    // --- Recorte compartido: la vista que comparten el lector y la vista previa (ADR 0011) -------
+    'clip.controls.title': 'What you are looking at',
+    'clip.range.label': 'Period within this extract',
+    'clip.range.all': 'The whole extract',
+    'clip.range.day': 'Last day of the extract',
+    'clip.range.week': 'Last 7 days of the extract',
+    'clip.range.month': 'Last 30 days of the extract',
+    'clip.range.custom': 'Custom period',
+    'clip.range.from': 'From',
+    'clip.range.to': 'To',
+    /**
+     * Se dice en voz alta que esto solo estrecha: quien acota espera, con razón, poder desacotar, y
+     * aquí no se puede más allá del recorte. Decirlo evita concluir que faltan registros.
+     */
+    'clip.range.help': 'This only narrows what is shown. The extract is a fixed snapshot and cannot '
+        + 'be widened from here: nothing on this page can ask for a record that is not already in it.',
+    'clip.types.label': 'Record types',
+    'clip.search.label': 'Search',
+    'clip.search.placeholder': 'Notes, foods, device...',
+    'clip.search.help': 'Searching happens in this browser, over the records of this extract only. '
+        + 'What you type is not sent anywhere. It narrows the timeline and the detail table; the '
+        + 'charts and the statistics keep covering the whole selected period.',
+    'clip.empty.type': 'This extract holds no records of this type for the period shown.',
+    'clip.range.outside': 'The period you chose falls outside this extract, which covers {from} to '
+        + '{to}. The whole extract is shown instead.',
+    /**
+     * La segunda línea de la cabecera: qué se está mirando **ahora**, después de acotar. Se imprime,
+     * a diferencia de los controles: en papel, un recorte de seis meses con una tabla de siete días
+     * y ninguna huella del filtro es un historial truncado que se lee como completo.
+     */
+    'clip.viewing.label': 'You are viewing',
+    'clip.viewing.rangeAll': 'the whole extract',
+    'clip.viewing.rangeFrom': 'from {from} onwards',
+    'clip.viewing.rangeTo': 'up to {to}',
+    'clip.viewing.rangeBetween': 'from {from} to {to}',
+    'clip.viewing.allTypes': 'every record type in the extract',
+    'clip.viewing.types': 'only {types}',
+    'clip.viewing.noTypes': 'no record type',
+    'clip.viewing.search': 'filtered by “{query}” in the timeline and the table',
+    'clip.notice.undeclared': {
+        one: '{count} record is of a type this extract does not declare, so it is not counted in the '
+            + 'statistics or drawn in the charts. It is listed in the table below.',
+        other: '{count} records are of types this extract does not declare, so they are not counted '
+            + 'in the statistics or drawn in the charts. They are listed in the table below.',
+    },
+    'clip.notice.noDeclaredTypes': 'This extract does not declare which record types it includes, so '
+        + 'every type found inside it is offered above.',
+    'clip.notice.mixedUnits': 'Blood glucose in this extract was recorded in more than one unit. The '
+        + 'statistics and the chart cover the {unit} readings only; nothing is converted, and the '
+        + 'readings in another unit are counted separately under each card.',
+    'clip.charts.title': 'Charts',
+    'clip.stats.title': 'Statistics',
+    'clip.timeline.title': 'Timeline',
+    'clip.table.title': 'Every record in detail',
+    'clip.notice.shown': {
+        one: '{count} record shown, of the {total} in this extract.',
+        other: '{count} records shown, of the {total} in this extract.',
+    },
+    'clip.notice.unreadable': {
+        one: '{count} record in this extract could not be read. It is not counted in the statistics '
+            + 'or drawn in the charts, and it is listed in the table below so that it is not missing.',
+        other: '{count} records in this extract could not be read. They are not counted in the '
+            + 'statistics or drawn in the charts, and they are listed in the table below so that they '
+            + 'are not missing.',
+    },
+
     // --- Página del lector de un recorte compartido (`reader/`, ADR 0011) -----------------------
     'reader.title': 'Shared health record',
     'reader.intro': 'Someone shared a read-only extract of their own health record with you. It is encrypted: nobody but this browser, with the PIN, can read it.',

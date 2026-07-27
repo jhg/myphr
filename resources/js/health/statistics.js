@@ -169,6 +169,85 @@ export function dominantUnit(events, type, valueKey = 'value') {
 }
 
 /**
+ * Unidad con la que se resume un tipo cuando lo que se mira es un **conjunto cerrado y ajeno**: la
+ * de la **mayoría** de las lecturas, no la de la más reciente.
+ *
+ * {@see dominantUnit} elige por recencia y tiene razón en el panel del paciente: quien acaba de
+ * cambiar de báscula quiere el resumen en la unidad que está usando ahora, y sabe que ha cambiado.
+ * En un recorte compartido nadie sabe eso. Un paciente que estrena medidor, con dos lecturas en
+ * mmol/L y doscientas anteriores en mg/dL, produciría una tarjeta «Recuento 2 · Media 7,4» y
+ * mandaría las doscientas restantes a una nota al pie: el profesional leería un resumen de dos
+ * lecturas creyendo que es el del recorte. Por mayoría, el resumen habla de las doscientas y las dos
+ * quedan declaradas aparte, que es el error que sí se ve.
+ *
+ * Los empates se resuelven por la unidad más reciente, para no depender del orden del array.
+ *
+ * @param {list<{type: string, occurredAt: string, data: object}>} events
+ * @param {string} type
+ * @param {string} [valueKey] Campo numérico del sobre (`value`, `dose`, ...).
+ * @returns {string|null} `null` si no hay ningún registro utilizable de ese tipo.
+ */
+export function majorityUnit(events, type, valueKey = 'value') {
+    /** @type {Map<string, number>} */
+    const counts = new Map();
+
+    for (const event of events) {
+        if (event.type !== type || toFiniteNumber(event.data?.[valueKey]) === null) {
+            continue;
+        }
+
+        if (typeof event.data.unit !== 'string' || event.data.unit === '') {
+            continue;
+        }
+
+        counts.set(event.data.unit, (counts.get(event.data.unit) ?? 0) + 1);
+    }
+
+    if (counts.size === 0) {
+        return null;
+    }
+
+    const mostRecent = dominantUnit(events, type, valueKey);
+    let winner = mostRecent;
+
+    for (const [unit, count] of counts) {
+        if (count > counts.get(winner) || (count === counts.get(winner) && unit === mostRecent)) {
+            winner = unit;
+        }
+    }
+
+    return winner;
+}
+
+/**
+ * ¿Cuántas unidades distintas hay en las lecturas de un tipo?
+ *
+ * Sirve para decidir si la exclusión por unidad merece un aviso de verdad o una nota al pie: con una
+ * sola unidad no hay nada que advertir, y con dos el número que se enseña describe a una parte del
+ * recorte, no al recorte.
+ *
+ * @param {list<{type: string, data: object}>} events
+ * @param {string} type
+ * @param {string} [valueKey]
+ * @returns {number}
+ */
+export function unitCount(events, type, valueKey = 'value') {
+    const units = new Set();
+
+    for (const event of events) {
+        if (event.type !== type || toFiniteNumber(event.data?.[valueKey]) === null) {
+            continue;
+        }
+
+        if (typeof event.data.unit === 'string' && event.data.unit !== '') {
+            units.add(event.data.unit);
+        }
+    }
+
+    return units.size;
+}
+
+/**
  * Resumen de un tipo de evento de **una sola magnitud numérica** (glucemia, peso, temperatura,
  * dosis de insulina) en un periodo, agrupado por el campo que distingue cómo se midió.
  *

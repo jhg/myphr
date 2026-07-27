@@ -189,9 +189,16 @@ export const ES = Object.freeze({
     'dashboard.typeFilter.none': 'No hay ningún tipo de evento marcado, así que no hay nada que mostrar. '
         + 'Marca al menos uno.',
     'dashboard.loadedCount': {
-        one: '{count} registro en el periodo elegido.',
-        other: '{count} registros en el periodo elegido.',
+        one: '{count} registro de los tipos marcados en este periodo.',
+        other: '{count} registros de los tipos marcados en este periodo.',
     },
+    'dashboard.search.hidden': {
+        one: '{count} registro de este periodo no coincide con lo que has buscado. Se sigue contando '
+            + 'en las gráficas y en las estadísticas.',
+        other: '{count} registros de este periodo no coinciden con lo que has buscado. Se siguen '
+            + 'contando en las gráficas y en las estadísticas.',
+    },
+    'dashboard.empty.search': 'Ningún registro de este periodo coincide con lo que has buscado.',
     'dashboard.targetRangeUnitMismatch': 'Tu rango objetivo está guardado en otra unidad, así que no se '
         + 'puede calcular el tiempo en rango sobre lecturas en {unit}. Ajusta la unidad del rango o la de '
         + 'presentación en los ajustes.',
@@ -327,6 +334,70 @@ export const ES = Object.freeze({
     'dashboard.chart.seriesMagnitude': '{group} \u00b7 {magnitude}',
     'dashboard.chart.tooltip': '{label}: mediana {median} {unit} (de {min} a {max})',
     'dashboard.chart.tooltipSingle': '{label}: {value} {unit} (una sola lectura)',
+    'dashboard.chart.ariaLabel': 'Mediana diaria y rango diario de {type}',
+
+    // --- Recorte compartido: la vista que comparten el lector y la vista previa (ADR 0011) -------
+    'clip.controls.title': 'Qué estás viendo',
+    'clip.range.label': 'Periodo dentro de este extracto',
+    'clip.range.all': 'Todo el extracto',
+    'clip.range.day': 'Último día del extracto',
+    'clip.range.week': 'Últimos 7 días del extracto',
+    'clip.range.month': 'Últimos 30 días del extracto',
+    'clip.range.custom': 'Periodo a medida',
+    'clip.range.from': 'Desde',
+    'clip.range.to': 'Hasta',
+    'clip.range.help': 'Esto solo acota lo que se enseña. El extracto es una foto fija y desde aquí '
+        + 'no se puede ampliar: nada de esta página puede pedir un registro que no esté ya dentro.',
+    'clip.types.label': 'Tipos de registro',
+    'clip.search.label': 'Buscar',
+    'clip.search.placeholder': 'Notas, alimentos, aparato...',
+    'clip.search.help': 'La búsqueda ocurre en este navegador, y solo sobre los registros de este '
+        + 'recorte. Lo que escribas no se envía a ninguna parte. Acota la línea temporal y la tabla '
+        + 'de detalle; las gráficas y las estadísticas siguen cubriendo el periodo elegido entero.',
+    'clip.empty.type': 'Este recorte no contiene registros de este tipo en el periodo mostrado.',
+    'clip.range.outside': 'El periodo que has elegido queda fuera de este recorte, que va del {from} '
+        + 'al {to}. Se enseña el recorte entero.',
+    /**
+     * La segunda línea de la cabecera: qué se está mirando **ahora**, después de acotar. Se imprime,
+     * a diferencia de los controles: en papel, un recorte de seis meses con una tabla de siete días
+     * y ninguna huella del filtro es un historial truncado que se lee como completo.
+     */
+    'clip.viewing.label': 'Estás viendo',
+    'clip.viewing.rangeAll': 'el recorte entero',
+    'clip.viewing.rangeFrom': 'desde el {from}',
+    'clip.viewing.rangeTo': 'hasta el {to}',
+    'clip.viewing.rangeBetween': 'del {from} al {to}',
+    'clip.viewing.allTypes': 'todos los tipos de registro del recorte',
+    'clip.viewing.types': 'solo {types}',
+    'clip.viewing.noTypes': 'ningún tipo de registro',
+    'clip.viewing.search': 'filtrado por «{query}» en la línea temporal y en la tabla',
+    'clip.notice.undeclared': {
+        one: '{count} registro es de un tipo que este recorte no declara, así que no se cuenta '
+            + 'en las estadísticas ni se dibuja en las gráficas. Aparece en la tabla de abajo.',
+        other: '{count} registros son de tipos que este recorte no declara, así que no se cuentan '
+            + 'en las estadísticas ni se dibujan en las gráficas. Aparecen en la tabla de abajo.',
+    },
+    'clip.notice.noDeclaredTypes': 'Este recorte no declara qué tipos de registro incluye, así '
+        + 'que arriba se ofrecen todos los que se han encontrado dentro.',
+    'clip.notice.mixedUnits': 'Las glucemias de este recorte se anotaron en más de una unidad. Las '
+        + 'estadísticas y la gráfica cubren solo las lecturas en {unit}; no se convierte nada, y '
+        + 'las que están en otra unidad se cuentan aparte debajo de cada tarjeta.',
+    'clip.charts.title': 'Gráficas',
+    'clip.stats.title': 'Estadísticas',
+    'clip.timeline.title': 'Línea temporal',
+    'clip.table.title': 'Todos los registros en detalle',
+    'clip.notice.shown': {
+        one: 'Se enseña {count} registro, de los {total} de este extracto.',
+        other: 'Se enseñan {count} registros, de los {total} de este extracto.',
+    },
+    'clip.notice.unreadable': {
+        one: '{count} registro de este extracto no se ha podido leer. No cuenta en las estadísticas '
+            + 'ni se dibuja en las gráficas, y aparece en la tabla de abajo para que no falte.',
+        other: '{count} registros de este extracto no se han podido leer. No cuentan en las '
+            + 'estadísticas ni se dibujan en las gráficas, y aparecen en la tabla de abajo para que '
+            + 'no falten.',
+    },
+
     // --- Página del lector de un recorte compartido (`reader/`, ADR 0011) -----------------------
     'reader.title': 'Historial de salud compartido',
     'reader.intro': 'Alguien ha compartido contigo un extracto de solo lectura de su propio historial de salud. Está cifrado: nadie salvo este navegador, con el PIN, puede leerlo.',

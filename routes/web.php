@@ -13,6 +13,8 @@ use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Route;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
+use Livewire\Livewire;
+use Livewire\Mechanisms\HandleRequests\RequireLivewireHeaders;
 
 /**
  * La raíz del sitio manda al panel, que es toda la aplicación.
@@ -27,6 +29,27 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
  * sesión vive en un solo sitio.
  */
 Route::redirect('/', '/phr')->name('home');
+
+/**
+ * El endpoint de Livewire, bajado al prefijo del panel.
+ *
+ * De serie vive en `/livewire-<hash>/update`, es decir **fuera** de `/phr`, y eso obligaba a que la
+ * cookie de sesión tuviera `path=/`. Con `path=/`, el navegador la manda también en la navegación de
+ * nivel superior a `/s/{link}` y en sus subrecursos: retirarle `StartSession` a esas rutas evita que
+ * Laravel la lea y la escriba, pero no evita que viaje. Cualquier proxy, WAF, CDN o registro de
+ * acceso por delante ve entonces, en la misma línea, el identificador del recorte y la cookie de una
+ * cuenta concreta, que es exactamente la correlación que este diseño dice evitar (ADR 0011).
+ *
+ * Con la ruta aquí, **todo lo que necesita sesión cuelga de `/phr`** y la cookie puede acotarse
+ * (`SESSION_PATH`, `config/session.php`). Lo vigila `tests/Feature/SessionCookieScopeTest.php`, que
+ * recorre las rutas y falla si alguna con `StartSession` queda fuera del prefijo.
+ *
+ * El nombre acaba en `livewire.update` porque es así como `HandleRequests::findUpdateRoute()`
+ * encuentra una ruta propia y la prefiere a la suya.
+ */
+Livewire::setUpdateRoute(fn ($handle) => Route::post('/phr/livewire/update', $handle)
+    ->middleware(['web', RequireLivewireHeaders::class])
+    ->name('phr.livewire.update'));
 
 /**
  * Lectura de un recorte compartido con un profesional (ADR 0011).

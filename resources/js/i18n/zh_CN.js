@@ -177,7 +177,13 @@ export const ZH_CN = Object.freeze({
     'dashboard.empty': '这段时间内还没有任何记录。',
     'dashboard.addFirst': '添加第一条记录',
     'dashboard.typeFilter.none': '没有勾选任何事件类型，因此没有可显示的内容。请至少勾选一项。',
-    'dashboard.loadedCount': { other: '所选时间段内共有 {count} 条记录。' },
+    'dashboard.loadedCount': {
+        other: '此时段内已勾选类型的记录共 {count} 条。',
+    },
+    'dashboard.search.hidden': {
+        other: '此时段内有 {count} 条记录与搜索内容不符，但仍计入图表和统计。',
+    },
+    'dashboard.empty.search': '此时段内没有与搜索内容相符的记录。',
     'dashboard.targetRangeUnitMismatch': '你的目标范围使用的是另一种单位，因此无法在 {unit} 的读数上计算范围内时间。请在设置中修改范围单位或显示单位。',
     'dashboard.targetRangeInvite': '在设置中配置你的血糖目标范围，这里就会显示你有多少比例的时间处于范围之内。',
     'dashboard.generic': '概览未能载入。',
@@ -297,6 +303,54 @@ export const ZH_CN = Object.freeze({
     'dashboard.chart.seriesMagnitude': '{group} \u00b7 {magnitude}',
     'dashboard.chart.tooltip': '{label}：中位数 {median} {unit}（从 {min} 到 {max}）',
     'dashboard.chart.tooltipSingle': '{label}：{value} {unit}（仅一次读数）',
+    'dashboard.chart.ariaLabel': '{type} 的每日中位数与每日范围',
+
+    // --- Recorte compartido: la vista que comparten el lector y la vista previa (ADR 0011) -------
+    'clip.controls.title': '你正在查看的内容',
+    'clip.range.label': '此摘录内的时间段',
+    'clip.range.all': '整份摘录',
+    'clip.range.day': '摘录中的最后一天',
+    'clip.range.week': '摘录中的最后 7 天',
+    'clip.range.month': '摘录中的最后 30 天',
+    'clip.range.custom': '自定义时间段',
+    'clip.range.from': '从',
+    'clip.range.to': '到',
+    'clip.range.help': '这只会缩小显示范围。摘录是一份固定的快照，无法在此扩大：本页面无法请求摘录中尚未包含的任何记录。',
+    'clip.types.label': '记录类型',
+    'clip.search.label': '搜索',
+    'clip.search.placeholder': '备注、食物、设备……',
+    'clip.search.help': '搜索在本浏览器内完成，仅针对本摘录的记录，输入内容不会发送到任何地方。它只缩小时间线和详情表格；图表和统计仍涵盖整个所选时段。',
+    'clip.empty.type': '本摘录在所示时段内没有此类记录。',
+    'clip.range.outside': '你选择的时段超出了本摘录的范围（{from} 至 {to}），因此显示整份摘录。',
+    /**
+     * La segunda línea de la cabecera: qué se está mirando **ahora**, después de acotar. Se imprime,
+     * a diferencia de los controles: en papel, un recorte de seis meses con una tabla de siete días
+     * y ninguna huella del filtro es un historial truncado que se lee como completo.
+     */
+    'clip.viewing.label': '当前查看',
+    'clip.viewing.rangeAll': '整份摘录',
+    'clip.viewing.rangeFrom': '自 {from} 起',
+    'clip.viewing.rangeTo': '至 {to}',
+    'clip.viewing.rangeBetween': '{from} 至 {to}',
+    'clip.viewing.allTypes': '摘录中的全部记录类型',
+    'clip.viewing.types': '仅 {types}',
+    'clip.viewing.noTypes': '未选任何记录类型',
+    'clip.viewing.search': '在时间线和表格中按“{query}”筛选',
+    'clip.notice.undeclared': {
+        other: '有 {count} 条记录属于本摘录未声明的类型，因此不计入统计也不绘制到图表中，但仍列在下方表格里。',
+    },
+    'clip.notice.noDeclaredTypes': '本摘录未声明包含哪些记录类型，因此上方列出了其中找到的全部类型。',
+    'clip.notice.mixedUnits': '本摘录中的血糖使用了不止一种单位。统计和图表仅涵盖 {unit} 的读数；不做任何换算，其余单位的读数在每张卡片下方单独计数。',
+    'clip.charts.title': '图表',
+    'clip.stats.title': '统计',
+    'clip.timeline.title': '时间线',
+    'clip.table.title': '全部记录明细',
+    'clip.notice.shown': {
+        other: '显示 {count} 条记录，此摘录共 {total} 条。',
+    },
+    'clip.notice.unreadable': {
+        other: '此摘录中有 {count} 条记录无法读取。它们不计入统计，也不会绘制在图表中；下方表格中仍会列出，以免遗漏。',
+    },
     // --- Página del lector de un recorte compartido (`reader/`, ADR 0011) -----------------------
     'reader.title': '共享的健康记录',
     'reader.intro': '有人与你共享了其本人健康记录的只读摘录。内容已加密：除本浏览器凭 PIN 码解密外，任何人都无法读取。',

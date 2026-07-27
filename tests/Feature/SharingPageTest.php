@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Filament\Pages\Sharing;
 use App\Models\User;
+use App\Sharing\ReaderCatalog;
 use App\Sharing\Shares;
 use App\Sharing\ShareTtl;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -111,7 +112,38 @@ it('no publica ningún dato del contenido en el catálogo', function (): void {
     $catalog = Livewire::test(Sharing::class)->instance()->catalog();
 
     expect(array_keys($catalog))
-        ->toBe(['types', 'ttls', 'defaultTtl', 'endpoints', 'readerUrlTemplate', 'limits']);
+        ->toBe(['types', 'ttls', 'defaultTtl', 'endpoints', 'readerUrlTemplate', 'limits', 'readerCatalog']);
+
+    /**
+     * `readerCatalog` es el mismo vocabulario público que recibe la página del lector: tokens de
+     * catálogo con su etiqueta, términos LOINC y unidades (ADR 0005). Nada de ahí depende de ninguna
+     * cuenta ni dice qué contiene ningún recorte, y es lo que permite que la vista previa se pinte
+     * con las mismas palabras que verá el profesional sin una sola petición de más.
+     */
+    expect($catalog['readerCatalog'])->toBe((new ReaderCatalog)->toArray());
+    expect(array_keys($catalog['readerCatalog']))->toBe(['locales', 'labels', 'loinc', 'units']);
+});
+
+it('previsualiza el recorte con la misma pantalla que verá el profesional', function (): void {
+    /**
+     * La vista previa no puede ser una versión resumida: lo que sale de aquí no se puede deshacer
+     * —revocar un enlace no borra lo que la otra persona ya descargó—, así que «lo que vas a enviar»
+     * tiene que ser literalmente lo que la otra persona verá. Por eso monta el mismo módulo que la
+     * página del lector, sobre el mismo cuerpo de paquete que se cifraría al generar.
+     */
+    expect(sharingModuleSource())
+        ->toContain("import { renderClippingExplorer } from '../reader/clippingExplorer.js';")
+        ->toContain('renderClippingExplorer(this.$refs.preview')
+        ->toContain('buildSharePackageBody({');
+
+    /**
+     * La región la construye entera el cliente: `wire:ignore` con `wire:key` estable y sin
+     * `@island`, por el mismo motivo que la gráfica de glucemia (ADR 0002). El servidor reemite un
+     * island tras cualquier petición de Livewire y se llevaría por delante el `<canvas>`.
+     */
+    expect(sharingViewSource())
+        ->toContain('x-ref="preview"')
+        ->toContain('wire:key="sharing-preview-region"');
 });
 
 it('registra el componente Alpine en app.js', function (): void {

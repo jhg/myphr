@@ -22,6 +22,24 @@ const DASHBOARD_MODULE = 'resources/js/health/dashboardPage.js';
 const DASHBOARD_VIEW = 'resources/views/phr/pages/dashboard.blade.php';
 
 /**
+ * Módulos que pintan lo que se ve en esta pantalla.
+ *
+ * La visualización ya no pertenece al panel: la línea temporal, las tarjetas y las gráficas viven en
+ * módulos que reciben eventos descifrados y devuelven nodos, para que el lector del profesional
+ * enseñe exactamente lo mismo sin sesión (ADR 0011). Las reglas de DESIGN.md se comprueban sobre
+ * todos ellos, porque el marcado salió de `dashboardPage.js` y las reglas tenían que salir con él.
+ *
+ * @var list<string>
+ */
+const DASHBOARD_RENDER_MODULES = [
+    'resources/js/health/dashboardPage.js',
+    'resources/js/health/timelineView.js',
+    'resources/js/health/statsView.js',
+    'resources/js/health/chartsView.js',
+    'resources/js/health/eventVisuals.js',
+];
+
+/**
  * Fuente sin comentarios, para que los tests que prohíben una clase no fallen por citarla en un
  * comentario que explica precisamente por qué no se usa.
  */
@@ -252,19 +270,25 @@ it('las superficies usan papeles del tema y no tonos de la rampa gris', function
     expect($contents)->not->toContain('bg-white');
     expect($contents)->not->toContain('bg-gray-50');
     expect($contents)->not->toContain('border-gray-200');
-})->with([DASHBOARD_VIEW, DASHBOARD_MODULE]);
+})->with([DASHBOARD_VIEW, ...DASHBOARD_RENDER_MODULES]);
 
 /**
  * Los avisos usan los tokens `error-*` / `info-*`, que conmutan con el tema, y no las rampas de
  * acento, que no se reasignan en oscuro (`theme.css`, § Avisos y chips).
+ *
+ * El aviso lo construye `eventVisuals.js`, que es el módulo compartido por las tres pantallas que
+ * enseñan eventos: un aviso con los colores mal puestos ahí saldría ilegible en las tres a la vez.
  */
-it('los avisos del módulo usan los tokens de aviso y no las rampas de acento', function (): void {
-    $module = dashboardSourceWithoutComments(DASHBOARD_MODULE);
+it('los avisos usan los tokens de aviso y no las rampas de acento', function (): void {
+    $module = dashboardSourceWithoutComments('resources/js/health/eventVisuals.js');
 
     expect($module)->toContain('bg-error-surface');
     expect($module)->toContain('bg-info-surface');
-    expect($module)->not->toContain('bg-danger-50');
-    expect($module)->not->toContain('bg-primary-50');
+
+    foreach (DASHBOARD_RENDER_MODULES as $path) {
+        expect(dashboardSourceWithoutComments($path))->not->toContain('bg-danger-50');
+        expect(dashboardSourceWithoutComments($path))->not->toContain('bg-primary-50');
+    }
 });
 
 /**

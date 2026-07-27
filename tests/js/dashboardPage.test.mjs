@@ -15,40 +15,57 @@
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, test } from 'node:test';
 
+/**
+ * Las afirmaciones de este fichero no han cambiado: lo que ha cambiado es de dónde se importa cada
+ * función. La visualización dejó de pertenecer al panel y vive en módulos que reciben eventos
+ * descifrados y devuelven nodos (`timelineView.js`, `statsView.js`, `chartsView.js`), con el
+ * vocabulario en `eventLabels.js` / `eventTypes.js` y la paginación en `eventSource.js`. El panel
+ * del paciente es hoy uno de sus tres consumidores, no su dueño.
+ */
 import {
-    buildTimeline,
-    chartCaptionText,
     CHART_SECTIONS,
+    chartCaptionText,
     chartElementIds,
     chartSeriesLabel,
     chartUnit,
-    defaultSelectedTypes,
-    describeExcludedByUnit,
-    describeTimelineEvent,
-    EVENT_TYPES,
-    filterBySelectedTypes,
-    flattenDecryptedEvent,
+} from '../../resources/js/health/chartsView.js';
+import {
     formatMeasuredValue,
     formatMethodLabel,
     formatNumber,
-    groupEntriesByDay,
-    hasAnyGlucoseSignal,
-    hasPeriodData,
-    localDayKey,
-    MEASUREMENT_SECTIONS,
+} from '../../resources/js/health/eventLabels.js';
+import {
+    flattenDecryptedEvent,
     needsAnotherPage,
     rangeStartMs,
+} from '../../resources/js/health/eventSource.js';
+import {
+    defaultSelectedTypes,
+    EVENT_TYPES,
+    filterBySelectedTypes,
+    selectedTypeTokens,
+} from '../../resources/js/health/eventTypes.js';
+import {
+    describeExcludedByUnit,
+    hasAnyGlucoseSignal,
+    hasPeriodData,
+    MEASUREMENT_SECTIONS,
     renderBloodPressureSection,
     renderGlucoseSection,
     renderMeasurementSection,
     renderStatsSections,
-    renderTimelineSection,
     resolveGlucoseTargetRange,
-    selectedTypeTokens,
     sortedMethodEntries,
     targetRangeUnitMismatch,
+} from '../../resources/js/health/statsView.js';
+import {
+    buildTimeline,
+    describeTimelineEvent,
+    groupEntriesByDay,
+    localDayKey,
+    renderTimelineSection,
     TIMELINE_MAX_ENTRIES,
-} from '../../resources/js/health/dashboardPage.js';
+} from '../../resources/js/health/timelineView.js';
 import { summarizeGlucosePeriod } from '../../resources/js/health/statistics.js';
 import { setLocale } from '../../resources/js/i18n/index.js';
 
@@ -767,6 +784,28 @@ test('groupEntriesByDay: agrupa por día y conserva el orden de las entradas', (
  * el `document` de estos tests no tiene `querySelector`: la frase, que es lo que informa, no depende
  * de encontrar la ruta.
  */
+/**
+ * El estado vacío tiene que poder decir **cuál de las dos cosas** ha pasado. «Todavía no hay
+ * registros en este periodo» sobre registros que están en el periodo y solo están filtrados por el
+ * buscador es una ausencia que se lee como un cero clínico, que es el error que este proyecto no
+ * puede permitirse.
+ */
+test('renderTimelineSection y renderStatsSections aceptan la frase del estado vacío', () => {
+    const timeline = renderTimelineSection([], { emptyText: 'Nada coincide con lo buscado.' });
+
+    assert.match(timeline.text, /Nada coincide con lo buscado\./);
+
+    const stats = renderStatsSections([], {
+        selectedTypes: { glucose: true },
+        unit: 'mg/dL',
+        targetRange: undefined,
+        unitMismatch: false,
+        emptyText: 'Este recorte no trae nada de este tipo.',
+    });
+
+    assert.match(stats.text, /Este recorte no trae nada de este tipo\./);
+});
+
 test('renderTimelineSection: sin ningún registro, el estado vacío coherente con el resto', () => {
     const fragment = renderTimelineSection([]);
 

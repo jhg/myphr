@@ -118,3 +118,29 @@ export function observeThemeChange(redraw) {
 
     return () => observer.disconnect();
 }
+
+/**
+ * Lo mismo que {@see observeThemeChange}, pero para las pantallas donde el tema **no lo elige
+ * nadie**: la del lector de un recorte compartido (ADR 0011).
+ *
+ * Allí no hay cuenta y no puede haber preferencia guardada —guardar una sería escribir en el
+ * dispositivo del profesional, que es justo lo que esa ruta evita: ni cookie, ni preferencia, ni
+ * nada—, así que manda el sistema operativo y el tema se lee con `prefers-color-scheme`, igual que
+ * hace `resources/css/reader.css`. Sin esto, la página conmutaría de tema entera menos las gráficas,
+ * que es exactamente lo que DESIGN.md § Charts — Dark advierte.
+ *
+ * @param {() => void} redraw
+ * @returns {() => void} Función para dejar de escuchar.
+ */
+export function observeColorSchemeChange(redraw) {
+    if (typeof globalThis.matchMedia !== 'function') {
+        return () => {};
+    }
+
+    const query = globalThis.matchMedia('(prefers-color-scheme: dark)');
+    const listener = () => redraw();
+
+    query.addEventListener('change', listener);
+
+    return () => query.removeEventListener('change', listener);
+}

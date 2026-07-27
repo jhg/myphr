@@ -161,6 +161,41 @@
                 <span x-show="! busy">{{ __('Generate link and PIN') }}</span>
                 <span x-show="busy" x-cloak>{{ __('Preparing…') }}</span>
             </button>
+
+            {{--
+                Vista previa · Botón secundario · § Buttons: sin relleno, borde de 1.5px.
+
+                Va **antes** de generar, no después, y por eso es un botón aparte: lo que sale de
+                aquí no se puede deshacer —revocar un enlace no borra lo que la otra persona ya
+                descargó—, así que ver antes de enviar es la única comprobación que sirve. No sube
+                nada, no crea ningún enlace y no consume ninguno de los del tope: son eventos que ya
+                están descifrados en este navegador, pintados con la misma pantalla del profesional.
+            --}}
+            <button
+                type="button"
+                @click="togglePreview()"
+                x-bind:disabled="previewBusy"
+                x-bind:aria-expanded="previewVisible ? 'true' : 'false'"
+                aria-controls="sharing-preview"
+                class="inline-flex min-h-11 items-center justify-center rounded-control border-[1.5px] border-accent px-6 py-2.5 text-button text-accent hover:bg-surface-hover focus-visible:shadow-focus-blue focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+            >
+                <span x-show="previewBusy" x-cloak>{{ __('Preparing…') }}</span>
+                <span x-show="! previewBusy && ! previewVisible">{{ __('Preview what the professional will see') }}</span>
+                <span x-show="! previewBusy && previewVisible" x-cloak>{{ __('Hide the preview') }}</span>
+            </button>
+        </div>
+
+        {{-- Error de la vista previa, aparte del de generación: son dos acciones distintas. --}}
+        <div
+            x-show="previewError"
+            x-cloak
+            role="alert"
+            class="mt-4 flex items-start gap-2 rounded-control border border-error-outline bg-error-surface px-3.5 py-2.5"
+        >
+            <svg class="mt-px size-5 shrink-0 text-error-ink" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003ZM12 8.25a.75.75 0 0 1 .75.75v3.75a.75.75 0 0 1-1.5 0V9a.75.75 0 0 1 .75-.75Zm0 8.25a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z" clip-rule="evenodd" />
+            </svg>
+            <p x-text="previewError" class="text-helper text-error-ink"></p>
         </div>
 
         {{--
@@ -185,6 +220,36 @@
             </svg>
             <p x-text="error" class="text-helper text-error-ink"></p>
         </div>
+    </section>
+
+    {{--
+        Vista previa del recorte: exactamente la pantalla que verá el profesional.
+
+        La construye entera `reader/clippingExplorer.js`, el mismo módulo que monta la página del
+        lector, sobre el mismo cuerpo de paquete que se cifraría al generar. Por eso aquí no hay ni
+        una etiqueta del contenido: el servidor no renderiza nunca nada de esto, y no podría, porque
+        son valores en claro que solo existen en este navegador.
+
+        `wire:ignore` con `wire:key` estable, sin `@island`, por el mismo motivo que la gráfica de
+        glucemia (ADR 0002): el servidor reemite un island tras cualquier petición de Livewire y se
+        llevaría por delante el `<canvas>` con todo lo dibujado.
+    --}}
+    <section x-show="previewVisible" x-cloak class="rounded-card border border-border bg-surface p-card shadow-sm">
+        <h2 class="font-display text-subhead text-ink">
+            {{ __('Preview') }}
+        </h2>
+
+        <p class="mt-1.5 text-helper text-ink-secondary">
+            {{ __('This is the extract exactly as the professional will see it, drawn from records already decrypted in this browser. Nothing has been uploaded and no link exists yet.') }}
+        </p>
+
+        <div
+            id="sharing-preview"
+            wire:ignore
+            wire:key="sharing-preview-region"
+            x-ref="preview"
+            class="mt-4 flex flex-col gap-6"
+        ></div>
     </section>
 
     {{--

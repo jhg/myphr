@@ -3,15 +3,25 @@
  *
  * Quien llega aquí **no tiene cuenta, no conoce esta aplicación y está en consulta**. La pantalla
  * está escrita para esa persona: una sola cosa que hacer (teclear el PIN), una espera explicada
- * mientras se deriva la clave, y después una tabla clínica que se puede leer o imprimir sin más
- * pasos.
+ * mientras se deriva la clave, y después el recorte entero, con la **misma** interfaz que ve el
+ * paciente en su panel: gráficas, estadísticas, línea temporal, búsqueda y subperiodos, más la tabla
+ * clínica de siempre para leer e imprimir. Todo eso lo pinta `clippingExplorer.js`, que es el mismo
+ * módulo que usa la vista previa de la pantalla de compartir: si esta pantalla tuviera su propia
+ * copia, el paciente y el médico acabarían mirando dos documentos distintos del mismo dato.
  *
  * **Lo que esta página no hace, y es deliberado:**
  *
- * * No usa Livewire, ni Filament, ni gráficas, ni ninguna cookie. La ruta ya se quita de encima la
+ * * No usa Livewire, ni Filament, ni ninguna cookie. La ruta ya se quita de encima la
  *   sesión y el CSRF (`routes/web.php`), y `fetch` va con `credentials: 'omit'` para que ni siquiera
  *   se mande una cookie que el navegador tuviera de antes: una cookie aquí sería un identificador
  *   estable de un profesional, correlacionable entre los recortes de dos pacientes distintos.
+ * * No puede pedir un evento más. El único endpoint que sirve datos clínicos es el que ya está tras
+ *   el PIN, y lo que entrega es el paquete entero de una vez. Acotar el subperiodo o buscar texto
+ *   trabaja sobre lo que ya está descifrado en memoria: el profesional puede **estrechar** lo que
+ *   mira, jamás ampliarlo más allá del recorte que el paciente decidió compartir.
+ * * No escribe nada en el dispositivo. Ni `localStorage`, ni `sessionStorage`, ni IndexedDB, ni
+ *   cookie, ni siquiera la preferencia de idioma: el paquete descifrado vive en memoria de esta
+ *   pestaña y cerrarla lo borra, igual que la clave maestra del paciente (ADR 0003).
  * * No enseña nada de la cuenta del paciente. No lo enseña porque no lo tiene: el servidor no manda
  *   ni nombre, ni correo, ni cuántos recortes hay. Lo único que llega es el paquete cifrado.
  * * No distingue causas de fallo. Enlace inexistente, caducado, revocado y PIN incorrecto dan el
@@ -25,8 +35,9 @@
  * envoltorio y saca `CK` → `CK` abre el paquete. El servidor no ve el PIN, ni `S`, ni `CK`, ni una
  * sola línea del contenido.
  *
- * La lógica que se puede probar sin DOM vive en `clinicalReport.js` y en las funciones exportadas de
- * este módulo (`tests/js/readerPage.test.mjs`).
+ * La lógica que se puede probar sin DOM vive en `clinicalReport.js`, en `clippingExplorer.js` y en
+ * las funciones exportadas de este módulo (`tests/js/readerPage.test.mjs`,
+ * `tests/js/clippingExplorer.test.mjs`).
  */
 
 import { canonicalDate } from '../crypto/canonicalDate.js';
@@ -37,7 +48,8 @@ import { decodeShareFragment, openShareWrapper } from '../crypto/shareLink.js';
 import { zeroize } from '../crypto/zeroize.js';
 import { decodeBase64Url, encodeBase64Url } from '../crypto/base64url.js';
 import { setLocale, t } from '../i18n/index.js';
-import { describeEvent, reportHeadline, resolveCatalog, sortByDateDescending, typeSummary } from './clinicalReport.js';
+import { resolveCatalog } from './clinicalReport.js';
+import { renderClippingExplorer } from './clippingExplorer.js';
 
 /** Error de esta pantalla: lo provoca lo que se ha tecleado o lo que ha contestado el servidor. */
 export class ReaderError extends Error {
@@ -290,8 +302,15 @@ export function startReaderPage(document, window) {
 
     const state = {
         locale: setLocale(config.locale),
-        /** Cuerpo del paquete ya descifrado. Vive en memoria de esta pestaña y muere al recargar. */
+        /**
+         * Cuerpo del paquete ya descifrado. Vive en memoria de esta pestaña y muere al recargar: no
+         * se escribe en `localStorage`, ni en `sessionStorage`, ni en IndexedDB, ni en ninguna
+         * cookie. Cerrar la pestaña lo borra, que es la única garantía real en un ordenador ajeno.
+         */
         body: null,
+
+        /** Vista montada del recorte ({@see renderClippingExplorer}), para poder desmontarla. */
+        explorer: null,
         attempts: 0,
         busy: false,
         /** @type {{sendKey: Uint8Array, generatedAt: Date}|null} */
@@ -450,187 +469,24 @@ export function startReaderPage(document, window) {
         }
     }
 
-    /** Pinta el informe clínico entero. Se vuelve a llamar al cambiar de idioma. */
+    /**
+     * Pinta el recorte entero. Se vuelve a llamar al cambiar de idioma, y entonces se desmonta la
+     * vista anterior antes de montar la nueva: sin el `destroy()`, la instancia de Chart.js del
+     * idioma anterior se quedaría atada a un lienzo que ya no está en el documento.
+     */
     function renderReport() {
         if (state.body === null) {
             return;
         }
 
-        const resolved = resolveCatalog(catalog, state.locale);
+        state.explorer?.destroy();
 
         nodes.report.hidden = false;
-        nodes.report.replaceChildren(
-            reportHeader(resolved, state.body),
-            reportTable(resolved, state.body),
-        );
-    }
-
-    /**
-     * Cabecera del informe: **siempre** el número de eventos, el rango y el instante de generación,
-     * más las dos listas de tipos. No se pliega y no se resume: es lo que permite ver que un recorte
-     * llegó truncado, y es lo que impide leer una ausencia como un cero clínico.
-     *
-     * @param {object} resolved
-     * @param {object} body
-     * @returns {HTMLElement}
-     */
-    function reportHeader(resolved, body) {
-        const headline = reportHeadline(body);
-        const types = typeSummary(resolved, body);
-
-        const section = document.createElement('section');
-        section.className = 'rounded-card border border-border bg-surface p-card shadow-sm';
-
-        const title = document.createElement('h2');
-        title.className = 'font-display text-headline text-ink';
-        title.textContent = headline.count;
-        section.appendChild(title);
-
-        for (const line of [headline.range, headline.generatedAt, types.included, types.excluded]) {
-            if (line === null) {
-                continue;
-            }
-
-            const paragraph = document.createElement('p');
-            paragraph.className = 'mt-1 text-body text-ink-secondary';
-            paragraph.textContent = line;
-            section.appendChild(paragraph);
-        }
-
-        const disclaimer = document.createElement('p');
-        disclaimer.className = 'mt-3 text-body-sm text-ink-secondary';
-        disclaimer.textContent = t('reader.header.snapshot');
-        section.appendChild(disclaimer);
-
-        return section;
-    }
-
-    /**
-     * Tabla clínica, ordenada por fecha y con una fila por registro.
-     *
-     * Es una `<table>` de verdad y no una lista de tarjetas: se lee en columnas, se compara de un
-     * vistazo y sale en papel como sale una tabla, que es donde acaba esto cuando alguien lo mete en
-     * una historia clínica.
-     *
-     * @param {object} resolved
-     * @param {object} body
-     * @returns {HTMLElement}
-     */
-    function reportTable(resolved, body) {
-        const wrapper = document.createElement('div');
-        wrapper.className = 'mt-6 overflow-x-auto rounded-card border border-border bg-surface shadow-sm';
-
-        const table = document.createElement('table');
-        table.className = 'w-full border-collapse text-body-sm';
-
-        const head = document.createElement('thead');
-        const headRow = document.createElement('tr');
-
-        for (const key of ['reader.table.when', 'reader.table.what', 'reader.table.value', 'reader.table.details', 'reader.table.loinc']) {
-            const cell = document.createElement('th');
-            cell.scope = 'col';
-            cell.className = 'border-b border-border px-4 py-3 text-left text-overline text-ink-secondary uppercase';
-            cell.textContent = t(key);
-            headRow.appendChild(cell);
-        }
-
-        head.appendChild(headRow);
-        table.appendChild(head);
-
-        const tbody = document.createElement('tbody');
-
-        for (const event of sortByDateDescending(Array.isArray(body.events) ? body.events : [])) {
-            tbody.appendChild(reportRow(describeEvent(resolved, event)));
-        }
-
-        if (tbody.children.length === 0) {
-            const row = document.createElement('tr');
-            const cell = document.createElement('td');
-
-            cell.colSpan = 5;
-            cell.className = 'px-4 py-3 text-body text-ink-secondary';
-            cell.textContent = t('reader.table.empty');
-            row.appendChild(cell);
-            tbody.appendChild(row);
-        }
-
-        table.appendChild(tbody);
-        wrapper.appendChild(table);
-
-        return wrapper;
-    }
-
-    /**
-     * @param {object} row Salida de `describeEvent`.
-     * @returns {HTMLTableRowElement}
-     */
-    function reportRow(row) {
-        const element = document.createElement('tr');
-        element.className = 'border-b border-border last:border-b-0 break-inside-avoid';
-
-        const when = document.createElement('td');
-        when.className = 'px-4 py-3 align-top font-mono text-body-sm text-ink whitespace-nowrap';
-        when.textContent = row.tz === null ? row.occurredAtLabel : `${row.occurredAtLabel} (${row.tz})`;
-
-        const what = document.createElement('td');
-        what.className = 'px-4 py-3 align-top text-body-sm text-ink';
-        what.textContent = row.typeLabel;
-
-        const value = document.createElement('td');
-        value.className = row.unreadable
-            ? 'px-4 py-3 align-top text-body-sm text-error-ink'
-            : 'px-4 py-3 align-top font-mono text-body text-ink whitespace-nowrap';
-        value.textContent = row.value;
-
-        const details = document.createElement('td');
-        details.className = 'px-4 py-3 align-top text-body-sm text-ink-secondary';
-
-        if (row.details.length > 0 || row.note !== null) {
-            const list = document.createElement('ul');
-            list.className = 'flex flex-col gap-0.5';
-
-            for (const detail of row.details) {
-                const item = document.createElement('li');
-                item.textContent = detail;
-                list.appendChild(item);
-            }
-
-            if (row.note !== null) {
-                const item = document.createElement('li');
-                item.className = 'text-ink';
-                item.textContent = t('reader.detail.note', { note: row.note });
-                list.appendChild(item);
-            }
-
-            details.appendChild(list);
-        }
-
-        const loinc = document.createElement('td');
-        loinc.className = 'px-4 py-3 align-top text-caption text-ink-secondary';
-
-        for (const entry of row.loinc) {
-            const item = document.createElement('p');
-
-            /**
-             * El código va en monoespaciada (Do's #7) y el término oficial **no se traduce**
-             * (ADR 0005): es el nombre con el que esta magnitud se identifica fuera de aquí.
-             */
-            const code = document.createElement('span');
-            code.className = 'font-mono text-ink';
-            code.textContent = entry.code;
-            item.appendChild(code);
-
-            if (entry.name !== null) {
-                item.appendChild(document.createTextNode(` ${entry.name}`));
-            }
-
-            loinc.appendChild(item);
-        }
-
-        for (const cell of [when, what, value, details, loinc]) {
-            element.appendChild(cell);
-        }
-
-        return element;
+        state.explorer = renderClippingExplorer(nodes.report, {
+            body: state.body,
+            resolved: resolveCatalog(catalog, state.locale),
+            /** Prefijo propio de los `id` de las gráficas, para no chocar con los de otra pantalla. */
+            chartPrefix: 'reader',
+        });
     }
 }

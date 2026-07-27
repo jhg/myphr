@@ -4,6 +4,14 @@
 @source '../js/reader/**/*.js';
 
 /*
+ * Las clases de las vistas compartidas con el panel (línea temporal, tarjetas de estadísticas,
+ * gráficas y avisos) las escriben los módulos de `resources/js/health/`, así que Tailwind tiene que
+ * mirar ahí también o esta hoja saldría sin ninguna de ellas. Es la contrapartida de que el lector
+ * pinte lo mismo que el paciente (ADR 0011): el marcado ya no es solo suyo.
+ */
+@source '../js/health/**/*.js';
+
+/*
  * Hoja de la página del lector (ADR 0011): la que abre el profesional, fuera del panel.
  *
  * ── Por qué no reutiliza el tema del panel ────────────────────────────────────────────────
@@ -99,16 +107,37 @@
     --color-warning-outline: #fde68a;
     --color-warning-ink: #b45309;
 
+    /*
+     * Avisos informativos, chips de filtro y la tinta de «dentro de objetivo». Entran con las vistas
+     * compartidas con el panel (§ Avisos y chips): el recuento de registros del periodo, las casillas
+     * de tipo y el porcentaje de tiempo en rango los pintan los mismos módulos en las dos pantallas,
+     * así que los mismos papeles tienen que existir aquí. Los valores son los de
+     * `resources/css/filament/phr/theme.css`, sin reinterpretar ninguno.
+     */
+    --color-info-surface: #f0f7ff;
+    --color-info-outline: #90e0ef;
+    --color-info-ink: #006399;
+
+    --color-success-ink: #047857;
+
+    --color-chip-surface: #f0f7ff;
+    --color-chip-outline: #cbd5e1;
+    --color-chip-ink: #475569;
+
     /* ── Radios, espaciado y elevación · DESIGN.md § Border Radius / Spacing / Elevation ── */
 
     --radius-control: 0.5rem; /* 8px · botones e inputs */
     --radius-card: 0.5rem; /* 8px · tarjetas y paneles */
+    --radius-chip: 0.25rem; /* 4px · chips e insignias */
 
     --spacing-card: 1.5rem; /* 24px · relleno de tarjeta */
     --spacing-pad-md: 1rem; /* 16px */
 
     /* Subtle · § Elevation: «cards, form containers». */
     --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px 0 rgb(0 0 0 / 0.04);
+
+    /* Large · § Elevation: la usan los avisos de error de las vistas compartidas con el panel. */
+    --shadow-large: 0 12px 32px 0 rgb(0 0 0 / 0.08), 0 4px 8px 0 rgb(0 0 0 / 0.04);
 
     /* § Elevation · Blue Focus y Error Halo: dos anillos, 0…2px del fondo y 2…6px del color. */
     --shadow-focus-blue: 0 0 0 2px var(--focus-ring-inset), 0 0 0 6px var(--focus-ring-accent);
@@ -119,6 +148,23 @@
     --focus-ring-inset: #fafcff;
     --focus-ring-accent: #0077b6;
     --error-ring-accent: #dc2626;
+
+    /*
+     * Paleta de las gráficas · DESIGN.md § Charts. Un `<canvas>` no hereda ninguna clase y no
+     * resuelve `var(--color-…)`, así que `resources/js/health/chartTheme.js` lee estas variables con
+     * `getComputedStyle(document.documentElement)` **en el momento de dibujar**. Están declaradas
+     * aquí y no en `@theme` porque no son utilidades de Tailwind: nadie escribe `bg-chart-grid`.
+     * Los valores son los mismos que publica el tema del panel, con sus ratios ya verificadas allí.
+     */
+    --chart-surface: var(--color-surface);
+    --chart-grid: #e2e8f0;
+    --chart-tick: #475569;
+    --chart-tooltip-surface: #0f172a;
+    --chart-tooltip-ink: #ffffff;
+    --chart-series-1: #0077b6;
+    --chart-series-2: #005280;
+    --chart-series-3: #059669;
+    --chart-series-4: #d97706;
 
     color-scheme: light dark;
 }
@@ -149,6 +195,30 @@
         --color-warning-surface: #2a1f05;
         --color-warning-outline: #5a4408;
         --color-warning-ink: #fcd34d;
+
+        --color-info-surface: #062231;
+        --color-info-outline: #10465f;
+        --color-info-ink: #90e0ef;
+
+        --color-success-ink: #6ee7b7;
+
+        --color-chip-surface: #16304a;
+        --color-chip-outline: #7189ac;
+        --color-chip-ink: #aebdd1;
+
+        /*
+         * § Charts — Dark. Sin este bloque, en oscuro los rótulos de eje quedarían en 2.10:1 y dos de
+         * las series por debajo del 3:1 que WCAG 1.4.11 exige a un objeto gráfico: una línea clínica
+         * invisible.
+         */
+        --chart-grid: #2a3a55;
+        --chart-tick: #aebdd1;
+        --chart-tooltip-surface: #e8eef7;
+        --chart-tooltip-ink: #0b1220;
+        --chart-series-1: #48cae4;
+        --chart-series-2: #90e0ef;
+        --chart-series-3: #34d399;
+        --chart-series-4: #fbbf24;
 
         --focus-ring-inset: #0b1220;
         --focus-ring-accent: #48cae4;

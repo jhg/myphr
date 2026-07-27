@@ -163,3 +163,88 @@ it('devuelve el identificador del recorte y la caducidad junto al paquete', func
         ->and($body['expiresAt'])->toBe($link->expires_at->format('Y-m-d\TH:i:s.u\Z'))
         ->and($body)->not->toHaveKey('generatedAt');
 });
+
+/**
+ * El profesional ve la **misma** interfaz que el paciente —gráficas, estadísticas, línea temporal,
+ * búsqueda y subperiodos— y no un informe estático. Lo que este test vigila es que la pinte el
+ * módulo compartido y no una copia: dos copias de la misma lectura clínica divergen en cuanto se
+ * añade el séptimo tipo de evento, y entonces el paciente y el médico miran documentos distintos del
+ * mismo dato.
+ */
+it('monta la pantalla compartida del recorte, no un informe propio', function (): void {
+    $reader = file_get_contents(base_path('resources/js/reader/readerPage.js'));
+
+    expect($reader)
+        ->toContain("import { renderClippingExplorer } from './clippingExplorer.js';")
+        ->toContain('renderClippingExplorer(nodes.report');
+
+    $explorer = file_get_contents(base_path('resources/js/reader/clippingExplorer.js'));
+
+    /** Las cuatro vistas del panel, importadas tal cual: aquí no se reimplementa ninguna. */
+    expect($explorer)
+        ->toContain("from '../health/timelineView.js'")
+        ->toContain("from '../health/statsView.js'")
+        ->toContain("from '../health/chartsView.js'")
+        ->toContain("from '../health/eventSearch.js'");
+});
+
+/**
+ * **El médico solo puede acotar dentro del recorte, jamás ampliarlo.**
+ *
+ * Los subperiodos y la búsqueda trabajan contra `memoryEventSource`, que no tiene de dónde sacar un
+ * evento que no esté ya en el paquete: el único endpoint que sirve datos clínicos es el que está
+ * tras el PIN, y entrega el paquete entero de una vez. No existe la vía para pedir uno más, y este
+ * test comprueba esa ausencia, que es lo que no se puede comprobar mirando la pantalla.
+ */
+it('la pantalla del recorte no puede pedir ni un evento más', function (): void {
+    $explorer = file_get_contents(base_path('resources/js/reader/clippingExplorer.js'));
+
+    expect($explorer)->toContain("import { flattenDecryptedEvent, memoryEventSource } from '../health/eventSource.js';");
+
+    /** Los comentarios nombran a propósito lo que no se usa, así que se miran fuera de ellos. */
+    $code = (string) preg_replace(['#/\*[\s\S]*?\*/#', '#^\s*//.*$#m'], ' ', $explorer);
+
+    foreach (['fetch(', 'XMLHttpRequest', 'sendBeacon', '$wire', 'livewire'] as $forbidden) {
+        expect($code)->not->toContain($forbidden);
+    }
+
+    /** Y el paquete descifrado no se escribe en el dispositivo del profesional (ADR 0003). */
+    foreach (['localStorage', 'sessionStorage', 'indexedDB', 'document.cookie'] as $storage) {
+        expect($code)->not->toContain($storage);
+    }
+});
+
+/**
+ * La página sigue fuera del panel: extraer las vistas compartidas no puede haber colado Livewire ni
+ * Filament en un documento que se abre sin sesión y en un dispositivo ajeno. Las gráficas sí entran
+ * ahora (Chart.js), y es código propio servido desde este mismo origen, que la CSP ya permite.
+ */
+it('la página del lector sigue sin Livewire, sin Filament y sin recursos de terceros', function (): void {
+    $content = $this->get('/s/'.Str::uuid())->getContent();
+
+    expect($content)
+        ->not->toContain('livewire')
+        ->and($content)->not->toContain('filament');
+
+    $entry = file_get_contents(base_path('resources/js/reader.js'));
+
+    expect($entry)->toContain("import { startReaderPage } from './reader/readerPage.js';");
+});
+
+/**
+ * Lo que de verdad acaba dentro de una historia clínica es papel, así que la hoja de impresión no es
+ * un extra: los controles y las gráficas se van (un desplegable impreso es tinta que no se puede
+ * pulsar, y un lienzo dibujado en tema oscuro sale invisible sobre blanco), y la tabla clínica con
+ * su término LOINC se queda.
+ */
+it('conserva la hoja de impresión y el término LOINC de la tabla clínica', function (): void {
+    $explorer = file_get_contents(base_path('resources/js/reader/clippingExplorer.js'));
+
+    expect($explorer)
+        ->toContain("section.setAttribute('data-phr-reader-screen-only', '')")
+        ->toContain("chartsCard.card.setAttribute('data-phr-reader-screen-only', '')")
+        ->toContain("'reader.table.loinc',");
+
+    expect(file_get_contents(base_path('resources/css/reader.css')))
+        ->toContain('[data-phr-reader-screen-only] {');
+});

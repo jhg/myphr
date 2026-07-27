@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Pages;
 
+use App\Sharing\ReaderCatalog;
 use App\Sharing\Shares;
 use App\Sharing\ShareTtl;
 use BackedEnum;
@@ -103,6 +104,7 @@ final class Sharing extends HealthEventPage
      *     endpoints: array{shares: string},
      *     readerUrlTemplate: string,
      *     limits: array{shares: int, links: int},
+     *     readerCatalog: array<string, mixed>,
      * }
      */
     public function catalog(): array
@@ -130,6 +132,15 @@ final class Sharing extends HealthEventPage
                 'shares' => Shares::MAX_ACTIVE_SHARES,
                 'links' => Shares::MAX_LINKS_PER_SHARE,
             ],
+            /**
+             * El mismo vocabulario que recibe la página del lector, para que la vista previa se pinte
+             * con las mismas palabras y los mismos términos LOINC que verá el profesional. Es dato
+             * público de referencia (ADR 0005): no depende de ninguna cuenta y no dice nada de lo que
+             * hay dentro del recorte. Va en esta misma respuesta y no en una petición aparte porque
+             * la vista previa no puede añadir ni una llamada al servidor: todo lo que enseña ya está
+             * descifrado en el navegador.
+             */
+            'readerCatalog' => (new ReaderCatalog)->toArray(),
         ];
     }
 

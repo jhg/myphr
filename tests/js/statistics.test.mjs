@@ -12,9 +12,11 @@ import { test } from 'node:test';
 
 import {
     dominantUnit,
+    majorityUnit,
     summarizeBloodPressurePeriod,
     summarizeGlucosePeriod,
     summarizeMeasurementPeriod,
+    unitCount,
 } from '../../resources/js/health/statistics.js';
 
 /**
@@ -348,4 +350,45 @@ test('dominantUnit: mira el campo de valor que se le diga (la insulina guarda la
 
     assert.equal(dominantUnit(events, 'insulin', 'dose'), '[iU]');
     assert.equal(dominantUnit(events, 'insulin'), null);
+});
+
+// --- majorityUnit y unitCount --------------------------------------------------------------------
+
+/**
+ * `dominantUnit` elige por recencia y tiene razón en el panel del paciente, que sabe que acaba de
+ * cambiar de báscula. En un recorte que lee otra persona no vale: dos lecturas nuevas en otra unidad
+ * mandarían doscientas a una nota al pie y dejarían la tarjeta resumiendo dos registros con aspecto
+ * de resumir el recorte entero.
+ */
+test('majorityUnit: gana la unidad de la mayoría, no la de la lectura más reciente', () => {
+    const events = [
+        { type: 'glucose', occurredAt: '2026-07-01T08:00:00.000000Z', data: { value: '110', unit: 'mg/dL' } },
+        { type: 'glucose', occurredAt: '2026-07-02T08:00:00.000000Z', data: { value: '120', unit: 'mg/dL' } },
+        { type: 'glucose', occurredAt: '2026-07-03T08:00:00.000000Z', data: { value: '7.4', unit: 'mmol/L' } },
+    ];
+
+    assert.equal(majorityUnit(events, 'glucose'), 'mg/dL');
+    assert.equal(dominantUnit(events, 'glucose'), 'mmol/L');
+});
+
+test('majorityUnit: en empate manda la más reciente, para no depender del orden del array', () => {
+    const events = [
+        { type: 'glucose', occurredAt: '2026-07-01T08:00:00.000000Z', data: { value: '110', unit: 'mg/dL' } },
+        { type: 'glucose', occurredAt: '2026-07-03T08:00:00.000000Z', data: { value: '7.4', unit: 'mmol/L' } },
+    ];
+
+    assert.equal(majorityUnit(events, 'glucose'), 'mmol/L');
+    assert.equal(majorityUnit([], 'glucose'), null);
+});
+
+test('unitCount: cuenta unidades distintas, que es lo que decide si hay algo que advertir', () => {
+    const events = [
+        { type: 'glucose', occurredAt: '2026-07-01T08:00:00.000000Z', data: { value: '110', unit: 'mg/dL' } },
+        { type: 'glucose', occurredAt: '2026-07-03T08:00:00.000000Z', data: { value: '7.4', unit: 'mmol/L' } },
+        { type: 'insulin', occurredAt: '2026-07-03T09:00:00.000000Z', data: { dose: '8', unit: '[iU]' } },
+    ];
+
+    assert.equal(unitCount(events, 'glucose'), 2);
+    assert.equal(unitCount(events, 'insulin', 'dose'), 1);
+    assert.equal(unitCount(events, 'bodyWeight'), 0);
 });

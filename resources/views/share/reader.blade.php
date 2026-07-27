@@ -6,6 +6,12 @@
     el bloqueo por inactividad y los componentes de doce pantallas del panel. Aquí no pinta nada de
     eso, y todo eso sería código corriendo en un dispositivo ajeno.
 
+    **Lo que sí carga, y el ADR 0011 no preveía, es Chart.js**: el profesional ve las mismas
+    gráficas que el paciente, porque una tabla de trescientas glucemias no se lee en consulta.
+    Entra por los módulos de `resources/js/health/` que comparten las dos pantallas, sigue siendo
+    código propio servido desde este origen y no rompe la CSP de abajo, que nunca ha permitido
+    recursos de terceros.
+
     **El servidor no pinta ni un dato clínico.** Manda esta cáscara, el vocabulario público de
     `App\Sharing\ReaderCatalog` (tokens de catálogo y términos LOINC, los mismos para todo el mundo)
     y el identificador del enlace, que ya está en la URL. Todo lo demás lo descifra el navegador con
@@ -93,7 +99,7 @@
             </p>
         </noscript>
 
-        <main class="mx-auto flex max-w-4xl flex-col gap-6 p-4 sm:p-8">
+        <main class="mx-auto flex max-w-6xl flex-col gap-6 p-4 sm:p-8">
             <header class="flex flex-wrap items-start justify-between gap-4">
                 <div>
                     <h1 data-phr-reader-text="reader.title" class="font-display text-headline text-ink"></h1>
@@ -199,8 +205,14 @@
                 ></p>
             </section>
 
-            {{-- Informe clínico. Lo pinta entero `readerPage.js` tras descifrar. --}}
-            <section data-phr-reader-report hidden class="flex flex-col"></section>
+            {{--
+                El recorte entero: cabecera, controles de subperiodo, tipos y búsqueda, gráficas,
+                estadísticas, línea temporal y la tabla clínica. Lo pinta entero
+                `reader/clippingExplorer.js` tras descifrar, que es el mismo módulo que monta la
+                vista previa de la pantalla de compartir: el servidor no emite ni una etiqueta de
+                esto, y no podría, porque son valores en claro que solo existen en este navegador.
+            --}}
+            <section data-phr-reader-report hidden class="flex flex-col gap-6"></section>
 
             <div data-phr-reader-screen-only class="flex flex-wrap gap-3">
                 {{-- Botón secundario · § Buttons: sin relleno, borde de 1.5px en el color de acción. --}}

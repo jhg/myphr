@@ -117,12 +117,22 @@ dos cifras, que no son cosmética: el tope de tamaño decide si el escalón de 4
 enlaces activos es lo que acota el coste de almacenamiento de una cuenta.
 
 La página del lector es una vista Blade fuera del panel, con entrada propia de Vite, sin Livewire, sin
-Filament, sin `chart.js`, sin cookie de sesión, sin CSRF y con CSP estricta sin recursos de terceros. Eso
+Filament, sin cookie de sesión, sin CSRF y con CSP estricta sin recursos de terceros. Eso
 la deja fuera del prefijo `phr`, que es el del panel de Filament (`PhrPanelProvider::path('phr')`): todo lo
 que se monta ahí pasa por `routes()`, que Filament envuelve con el grupo `web` y por tanto con sesión y
 CSRF, incluidas las rutas sin autenticar de OPAQUE. Las tres rutas del lector —la página, `challenge` y
-`open`— viven en `routes/web.php` con su propia pila de middleware; **pendiente de decisión** bajo qué
-prefijo, que es una elección de superficie pública y no técnica. Se pinta en el `Accept-Language` del
+`open`— viven en `routes/web.php` bajo el prefijo `/s`, corto porque acaba en un QR y mudo porque la URL se
+enseña en una consulta, con su propia pila de middleware.
+
+Retirarle `StartSession` a esas rutas gobierna lo que Laravel lee y escribe, y no lo que el navegador manda.
+Por eso la cookie de sesión se acota al prefijo del panel (`SESSION_PATH=/phr`) y el endpoint de Livewire,
+que de serie vive en `/livewire-<hash>/update`, se registra dentro de `/phr` con `Livewire::setUpdateRoute`.
+Con `path=/`, la navegación de nivel superior a `/s/{link}` y sus subrecursos llevaban la cookie igual si
+quien abre el enlace tiene sesión en el panel, y el identificador del recorte y la cuenta quedaban en la
+misma línea de cualquier registro de acceso, proxy, WAF o CDN por delante: exactamente la correlación que
+esta ruta existe para evitar. `tests/Feature/SessionCookieScopeTest.php` recorre las rutas y falla si alguna
+propia con sesión queda fuera del alcance de la cookie, para que cambiar el prefijo del panel no lo reabra
+en silencio. Se pinta en el `Accept-Language` del
 profesional y nunca en el idioma de la persona propietaria, que es columna en claro por el ADR 0007
 (`docs/adr/0007-encrypted-user-configuration.md`) y no tiene por qué salir de casa. El cliente lee
 `location.hash` una vez y llama a
@@ -133,9 +143,68 @@ cautivos se comen el fragmento.
 El texto en claro del paquete lleva el rango exacto, el instante de generación, el número de eventos y la
 lista de tipos incluidos y excluidos. La pantalla los muestra siempre, sin plegar, porque una ausencia se
 lee como un cero clínico: si faltan las comidas, el médico concluye que no las hay. Los eventos que no
-descifren se pintan como fila de error y nunca se omiten (ADR 0004). El QR se genera bajo pulsación
+descifren se pintan como fila de error y nunca se omiten (ADR 0004), y lo mismo vale para los de un tipo que
+el recorte no declara —un séptimo tipo llegado de una versión más nueva del panel—: se cuentan, se avisan y
+salen en la tabla, en vez de desaparecer de todo por no tener casilla que marcar. El QR se genera bajo pulsación
 explícita, con corrección de errores M, lado mínimo de 400 px y fondo blanco incluso en tema oscuro, y el
 PIN nunca aparece en la misma pantalla, para que una sola foto no contenga las dos mitades.
+
+El lector **no es un informe estático, es la misma interfaz que ve el paciente**: gráficas, tarjetas de
+estadísticas, línea temporal, búsqueda de texto libre y selección de subperiodos, sobre los eventos del
+recorte. Trescientas glucemias en una tabla no se leen en consulta, y mantener dos pintados distintos del
+mismo dato haría que el paciente y el médico vieran medias distintas del mismo periodo. Para eso, la
+visualización no pertenece a ninguna pantalla: vive en módulos que reciben un array de eventos **ya
+descifrados** y devuelven nodos (`health/timelineView.js`, `health/statsView.js`, `health/chartsView.js`), y
+de dónde salen esos eventos lo decide una abstracción de una sola función asíncrona,
+`(range) => {events, failedToOpen, truncated}`, con dos implementaciones: `livewireEventSource`, que pide al
+servidor desde el panel, y `memoryEventSource`, que sirve desde el paquete descifrado en memoria. Las
+pantallas no notan la diferencia. Nada de esto pasa por un componente Livewire, y no es negociable: lo que
+toca una propiedad pública acaba en el snapshot, que viaja al servidor y se queda ahí (ADR 0002).
+
+Cuatro invariantes de esa pantalla, que no son detalles de implementación sino la razón de que pueda existir
+sin cuenta y sin sesión:
+
+* **El médico solo puede acotar, jamás ampliar.** El subperiodo se corta contra los extremos del recorte y
+  los atajos («último día», «últimos 7 días») cuentan desde el **final del recorte**, nunca desde el reloj
+  de hoy: un recorte de hace una semana saldría vacío, y una pantalla vacía se lee como «este paciente no
+  tiene registros». Además de esa mitad declarativa hay una estructural y más fuerte: el único origen es
+  `memoryEventSource`, que solo puede devolver objetos de la lista que ya tiene delante. En
+  `reader/clippingExplorer.js` no hay un `fetch`, ni un `$wire`, ni una URL.
+* **El paquete descifrado no se persiste.** Ni `localStorage`, ni `sessionStorage`, ni IndexedDB, ni cookie,
+  ni Service Worker que lo cachee. Cerrar la pestaña lo borra. Tampoco se guarda la preferencia de idioma,
+  ni el subperiodo, ni lo buscado: en un ordenador de consulta que usan varias personas, cualquiera de esas
+  tres cosas es un rastro clínico que sobrevive a quien lo dejó. El bundle del lector tampoco puede alcanzar
+  el llavero de la clave maestra del panel, y eso lo vigila un test que recorre el grafo de importaciones
+  **transitivo** desde la entrada de Vite: un test de importaciones directas no cubre un perímetro que
+  Rollup decide por alcanzabilidad.
+* **La búsqueda es local y no es un filtro de cálculo.** Corre entera sobre lo descifrado y lo tecleado no
+  viaja a ninguna parte —en el lector no hay ninguna parte a la que pudiera viajar—. Y estrecha la línea
+  temporal y la tabla, no las gráficas ni las estadísticas: una media sobre los registros cuyo *texto*
+  contiene «noche» o «140» no es una población clínica, es un número inventado con aspecto de dato. El
+  periodo y los tipos definen la población; la búsqueda solo localiza dentro de ella. El panel del paciente
+  aplica el mismo criterio, por la misma razón y para que las dos pantallas no diverjan.
+* **La cabecera dice el recorte, y una segunda línea dice lo que hay debajo.** «N eventos, del X al Y,
+  generado el Z» describe el paquete entero y es la única defensa contra un recorte que llegase truncado.
+  Debajo, repintada en cada cambio y **también en papel**, va la línea de estado efectivo: el rango
+  realmente aplicado, los tipos marcados y el texto buscado. Los controles interactivos no se imprimen, así
+  que sin esa línea el papel que acaba en una historia clínica declararía seis meses y todos los tipos sobre
+  una tabla de siete días filtrada.
+
+La unidad de glucemia del recorte sale de las propias lecturas y por **mayoría**, no por recencia: la unidad
+de presentación del paciente es configuración cifrada suya (ADR 0007) y no viaja en el paquete, y elegir la
+de la última lectura dejaría que dos lecturas nuevas en mmol/L mandaran doscientas en mg/dL a una nota al
+pie, con la tarjeta resumiendo dos registros. Nada se convierte (ADR 0007), y con más de una unidad presente
+se avisa por encima de la tarjeta.
+
+La pantalla de compartir del paciente monta **ese mismo módulo** como vista previa, con el mismo cuerpo del
+paquete que se cifraría al generar: antes de enviar nada se ve exactamente lo que verá el profesional. Sale
+casi gratis porque esa pantalla ya tiene los eventos descifrados delante. La vista previa **se cae en cuanto
+la selección cambia** —tipos, periodo—: es la única superficie de consentimiento informado del flujo y va
+bajo un texto que dice, con esas palabras, «esto es exactamente lo que verá el profesional», sobre una
+acción que no se puede deshacer, porque revocar no borra lo que la otra persona ya descargó. Lo que sí hace
+la vista previa, y conviene decirlo, es leer eventos del servidor igual que generar, con el `from`/`to` en
+claro: no sube ningún paquete ni consume ninguno de los enlaces del tope, pero el servidor sabe qué
+componente llama, así que una previsualización abandonada le dice que hubo un envío en preparación.
 
 Queda **pendiente de aprobación** una dependencia de JavaScript para el QR: `uqr`, licencia MIT, cero
 dependencias transitivas, ESM puro, unos 4,5 KB comprimidos, salida SVG. Se descartan `qrcode` de npm por
@@ -200,11 +269,39 @@ formato de eventos.
 
 Re-armar un enlace exige la clave maestra, porque `CK` vive en el descriptor cifrado, así que tras el
 bloqueo por inactividad del ADR 0009 (`docs/adr/0009-user-provisioning-and-session-lifecycle.md`) hay que
-volver a autenticarse. Lo que de verdad acaba dentro de una historia clínica es texto, así que la pantalla
-del lector necesita hoja de impresión y un botón de copiar resumen; ese detalle y el de la selección de
-tipos van a su propio Spec.
+volver a autenticarse. Lo que de verdad acaba dentro de una historia clínica es texto, así que la hoja de
+impresión del lector esconde los controles y las gráficas —un `<canvas>` dibujado en tema oscuro sale en
+papel como líneas claras sobre blanco, es decir invisible— y deja el encabezado, la línea de estado
+efectivo, las tarjetas de estadísticas y la tabla clínica, que es donde vive el término oficial LOINC y que
+no se traduce (ADR 0005).
+
+Compartir las vistas entre el panel y el lector tiene un precio que hay que vigilar y que ya se cobró una
+vez: Rollup mete en el trozo común todo lo alcanzable desde dos entradas de Vite, con su cadena de
+importaciones entera. Cualquier módulo nuevo que el lector alcance arrastra consigo lo que él importe, así
+que el perímetro se comprueba sobre el grafo transitivo y, cuando hay build, sobre el propio artefacto.
 
 El ADR 0004 (`docs/adr/0004-client-crypto-and-data-format.md`) recoge las excepciones que este ADR
 introduce sobre sus reglas del dato en reposo, el ADR 0006 (`docs/adr/0006-encrypted-event-model.md`)
 apunta aquí para la compartición, el ADR 0002 anota que el paquete `s1.` no viaja por Livewire y el
 ADR 0003 que la mitad de la entrega empeora con esta página.
+
+## Decision History
+
+### 2026-07-27 — El lector deja de ser un informe estático
+Previamente decidido: el profesional veía una cabecera y una tabla clínica, sin `chart.js` ni ningún
+control, y la pantalla de compartir no enseñaba nada antes de enviar.
+Cambió porque: trescientas glucemias en una tabla no se leen en una consulta, y el paciente firmaba a ciegas
+un envío que no se puede deshacer. Ahora el lector monta la misma interfaz del panel —gráficas,
+estadísticas, línea temporal, búsqueda y subperiodos— sobre el paquete descifrado en memoria, y esa misma
+pantalla es la vista previa del paciente. Lo que no cambia es el perímetro: solo se puede acotar, nada se
+persiste, la búsqueda no sale del navegador y no hay una segunda vía para pedir datos. `chart.js` entra en
+el bundle del lector; a cambio, el llavero de la clave maestra sale de él, y hay un test sobre el grafo
+transitivo de importaciones que lo mantiene fuera.
+
+### 2026-07-27 — La cookie de sesión se acota al prefijo del panel
+Previamente decidido: bastaba con retirarle `StartSession`, `EncryptCookies` y
+`AddQueuedCookiesToResponse` a las rutas `/s` para que la lectura de un recorte no llevara cookie.
+Cambió porque: eso gobierna lo que Laravel lee y escribe, no lo que el navegador manda. Con `path=/`, la
+navegación a `/s/{link}` llevaba la cookie igual, y el identificador del recorte y una cuenta concreta
+quedaban en la misma línea de cualquier registro de acceso. La cookie pasa a `path=/phr` y el endpoint de
+Livewire baja dentro de ese prefijo, que era lo único que obligaba a la raíz.

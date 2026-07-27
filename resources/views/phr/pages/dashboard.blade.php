@@ -3,9 +3,14 @@
 
     Línea temporal de todos los tipos de evento y estadísticas, las dos cosas **del periodo y de los
     tipos que elige la persona**. Es la primera pantalla que ve al entrar, y todo el cálculo ocurre en
-    el navegador sobre eventos descifrados (`resources/js/health/dashboardPage.js`, que reutiliza
-    `health/statistics.js`): el servidor nunca ve un valor clínico, así que aquí no hay ningún
-    `wire:model` ni propiedad pública con datos.
+    el navegador sobre eventos descifrados: el servidor nunca ve un valor clínico, así que aquí no hay
+    ningún `wire:model` ni propiedad pública con datos.
+
+    **Lo que se pinta ya no es de esta pantalla.** `resources/js/health/dashboardPage.js` es solo el
+    componente Alpine: la línea temporal (`timelineView.js`), las tarjetas (`statsView.js`, que
+    reutiliza `health/statistics.js`) y las gráficas (`chartsView.js`) reciben eventos descifrados y
+    devuelven nodos, y de dónde salen esos eventos lo decide `eventSource.js`. El lector del
+    profesional monta los mismos módulos sobre el paquete descifrado en memoria, sin sesión (ADR 0011).
 
     **El periodo por defecto es el último día**, no «todo»: esta pantalla se abre sola en cada visita
     y descifrar un año de eventos en el navegador se nota. El control es el mismo que el de las
@@ -128,6 +133,47 @@
                 @endforeach
             </div>
         </fieldset>
+
+        {{--
+            Búsqueda de texto libre sobre lo ya descifrado.
+
+            **Puede existir aquí precisamente porque no es el buscador global del panel**, que está
+            desactivado a conciencia: aquél resuelve en el servidor con un `like` sobre columnas, y
+            las de un evento son `user_id`, `occurred_at` y un blob cifrado (ADR 0006). Ésta corre
+            entera en el navegador, sobre los eventos que ya se bajaron y se abrieron para pintar la
+            pantalla: no hay petición, no hay parámetro de consulta y lo tecleado no sale del
+            dispositivo. El porqué completo está en `resources/js/health/eventSearch.js`.
+
+            `x-model` y nunca `wire:model` (ADR 0002): el texto que alguien busca en su propio
+            historial —«hipoglucemia», el nombre de un fármaco— es un dato clínico por sí mismo, y
+            todo lo que toca una propiedad de Livewire acaba en el snapshot, que viaja al servidor.
+
+            `type="search"` y no `type="text"`: el navegador añade el botón de borrar y lo anuncia
+            como campo de búsqueda. `.debounce` evita repintar seis tarjetas y cinco gráficas en cada
+            pulsación; 200 ms es lo que tarda en notarse una pausa al teclear.
+
+            El texto de ayuda dice la limitación en voz alta, porque es la que sorprende: solo se
+            busca dentro del periodo cargado. Ampliarlo es cambiar el periodo de arriba, que sí lo
+            aplica el servidor por `occurred_at`, columna en claro.
+        --}}
+        <div class="mt-4">
+            <label for="dashboard-search" class="mb-1.5 block text-body-sm font-semibold text-ink">
+                {{ __('Search') }}
+            </label>
+            <input
+                id="dashboard-search"
+                x-model="searchQuery"
+                @input.debounce.200ms="applyFilters()"
+                type="search"
+                autocomplete="off"
+                aria-describedby="dashboard-search-help"
+                placeholder="{{ __('Notes, foods, device...') }}"
+                class="block min-h-11 w-full rounded-control border-[1.5px] border-border-strong bg-surface px-3.5 py-2.5 text-body text-ink focus:border-accent focus:shadow-focus-blue focus:outline-none"
+            >
+            <p id="dashboard-search-help" class="mt-1.5 text-helper text-ink-secondary">
+                {{ __('Searching happens in this browser, over the records of the selected period only: the server cannot read them.') }}
+            </p>
+        </div>
     </section>
 
     {{--

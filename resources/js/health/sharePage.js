@@ -30,6 +30,12 @@
  * semana no pasó nada. Por el mismo motivo, un evento que no descifra aborta la generación en vez de
  * quedarse fuera en silencio (ADR 0004: un fallo de descifrado es siempre visible).
  *
+ * **La vista previa enseña el recorte con la misma pantalla del profesional** y no con una versión
+ * resumida: monta `reader/clippingExplorer.js` sobre el **mismo** cuerpo de paquete que se cifraría
+ * al generar ({@see buildSharePackageBody}). Es la única forma de que «lo que vas a enviar» sea
+ * literalmente lo que la otra persona verá, y no cuesta ninguna exposición nueva: son eventos que ya
+ * están descifrados en este navegador, no sube nada y todavía no existe ningún enlace.
+ *
  * Las funciones exportadas antes de `sharePage()` son la lógica pura del componente, probable sin
  * Alpine ni DOM (`tests/js/sharePage.test.mjs`).
  */
@@ -51,7 +57,9 @@ import {
 } from '../crypto/shareKeys.js';
 import { encodeShareFragment, sealShareWrapper } from '../crypto/shareLink.js';
 import { zeroize } from '../crypto/zeroize.js';
-import { formatDateTime, joinList, t } from '../i18n/index.js';
+import { currentLocale, formatDateTime, joinList, t } from '../i18n/index.js';
+import { resolveCatalog } from '../reader/clinicalReport.js';
+import { renderClippingExplorer } from '../reader/clippingExplorer.js';
 import { dateRangeControl } from './dateRange.js';
 import { openEvent } from './eventEnvelope.js';
 import { progressMixin } from '../auth/progress.js';
@@ -389,6 +397,20 @@ export function sharePage() {
         /** Si el QR está en pantalla. Mientras lo esté, el PIN se esconde (ADR 0011). */
         qrVisible: false,
 
+        /**
+         * Vista previa: si está montada, y su controlador para poder desmontarla.
+         *
+         * El recorte previsualizado **no se guarda en ninguna propiedad**: se pinta y se olvida. Es
+         * lo mismo que hace el resto de esta pantalla con los eventos descifrados, y por el mismo
+         * motivo (ADR 0002): una propiedad de un componente Livewire acaba en el snapshot.
+         *
+         * @type {{repaint: () => Promise<void>, destroy: () => void}|null}
+         */
+        preview: null,
+        previewVisible: false,
+        previewBusy: false,
+        previewError: '',
+
         /** Confirmación de copiado del enlace, efímera. */
         copied: false,
         copiedTimer: null,
@@ -404,6 +426,36 @@ export function sharePage() {
         init() {
             this.config = JSON.parse(document.querySelector('[data-phr-share-catalog]').textContent);
             this.ttl = this.config.defaultTtl;
+
+            /**
+             * **La vista previa se cae en cuanto deja de corresponder a lo que se enviaría.**
+             *
+             * Es la única superficie de consentimiento informado de todo el flujo, y va bajo un
+             * encabezado que dice, con esas palabras, «esto es exactamente lo que verá el
+             * profesional». Sin esto, marcar «Comidas» o cambiar a tres meses después de haber
+             * previsualizado dejaba en pantalla el recorte anterior mientras se cifraba y se subía
+             * otro; y aquí no hay marcha atrás, porque revocar no borra lo que la otra persona ya
+             * descargó.
+             *
+             * Se esconde en vez de repintarse: repintar cuesta segundos y una petición por cada
+             * casilla que alguien toque. Volver a pulsar el botón la trae de vuelta con lo de ahora.
+             */
+            for (const property of ['types', 'rangePreset', 'rangeFromDay', 'rangeToDay']) {
+                this.$watch(property, () => this.hidePreview());
+            }
+
+            /**
+             * El panel corre en modo SPA (`->spa()` en `PhrPanelProvider`), así que salir de esta
+             * pantalla por un enlace del menú no dispara `unload` y `hidePreview()` no llegaría a
+             * correr nunca. Livewire, además, copia `document.documentElement.outerHTML` a su caché
+             * del botón «atrás» justo antes de navegar: sin este oyente, ahí quedaría una copia del
+             * recorte descifrado —notas, valores, fechas— de una pantalla de la que ya se había ido.
+             *
+             * `once` porque al navegar este componente muere: el oyente tiene que durar exactamente
+             * hasta la primera salida, y dejarlo puesto acumularía uno por visita, cada uno atado a
+             * un componente ya difunto.
+             */
+            document.addEventListener('livewire:navigating', () => this.hidePreview(), { once: true });
 
             void this.loadShares();
         },
@@ -652,6 +704,112 @@ export function sharePage() {
             }
 
             return events;
+        },
+
+        /**
+         * Enseña u oculta la vista previa: el recorte del rango y los tipos elegidos ahora mismo,
+         * pintado con la **misma** pantalla que verá el profesional.
+         *
+         * Se hace bajo pulsación y no de oficio al cambiar el rango: descifrar un mes de eventos
+         * cuesta segundos, y hacerlo cada vez que alguien toca una casilla convertiría la pantalla
+         * en un tostador.
+         *
+         * **No es gratis, y conviene no decir que lo es.** No se sube ningún paquete, no se crea
+         * ningún enlace y no se consume ninguno de los del tope; pero se leen los eventos del
+         * servidor exactamente igual que al generar, con el `from`/`to` en claro (`occurred_at` es
+         * columna en claro, ADR 0006). La diferencia con el panel es la atribución: el servidor sabe
+         * qué componente llama, así que una previsualización abandonada le dice «estuvo preparando un
+         * envío de este rango y al final no lo mandó». El descifrado, eso sí, sigue ocurriendo entero
+         * aquí.
+         */
+        async togglePreview() {
+            if (this.previewVisible) {
+                this.hidePreview();
+
+                return;
+            }
+
+            if (this.previewBusy) {
+                return;
+            }
+
+            this.previewBusy = true;
+            this.previewError = '';
+
+            try {
+                const userId = ownerId();
+
+                if (!isUnlocked() || userId === null) {
+                    throw new ShareScreenError(t('common.noSession'));
+                }
+
+                const { included, excluded } = partitionTypes(this.types);
+
+                if (included.length === 0) {
+                    throw new ShareScreenError(t('share.error.noTypes'));
+                }
+
+                const range = this.historyRange();
+
+                if (this.rangeError !== '') {
+                    throw new ShareScreenError(this.rangeError);
+                }
+
+                const events = this.decryptForSharing(await this.fetchRangeEvents(range), userId, included);
+
+                if (events.length === 0) {
+                    throw new ShareScreenError(t('share.error.empty'));
+                }
+
+                /**
+                 * El **mismo** cuerpo que se cifraría al generar. Construirlo aquí de otra forma
+                 * dejaría la vista previa enseñando algo que no es lo que se envía, que es
+                 * exactamente lo que esta función existe para descartar.
+                 */
+                const body = buildSharePackageBody({
+                    events,
+                    included,
+                    excluded,
+                    range,
+                    generatedAt: new Date(),
+                });
+
+                /**
+                 * La sección se descubre **antes** de pintar, y con `$nextTick` para que Alpine haya
+                 * aplicado ya el `x-show`. Chart.js mide el ancho del contenedor al construirse, y
+                 * dentro de un elemento con `display: none` ese ancho es cero: el lienzo saldría de
+                 * un píxel y no se recuperaría al mostrarlo.
+                 */
+                this.previewVisible = true;
+                await this.$nextTick();
+
+                this.preview = renderClippingExplorer(this.$refs.preview, {
+                    body,
+                    /**
+                     * El vocabulario del lector (tokens de catálogo, términos LOINC y unidades) lo
+                     * pinta el servidor en el catálogo de esta pantalla, en los tres idiomas, igual
+                     * que en la página del lector. Aquí se resuelve al idioma en vigor del panel.
+                     */
+                    resolved: resolveCatalog(this.config.readerCatalog, currentLocale()),
+                    chartPrefix: 'share-preview',
+                });
+            } catch (failure) {
+                this.previewError = describeShareError(failure);
+                this.hidePreview();
+            } finally {
+                this.previewBusy = false;
+            }
+        },
+
+        /**
+         * Desmonta la vista previa. Destruir las gráficas no es cosmética: dejarlas vivas sobre
+         * lienzos que ya no están en el documento mantiene en memoria los valores en claro que
+         * dibujaron.
+         */
+        hidePreview() {
+            this.preview?.destroy();
+            this.preview = null;
+            this.previewVisible = false;
         },
 
         /** Enseña u oculta el QR. Al enseñarlo, el PIN desaparece de la pantalla (ADR 0011). */
