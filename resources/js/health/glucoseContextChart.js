@@ -1,20 +1,20 @@
 /**
- * Dibujo de la curva de glucemia con las marcas de comida e insulina encima.
+ * Drawing of the glucose curve with the meal and insulin markers on top.
  *
- * Recibe lo que construye `health/glucoseContext.js` —ya agrupado, ya recortado y ya etiquetado— y
- * devuelve la instancia de Chart.js. No calcula nada y no lee eventos: por eso la misma gráfica sale
- * igual en el panel del paciente, en el lector del profesional y en la vista previa de compartir.
+ * It takes what `health/glucoseContext.js` builds —already grouped, already clipped and already
+ * labelled— and returns the Chart.js instance. It computes nothing and reads no events: that is
+ * why the same chart comes out in the patient panel, in the professional's reader and in the share preview.
  *
- * **El eje X es lineal, no de categorías ni de tiempo.** De tiempo no puede ser: no hay adaptador de
- * fechas de Chart.js instalado (misma razón que en `medianBandChart.js`). Y de categorías tampoco
- * debe serlo, porque aquí las distancias significan: dos lecturas separadas diez minutos y dos
- * separadas diez horas no pueden quedar igual de lejos, o la subida de después de comer se leería
- * como una pendiente inventada. Los valores del eje son horas de pared (`eventWallClockMs`), así que
- * las etiquetas se formatean en UTC ({@see wallClockFormat}) para no desplazarlas dos veces.
+ * **The X axis is linear, not category and not time.** Time it cannot be: no Chart.js date adapter
+ * is installed (same reason as in `medianBandChart.js`). And category it must not be either,
+ * because here distances mean something: two readings ten minutes apart and two ten hours apart
+ * cannot end up equally far, or the post-meal rise would read as an invented slope. The axis values
+ * are wall clock times (`eventWallClockMs`), so the labels are formatted in UTC
+ * ({@see wallClockFormat}) so as not to shift them twice.
  *
- * **Las marcas viven en su propio eje vertical, invisible y fijo de 0 a 1.** Así se quedan pegadas
- * abajo pase lo que pase con la glucemia: colgarlas del eje de mg/dL las movería con cada cambio de
- * escala y una comida acabaría dibujada a la altura de una hiperglucemia.
+ * **The markers live on their own vertical axis, invisible and fixed from 0 to 1.** That way they
+ * stay stuck at the bottom whatever the glucose does: hanging them off the mg/dL axis would move
+ * them with every scale change and a meal would end up drawn at the height of a hyperglycaemia.
  */
 
 import Chart from 'chart.js/auto';
@@ -25,38 +25,38 @@ import { chartColors, CHART_FONTS } from './chartTheme.js';
 import { wallClockFormat } from './chartTime.js';
 
 /**
- * Altura de cada tipo de marca en el eje auxiliar (0 abajo, 1 arriba).
+ * Height of each marker kind on the auxiliary axis (0 bottom, 1 top).
  *
- * Dos carriles y no uno: apiladas en la misma altura, una comida y su inyección —que suelen ir
- * juntas— se taparían, y lo que se quiere ver es precisamente que van juntas.
+ * Two lanes and not one: stacked at the same height, a meal and its injection —which usually go
+ * together— would cover each other, and what we want to see is precisely that they go together.
  */
 const MARKER_LEVELS = Object.freeze({ meal: 0.06, insulin: 0.16 });
 
 /**
- * Forma de cada tipo de marca. Es la segunda codificación que pide Do's #3: la marca de comida y la
- * de insulina se distinguen por silueta, no solo por color.
+ * Shape of each marker kind. It is the second encoding Do's #3 asks for: the meal marker and the
+ * insulin one are told apart by silhouette, not by colour alone.
  */
 const MARKER_SHAPES = Object.freeze({ meal: 'rectRot', insulin: 'triangle' });
 
 /**
- * Cuántas marcas de insulina pueden llevar la dosis escrita al lado.
+ * How many insulin markers can carry the dose written next to them.
  *
- * Pasado ese número, los rótulos se solapan entre sí y con la curva: dejan de ser información y se
- * convierten en la valla ilegible que este límite existe para evitar. La dosis no se pierde —sigue
- * en la marca al pasar por encima o tocar, y en la línea temporal—, solo deja de estar escrita.
+ * Past that number, the labels overlap each other and the curve: they stop being information and
+ * become the unreadable fence this limit exists to avoid. The dose is not lost —it stays on the
+ * marker on hover or tap, and in the timeline—, it just stops being written out.
  */
 const MAX_DOSE_LABELS = 10;
 
-/** Radio de una marca, que crece un poco con las que lleva agrupadas dentro. */
+/** Radius of a marker, which grows a little with the ones grouped inside it. */
 const MARKER_RADIUS = 6;
 
 /**
- * Descriptores de las series de glucemia: color y forma por posición.
+ * Descriptors of the glucose series: colour and shape by position.
  *
- * Se reparten **solo los dos primeros colores** de DESIGN.md § Charts, que son los dos azules
- * neutros del sistema: los otros dos son los matices de Success y Warning y aquí están reservados
- * para las marcas de comida e insulina, que sí son otra cosa. Dos métodos con el mismo azul siguen
- * distinguiéndose por patrón de trazo y forma de punto.
+ * **Only the first two colours** of DESIGN.md § Charts are handed out, the two neutral blues of
+ * the system: the other two are the Success and Warning shades and here they are reserved for the
+ * meal and insulin markers, which really are something else. Two methods with the same blue are
+ * still told apart by dash pattern and point shape.
  *
  * @param {list<string>} labels
  * @param {{series: list<string>}} colors
@@ -77,7 +77,7 @@ export function describeGlucoseSeries(labels, colors) {
 }
 
 /**
- * Texto de una marca al pasar por encima: qué lleva dentro y, si agrupa varias, cuántas.
+ * Text of a marker on hover: what it carries inside and, if it groups several, how many.
  *
  * @param {{count: number, items: list<string>}} marker
  * @returns {list<string>}
@@ -94,10 +94,10 @@ export function markerTooltipLines(marker) {
 }
 
 /**
- * Conjunto de Chart.js de un tipo de marca.
+ * Chart.js dataset of one marker kind.
  *
- * @param {string} kind `meal` o `insulin`.
- * @param {list<object>} markers Solo los de ese tipo.
+ * @param {string} kind `meal` or `insulin`.
+ * @param {list<object>} markers Only the ones of that kind.
  * @param {{color: string, label: string}} style
  * @returns {object}
  */
@@ -107,7 +107,7 @@ function markerDataset(kind, markers, style) {
         label: style.label,
         yAxisID: 'marks',
         data: markers.map((marker) => ({ x: marker.x, y: MARKER_LEVELS[kind] })),
-        /** Los detalles viajan con el conjunto, para el tooltip y para los rótulos de dosis. */
+        /** The details travel with the dataset, for the tooltip and for the dose labels. */
         markers,
         markerKind: kind,
         backgroundColor: style.color,
@@ -120,11 +120,11 @@ function markerDataset(kind, markers, style) {
 }
 
 /**
- * Escribe la dosis encima de cada marca de insulina, mientras quepan.
+ * Writes the dose above each insulin marker, as long as they fit.
  *
- * Es un complemento de Chart.js y no un rótulo del DOM porque tiene que seguir a la marca en cada
- * redibujado (redimensionar la ventana mueve todas las posiciones). El color es el de los rótulos de
- * eje, leído del tema en el momento de dibujar como todo lo demás (§ Charts — Dark).
+ * It is a Chart.js plugin and not a DOM label because it has to follow the marker on every redraw
+ * (resizing the window moves every position). The colour is the axis label one, read from the
+ * theme at draw time like everything else (§ Charts — Dark).
  *
  * @param {{tick: string}} colors
  * @returns {object}
@@ -164,17 +164,17 @@ function doseLabelPlugin(colors) {
 }
 
 /**
- * Pinta la gráfica y devuelve la instancia, o `null` si no hay ninguna lectura de glucemia.
+ * Paints the chart and returns the instance, or `null` if there is no glucose reading.
  *
- * Sin glucemia no se dibuja el lienzo aunque haya comidas e insulina: esta gráfica es la relación
- * entre las tres cosas, y unas marcas sueltas sobre unos ejes vacíos no dicen nada que la línea
- * temporal no diga mejor.
+ * With no glucose the canvas is not drawn even if there are meals and insulin: this chart is the
+ * relation between the three things, and a few loose markers over empty axes say nothing the
+ * timeline does not say better.
  *
  * @param {HTMLCanvasElement} canvas
  * @param {object} params
  * @param {list<{label: string, points: list<{x: number, y: number|null}>}>} params.series
  * @param {list<{kind: string, x: number, count: number, items: list<string>, short: string}>} params.markers
- * @param {string} params.unit Código UCUM (ADR 0005: no se traduce).
+ * @param {string} params.unit UCUM code (ADR 0005: not translated).
  * @param {string} params.legendId
  * @returns {Chart|null}
  */
@@ -197,7 +197,7 @@ export function renderGlucoseContextChart(canvas, { series, markers, unit, legen
             label: markerStyles[kind].label,
             color: markerStyles[kind].color,
             pointStyle: MARKER_SHAPES[kind],
-            /** Sucesos, no una serie continua: en la leyenda van sin trazo. */
+            /** Events, not a continuous series: in the legend they go without a stroke. */
             lineless: true,
         })),
     ]));
@@ -218,9 +218,9 @@ export function renderGlucoseContextChart(canvas, { series, markers, unit, legen
             pointBorderColor: colors.surface,
             pointBorderWidth: 1,
             /**
-             * Punto pequeño: una serie de sensor trae cientos de lecturas y con el radio de las
-             * gráficas de mediana la línea se convertiría en una cadena de bolas. Lo que se lee aquí
-             * es el recorrido, no cada punto; el detalle está en el tooltip.
+             * Small point: a sensor series brings hundreds of readings and with the radius of the
+             * median charts the line would turn into a chain of beads. What is read here is the
+             * path, not each point; the detail is in the tooltip.
              */
             pointRadius: 2.5,
             pointHoverRadius: 5,
@@ -228,7 +228,7 @@ export function renderGlucoseContextChart(canvas, { series, markers, unit, legen
             borderDash: [...entry.borderDash],
             pointStyle: entry.pointStyle,
             tension: 0.25,
-            /** `spanGaps` en falso (de fábrica): los huecos que abrió `splitOnGaps` son huecos. */
+            /** `spanGaps` false (out of the box): the gaps `splitOnGaps` opened are gaps. */
         })),
         ...presentKinds.map((kind) => markerDataset(
             kind,
@@ -243,7 +243,7 @@ export function renderGlucoseContextChart(canvas, { series, markers, unit, legen
         options: {
             maintainAspectRatio: false,
             color: colors.tick,
-            /** Interacción por cercanía: las marcas son pequeñas y se tocan con el dedo. */
+            /** Interaction by proximity: the markers are small and are tapped with a finger. */
             interaction: { mode: 'nearest', intersect: false },
             scales: {
                 x: {
@@ -270,10 +270,17 @@ export function renderGlucoseContextChart(canvas, { series, markers, unit, legen
                     },
                 },
                 /**
-                 * El carril de las marcas. `display: false` y rango fijo: no es una magnitud, es una
-                 * posición, y enseñar un eje de 0 a 1 al lado de la glucemia invitaría a leerlo.
+                 * The marker lane. `display: false` and a fixed range: it is not a quantity, it is
+                 * a position, and showing an axis from 0 to 1 next to the glucose would invite reading it.
+                 *
+                 * `axis: 'y'` is not decoration. Chart.js only guesses whether a scale is horizontal
+                 * or vertical from its id (`x`, `y`, `r`) or from `position`; with an id of our own
+                 * like `marks` it can guess neither and it throws
+                 * `Cannot determine type of 'marks' axis`. Declaring the axis and not a `position`
+                 * keeps the lane exactly where it is today: the scale stays hidden, takes up no edge
+                 * of the canvas and does not shift the glucose curve.
                  */
-                marks: { type: 'linear', display: false, min: 0, max: 1 },
+                marks: { type: 'linear', axis: 'y', display: false, min: 0, max: 1 },
             },
             plugins: {
                 legend: { display: false },
