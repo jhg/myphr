@@ -1,51 +1,51 @@
 /**
- * Componente Alpine de la pantalla de insulina inyectada (ADR 0002, ADR 0004, ADR 0005, ADR 0006).
+ * Alpine component of the injected insulin screen (ADR 0002, ADR 0004, ADR 0005, ADR 0006).
  *
- * El contrato del DOM lo fija `resources/views/phr/pages/insulin.blade.php`: nada de `wire:model`
- * (ADR 0002), los campos se leen por `x-ref` y el sobre cifrado sube como argumento de
- * `storeEvent` (la acción de `HealthEventPage`, la misma que usa cualquier pantalla de evento),
- * nunca como propiedad de Livewire.
+ * The DOM contract is fixed by `resources/views/phr/pages/insulin.blade.php`: no `wire:model`
+ * (ADR 0002), the fields are read through `x-ref` and the encrypted envelope goes up as an
+ * argument of `storeEvent` (the `HealthEventPage` action, the same one any event screen uses),
+ * never as a Livewire property.
  *
- * **El servidor no puede filtrar por tipo** (ADR 0006, ver JSDoc de `HealthEventPage::fetchEvents()`):
- * `fetchEvents` trae todos los eventos del usuario y aquí se descifra cada uno y se descarta el que
- * no sea `type === 'insulin'`. Un sobre que no abre no tumba la pantalla: se cuenta y se avisa,
- * porque un fallo de descifrado silencioso es justo lo que el ADR 0004 prohíbe.
+ * **The server cannot filter by type** (ADR 0006, see the JSDoc of `HealthEventPage::fetchEvents()`):
+ * `fetchEvents` brings every event of the user and here each one is decrypted and whatever is not
+ * `type === 'insulin'` is discarded. An envelope that does not open does not take the screen down:
+ * it is counted and reported, because a silent decryption failure is exactly what ADR 0004 forbids.
  *
- * **Riesgo real de esta pantalla**: una dosis mal leída es una dosis mal puesta. La dosis se
- * muestra siempre en monoespaciada, en el texto principal (nunca en gris claro) y con el mayor
- * tamaño de tipo disponible en la lista, siguiendo DESIGN.md al pie de la letra.
+ * **The real risk of this screen**: a misread dose is a misgiven dose. The dose is always shown in
+ * monospace, in the main text (never in light grey) and in the largest type size available in the
+ * list, following DESIGN.md to the letter.
  *
- * **No lleva código LOINC** (ADR 0006): un evento de insulina es una administración de medicación,
- * no una observación de una magnitud, así que no hay tabla (tipo, unidad) → código que resolver
- * aquí, a diferencia de `glucosePage.js`.
+ * **It carries no LOINC code** (ADR 0006): an insulin event is a medication administration, not an
+ * observation of a quantity, so there is no (type, unit) → code table to resolve here, unlike
+ * `glucosePage.js`.
  *
- * **La dosis viaja como cadena, nunca como número** (ADR 0004: «decimales como cadena»): media
- * unidad es una dosis real en pacientes pediátricos y `parseFloat` u operaciones aritméticas la
- * redondearían o la representarían con errores de coma flotante.
+ * **The dose travels as a string, never as a number** (ADR 0004: "decimals as a string"): half a
+ * unit is a real dose in paediatric patients and `parseFloat` or arithmetic would round it or
+ * represent it with floating point errors.
  *
- * **Los cuatro campos comunes a todo evento** (origen manual/aparato, aparato, quién registra, nota
- * libre; ADR 0006) no se construyen aquí: viven en `eventCommonFields.js`, en una función pura
- * (`buildCommonEventFields`) reutilizable por cualquier pantalla de evento, y `buildInsulinContent`
- * los recibe ya construidos para desplegarlos en el nivel superior del contenido, junto a `v`,
- * `type` y `tz`, nunca dentro de `data`.
+ * **The four fields common to every event** (manual/device origin, device, who records, free note;
+ * ADR 0006) are not built here: they live in `eventCommonFields.js`, in a pure function
+ * (`buildCommonEventFields`) reusable by any event screen, and `buildInsulinContent` receives them
+ * already built to spread them at the top level of the content, next to `v`, `type` and `tz`,
+ * never inside `data`.
  *
- * **El formulario no pregunta el origen del dato.** `origin` distingue cómo entró el dato en la
- * aplicación: tecleado por una persona (`manual`) frente a importado automáticamente desde un
- * aparato (`device`). Hoy no existe ninguna integración con un aparato en esta pantalla, así que
- * la entrada es siempre manual y preguntarlo no tiene una respuesta real; el campo sigue viajando
- * en el contenido cifrado porque el ADR 0006 lo exige y no se recupera después sobre datos ya
- * cifrados, pero aquí se fija a `manual` sin mostrar ningún `<select>` — es el valor por defecto de
- * `buildCommonEventFields` cuando no se le pasa `origin`. El día que exista una importación
- * automática desde un aparato (p. ej. un bolígrafo o una bomba conectados), será ella quien pase
- * `device` explícitamente. El campo de aparato (`device`), en cambio, sí se pregunta: es útil
- * incluso con entrada manual, para anotar con qué bolígrafo o bomba se puso la dosis.
+ * **The form does not ask for the origin of the datum.** `origin` tells apart how the datum
+ * entered the application: typed by a person (`manual`) versus imported automatically from a
+ * device (`device`). Today there is no device integration on this screen, so the entry is always
+ * manual and asking has no real answer; the field still travels in the encrypted content because
+ * ADR 0006 demands it and it cannot be recovered later over already encrypted data, but here it is
+ * fixed to `manual` without showing any `<select>` — it is the default value of
+ * `buildCommonEventFields` when no `origin` is passed. The day an automatic import from a device
+ * exists (say a connected pen or pump), that will be the one passing `device` explicitly. The
+ * device field (`device`), on the other hand, is asked for: it is useful even with manual entry,
+ * to note which pen or pump the dose was given with.
  *
- * **La fecha del evento no se convierte aquí.** `datetimeLocalToCanonical` vive en
- * `datetimeLocal.js` porque lo que devuelve entra como dato asociado del AEAD (ADR 0004): si cada
- * pantalla llevara su copia y una se desviara, sus sobres dejarían de abrirse.
+ * **The event date is not converted here.** `datetimeLocalToCanonical` lives in `datetimeLocal.js`
+ * because what it returns enters as AEAD associated data (ADR 0004): if each screen carried its
+ * own copy and one drifted, its envelopes would stop opening.
  *
- * Las funciones exportadas antes de `insulinPage()` son la lógica pura del componente, para poder
- * probarlas sin montar Alpine ni Chart.js (`tests/js/insulinPage.test.mjs`).
+ * The functions exported before `insulinPage()` are the pure logic of the component, so they can
+ * be tested without mounting Alpine or Chart.js (`tests/js/insulinPage.test.mjs`).
  */
 
 import Chart from 'chart.js/auto';
@@ -56,7 +56,7 @@ import { EnvelopeError } from '../crypto/envelope.js';
 import { formatChartDay, formatDateTime, t } from '../i18n/index.js';
 import { legendElementFor, legendItems, renderLegend } from './chartLegend.js';
 import { chartColors, observeThemeChange } from './chartTheme.js';
-import { eventDayKey } from './dailyBands.js';
+import { enumerateDays, eventDayKey, MAX_CHART_DAYS } from './dailyBands.js';
 import { dateRangeControl } from './dateRange.js';
 import { datetimeLocalToCanonical } from './datetimeLocal.js';
 import { buildCommonEventFields } from './eventCommonFields.js';
@@ -64,33 +64,33 @@ import { openEvent, sealEvent } from './eventEnvelope.js';
 import { parseNumericValue } from './numericValue.js';
 import { savedNotice } from './savedNotice.js';
 
-/** Código UCUM de la unidad internacional de insulina (ADR 0005): `Insulin::UNIT_INTERNATIONAL_UNIT`. */
+/** UCUM code of the international insulin unit (ADR 0005): `Insulin::UNIT_INTERNATIONAL_UNIT`. */
 export const INSULIN_UNIT = '[iU]';
 
 /**
- * Construye el contenido en claro de un evento de insulina, con la forma del ADR 0006. La dosis
- * viaja como cadena, nunca como número (ADR 0004: decimales como cadena), y el evento no lleva
- * código LOINC porque es una administración de medicación, no una observación.
+ * Builds the content in the clear of an insulin event, with the shape of ADR 0006. The dose
+ * travels as a string, never as a number (ADR 0004: decimals as a string), and the event carries
+ * no LOINC code because it is a medication administration, not an observation.
  *
- * `common` son los cuatro campos que comparte cualquier tipo de evento (origen, aparato, quién
- * registra, nota: ver `eventCommonFields.js`) y van en el nivel superior del contenido, no dentro de
- * `data`. `product` (nombre comercial, texto libre) y `site` (zona de inyección) son propios de la
- * insulina y opcionales: si no se indican (cadena vacía o ausentes), no entran en `data` en
- * absoluto, en vez de guardarse como cadena vacía (mismo criterio que `mealContext` en
+ * `common` are the four fields any event type shares (origin, device, who records, note: see
+ * `eventCommonFields.js`) and they go at the top level of the content, not inside `data`. `product`
+ * (brand name, free text) and `site` (injection site) belong to insulin and are optional: if they
+ * are not given (empty string or absent), they do not enter `data` at all, instead of being stored
+ * as an empty string (same criterion as `mealContext` in
  * `glucosePage.js`).
  *
  * @param {object} params
- * @param {string} params.dose Tal cual la escribió la persona, ya como cadena (p. ej. "0.5").
- * @param {string} params.insulinType Token de `App\Catalog\InsulinType`.
- * @param {string} [params.product] Nombre comercial en texto libre, o vacío/ausente.
- * @param {string} [params.site] Token de `App\Catalog\InjectionSite`, o vacío/ausente.
- * @param {string} params.tz Desfase `±HH:MM` del momento del registro.
+ * @param {string} params.dose Exactly as the person typed it, already as a string (e.g. "0.5").
+ * @param {string} params.insulinType `App\Catalog\InsulinType` token.
+ * @param {string} [params.product] Brand name as free text, or empty/absent.
+ * @param {string} [params.site] `App\Catalog\InjectionSite` token, or empty/absent.
+ * @param {string} params.tz `±HH:MM` offset of the moment of recording.
  * @param {{origin: string, recordedBy: string, device?: string, note?: string}} params.common
- *        Ya construido por `buildCommonEventFields`.
+ *        Already built by `buildCommonEventFields`.
  * @returns {{v: 1, type: 'insulin', tz: string, origin: string, recordedBy: string, device?: string,
  *           note?: string, data: {insulinType: string, dose: string, unit: string, product?: string,
  *           site?: string}}}
- * @throws {Error} Si falta la dosis o el tipo de insulina.
+ * @throws {Error} If the dose or the insulin type is missing.
  */
 export function buildInsulinContent({ dose, insulinType, product, site, tz, common }) {
     if (typeof dose !== 'string' || dose.trim() === '') {
@@ -121,12 +121,12 @@ export function buildInsulinContent({ dose, insulinType, product, site, tz, comm
 }
 
 /**
- * Resuelve la etiqueta de la zona de inyección de un evento ya descifrado, tolerando que el campo
- * no exista (opcional, se omite del contenido cuando no se indicó).
+ * Resolves the injection site label of an already decrypted event, tolerating that the field does
+ * not exist (optional, left out of the content when not given).
  *
  * @param {{injectionSites: list<{token: string, label: string}>}} catalog
  * @param {{site?: string}} data
- * @returns {string|null} `null` cuando el evento no trae zona.
+ * @returns {string|null} `null` when the event brings no site.
  */
 export function injectionSiteLabel(catalog, data) {
     if (typeof data.site !== 'string' || data.site === '') {
@@ -137,11 +137,11 @@ export function injectionSiteLabel(catalog, data) {
 }
 
 /**
- * Resuelve la etiqueta del producto de un evento ya descifrado, tolerando que el campo no exista
- * (texto libre opcional, ADR 0006).
+ * Resolves the product label of an already decrypted event, tolerating that the field does not
+ * exist (optional free text, ADR 0006).
  *
  * @param {{product?: string}} data
- * @returns {string|null} `null` cuando el evento no trae producto.
+ * @returns {string|null} `null` when the event brings no product.
  */
 export function productLabel(data) {
     if (typeof data.product !== 'string' || data.product === '') {
@@ -152,10 +152,10 @@ export function productLabel(data) {
 }
 
 /**
- * Descarta los eventos descifrados que no son de tipo `insulin`. El servidor no puede hacer este
- * filtro porque el tipo va cifrado dentro del sobre (ADR 0006): es responsabilidad del cliente.
+ * Discards the decrypted events that are not of type `insulin`. The server cannot do this filter
+ * because the type travels encrypted inside the envelope (ADR 0006): it is the client's job.
  *
- * @param {list<{id: string, occurredAt: string, content: object}>} events Ya descifrados.
+ * @param {list<{id: string, occurredAt: string, content: object}>} events Already decrypted.
  * @returns {list<{id: string, occurredAt: string, content: object}>}
  */
 export function filterInsulinEvents(events) {
@@ -163,19 +163,31 @@ export function filterInsulinEvents(events) {
 }
 
 /**
- * Agrupa eventos de insulina por día de calendario local y tipo, sumando la dosis del día (dosis
- * decimales sumadas con precisión de cadena, ver `sumDoses`), para la gráfica de barras.
+ * Groups insulin events by local calendar day and type, adding up the dose of the day (decimal
+ * doses added with string precision, see `sumDoses`), for the bar chart.
  *
- * Una dosis no es una magnitud continua como la glucemia: no hay un valor "entre" dos inyecciones,
- * así que aquí no cabe una gráfica de líneas (sugeriría continuidad donde no la hay). Se agrupa por
- * día y tipo de insulina en vez de trazar cada inyección, porque lo clínicamente relevante es la
- * dosis total diaria de cada tipo, no la lectura aislada de una inyección concreta.
+ * A dose is not a continuous quantity like glucose: there is no value "between" two injections, so
+ * a line chart has no place here (it would suggest continuity where there is none). It is grouped
+ * by day and insulin type instead of drawing each injection, because what is clinically relevant
+ * is the total daily dose of each type, not the isolated reading of one injection.
  *
- * @param {list<{id: string, occurredAt: string, content: object}>} insulinEvents Ya filtrados por
- *        `filterInsulinEvents`.
- * @returns {{days: list<string>, totalsByType: Record<string, list<number>>}} `days` son claves
- *          `YYYY-MM-DD` en orden ascendente; `totalsByType[insulinType][i]` es la dosis total de ese
- *          tipo en `days[i]` (0 si ese día no tuvo dosis de ese tipo).
+ * **The axis covers every calendar day of the stretch, not only the days with injections**
+ * ({@see enumerateDays}, the same the dashboard band chart uses). With one bar per day with data,
+ * injections on the 1st, the 2nd and the 20th came out as three touching bars: an eighteen-day
+ * break in the therapy was drawn exactly like three consecutive days, and adherence —which is the
+ * most important thing this chart could say— was invisible.
+ *
+ * **A day with no injection is a gap (`null`), never a zero.** A zero here is a reading, and a
+ * false one: "that day the dose was nil" is a clinical statement, and what is actually known is
+ * that nothing was written down. Inside a day that does have records the zero is right, and it
+ * stays: a type not injected that day really did add up to nothing.
+ *
+ * @param {list<{id: string, occurredAt: string, content: object}>} insulinEvents Already filtered
+ *        by `filterInsulinEvents`.
+ * @returns {{days: list<string>, totalsByType: Record<string, list<number|null>>, omittedDays: number}}
+ *          `days` are `YYYY-MM-DD` keys in ascending order, with no holes;
+ *          `totalsByType[insulinType][i]` is the total dose of that type on `days[i]`, 0 if that
+ *          day had records of another type and `null` if it had none at all.
  */
 export function groupInsulinByDay(insulinEvents) {
     /** @type {Map<string, Map<string, number>>} */
@@ -184,6 +196,11 @@ export function groupInsulinByDay(insulinEvents) {
     for (const event of insulinEvents) {
         const { data } = event.content;
         const day = eventDayKey(event.occurredAt, event.content.tz);
+
+        /** An unreadable instant has no day to be attributed to, and would break the stretch. */
+        if (day === '') {
+            continue;
+        }
 
         if (!byDay.has(day)) {
             byDay.set(day, new Map());
@@ -194,56 +211,78 @@ export function groupInsulinByDay(insulinEvents) {
         byType.set(data.insulinType, sumDoses(previous, data.dose));
     }
 
-    const days = [...byDay.keys()].sort();
-    const types = [...new Set(days.flatMap((day) => [...byDay.get(day).keys()]))].sort();
+    if (byDay.size === 0) {
+        return { days: [], totalsByType: {}, omittedDays: 0 };
+    }
 
-    /** @type {Record<string, list<number>>} */
+    const observed = [...byDay.keys()].sort();
+    const spanned = enumerateDays(observed[0], observed[observed.length - 1]);
+    /** The same cap as the dashboard, and for the same reason: the most recent days are kept. */
+    const days = spanned.slice(-MAX_CHART_DAYS);
+    const types = [...new Set(observed.flatMap((day) => [...byDay.get(day).keys()]))].sort();
+
+    /** @type {Record<string, list<number|null>>} */
     const totalsByType = {};
 
     for (const type of types) {
-        totalsByType[type] = days.map((day) => byDay.get(day).get(type) ?? 0);
+        totalsByType[type] = days.map((day) => (byDay.has(day) ? (byDay.get(day).get(type) ?? 0) : null));
     }
 
-    return { days, totalsByType };
+    return { days, totalsByType, omittedDays: spanned.length - days.length };
 }
 
 /**
- * Texto del pie de la gráfica: qué tipos de insulina entran, cuántos días cubre y cuánta dosis
- * acumula cada tipo.
+ * Text of the chart caption: which insulin types go in, how many days it covers and how much dose
+ * each type adds up to.
  *
- * No es decoración. La gráfica es un objeto gráfico sin texto, así que el color no puede ser el
- * único portador de la información (DESIGN.md § Do's #3): quien no distinga los tonos —o use un
- * lector de pantalla, o vea la pantalla en blanco y negro— lee
- * aquí lo mismo que dicen las barras. Y cuando todavía no hay ningún registro —el caso de cualquier
- * usuario nuevo— dice qué va a aparecer aquí, en vez de dejar una tarjeta con un lienzo en blanco
- * que parece un fallo.
+ * It is not decoration. The chart is a graphical object with no text, so colour cannot be the only
+ * carrier of the information (DESIGN.md § Do's #3): whoever does not tell the shades apart —or
+ * uses a screen reader, or sees the screen in black and white— reads here the same as the bars
+ * say. And when there is no record yet —the case of any new user— it says what will appear here,
+ * instead of leaving a card with a blank canvas that looks like a bug.
  *
- * @param {list<string>} days Claves `YYYY-MM-DD`, tal como las devuelve `groupInsulinByDay`.
- * @param {Record<string, list<number>>} totalsByType Dosis por tipo y día.
- * @param {(type: string) => string} labelFor Etiqueta de un token de tipo de insulina, en el idioma
- *        activo (sale del catálogo del servidor).
+ * The count it states is of **days with records**, not of days on the axis: since the axis covers
+ * the whole stretch (see {@see groupInsulinByDay}), the two stopped being the same number, and
+ * saying "20 days with records" over three bars would be false.
+ *
+ * @param {list<string>} days `YYYY-MM-DD` keys, exactly as `groupInsulinByDay` returns them.
+ * @param {Record<string, list<number|null>>} totalsByType Dose per type and day; `null` on the days
+ *        with no record at all.
+ * @param {(type: string) => string} labelFor Label of an insulin type token, in the active
+ *        language (it comes from the server catalog).
+ * @param {number} [omittedDays] Older days of the stretch left out of the chart. A silent clip
+ *        would read as "there was nothing before", which is the very mistake this chart avoids.
  * @returns {string}
  */
-export function summarizeDailyDoses(days, totalsByType, labelFor) {
+export function summarizeDailyDoses(days, totalsByType, labelFor, omittedDays = 0) {
     if (days.length === 0) {
         return t('insulin.chartEmpty');
     }
 
+    const recordedDays = days.filter(
+        (day, index) => Object.values(totalsByType).some((doses) => doses[index] !== null),
+    ).length;
+
     const totals = Object.entries(totalsByType)
         .map(([type, doses]) => {
-            const total = doses.reduce((accumulated, dose) => Math.round((accumulated + dose) * 1000) / 1000, 0);
+            const total = doses.reduce(
+                (accumulated, dose) => Math.round((accumulated + (dose ?? 0)) * 1000) / 1000,
+                0,
+            );
 
             return `${labelFor(type)}: ${total} ${INSULIN_UNIT}`;
         })
         .join('; ');
 
-    return t('insulin.caption', { count: days.length, totals });
+    const caption = t('insulin.caption', { count: recordedDays, totals });
+
+    return omittedDays === 0 ? caption : `${caption} ${t('insulin.omittedDays', { count: omittedDays })}`;
 }
 
 /**
- * Suma dos dosis, tolerando que la representación decimal de JavaScript no sea exacta: redondea a
- * tres decimales, más que suficiente para dosis de insulina (media unidad es el caso más fino en la
- * práctica clínica) y evita que la suma acumule ruido de coma flotante visible en la gráfica.
+ * Adds two doses, tolerating that the JavaScript decimal representation is not exact: it rounds to
+ * three decimals, more than enough for insulin doses (half a unit is the finest case in clinical
+ * practice) and it keeps the sum from accumulating floating point noise visible in the chart.
  *
  * @param {number} accumulated
  * @param {string} dose
@@ -254,14 +293,14 @@ function sumDoses(accumulated, dose) {
 }
 
 /**
- * El día de un evento sale de `health/dailyBands.js` ({@see eventDayKey}) y no de una copia local:
- * la regla —el día es el de la zona con la que se registró el evento, que viaja en `tz` (ADR 0006),
- * nunca el del dispositivo que mira— es la misma que necesita la gráfica de bandas del panel de
- * inicio, y dos implementaciones acabarían atribuyendo una inyección de las 23:30 a días distintos
- * en dos pantallas de la misma aplicación.
+ * The day of an event comes from `health/dailyBands.js` ({@see eventDayKey}) and not from a local
+ * copy: the rule —the day is the one of the zone the event was recorded in, which travels in `tz`
+ * (ADR 0006), never that of the device looking— is the same the band chart of the home dashboard
+ * needs, and two implementations would end up attributing a 23:30 injection to different days on
+ * two screens of the same application.
  */
 
-/** @returns {string} Ahora mismo, en la forma que espera un `<input type="datetime-local" step="1">`. */
+/** @returns {string} Right now, in the shape an `<input type="datetime-local" step="1">` expects. */
 function nowAsDatetimeLocalValue() {
     return toDatetimeLocalValue(new Date());
 }
@@ -278,16 +317,16 @@ function toDatetimeLocalValue(date) {
 }
 
 /**
- * Orden en que los tipos de insulina toman las series de `chartColors()` (§ Components · Charts,
- * «Series, in order»). El orden es fijo y no depende de qué tipos traiga el historial: así el mismo
- * tipo conserva su color aunque un día no haya registros de otro.
+ * Order in which the insulin types take the series of `chartColors()` (§ Components · Charts,
+ * "Series, in order"). The order is fixed and does not depend on which types the history brings:
+ * that way the same type keeps its colour even if one day there are no records of another.
  */
 const CHART_SERIES_BY_TYPE = Object.freeze({ rapid: 0, long: 1, mixed: 2 });
 
 /**
- * Marca de cada entrada de la leyenda, en el orden en que aparecen los tipos de insulina. Es la
- * segunda codificación que Do's #3 exige cuando el color no basta: en una pantalla en blanco y
- * negro, o impresas, las series se distinguen por la forma.
+ * Marker of each legend entry, in the order the insulin types appear. It is the second encoding
+ * Do's #3 demands when colour is not enough: on a black and white screen, or printed, the series
+ * are told apart by shape.
  */
 const CHART_LEGEND_SHAPES = Object.freeze(['rect', 'circle', 'triangle']);
 
@@ -296,7 +335,7 @@ const CHART_FONTS = Object.freeze({
     mono: "'IBM Plex Mono', ui-monospace, monospace",
 });
 
-/** Trazados de Heroicons v2 (outline, 24×24): el gotero de `Insulin::$navigationIcon`. */
+/** Heroicons v2 paths (outline, 24×24): the dropper of `Insulin::$navigationIcon`. */
 const ICON_PATHS = Object.freeze({
     warning: 'M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 '
         + '1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z',
@@ -307,8 +346,8 @@ const ICON_PATHS = Object.freeze({
 });
 
 /**
- * Icono decorativo de 20px (DESIGN.md § Lists). Va con `aria-hidden`: nunca lleva información que
- * no esté también en el texto (Do's #3).
+ * Decorative 20px icon (DESIGN.md § Lists). It goes with `aria-hidden`: it never carries
+ * information that is not also in the text (Do's #3).
  *
  * @param {'warning'|'info'|'drop'} name
  * @param {string} className
@@ -335,7 +374,7 @@ function createIcon(name, className) {
 }
 
 /**
- * Aviso en bloque con icono (DESIGN.md § Chips): color + icono + texto, nunca color a secas.
+ * Block notice with an icon (DESIGN.md § Chips): colour + icon + text, never colour alone.
  *
  * @param {object} params
  * @param {'error'|'info'} params.tone
@@ -346,10 +385,10 @@ function createCallout({ tone, message }) {
     const callout = document.createElement('div');
 
     /**
-     * Los dos tonos salen de los tokens de aviso (`error-*` / `info-*`, ver `theme.css`), no de la
-     * rampa `danger-*`/`primary-*`: los tokens ya llevan dentro el par de § Chips corregido a AA y
-     * su equivalente de § Dark Mode, mientras que un `bg-danger-50` fijo queda como un rectángulo
-     * casi blanco en tema oscuro. Mismos tokens que `glucosePage.js`.
+     * The two tones come from the notice tokens (`error-*` / `info-*`, see `theme.css`), not from
+     * the `danger-*`/`primary-*` ramp: the tokens already carry inside the § Chips pair corrected
+     * to AA and its § Dark Mode equivalent, while a fixed `bg-danger-50` stays an almost white
+     * rectangle in dark theme. Same tokens as `glucosePage.js`.
      */
     callout.className = tone === 'error'
         ? 'flex items-start gap-3 rounded-control border border-error-outline bg-error-surface p-pad-md '
@@ -371,8 +410,8 @@ function createCallout({ tone, message }) {
 }
 
 /**
- * Chip de estado (DESIGN.md § Chips · Status Chip), para el tipo de insulina: es lo más importante
- * a distinguir de un vistazo, igual que el método de medición en `glucosePage.js`.
+ * Status chip (DESIGN.md § Chips · Status Chip), for the insulin type: it is the most important
+ * thing to tell apart at a glance, like the measurement method in `glucosePage.js`.
  *
  * @param {string} label
  * @returns {HTMLSpanElement}
@@ -387,8 +426,8 @@ function createStatusChip(label) {
 }
 
 /**
- * Chip de filtro (DESIGN.md § Chips · Filter Chip), para la zona de inyección: no es un estado
- * clínico sino una circunstancia de la dosis.
+ * Filter chip (DESIGN.md § Chips · Filter Chip), for the injection site: it is not a clinical
+ * state but a circumstance of the dose.
  *
  * @param {string} label
  * @returns {HTMLSpanElement}
@@ -419,15 +458,15 @@ function describeError(failure) {
 }
 
 /**
- * Tamaño de página del historial. Es el mismo valor que el `$limit` por defecto de
- * `HealthEventPage::fetchEvents()`: los argumentos son posicionales, así que pasar el rango obliga
- * a pasar también el cursor y el límite, y aquí se repite el valor de siempre para no cambiar de
- * paso la cantidad de eventos que baja cada carga.
+ * History page size. It is the same value as the default `$limit` of
+ * `HealthEventPage::fetchEvents()`: the arguments are positional, so passing the range forces
+ * passing the cursor and the limit too, and the usual value is repeated here so as not to change
+ * in passing how many events come down on each load.
  */
 const HISTORY_FETCH_LIMIT = 100;
 
 /**
- * Factoría del componente Alpine. Se registra como `phrInsulinPage`.
+ * Alpine component factory. Registered as `phrInsulinPage`.
  *
  * @returns {object}
  */
@@ -440,15 +479,15 @@ export function insulinPage() {
         catalog: null,
         loading: false,
 
-        /** Sobres descifrados que fallaron al abrir en la última carga (no tumban la pantalla). */
+        /** Decrypted envelopes that failed to open on the last load (they do not take the screen down). */
         failedToOpenCount: 0,
 
-        /** Instancia de Chart.js viva, para poder destruirla antes de repintar. */
+        /** Live Chart.js instance, so it can be destroyed before repainting. */
         chart: null,
 
         /**
-         * Últimos eventos que se pintaron. No es caché de datos: es lo que permite rehacer la
-         * gráfica cuando cambia el tema sin volver a pedir ni a descifrar nada (`chartTheme.js`).
+         * Last events that were painted. It is not a data cache: it is what lets the chart be
+         * rebuilt when the theme changes without asking for or decrypting anything again (`chartTheme.js`).
          */
         chartEvents: [],
 
@@ -456,8 +495,8 @@ export function insulinPage() {
             this.catalog = JSON.parse(document.querySelector('[data-phr-insulin-catalog]').textContent);
 
             /**
-             * DESIGN.md § Charts — Dark: la gráfica tiene que releer los colores y repintarse cuando
-             * `<html>` entra o sale del modo oscuro, o el panel entero conmuta menos las gráficas.
+             * DESIGN.md § Charts — Dark: the chart has to re-read the colours and repaint when
+             * `<html>` enters or leaves dark mode, or the whole panel switches except the charts.
              */
             observeThemeChange(() => {
                 if (this.chart !== null) {
@@ -478,13 +517,13 @@ export function insulinPage() {
         },
 
         /**
-         * Guarda el registro.
+         * Saves the record.
          *
-         * `loading` cubre TODA la operación, no solo la descarga del historial: entre el clic y el
-         * repintado hay derivación de clave, sellado AEAD e ida y vuelta a Livewire, y sin señal
-         * alguna la persona vuelve a pulsar el botón —y en esta pantalla pulsar dos veces guarda
-         * dos dosis—. La plantilla lo usa para deshabilitar el botón, marcar `aria-busy` y cambiar
-         * el texto (Do's #3), igual que la pantalla de glucemia.
+         * `loading` covers the WHOLE operation, not just the history download: between the click and
+         * the repaint there is key derivation, AEAD sealing and a round trip to Livewire, and with
+         * no signal at all the person presses the button again —and on this screen pressing twice
+         * saves two doses—. The template uses it to disable the button, set `aria-busy` and change
+         * the text (Do's #3), like the glucose screen.
          *
          * @param {SubmitEvent} [event]
          */
@@ -507,10 +546,10 @@ export function insulinPage() {
                 }
 
                 /**
-                 * La dosis pasa por la misma validación que el resto de valores clínicos: como mucho
-                 * dos decimales y separador normalizado a punto antes de cifrar. Es el campo donde un
-                 * error de lectura hace más daño de toda la aplicación, porque una dosis mal escrita
-                 * es una dosis mal puesta, y una vez sellado el sobre ya no se puede corregir.
+                 * The dose goes through the same validation as any other clinical value: at most
+                 * two decimals and the separator normalized to a dot before encrypting. It is the
+                 * field where a reading error does the most damage in the whole application, because
+                 * a badly written dose is a badly given dose, and once the envelope is sealed it can no longer be corrected.
                  */
                 const dose = parseNumericValue(rawDose, t('field.dose'));
 
@@ -529,9 +568,9 @@ export function insulinPage() {
                 const { occurredAt, tz } = datetimeLocalToCanonical(localDatetime);
 
                 /**
-                 * Sin `origin`: no hay `<select>` de origen del dato en el formulario (ver JSDoc
-                 * del módulo), así que `buildCommonEventFields` aplica su valor por defecto,
-                 * `manual`, que es la única entrada posible hoy.
+                 * No `origin`: there is no data-origin `<select>` in the form (see the module
+                 * JSDoc), so `buildCommonEventFields` applies its default value, `manual`, which is
+                 * the only possible entry today.
                  */
                 const common = buildCommonEventFields({
                     device: this.$refs.device.value,
@@ -550,14 +589,14 @@ export function insulinPage() {
 
                 const payload = sealEvent({ userId, occurredAt, content });
 
-                /** Acción de `HealthEventPage`, común a cualquier pantalla de evento (ADR 0006). */
+                /** `HealthEventPage` action, shared by any event screen (ADR 0006). */
                 await this.$wire.storeEvent(payload, occurredAt);
 
                 this.$refs.dose.value = '';
 
                 await this.loadHistory();
 
-                /** Al final de todo: el aviso confirma la operación entera, no solo el POST. */
+                /** At the very end: the notice confirms the whole operation, not just the POST. */
                 this.confirmSaved();
             } catch (failure) {
                 this.error = describeError(failure);
@@ -566,7 +605,7 @@ export function insulinPage() {
             }
         },
 
-        /** Descarga, descifra, filtra y pinta el historial (lista y gráfica). */
+        /** Downloads, decrypts, filters and paints the history (list and chart). */
         async loadHistory() {
             this.loading = true;
 
@@ -580,10 +619,10 @@ export function insulinPage() {
                 }
 
                 /**
-                 * El rango sí lo aplica el servidor: `occurred_at` es columna en claro (ADR 0006) y
-                 * acotarla ahorra descargar y descifrar meses de eventos de otros tipos que este
-                 * módulo tiraría igualmente. El tipo se sigue descartando aquí, que es lo que el
-                 * servidor no puede hacer.
+                 * The range is applied by the server: `occurred_at` is a column in the clear (ADR
+                 * 0006) and narrowing it saves downloading and decrypting months of events of other
+                 * types this module would throw away anyway. The type is still discarded here,
+                 * which is what the server cannot do.
                  */
                 const range = this.historyRange();
                 const rawEvents = await this.$wire.fetchEvents(null, HISTORY_FETCH_LIMIT, range.from, range.to);
@@ -601,7 +640,7 @@ export function insulinPage() {
 
                         opened.push({ id: rawEvent.id, occurredAt: rawEvent.occurredAt, content });
                     } catch {
-                        /** Un sobre que no abre no tumba la pantalla (ADR 0004): se cuenta y se avisa. */
+                        /** An envelope that does not open does not take the screen down (ADR 0004): it is counted and reported. */
                         failedToOpen += 1;
                     }
                 }
@@ -620,12 +659,12 @@ export function insulinPage() {
         },
 
         /**
-         * Sin clave no se puede descifrar nada: se dice, no se pinta una lista vacía.
+         * With no key nothing can be decrypted: it is said, no empty list is painted.
          *
-         * Perder la clave en memoria es normal y frecuente (ADR 0003), así que este estado tiene
-         * que dejar la pantalla entera coherente: además del aviso en la lista, se tira la gráfica
-         * anterior (si la hubiera) y su pie lo explica. Una gráfica con las barras de la sesión
-         * anterior junto a un «necesitas iniciar sesión» es una contradicción a la vista.
+         * Losing the key in memory is normal and frequent (ADR 0003), so this state has to leave
+         * the whole screen coherent: besides the notice in the list, the previous chart (if there
+         * was one) is thrown away and its caption explains it. A chart with the bars of the
+         * previous session next to a "you need to sign in" is a contradiction in plain sight.
          */
         renderLocked() {
             this.failedToOpenCount = 0;
@@ -636,7 +675,7 @@ export function insulinPage() {
             this.$refs.chartCaption.textContent = t('insulin.chartLocked');
         },
 
-        /** Destruye la instancia viva de Chart.js, si la hay. Repintar sin destruir la duplica. */
+        /** Destroys the live Chart.js instance, if there is one. Repainting without destroying duplicates it. */
         destroyChart() {
             if (this.chart !== null) {
                 this.chart.destroy();
@@ -666,7 +705,7 @@ export function insulinPage() {
                 const list = document.createElement('ul');
                 list.className = 'flex flex-col';
 
-                /** Más reciente primero, como llega de `fetchEvents` (orden descendente por servidor). */
+                /** Most recent first, as it comes from `fetchEvents` (descending order from the server). */
                 for (const event of insulinEvents) {
                     list.appendChild(this.renderListItem(event));
                 }
@@ -678,10 +717,10 @@ export function insulinPage() {
         },
 
         /**
-         * Item de historial con la forma de DESIGN.md § Lists. La dosis es el dato de mayor riesgo
-         * de esta pantalla (una dosis mal leída es una dosis mal puesta): va en `font-mono`,
-         * `text-body-lg` y el texto principal `#0F172A`, nunca en un gris apagado, para que sea lo
-         * primero y lo más legible de la fila.
+         * History item with the shape of DESIGN.md § Lists. The dose is the highest-risk datum of
+         * this screen (a misread dose is a misgiven dose): it goes in `font-mono`, `text-body-lg`
+         * and the main text `#0F172A`, never in a dull grey, so it is the first and most legible
+         * thing in the row.
          *
          * @param {{id: string, occurredAt: string, content: object}} event
          * @returns {HTMLLIElement}
@@ -690,10 +729,10 @@ export function insulinPage() {
             const { data } = event.content;
 
             /**
-             * Sin `hover:` ni `active:`: DESIGN.md § Lists reserva esos dos estados a un elemento
-             * de lista pulsable, y este no es enlace ni botón —no tiene destino, ni manejador, ni
-             * foco—. Prometer una interacción que no ocurre es peor que no prometerla. Mismo
-             * criterio que `glucosePage.js`.
+             * No `hover:` and no `active:`: DESIGN.md § Lists reserves those two states for a
+             * pressable list element, and this is neither link nor button —it has no destination,
+             * no handler and no focus—. Promising an interaction that does not happen is worse than
+             * not promising it. Same criterion as `glucosePage.js`.
              */
             const item = document.createElement('li');
             item.className = 'flex min-h-12 items-start gap-4 border-b border-border px-4 py-3.5 last:border-b-0';
@@ -703,17 +742,17 @@ export function insulinPage() {
             const body = document.createElement('div');
             body.className = 'flex flex-1 flex-col gap-2';
 
-            /** Primera línea: la dosis. Monoespaciada, grande y en el texto principal. */
+            /** First line: the dose. Monospace, large and in the main text. */
             const dose = document.createElement('p');
             dose.className = 'font-mono text-body-lg text-ink';
 
             /**
-             * Sin `font-bold`: de IBM Plex Mono solo se empaqueta el peso 400 (§ Typography · Code
-             * la define «regular»), así que pedir 700 haría que el navegador sintetizara una falsa
-             * negrita, engordando y deformando justo los glifos numéricos que Do's #7 quiere
-             * inconfundibles —y aquí el glifo deformado sería una dosis—. La dosis destaca por ser
-             * lo primero de la fila, ir en el tamaño mayor de la lista y llevar la tinta principal,
-             * frente al gris secundario de la unidad.
+             * No `font-bold`: only weight 400 of IBM Plex Mono is bundled (§ Typography · Code
+             * defines it as "regular"), so asking for 700 would make the browser synthesize a fake
+             * bold, fattening and deforming exactly the numeric glyphs Do's #7 wants unmistakable
+             * —and here the deformed glyph would be a dose—. The dose stands out by being first in
+             * the row, going in the largest size of the list and carrying the main ink, against the
+             * secondary grey of the unit.
              */
             const doseValue = document.createElement('span');
             doseValue.textContent = data.dose;
@@ -735,16 +774,16 @@ export function insulinPage() {
             chips.className = 'flex flex-wrap items-center gap-2';
             chips.appendChild(createStatusChip(typeLabel));
 
-            /** Sin zona de inyección (opcional): no se muestra chip en su lugar. */
+            /** With no injection site (optional): no chip is shown in its place. */
             if (siteLabel !== null) {
                 chips.appendChild(createFilterChip(siteLabel));
             }
 
             body.appendChild(chips);
 
-            /** Texto secundario: marca de tiempo y, si lo hay, el producto en texto libre. */
+            /** Secondary text: timestamp and, if there is one, the product as free text. */
             const meta = document.createElement('p');
-            /** Tamaño Code de § Typography, el papel de «medical codes, IDs, data fields». */
+            /** Code size of § Typography, the role of "medical codes, IDs, data fields". */
             meta.className = 'font-mono text-code text-ink-secondary';
             meta.textContent = product !== null
                 ? `${formatDateTime(event.occurredAt)} · ${product}`
@@ -757,24 +796,24 @@ export function insulinPage() {
         },
 
         /**
-         * Pinta la gráfica de barras de dosis diaria por tipo de insulina, o no pinta nada si no
-         * hay datos. Es de barras y no de líneas a propósito: una dosis no es una magnitud continua
-         * como la glucemia, y una línea sugeriría que hay un valor entre dos inyecciones que no
-         * existe (ver JSDoc de `groupInsulinByDay`).
+         * Paints the bar chart of daily dose per insulin type, or paints nothing if there is no
+         * data. It is bars and not lines on purpose: a dose is not a continuous quantity like
+         * glucose, and a line would suggest there is a value between two injections that does not
+         * exist (see the JSDoc of `groupInsulinByDay`).
          *
          * @param {list<{id: string, occurredAt: string, content: object}>} insulinEvents
          */
         renderChart(insulinEvents) {
-            /** Se guardan para poder repintar al conmutar el tema (ver `init()` y `chartTheme.js`). */
+            /** They are stored so the chart can be repainted on theme switch (see `init()` and `chartTheme.js`). */
             this.chartEvents = insulinEvents;
 
-            /** Colores del tema activo, leídos ahora y no al cargar el módulo (`chartTheme.js`). */
+            /** Colours of the active theme, read now and not when the module loaded (`chartTheme.js`). */
             const colors = chartColors();
 
-            const { days, totalsByType } = groupInsulinByDay(insulinEvents);
+            const { days, totalsByType, omittedDays } = groupInsulinByDay(insulinEvents);
 
             this.destroyChart();
-            this.renderChartCaption(days, totalsByType);
+            this.renderChartCaption(days, totalsByType, omittedDays);
 
             if (days.length === 0) {
                 this.paintLegend([]);
@@ -786,10 +825,10 @@ export function insulinPage() {
             const types = Object.keys(totalsByType);
 
             /**
-             * En la leyenda cada tipo lleva además su propia marca —cuadrado, círculo, triángulo—,
-             * que es la segunda codificación que pide Do's #3. Las barras no pueden llevar esa marca
-             * (una barra es un rectángulo), así que quien lea la gráfica sin distinguir los tonos
-             * sigue apoyándose en el pie, que dice en texto la dosis acumulada de cada tipo.
+             * In the legend each type also carries its own marker —square, circle, triangle—, which
+             * is the second encoding Do's #3 asks for. The bars cannot carry that marker (a bar is
+             * a rectangle), so whoever reads the chart without telling the shades apart still leans
+             * on the caption, which states in text the accumulated dose of each type.
              */
             const series = types.map((type, index) => ({
                 label: this.catalog.insulinTypes.find((row) => row.token === type)?.label ?? type,
@@ -815,10 +854,24 @@ export function insulinPage() {
                     color: colors.tick,
                     scales: {
                         x: {
+                            /**
+                             * A category axis, and here that is not the same mistake as on the
+                             * charts of readings: one category is one calendar day and every day of
+                             * the stretch is there (`groupInsulinByDay`), so equal widths already
+                             * are proportional to time and an eighteen-day break comes out eighteen
+                             * bars wide. Going linear would only mean guessing the width of a bar.
+                             *
+                             * `autoSkip` is left as it comes: with 180 days Chart.js writes the
+                             * labels that fit and drops the rest, instead of piling them up.
+                             */
                             stacked: false,
                             grid: { display: false },
                             border: { color: colors.grid },
-                            ticks: { color: colors.tick, font: { family: CHART_FONTS.mono, size: 12 } },
+                            ticks: {
+                                color: colors.tick,
+                                font: { family: CHART_FONTS.mono, size: 12 },
+                                maxRotation: 0,
+                            },
                         },
                         y: {
                             beginAtZero: true,
@@ -835,14 +888,14 @@ export function insulinPage() {
                     },
                     plugins: {
                         /**
-                         * La leyenda vive fuera del lienzo, en HTML (ver `chartLegend.js`): dentro
-                         * reservaba alto del contenedor de 320px y, con `pointStyle: 'circle'`
-                         * fijo, sus tres entradas se distinguían solo por el color.
+                         * The legend lives outside the canvas, in HTML (see `chartLegend.js`):
+                         * inside it reserved height of the 320px container and, with a fixed
+                         * `pointStyle: 'circle'`, its three entries were told apart by colour alone.
                          */
                         legend: { display: false },
                         /**
-                         * El par fondo/tinta sale del tema: el tooltip es el único componente que
-                         * se invierte respecto de la interfaz (§ Charts — Dark).
+                         * The background/ink pair comes from the theme: the tooltip is the only
+                         * component that inverts against the interface (§ Charts — Dark).
                          */
                         tooltip: {
                             backgroundColor: colors.tooltipSurface,
@@ -859,7 +912,7 @@ export function insulinPage() {
         },
 
         /**
-         * Pinta la leyenda en HTML, fuera del lienzo (ver el JSDoc de `chartLegend.js`).
+         * Paints the legend in HTML, outside the canvas (see the JSDoc of `chartLegend.js`).
          *
          * @param {list<{label: string, color: string, pointStyle: string}>} series
          */
@@ -871,17 +924,19 @@ export function insulinPage() {
         },
 
         /**
-         * Escribe el pie de la gráfica, que es el nombre accesible de lo que pintan las barras (ver
+         * Writes the chart caption, which is the accessible name of what the bars paint (see
          * `summarizeDailyDoses`).
          *
          * @param {list<string>} days
-         * @param {Record<string, list<number>>} totalsByType
+         * @param {Record<string, list<number|null>>} totalsByType
+         * @param {number} [omittedDays]
          */
-        renderChartCaption(days, totalsByType) {
+        renderChartCaption(days, totalsByType, omittedDays = 0) {
             this.$refs.chartCaption.textContent = summarizeDailyDoses(
                 days,
                 totalsByType,
                 (type) => this.catalog.insulinTypes.find((row) => row.token === type)?.label ?? type,
+                omittedDays,
             );
         },
     };

@@ -1,11 +1,11 @@
 /**
- * Comprobaciones de la lógica pura de `health/glucosePage.js` (ADR 0004, ADR 0006, ADR 0008).
+ * Checks of the pure logic of `health/glucosePage.js` (ADR 0004, ADR 0006, ADR 0008).
  *
- * No se monta Alpine ni Chart.js: `glucosePage()` solo orquesta DOM y librerías externas, y esa
- * orquestación no se prueba aquí. Lo que se prueba es la lógica que no depende de ninguna de las
- * dos, exportada aparte para poder llamarla directamente.
+ * Neither Alpine nor Chart.js is mounted: `glucosePage()` only orchestrates DOM and external
+ * libraries, and that orchestration is not tested here. What is tested is the logic that depends
+ * on neither of the two, exported apart so it can be called directly.
  *
- * Corredor incorporado de Node, como el resto de `tests/js` (ver `crypto.test.mjs`).
+ * Node's built-in runner, like the rest of `tests/js` (see `crypto.test.mjs`).
  *
  *     npm test
  */
@@ -26,17 +26,17 @@ import { parseNumericValue } from '../../resources/js/health/numericValue.js';
 import { setLocale } from '../../resources/js/i18n/index.js';
 
 /**
- * Estos tests afirman el texto **en castellano**, así que fijan el idioma en vez de darlo por
- * supuesto: el idioma por defecto del cliente es el inglés (igual que `config/app.php`), y en Node
- * no hay `<html lang>` del que deducirlo. Sin esta línea, las afirmaciones de texto de abajo
- * estarían comprobando el catálogo de respaldo sin decirlo.
+ * These tests assert the text **in Spanish**, so they set the language instead of assuming it: the
+ * client default language is English (as in `config/app.php`), and in Node there is no
+ * `<html lang>` to work it out from. Without this line, the text assertions below would be
+ * checking the fallback catalog without saying so.
  */
 setLocale('es');
 
-/** Campos comunes de prueba, con la forma que devuelve `buildCommonEventFields` (ADR 0006). */
+/** Test common fields, with the shape `buildCommonEventFields` returns (ADR 0006). */
 const COMMON_FIELDS = Object.freeze({ origin: 'manual', recordedBy: 'self' });
 
-/** Tabla LOINC de prueba, con la forma que devuelve `Glucose::catalog()` (ADR 0005, ADR 0008). */
+/** Test LOINC table, with the shape `Glucose::catalog()` returns (ADR 0005, ADR 0008). */
 const LOINC_TABLE = Object.freeze([
     { method: 'capillary', unit: 'mg/dL', code: '41653-7' },
     { method: 'capillary', unit: 'mmol/L', code: '14743-9' },
@@ -44,7 +44,7 @@ const LOINC_TABLE = Object.freeze([
     { method: 'interstitial', unit: 'mmol/L', code: '105272-9' },
 ]);
 
-test('buildGlucoseContent: forma exacta del ADR 0006 para cada combinación de método y unidad', () => {
+test('buildGlucoseContent: exact ADR 0006 shape for each combination of method and unit', () => {
     const cases = [
         { method: 'capillary', unit: 'mg/dL', loinc: '41653-7' },
         { method: 'capillary', unit: 'mmol/L', loinc: '14743-9' },
@@ -76,7 +76,7 @@ test('buildGlucoseContent: forma exacta del ADR 0006 para cada combinación de m
     }
 });
 
-test('buildGlucoseContent: el valor que llega al payload es siempre cadena con punto, tras pasar por parseNumericValue (criterio numérico del cliente)', () => {
+test('buildGlucoseContent: the value reaching the payload is always a string with a dot, after going through parseNumericValue (client numeric criterion)', () => {
     const value = parseNumericValue('7,85', 'El valor');
 
     const content = buildGlucoseContent({
@@ -93,7 +93,7 @@ test('buildGlucoseContent: el valor que llega al payload es siempre cadena con p
     assert.equal(typeof content.data.value, 'string');
 });
 
-test('buildGlucoseContent: mealContext vacío o ausente no entra en data (ADR 0006, opcional)', () => {
+test('buildGlucoseContent: an empty or absent mealContext does not enter data (ADR 0006, optional)', () => {
     const withEmptyString = buildGlucoseContent({
         value: '142',
         unit: 'mg/dL',
@@ -118,7 +118,7 @@ test('buildGlucoseContent: mealContext vacío o ausente no entra en data (ADR 00
     assert.equal('mealContext' in withoutField.data, false);
 });
 
-test('buildGlucoseContent: mealContext con valor sí entra en data', () => {
+test('buildGlucoseContent: a mealContext with a value does enter data', () => {
     const content = buildGlucoseContent({
         value: '142',
         unit: 'mg/dL',
@@ -132,7 +132,7 @@ test('buildGlucoseContent: mealContext con valor sí entra en data', () => {
     assert.equal(content.data.mealContext, 'after_meal');
 });
 
-test('buildGlucoseContent: los campos comunes van en el nivel superior, nunca dentro de data', () => {
+test('buildGlucoseContent: the common fields go at the top level, never inside data', () => {
     const content = buildGlucoseContent({
         value: '142',
         unit: 'mg/dL',
@@ -154,7 +154,7 @@ test('buildGlucoseContent: los campos comunes van en el nivel superior, nunca de
     assert.equal('note' in content.data, false);
 });
 
-test('mealContextLabel: tolera un evento sin mealContext y no inventa nada', () => {
+test('mealContextLabel: tolerates an event with no mealContext and invents nothing', () => {
     const catalog = { mealContexts: [{ token: 'fasting', label: 'En ayunas' }] };
 
     assert.equal(mealContextLabel(catalog, {}), null);
@@ -162,7 +162,7 @@ test('mealContextLabel: tolera un evento sin mealContext y no inventa nada', () 
     assert.equal(mealContextLabel(catalog, { mealContext: 'fasting' }), 'En ayunas');
 });
 
-test('buildGlucoseContent: sin valor, lanza en vez de guardar algo a medias', () => {
+test('buildGlucoseContent: with no value, it throws instead of storing something half done', () => {
     assert.throws(() => buildGlucoseContent({
         value: '   ',
         unit: 'mg/dL',
@@ -173,11 +173,11 @@ test('buildGlucoseContent: sin valor, lanza en vez de guardar algo a medias', ()
     }));
 });
 
-test('resolveLoincCode: combinación de método y unidad sin código, lanza y no inventa uno', () => {
+test('resolveLoincCode: a method and unit combination with no code throws and invents none', () => {
     assert.throws(() => resolveLoincCode(LOINC_TABLE, 'capillary', 'g'));
 });
 
-test('buildGlucoseContent: propaga el fallo de resolveLoincCode, nunca guarda sin código', () => {
+test('buildGlucoseContent: it propagates the failure of resolveLoincCode, it never stores without a code', () => {
     assert.throws(() => buildGlucoseContent({
         value: '142',
         unit: 'g',
@@ -188,15 +188,15 @@ test('buildGlucoseContent: propaga el fallo de resolveLoincCode, nunca guarda si
     }));
 });
 
-test('formatTzOffset: signo y ceros a la izquierda', () => {
+test('formatTzOffset: sign and leading zeros', () => {
     assert.equal(formatTzOffset(120), '+02:00');
     assert.equal(formatTzOffset(-300), '-05:00');
     assert.equal(formatTzOffset(0), '+00:00');
     assert.equal(formatTzOffset(-30), '-00:30');
 });
 
-test('datetimeLocalToCanonical: instante correcto con un desfase distinto de cero (Madrid, +02:00)', () => {
-    /** `getTimezoneOffset()` para +02:00 es -120 (UTC menos local, ver JSDoc de la función). */
+test('datetimeLocalToCanonical: correct instant with a non-zero offset (Madrid, +02:00)', () => {
+    /** `getTimezoneOffset()` for +02:00 is -120 (UTC minus local, see the function JSDoc). */
     const { occurredAt, tz } = datetimeLocalToCanonical('2026-07-25T11:08:07', {
         timezoneOffsetMinutes: -120,
     });
@@ -205,7 +205,7 @@ test('datetimeLocalToCanonical: instante correcto con un desfase distinto de cer
     assert.equal(tz, '+02:00');
 });
 
-test('datetimeLocalToCanonical: instante correcto con un desfase negativo (Nueva York, -05:00)', () => {
+test('datetimeLocalToCanonical: correct instant with a negative offset (New York, -05:00)', () => {
     const { occurredAt, tz } = datetimeLocalToCanonical('2026-07-25T07:00:00', {
         timezoneOffsetMinutes: 300,
     });
@@ -214,13 +214,13 @@ test('datetimeLocalToCanonical: instante correcto con un desfase negativo (Nueva
     assert.equal(tz, '-05:00');
 });
 
-test('datetimeLocalToCanonical: acepta datetime-local sin segundos', () => {
+test('datetimeLocalToCanonical: accepts a datetime-local with no seconds', () => {
     const { occurredAt } = datetimeLocalToCanonical('2026-07-25T11:08', { timezoneOffsetMinutes: 0 });
 
     assert.equal(occurredAt, '2026-07-25T11:08:00.000000Z');
 });
 
-test('filterGlucoseEvents: descarta los eventos que no son de tipo glucose', () => {
+test('filterGlucoseEvents: discards the events that are not of type glucose', () => {
     const events = [
         { id: '1', occurredAt: 'a', content: { type: 'glucose', data: {} } },
         { id: '2', occurredAt: 'b', content: { type: 'insulin', data: {} } },
@@ -233,7 +233,7 @@ test('filterGlucoseEvents: descarta los eventos que no son de tipo glucose', () 
     assert.deepEqual(filtered.map((event) => event.id), ['1', '4']);
 });
 
-test('groupGlucoseByMethod: separa por método y deja fuera los de otra unidad, contándolos', () => {
+test('groupGlucoseByMethod: separates by method and leaves out the ones of another unit, counting them', () => {
     const events = [
         glucoseEvent({ occurredAt: '2026-07-25T09:00:00.000000Z', value: '100', unit: 'mg/dL', method: 'capillary' }),
         glucoseEvent({ occurredAt: '2026-07-25T08:00:00.000000Z', value: '95', unit: 'mg/dL', method: 'capillary' }),
@@ -246,7 +246,7 @@ test('groupGlucoseByMethod: separa por método y deja fuera los de otra unidad, 
     assert.equal(excludedByUnit, 1);
     assert.deepEqual(Object.keys(seriesByMethod).sort(), ['capillary', 'interstitial']);
 
-    /** La serie capilar solo trae los dos eventos en mg/dL, ordenados por fecha. */
+    /** The capillary series only brings the two events in mg/dL, sorted by date. */
     assert.equal(seriesByMethod.capillary.length, 2);
     assert.equal(seriesByMethod.capillary[0].y, 95);
     assert.equal(seriesByMethod.capillary[1].y, 100);
@@ -256,7 +256,7 @@ test('groupGlucoseByMethod: separa por método y deja fuera los de otra unidad, 
     assert.equal(seriesByMethod.interstitial[0].y, 110);
 });
 
-test('groupGlucoseByMethod: sin eventos en la unidad de presentación, no hay series', () => {
+test('groupGlucoseByMethod: with no events in the display unit, there are no series', () => {
     const events = [
         glucoseEvent({ occurredAt: '2026-07-25T09:00:00.000000Z', value: '6.1', unit: 'mmol/L', method: 'capillary' }),
     ];
@@ -284,7 +284,7 @@ function glucoseEvent({ occurredAt, value, unit, method }) {
     };
 }
 
-test('chartCaptionText: sin ningún registro dice lo mismo que la lista, no «en esta unidad»', () => {
+test('chartCaptionText: with no record at all it says the same as the list, not "in this unit"', () => {
     const caption = chartCaptionText({
         methodLabels: [],
         presentationUnit: 'mg/dL',
@@ -295,7 +295,7 @@ test('chartCaptionText: sin ningún registro dice lo mismo que la lista, no «en
     assert.equal(caption, 'Todavía no hay registros de glucemia.');
 });
 
-test('chartCaptionText: nombra los métodos incluidos (ADR 0008, nada se mezcla en silencio)', () => {
+test('chartCaptionText: it names the included methods (ADR 0008, nothing is mixed in silence)', () => {
     const caption = chartCaptionText({
         methodLabels: ['Capilar (punción digital)', 'Intersticial (sensor continuo)'],
         presentationUnit: 'mg/dL',
@@ -306,7 +306,7 @@ test('chartCaptionText: nombra los métodos incluidos (ADR 0008, nada se mezcla 
     assert.equal(caption, 'Incluye: Capilar (punción digital), Intersticial (sensor continuo).');
 });
 
-test('chartCaptionText: cuenta los registros dejados fuera por estar en otra unidad', () => {
+test('chartCaptionText: it counts the records left out for being in another unit', () => {
     const caption = chartCaptionText({
         methodLabels: ['Capilar (punción digital)'],
         presentationUnit: 'mg/dL',
@@ -318,7 +318,7 @@ test('chartCaptionText: cuenta los registros dejados fuera por estar en otra uni
     assert.match(caption, /2 registros en otra unidad distinta de mg\/dL no se muestran/);
 });
 
-test('chartCaptionText: hay registros pero ninguno en la unidad mostrada, la gráfica vacía se explica', () => {
+test('chartCaptionText: there are records but none in the shown unit, the empty chart explains itself', () => {
     const caption = chartCaptionText({
         methodLabels: [],
         presentationUnit: 'mmol/L',
@@ -328,4 +328,40 @@ test('chartCaptionText: hay registros pero ninguno en la unidad mostrada, la gr�
 
     assert.match(caption, /Ningún registro está en mmol\/L/);
     assert.match(caption, /3 registros en otra unidad distinta de mmol\/L/);
+});
+
+test('groupGlucoseByMethod: the axis instant keeps the real distance between readings', () => {
+    /**
+     * The exact case that motivated the linear axis: 00:00, 12:00 and 12:30. On a category axis the
+     * three came out at even thirds; here the first gap has to be twenty-four times the second.
+     */
+    const events = [
+        glucoseEvent({ occurredAt: '2026-07-25T00:00:00.000000Z', value: '90', unit: 'mg/dL', method: 'capillary' }),
+        glucoseEvent({ occurredAt: '2026-07-25T12:00:00.000000Z', value: '140', unit: 'mg/dL', method: 'capillary' }),
+        glucoseEvent({ occurredAt: '2026-07-25T12:30:00.000000Z', value: '155', unit: 'mg/dL', method: 'capillary' }),
+    ];
+
+    const [first, second, third] = groupGlucoseByMethod(events, 'mg/dL').seriesByMethod.capillary;
+
+    assert.equal(second.x - first.x, 12 * 3_600_000);
+    assert.equal(third.x - second.x, 30 * 60_000);
+    assert.equal((second.x - first.x) / (third.x - second.x), 24);
+});
+
+test('groupGlucoseByMethod: the instant is the wall clock of the event, not the browser one', () => {
+    const event = {
+        id: '1',
+        /** 21:00 in Madrid, which is 19:00 UTC: on the axis it has to sit at 21:00. */
+        occurredAt: '2026-07-25T19:00:00.000000Z',
+        content: {
+            v: 1,
+            type: 'glucose',
+            tz: '+02:00',
+            data: { value: '120', unit: 'mg/dL', loinc: '41653-7', method: 'capillary', mealContext: 'fasting' },
+        },
+    };
+
+    const [point] = groupGlucoseByMethod([event], 'mg/dL').seriesByMethod.capillary;
+
+    assert.equal(new Date(point.x).getUTCHours(), 21);
 });

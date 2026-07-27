@@ -1,12 +1,12 @@
 /**
- * Comprobaciones de la lógica pura de `health/bodyWeightPage.js` (ADR 0004, ADR 0005, ADR 0006).
+ * Checks of the pure logic of `health/bodyWeightPage.js` (ADR 0004, ADR 0005, ADR 0006).
  *
- * No se monta Alpine ni Chart.js: `bodyWeightPage()` solo orquesta DOM y librerías externas, y esa
- * orquestación no se prueba aquí. Lo que se prueba es la lógica que no depende de ninguna de las
- * dos, exportada aparte para poder llamarla directamente. Mismo enfoque que
+ * Neither Alpine nor Chart.js is mounted: `bodyWeightPage()` only orchestrates DOM and external
+ * libraries, and that orchestration is not tested here. What is tested is the logic that depends
+ * on neither of the two, exported apart so it can be called directly. Same approach as
  * `tests/js/bloodPressurePage.test.mjs`.
  *
- * Corredor incorporado de Node, como el resto de `tests/js`.
+ * Node's built-in runner, like the rest of `tests/js`.
  *
  *     npm test
  */
@@ -25,10 +25,10 @@ import { datetimeLocalToCanonical, formatTzOffset } from '../../resources/js/hea
 import { unitLabel } from '../../resources/js/health/unitLabel.js';
 import { parseNumericValue } from '../../resources/js/health/numericValue.js';
 
-/** Campos comunes de prueba, con la forma que devuelve `buildCommonEventFields` (ADR 0006). */
+/** Test common fields, with the shape `buildCommonEventFields` returns (ADR 0006). */
 const COMMON_FIELDS = Object.freeze({ origin: 'manual', recordedBy: 'self' });
 
-/** Catálogo de prueba, con la forma que devuelve `BodyWeight::catalog()` (ADR 0005). */
+/** Test catalog, with the shape `BodyWeight::catalog()` returns (ADR 0005). */
 const CATALOG = Object.freeze({
     units: [
         { code: 'kg', label: 'kg' },
@@ -42,7 +42,7 @@ const CATALOG = Object.freeze({
     heightLoinc: '8302-2',
 });
 
-test('buildBodyWeightContent: forma exacta del ADR 0006', () => {
+test('buildBodyWeightContent: exact ADR 0006 shape', () => {
     const content = buildBodyWeightContent({
         value: '72.4',
         unit: 'kg',
@@ -65,7 +65,7 @@ test('buildBodyWeightContent: forma exacta del ADR 0006', () => {
     });
 });
 
-test('buildBodyWeightContent: el valor viaja como cadena, nunca como número (ADR 0004)', () => {
+test('buildBodyWeightContent: the value travels as a string, never as a number (ADR 0004)', () => {
     const content = buildBodyWeightContent({
         value: parseNumericValue('72,45', 'El peso'),
         unit: 'kg',
@@ -74,12 +74,12 @@ test('buildBodyWeightContent: el valor viaja como cadena, nunca como número (AD
         common: COMMON_FIELDS,
     });
 
-    /** La coma se normaliza a punto, pero el tipo sigue siendo cadena. */
+    /** The comma is normalized to a dot, but the type is still a string. */
     assert.equal(content.data.value, '72.45');
     assert.equal(typeof content.data.value, 'string');
 });
 
-test('buildBodyWeightContent: el código LOINC no depende de la unidad', () => {
+test('buildBodyWeightContent: the LOINC code does not depend on the unit', () => {
     const inPounds = buildBodyWeightContent({
         value: '160',
         unit: '[lb_av]',
@@ -92,7 +92,7 @@ test('buildBodyWeightContent: el código LOINC no depende de la unidad', () => {
     assert.equal(inPounds.data.unit, '[lb_av]');
 });
 
-test('buildBodyWeightContent: falla sin valor y sin unidad', () => {
+test('buildBodyWeightContent: it fails with no value and no unit', () => {
     assert.throws(() => buildBodyWeightContent({
         value: '   ',
         unit: 'kg',
@@ -110,14 +110,14 @@ test('buildBodyWeightContent: falla sin valor y sin unidad', () => {
     }));
 });
 
-test('unitLabel: enseña la etiqueta y no el código UCUM con corchetes', () => {
+test('unitLabel: it shows the label and not the UCUM code with brackets', () => {
     assert.equal(unitLabel(CATALOG, '[lb_av]'), 'lb');
     assert.equal(unitLabel(CATALOG, 'kg'), 'kg');
-    /** Un código desconocido se enseña tal cual: feo, pero no esconde el registro. */
+    /** An unknown code is shown as is: ugly, but it does not hide the record. */
     assert.equal(unitLabel(CATALOG, 'st'), 'st');
 });
 
-test('filterBodyWeightEvents: descarta lo que no es peso (el servidor no puede, ADR 0006)', () => {
+test('filterBodyWeightEvents: discards whatever is not weight (the server cannot, ADR 0006)', () => {
     const events = [
         { id: '1', occurredAt: '2026-03-01T08:00:00.000000Z', content: { type: 'bodyWeight', data: {} } },
         { id: '2', occurredAt: '2026-03-01T09:00:00.000000Z', content: { type: 'glucose', data: {} } },
@@ -127,7 +127,7 @@ test('filterBodyWeightEvents: descarta lo que no es peso (el servidor no puede, 
     assert.deepEqual(filterBodyWeightEvents(events).map((event) => event.id), ['1']);
 });
 
-test('groupBodyWeightByUnit: una serie por unidad, ordenada por fecha y sin convertir', () => {
+test('groupBodyWeightByUnit: one series per unit, sorted by date and without converting', () => {
     const events = [
         {
             id: '1',
@@ -152,17 +152,17 @@ test('groupBodyWeightByUnit: una serie por unidad, ordenada por fecha y sin conv
     assert.deepEqual(seriesByUnit.kg.map((point) => point.y), [73.1, 72.4]);
     assert.deepEqual(seriesByUnit['[lb_av]'].map((point) => point.y), [160]);
 
-    /** Ninguna libra se cuela en la serie de kilogramos: no hay conversión en ninguna dirección. */
+    /** No pound slips into the kilogram series: there is no conversion in either direction. */
     assert.equal(seriesByUnit.kg.length, 2);
 });
 
-test('chartCaptionText: dice qué unidades incluye, y lo dice también cuando no hay ninguna', () => {
+test('chartCaptionText: it says which units it includes, and it says so when there is none too', () => {
     assert.match(chartCaptionText(['kg', 'lb']), /kg/);
     assert.notEqual(chartCaptionText([]), '');
     assert.notEqual(chartCaptionText([]), chartCaptionText(['kg']));
 });
 
-test('datetimeLocalToCanonical: hora local a instante canónico del ADR 0004', () => {
+test('datetimeLocalToCanonical: local time to the ADR 0004 canonical instant', () => {
     const { occurredAt, tz } = datetimeLocalToCanonical('2026-03-01T08:30:00', {
         timezoneOffsetMinutes: -120,
     });
@@ -171,7 +171,7 @@ test('datetimeLocalToCanonical: hora local a instante canónico del ADR 0004', (
     assert.equal(tz, '+02:00');
 });
 
-test('formatTzOffset: convenio de signo del campo `tz` (ADR 0006)', () => {
+test('formatTzOffset: sign convention of the `tz` field (ADR 0006)', () => {
     assert.equal(formatTzOffset(120), '+02:00');
     assert.equal(formatTzOffset(-330), '-05:30');
     assert.equal(formatTzOffset(0), '+00:00');
@@ -179,11 +179,11 @@ test('formatTzOffset: convenio de signo del campo `tz` (ADR 0006)', () => {
 
 /*
 |--------------------------------------------------------------------------
-| Estatura opcional dentro del mismo registro
+| Optional height inside the same record
 |--------------------------------------------------------------------------
 */
 
-test('buildBodyWeightContent: la estatura entra en el mismo registro, con su unidad y su LOINC', () => {
+test('buildBodyWeightContent: the height enters the same record, with its unit and its LOINC', () => {
     const content = buildBodyWeightContent({
         value: '72.4',
         unit: 'kg',
@@ -202,7 +202,7 @@ test('buildBodyWeightContent: la estatura entra en el mismo registro, con su uni
     });
 });
 
-test('buildBodyWeightContent: la estatura en blanco no rompe el registro y no deja ninguna clave', () => {
+test('buildBodyWeightContent: a blank height does not break the record and leaves no key behind', () => {
     for (const height of ['', '   ', undefined]) {
         const content = buildBodyWeightContent({
             value: '72.4',
@@ -214,13 +214,13 @@ test('buildBodyWeightContent: la estatura en blanco no rompe el registro y no de
             common: COMMON_FIELDS,
         });
 
-        /** Ni `null` ni cadena vacía: la clave sencillamente no está (ADR 0006). */
+        /** No `null` and no empty string: the key simply is not there (ADR 0006). */
         assert.equal('height' in content.data, false, String(height));
         assert.equal(content.data.value, '72.4');
     }
 });
 
-test('buildBodyWeightContent: una estatura escrita sin unidad sí es un error', () => {
+test('buildBodyWeightContent: a height written with no unit is an error', () => {
     assert.throws(() => buildBodyWeightContent({
         value: '72.4',
         unit: 'kg',
@@ -232,7 +232,7 @@ test('buildBodyWeightContent: una estatura escrita sin unidad sí es un error', 
     }));
 });
 
-test('buildBodyWeightContent: la estatura viaja como cadena, igual que el peso (ADR 0004)', () => {
+test('buildBodyWeightContent: the height travels as a string, like the weight (ADR 0004)', () => {
     const content = buildBodyWeightContent({
         value: '72',
         unit: 'kg',
@@ -248,8 +248,39 @@ test('buildBodyWeightContent: la estatura viaja como cadena, igual que el peso (
     assert.equal(content.data.height.unit, '[in_i]');
 });
 
-test('heightUnitLabel: enseña «in» y guarda «[in_i]»', () => {
+test('heightUnitLabel: it shows "in" and stores "[in_i]"', () => {
     assert.equal(heightUnitLabel(CATALOG, '[in_i]'), 'in');
     assert.equal(heightUnitLabel(CATALOG, 'cm'), 'cm');
     assert.equal(heightUnitLabel(CATALOG, 'league'), 'league');
+});
+
+test('groupBodyWeightByUnit: the axis instant keeps the real distance between weighings', () => {
+    /**
+     * Three weighings in one week and then nothing for two months. On a category axis the four
+     * points came out evenly spaced and the slope between the last two —the only thing anybody
+     * reads in a weight chart— was invented.
+     */
+    const events = ['2026-03-01', '2026-03-02', '2026-03-03', '2026-05-03'].map((day) => ({
+        id: day,
+        occurredAt: `${day}T08:00:00.000000Z`,
+        content: { type: 'bodyWeight', tz: '+00:00', data: { value: '72', unit: 'kg' } },
+    }));
+
+    const points = groupBodyWeightByUnit(events).kg;
+    const gaps = points.slice(1).map((point, index) => point.x - points[index].x);
+
+    assert.deepEqual(gaps.slice(0, 2), [86_400_000, 86_400_000]);
+    /** The last gap is sixty-one days, and on the axis it is sixty-one times wider. */
+    assert.equal(gaps[2] / gaps[0], 61);
+});
+
+test('groupBodyWeightByUnit: the instant is the wall clock of the event, not the browser one', () => {
+    const events = [{
+        id: '1',
+        /** 08:00 in Madrid, which is 06:00 UTC: on the axis it has to sit at 08:00. */
+        occurredAt: '2026-03-01T06:00:00.000000Z',
+        content: { type: 'bodyWeight', tz: '+02:00', data: { value: '72', unit: 'kg' } },
+    }];
+
+    assert.equal(new Date(groupBodyWeightByUnit(events).kg[0].x).getUTCHours(), 8);
 });

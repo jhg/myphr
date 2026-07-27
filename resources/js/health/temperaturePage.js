@@ -1,45 +1,45 @@
 /**
- * Componente Alpine de la pantalla de temperatura corporal (ADR 0002, ADR 0004, ADR 0005, ADR 0006,
+ * Alpine component of the body temperature screen (ADR 0002, ADR 0004, ADR 0005, ADR 0006,
  * ADR 0008).
  *
- * El contrato del DOM lo fija `resources/views/phr/pages/temperature.blade.php`: nada de
- * `wire:model` (ADR 0002), los campos se leen por `x-ref` y el sobre cifrado sube como argumento de
- * `storeEvent`, nunca como propiedad de Livewire.
+ * The DOM contract is fixed by `resources/views/phr/pages/temperature.blade.php`: no `wire:model`
+ * (ADR 0002), the fields are read through `x-ref` and the encrypted envelope goes up as an
+ * argument of `storeEvent`, never as a Livewire property.
  *
- * **El sitio de medida es el método** (ADR 0008): la axilar y la rectal de la misma persona en el
- * mismo momento no dan el mismo número, así que el sitio se pregunta, viaja como campo propio
- * (`data.site`) y **nunca se mezcla en silencio** con otro: cada sitio es una serie aparte y el pie
- * de la gráfica dice cuáles incluye.
+ * **The measurement site is the method** (ADR 0008): the axillary and the rectal of the same
+ * person at the same moment do not give the same number, so the site is asked for, travels as a
+ * field of its own (`data.site`) and is **never mixed in silence** with another: each site is a
+ * separate series and the chart caption says which ones it includes.
  *
- * **Aquí el sitio además decide el código LOINC**, al contrario que el brazo y la postura de la
- * tensión: LOINC publica un código por sitio de medida, así que esta pantalla resuelve el código
- * contra la tabla `catalog.loinc` que emite el servidor, al estilo de la glucemia (ver
+ * **Here the site also decides the LOINC code**, unlike the arm and the posture of blood pressure:
+ * LOINC publishes one code per measurement site, so this screen resolves the code against the
+ * `catalog.loinc` table the server emits, in the style of glucose (see
  * `App\Catalog\TemperatureLoincCode`).
  *
- * **No se convierte entre Celsius y Fahrenheit.** Cada registro conserva la unidad con la que se
- * anotó (ADR 0006) y la serie se agrupa por la pareja (sitio, unidad): una sola línea con 36,8 y
- * 98,2 seguidos no sería una tendencia, sería un salto de escala disfrazado de fiebre. Convertir
- * exigiría además fijar precisión y redondeo, que esta versión no aborda.
+ * **Nothing is converted between Celsius and Fahrenheit.** Each record keeps the unit it was
+ * written in (ADR 0006) and the series is grouped by the (site, unit) pair: a single line with
+ * 36.8 and 98.2 in a row would not be a trend, it would be a scale jump disguised as a fever.
+ * Converting would also require fixing precision and rounding, which this version does not tackle.
  *
- * **El servidor no puede filtrar por tipo** (ADR 0006): `fetchEvents` trae todos los eventos del
- * usuario y aquí se descifra cada uno y se descarta el que no sea `type === 'temperature'`. Un sobre
- * que no abre no tumba la pantalla: se cuenta y se avisa (ADR 0004).
+ * **The server cannot filter by type** (ADR 0006): `fetchEvents` brings every event of the user
+ * and here each one is decrypted and whatever is not `type === 'temperature'` is discarded. An
+ * envelope that does not open does not take the screen down: it is counted and reported (ADR 0004).
  *
- * **Los cuatro campos comunes a todo evento** (origen, aparato, quién registra, nota; ADR 0006) no
- * se construyen aquí: viven en `eventCommonFields.js` y `buildTemperatureContent` los recibe ya
- * construidos, para desplegarlos en el nivel superior del contenido, nunca dentro de `data`.
+ * **The four fields common to every event** (origin, device, who records, note; ADR 0006) are not
+ * built here: they live in `eventCommonFields.js` and `buildTemperatureContent` receives them
+ * already built, to spread them at the top level of the content, never inside `data`.
  *
- * **El origen no se pregunta en el formulario.** `origin` distingue cómo entró el dato —tecleado
- * frente a importado de un aparato—, y aquí la inserción es siempre manual: se lee el número en el
- * termómetro y se teclea. `submit()` lo fija a `'manual'` sin leer ningún campo del DOM; el aparato
- * (`device`) sí es útil (con qué se midió) y conserva su campo.
+ * **The origin is not asked for in the form.** `origin` tells apart how the datum entered —typed
+ * versus imported from a device—, and here the insertion is always manual: the number is read on
+ * the thermometer and typed in. `submit()` fixes it to `'manual'` without reading any DOM field;
+ * the device (`device`) is useful (what it was measured with) and keeps its field.
  *
- * **La fecha del evento no se convierte aquí.** `datetimeLocalToCanonical` vive en
- * `datetimeLocal.js` porque lo que devuelve entra como dato asociado del AEAD (ADR 0004): si cada
- * pantalla llevara su copia y una se desviara, sus sobres dejarían de abrirse.
+ * **The event date is not converted here.** `datetimeLocalToCanonical` lives in `datetimeLocal.js`
+ * because what it returns enters as AEAD associated data (ADR 0004): if each screen carried its
+ * own copy and one drifted, its envelopes would stop opening.
  *
- * Las funciones exportadas antes de `temperaturePage()` son la lógica pura del componente, para
- * poder probarlas sin montar Alpine ni Chart.js (`tests/js/temperaturePage.test.mjs`).
+ * The functions exported before `temperaturePage()` are the pure logic of the component, so they
+ * can be tested without mounting Alpine or Chart.js (`tests/js/temperaturePage.test.mjs`).
  */
 
 import Chart from 'chart.js/auto';
@@ -47,27 +47,29 @@ import Chart from 'chart.js/auto';
 import { isUnlocked, ownerId } from '../auth/keyring.js';
 import { SESSION_READY_EVENT } from '../auth/sessionBootstrap.js';
 import { EnvelopeError } from '../crypto/envelope.js';
-import { formatChartDate, formatDateTime, joinList, t } from '../i18n/index.js';
+import { formatDateTime, joinList, t } from '../i18n/index.js';
 import { legendElementFor, legendItems, renderLegend } from './chartLegend.js';
 import { chartColors, observeThemeChange } from './chartTheme.js';
+import { eventWallClockMs } from './dailyBands.js';
 import { dateRangeControl } from './dateRange.js';
 import { datetimeLocalToCanonical } from './datetimeLocal.js';
 import { buildCommonEventFields } from './eventCommonFields.js';
 import { openEvent, sealEvent } from './eventEnvelope.js';
 import { parseNumericValue } from './numericValue.js';
 import { savedNotice } from './savedNotice.js';
+import { chartTimeFormat, splitOnGaps, timeAxisBounds, timeAxisScale, timeAxisTooltipTitle } from './timeAxis.js';
 import { unitLabel } from './unitLabel.js';
 
 /**
- * Resuelve el código LOINC de un sitio de medida contra la tabla del catálogo del servidor (ADR
- * 0005, ADR 0008). Nunca inventa uno ni cae al código genérico de «temperatura corporal»: si el
- * sitio no está en la tabla, falla de forma visible, porque un código LOINC equivocado es un dato
- * clínico equivocado y, una vez cifrado, ya no se corrige.
+ * Resolves the LOINC code of a measurement site against the table of the server catalog (ADR 0005,
+ * ADR 0008). It never invents one and never falls back to the generic "body temperature" code: if
+ * the site is not in the table, it fails visibly, because a wrong LOINC code is a wrong clinical
+ * datum and, once encrypted, it cannot be corrected.
  *
  * @param {list<{site: string, code: string}>} loincTable
  * @param {string} site
  * @returns {string}
- * @throws {Error} Si no existe código para ese sitio.
+ * @throws {Error} If there is no code for that site.
  */
 export function resolveLoincCode(loincTable, site) {
     const entry = loincTable.find((row) => row.site === site);
@@ -80,7 +82,7 @@ export function resolveLoincCode(loincTable, site) {
 }
 
 /**
- * Etiqueta legible de un sitio de medida a partir del catálogo del servidor.
+ * Readable label of a measurement site out of the server catalog.
  *
  * @param {{sites: list<{token: string, label: string}>}} catalog
  * @param {string} site
@@ -91,20 +93,20 @@ export function siteLabel(catalog, site) {
 }
 
 /**
- * Separador de {@see seriesKey}. Se corta por el primero, igual que en la tensión: ningún token de
- * sitio lleva una barra vertical, pero los códigos UCUM sí llevan corchetes y barras (`[degF]`), así
- * que el separador tiene que ser un carácter que no aparezca en el primer trozo.
+ * Separator of {@see seriesKey}. It splits on the first one, as in blood pressure: no site token
+ * carries a vertical bar, but UCUM codes do carry brackets and slashes (`[degF]`), so the
+ * separator has to be a character that does not appear in the first piece.
  */
 const SERIES_KEY_SEPARATOR = '|';
 
 /**
- * Token estable que agrupa una lectura por sitio de medida **y** unidad. No se guarda en el sobre
- * bajo esta forma —`data.site` y `data.unit` viajan como campos propios— pero es la clave con la que
- * la gráfica agrupa: el sitio porque lo exige el ADR 0008, y la unidad porque Celsius y Fahrenheit
- * no comparten escala y no se convierten (ver JSDoc del módulo).
+ * Stable token that groups a reading by measurement site **and** unit. It is not stored in the
+ * envelope in this form —`data.site` and `data.unit` travel as fields of their own— but it is the
+ * key the chart groups by: the site because ADR 0008 demands it, and the unit because Celsius and
+ * Fahrenheit do not share a scale and are not converted (see the module JSDoc).
  *
- * @param {string} site Token de `App\Catalog\TemperatureMeasurementSite`.
- * @param {string} unit Código UCUM.
+ * @param {string} site `App\Catalog\TemperatureMeasurementSite` token.
+ * @param {string} unit UCUM code.
  * @returns {string}
  */
 export function seriesKey(site, unit) {
@@ -112,7 +114,7 @@ export function seriesKey(site, unit) {
 }
 
 /**
- * Deshace {@see seriesKey}. Corta por el **primer** separador, no por todos.
+ * Undoes {@see seriesKey}. It splits on the **first** separator, not on every one.
  *
  * @param {string} key
  * @returns {[string, string]} `[site, unit]`.
@@ -128,11 +130,11 @@ export function splitSeriesKey(key) {
 }
 
 /**
- * Rótulo de una serie: sitio de medida y unidad, en ese orden. Los dos, y no solo el sitio, porque
- * dos series del mismo sitio en unidades distintas serían indistinguibles.
+ * Label of a series: measurement site and unit, in that order. Both, and not just the site,
+ * because two series of the same site in different units would be indistinguishable.
  *
  * @param {{sites: list<{token: string, label: string}>, units: list<{code: string, label: string}>}} catalog
- * @param {string} key Clave de {@see seriesKey}.
+ * @param {string} key Key of {@see seriesKey}.
  * @returns {string}
  */
 export function seriesLabel(catalog, key) {
@@ -145,25 +147,25 @@ export function seriesLabel(catalog, key) {
 }
 
 /**
- * Construye el contenido en claro de un evento de temperatura, con la forma del ADR 0006 más el
- * método del ADR 0008. El valor viaja como cadena, nunca como número (ADR 0004: decimales como
- * cadena).
+ * Builds the content in the clear of a temperature event, with the shape of ADR 0006 plus the
+ * method of ADR 0008. The value travels as a string, never as a number (ADR 0004: decimals as a
+ * string).
  *
- * `common` son los cuatro campos que comparte cualquier tipo de evento (ver `eventCommonFields.js`) y
- * van en el nivel superior del contenido, no dentro de `data`.
+ * `common` are the four fields any event type shares (see `eventCommonFields.js`) and they go at
+ * the top level of the content, not inside `data`.
  *
  * @param {object} params
- * @param {string} params.value Tal cual lo escribió la persona, ya como cadena.
- * @param {string} params.unit Código UCUM.
- * @param {string} params.site Token de `App\Catalog\TemperatureMeasurementSite`.
- * @param {string} params.tz Desfase `±HH:MM` del momento del registro.
+ * @param {string} params.value Exactly as the person typed it, already as a string.
+ * @param {string} params.unit UCUM code.
+ * @param {string} params.site `App\Catalog\TemperatureMeasurementSite` token.
+ * @param {string} params.tz `±HH:MM` offset of the moment of recording.
  * @param {{loinc: list<{site: string, code: string}>}} params.catalog
  * @param {{origin: string, recordedBy: string, device?: string, note?: string}} params.common
- *        Ya construido por `buildCommonEventFields`.
+ *        Already built by `buildCommonEventFields`.
  * @returns {{v: 1, type: 'temperature', tz: string, origin: string, recordedBy: string,
  *           device?: string, note?: string,
  *           data: {value: string, unit: string, loinc: string, site: string}}}
- * @throws {Error} Si falta el valor, la unidad o el sitio, o si el sitio no tiene código LOINC.
+ * @throws {Error} If the value, the unit or the site is missing, or if the site has no LOINC code.
  */
 export function buildTemperatureContent({ value, unit, site, tz, catalog, common }) {
     if (typeof value !== 'string' || value.trim() === '') {
@@ -193,10 +195,10 @@ export function buildTemperatureContent({ value, unit, site, tz, catalog, common
 }
 
 /**
- * Descarta los eventos descifrados que no son de tipo `temperature`. El servidor no puede hacer este
- * filtro porque el tipo va cifrado dentro del sobre (ADR 0006): es responsabilidad del cliente.
+ * Discards the decrypted events that are not of type `temperature`. The server cannot do this
+ * filter because the type travels encrypted inside the envelope (ADR 0006): it is the client's job.
  *
- * @param {list<{id: string, occurredAt: string, content: object}>} events Ya descifrados.
+ * @param {list<{id: string, occurredAt: string, content: object}>} events Already decrypted.
  * @returns {list<{id: string, occurredAt: string, content: object}>}
  */
 export function filterTemperatureEvents(events) {
@@ -204,13 +206,27 @@ export function filterTemperatureEvents(events) {
 }
 
 /**
- * Agrupa las lecturas por la pareja (sitio, unidad) para la gráfica. Nunca por sitio a secas —dos
- * escalas en una línea no son una tendencia— ni por unidad a secas, que mezclaría sitios en silencio
- * y es justo lo que prohíbe el ADR 0008.
+ * Gap from which the temperature line breaks.
  *
- * @param {list<{id: string, occurredAt: string, content: object}>} temperatureEvents Ya filtrados
- *        por `filterTemperatureEvents`.
- * @returns {Record<string, list<{x: number, y: number}>>} Indexado por {@see seriesKey}.
+ * A fever is read by the cadence of the readings: five taken every four hours through a bad night
+ * are a curve, and the two loose ones of the following week are not its continuation. A full day
+ * with nothing measured is exactly the stretch nobody knows anything about, so the line is cut
+ * there instead of drawing a slow slide from the fever to the convalescence.
+ */
+export const MAX_TEMPERATURE_GAP_MS = 24 * 3_600_000;
+
+/**
+ * Groups the readings by the (site, unit) pair for the chart. Never by site alone —two scales on
+ * one line are not a trend— and never by unit alone, which would mix sites in silence and is
+ * exactly what ADR 0008 forbids.
+ *
+ * The `x` of each point is the wall clock time of whoever took the reading
+ * ({@see eventWallClockMs}), not the absolute instant: a temperature taken at 03:00 stays at 03:00
+ * whatever zone the chart is opened from, which is what makes a night-time fever readable.
+ *
+ * @param {list<{id: string, occurredAt: string, content: object}>} temperatureEvents Already
+ *        filtered by `filterTemperatureEvents`.
+ * @returns {Record<string, list<{x: number, y: number}>>} Indexed by {@see seriesKey}.
  */
 export function groupTemperatureBySiteAndUnit(temperatureEvents) {
     /** @type {Record<string, list<{x: number, y: number}>>} */
@@ -219,12 +235,18 @@ export function groupTemperatureBySiteAndUnit(temperatureEvents) {
     for (const event of temperatureEvents) {
         const { data } = event.content;
         const key = seriesKey(data.site, data.unit);
+        const at = eventWallClockMs(event.occurredAt, event.content.tz);
+
+        /** An unreadable instant has no place on a time axis: it would land on 1970 or on `NaN`. */
+        if (at === null) {
+            continue;
+        }
 
         if (seriesByKey[key] === undefined) {
             seriesByKey[key] = [];
         }
 
-        seriesByKey[key].push({ x: Date.parse(event.occurredAt), y: Number(data.value) });
+        seriesByKey[key].push({ x: at, y: Number(data.value) });
     }
 
     for (const points of Object.values(seriesByKey)) {
@@ -235,10 +257,10 @@ export function groupTemperatureBySiteAndUnit(temperatureEvents) {
 }
 
 /**
- * Texto del pie de la gráfica: qué series incluye, sitio y unidad, porque no son comparables entre
- * sí (ADR 0008).
+ * Text of the chart caption: which series it includes, site and unit, because they are not
+ * comparable with each other (ADR 0008).
  *
- * @param {list<string>} labels Rótulos de las series con datos.
+ * @param {list<string>} labels Labels of the series with data.
  * @returns {string}
  */
 export function chartCaptionText(labels) {
@@ -247,7 +269,7 @@ export function chartCaptionText(labels) {
         : t('temperature.caption.empty');
 }
 
-/** @returns {string} Ahora mismo, en la forma que espera un `<input type="datetime-local" step="1">`. */
+/** @returns {string} Right now, in the shape an `<input type="datetime-local" step="1">` expects. */
 function nowAsDatetimeLocalValue() {
     return toDatetimeLocalValue(new Date());
 }
@@ -264,9 +286,9 @@ function toDatetimeLocalValue(date) {
 }
 
 /**
- * Segunda codificación de cada serie, además del color (Do's #3): patrón de trazo y forma del punto.
- * Quien no distingue los colores sigue pudiendo decir qué línea es qué sitio de medida. Los colores
- * salen de `chartColors()`, que los lee del tema en cada dibujado (ver `chartTheme.js`).
+ * Second encoding of each series, besides the colour (Do's #3): dash pattern and point shape.
+ * Whoever does not tell colours apart can still say which line is which measurement site. The
+ * colours come from `chartColors()`, which reads them from the theme on every draw (see `chartTheme.js`).
  */
 const CHART_SERIES_SHAPES = Object.freeze([
     Object.freeze({ borderDash: [], pointStyle: 'circle' }),
@@ -274,26 +296,26 @@ const CHART_SERIES_SHAPES = Object.freeze([
     Object.freeze({ borderDash: [2, 3], pointStyle: 'rect' }),
 ]);
 
-/** Familias de DESIGN.md § Typography, declaradas por nombre porque `<canvas>` no lee variables CSS. */
+/** Families of DESIGN.md § Typography, declared by name because a `<canvas>` reads no CSS variables. */
 const CHART_FONTS = Object.freeze({
     body: "'Open Sans', ui-sans-serif, system-ui, sans-serif",
     mono: "'IBM Plex Mono', ui-monospace, monospace",
 });
 
 /**
- * Familia y tamaño por defecto de todo el lienzo, en el único sitio donde Chart.js los admite:
- * `Chart.defaults.font`. Chart.js resuelve la tipografía de cada elemento contra estos valores, así
- * que una clave `font` en la raíz de `options` sería configuración muerta.
+ * Default family and size of the whole canvas, in the only place Chart.js accepts them:
+ * `Chart.defaults.font`. Chart.js resolves the typography of each element against these values, so
+ * a `font` key at the root of `options` would be dead configuration.
  */
 Chart.defaults.font.family = CHART_FONTS.body;
 Chart.defaults.font.size = 13;
 
 /**
- * Trazados de Heroicons v2 (outline, 24×24), la misma familia que usa el panel. El del historial es
- * la llama de `Temperature::$navigationIcon`, para que el icono guía de cada registro sea el mismo
- * que el de la sección. Del icono se toma solo el contorno exterior: `createIcon` dibuja un único
- * `<path>` y a 20px la llama interior no se distingue, así que añadir un segundo trazo complicaría
- * el ayudante sin cambiar nada de lo que se ve.
+ * Heroicons v2 paths (outline, 24×24), the same family the panel uses. The one in the history is
+ * the flame of `Temperature::$navigationIcon`, so the guide icon of each record is the same as the
+ * one of the section. Only the outer outline of the icon is taken: `createIcon` draws a single
+ * `<path>` and at 20px the inner flame cannot be told apart, so adding a second stroke would
+ * complicate the helper without changing anything visible.
  */
 const ICON_PATHS = Object.freeze({
     warning: 'M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 '
@@ -305,8 +327,8 @@ const ICON_PATHS = Object.freeze({
 });
 
 /**
- * Icono decorativo de 20px (DESIGN.md § Lists: «20px icon»). Va con `aria-hidden`: nunca lleva
- * información que no esté también en el texto (Do's #3).
+ * Decorative 20px icon (DESIGN.md § Lists: "20px icon"). It goes with `aria-hidden`: it never
+ * carries information that is not also in the text (Do's #3).
  *
  * @param {'warning'|'info'|'fire'} name
  * @param {string} className
@@ -333,9 +355,9 @@ function createIcon(name, className) {
 }
 
 /**
- * Aviso en bloque con icono (DESIGN.md § Chips · Status Chip): color + icono + texto, nunca color a
- * secas (Do's #3). Mismos tokens de aviso (`error-*` / `info-*`) que el resto de pantallas de
- * eventos, que conmutan solos con el tema.
+ * Block notice with an icon (DESIGN.md § Chips · Status Chip): colour + icon + text, never colour
+ * alone (Do's #3). Same notice tokens (`error-*` / `info-*`) as the other event screens, which
+ * switch on their own with the theme.
  *
  * @param {object} params
  * @param {'error'|'info'} params.tone
@@ -365,10 +387,10 @@ function createCallout({ tone, message }) {
 }
 
 /**
- * Chip de estado (DESIGN.md § Chips · Status Chip, variante info): 12px bold en mayúsculas, 4px de
- * radio. Es el chip del **sitio de medida**, que es el método de esta magnitud (ADR 0008), así que
- * lleva el mismo tratamiento visual que el método de la glucemia o el brazo y la postura de la
- * tensión.
+ * Status chip (DESIGN.md § Chips · Status Chip, info variant): 12px bold in uppercase, 4px radius.
+ * It is the chip of the **measurement site**, which is the method of this quantity (ADR 0008), so
+ * it gets the same visual treatment as the glucose method or the arm and posture of blood
+ * pressure.
  *
  * @param {string} label
  * @returns {HTMLSpanElement}
@@ -399,14 +421,14 @@ function describeError(failure) {
 }
 
 /**
- * Tamaño de página del historial. Es el mismo valor que el `$limit` por defecto de
- * `HealthEventPage::fetchEvents()`: los argumentos son posicionales, así que pasar el rango obliga a
- * pasar también el cursor y el límite, y aquí se repite el valor de siempre.
+ * History page size. It is the same value as the default `$limit` of
+ * `HealthEventPage::fetchEvents()`: the arguments are positional, so passing the range forces
+ * passing the cursor and the limit too, and the usual value is repeated here.
  */
 const HISTORY_FETCH_LIMIT = 100;
 
 /**
- * Factoría del componente Alpine. Se registra como `phrTemperaturePage`.
+ * Alpine component factory. Registered as `phrTemperaturePage`.
  *
  * @returns {object}
  */
@@ -419,15 +441,15 @@ export function temperaturePage() {
         catalog: null,
         loading: false,
 
-        /** Sobres descifrados que fallaron al abrir en la última carga (no tumban la pantalla). */
+        /** Decrypted envelopes that failed to open on the last load (they do not take the screen down). */
         failedToOpenCount: 0,
 
-        /** Instancia de Chart.js viva, para poder destruirla antes de repintar. */
+        /** Live Chart.js instance, so it can be destroyed before repainting. */
         chart: null,
 
         /**
-         * Últimos eventos que se pintaron. No es caché de datos: es lo que permite rehacer la
-         * gráfica cuando cambia el tema sin volver a pedir ni a descifrar nada (`chartTheme.js`).
+         * Last events that were painted. It is not a data cache: it is what lets the chart be
+         * rebuilt when the theme changes without asking for or decrypting anything again (`chartTheme.js`).
          */
         chartEvents: [],
 
@@ -435,8 +457,8 @@ export function temperaturePage() {
             this.catalog = JSON.parse(document.querySelector('[data-phr-temperature-catalog]').textContent);
 
             /**
-             * DESIGN.md § Charts — Dark: la gráfica tiene que releer los colores y repintarse cuando
-             * `<html>` entra o sale del modo oscuro, o el panel entero conmuta menos las gráficas.
+             * DESIGN.md § Charts — Dark: the chart has to re-read the colours and repaint when
+             * `<html>` enters or leaves dark mode, or the whole panel switches except the charts.
              */
             observeThemeChange(() => {
                 if (this.chart !== null) {
@@ -445,8 +467,8 @@ export function temperaturePage() {
             });
 
             /**
-             * Las opciones de `unit` y `site` las renderiza el servidor en Blade (ADR 0002, ADR
-             * 0005): no se rellenan aquí. Ver el comentario al inicio de `temperature.blade.php`.
+             * The options of `unit` and `site` are rendered by the server in Blade (ADR 0002, ADR
+             * 0005): they are not filled in here. See the comment at the start of `temperature.blade.php`.
              */
             this.$refs.occurredAt.value = nowAsDatetimeLocalValue();
 
@@ -461,12 +483,12 @@ export function temperaturePage() {
         },
 
         /**
-         * Guarda el registro.
+         * Saves the record.
          *
-         * `loading` cubre TODA la operación, no solo la descarga del historial: entre el clic y el
-         * repintado hay derivación de clave, sellado AEAD e ida y vuelta a Livewire, y sin señal
-         * alguna la persona vuelve a pulsar el botón, que en una pantalla de registro clínico
-         * significa una lectura duplicada en el historial.
+         * `loading` covers the WHOLE operation, not just the history download: between the click and
+         * the repaint there is key derivation, AEAD sealing and a round trip to Livewire, and with
+         * no signal at all the person presses the button again, which on a clinical recording screen
+         * means a duplicated reading in the history.
          */
         async submit() {
             this.error = '';
@@ -480,10 +502,10 @@ export function temperaturePage() {
                     throw new Error(t('common.noSession'));
                 }
 
-                // Valida el formato numérico y normaliza la coma a punto (ver JSDoc de
-                // `numericValue.js`); la cadena vacía pasa intacta y la detecta como "falta el dato"
-                // `buildTemperatureContent`. El resultado sigue siendo cadena: no se convierte a
-                // número (ADR 0004).
+                // Validates the numeric format and normalizes the comma to a dot (see the JSDoc of
+                // `numericValue.js`); the empty string passes untouched and is detected as "missing
+                // datum" by `buildTemperatureContent`. The result is still a string: it is not
+                // converted to a number (ADR 0004).
                 const value = parseNumericValue(this.$refs.value.value.trim(), t('field.temperature'));
 
                 const localDatetime = this.$refs.occurredAt.value;
@@ -495,7 +517,7 @@ export function temperaturePage() {
                 const { occurredAt, tz } = datetimeLocalToCanonical(localDatetime);
 
                 const common = buildCommonEventFields({
-                    /** Siempre manual: ver el JSDoc del módulo, "El origen no se pregunta...". */
+                    /** Always manual: see the module JSDoc, "The origin is not asked for...". */
                     origin: 'manual',
                     device: this.$refs.device.value,
                     recordedBy: this.$refs.recordedBy.value,
@@ -518,15 +540,15 @@ export function temperaturePage() {
                 this.$refs.value.value = '';
 
                 /**
-                 * La fecha vuelve a «ahora»: si se quedara con la del registro recién guardado, la
-                 * siguiente lectura se apuntaría en silencio a un instante pasado, y una fiebre con
-                 * hora equivocada ya no se distingue de la buena.
+                 * The date goes back to "now": if it kept the one of the record just saved, the
+                 * next reading would be silently written to a past instant, and a fever with the
+                 * wrong time can no longer be told from a good one.
                  */
                 this.$refs.occurredAt.value = nowAsDatetimeLocalValue();
 
                 await this.loadHistory();
 
-                /** Al final de todo: el aviso confirma la operación entera, no solo el POST. */
+                /** At the very end: the notice confirms the whole operation, not just the POST. */
                 this.confirmSaved();
             } catch (failure) {
                 this.error = describeError(failure);
@@ -535,7 +557,7 @@ export function temperaturePage() {
             }
         },
 
-        /** Descarga, descifra, filtra y pinta el historial (lista y gráfica). */
+        /** Downloads, decrypts, filters and paints the history (list and chart). */
         async loadHistory() {
             this.loading = true;
 
@@ -549,10 +571,10 @@ export function temperaturePage() {
                 }
 
                 /**
-                 * El rango sí lo aplica el servidor: `occurred_at` es columna en claro (ADR 0006) y
-                 * acotarla ahorra descargar y descifrar meses de eventos de otros tipos que este
-                 * módulo tiraría igualmente. El tipo se sigue descartando aquí, que es lo que el
-                 * servidor no puede hacer.
+                 * The range is applied by the server: `occurred_at` is a column in the clear (ADR
+                 * 0006) and narrowing it saves downloading and decrypting months of events of other
+                 * types this module would throw away anyway. The type is still discarded here,
+                 * which is what the server cannot do.
                  */
                 const range = this.historyRange();
                 const rawEvents = await this.$wire.fetchEvents(null, HISTORY_FETCH_LIMIT, range.from, range.to);
@@ -570,7 +592,7 @@ export function temperaturePage() {
 
                         opened.push({ id: rawEvent.id, occurredAt: rawEvent.occurredAt, content });
                     } catch {
-                        /** Un sobre que no abre no tumba la pantalla (ADR 0004): se cuenta y se avisa. */
+                        /** An envelope that does not open does not take the screen down (ADR 0004): it is counted and reported. */
                         failedToOpen += 1;
                     }
                 }
@@ -589,11 +611,11 @@ export function temperaturePage() {
         },
 
         /**
-         * Sin clave no se puede descifrar nada: se dice, no se pinta una lista vacía.
+         * With no key nothing can be decrypted: it is said, no empty list is painted.
          *
-         * Perder la clave en mitad de la sesión es normal (ADR 0003), así que la gráfica también se
-         * destruye: dejar las líneas de la carga anterior mostraría valores descifrados de una sesión
-         * que ya no está desbloqueada.
+         * Losing the key mid-session is normal (ADR 0003), so the chart is destroyed too: leaving
+         * the lines of the previous load would show decrypted values of a session that is no longer
+         * unlocked.
          */
         renderLocked() {
             this.$refs.list.replaceChildren(createCallout({ tone: 'info', message: t('common.locked.history') }));
@@ -643,12 +665,12 @@ export function temperaturePage() {
         },
 
         /**
-         * Item de historial con la forma de DESIGN.md § Lists, la misma que las demás pantallas. El
-         * valor va en IBM Plex Mono (Do's #7) y el sitio de medida es un chip de estado, para no
-         * perderse en texto concatenado.
+         * History item with the shape of DESIGN.md § Lists, the same as the other screens. The
+         * value goes in IBM Plex Mono (Do's #7) and the measurement site is a status chip, so it
+         * does not get lost in concatenated text.
          *
-         * El `<li>` NO lleva `hover:` ni `active:`: DESIGN.md § Lists reserva esos dos estados a un
-         * elemento de lista pulsable, y este no es enlace ni botón.
+         * The `<li>` does NOT carry `hover:` or `active:`: DESIGN.md § Lists reserves those two
+         * states for a pressable list element, and this is neither link nor button.
          *
          * @param {{id: string, occurredAt: string, content: object}} event
          * @returns {HTMLLIElement}
@@ -668,10 +690,10 @@ export function temperaturePage() {
             measurement.className = 'font-mono text-body text-ink';
 
             /**
-             * Sin `font-semibold`: de IBM Plex Mono solo se empaqueta el peso 400 (§ Typography ·
-             * Code la define «regular»), así que pedir 600 haría que el navegador sintetizara una
-             * falsa negrita, engordando justo los glifos numéricos que Do's #7 quiere
-             * inconfundibles.
+             * No `font-semibold`: only weight 400 of IBM Plex Mono is bundled (§ Typography · Code
+             * defines it as "regular"), so asking for 600 would make the browser synthesize a fake
+             * bold, fattening exactly the numeric glyphs Do's #7 wants
+             * unmistakable.
              */
             const value = document.createElement('span');
             value.textContent = data.value;
@@ -690,9 +712,9 @@ export function temperaturePage() {
             body.appendChild(chips);
 
             /**
-             * Texto secundario: marca de tiempo y código LOINC, ambos numéricos → monoespaciada, y
-             * en el tamaño Code de § Typography (14px), que es el papel que DESIGN.md define para
-             * «medical codes, IDs, data fields».
+             * Secondary text: timestamp and LOINC code, both numeric → monospace, and in the Code
+             * size of § Typography (14px), which is the role DESIGN.md defines for "medical codes,
+             * IDs, data fields".
              */
             const meta = document.createElement('p');
             meta.className = 'font-mono text-code text-ink-secondary';
@@ -705,21 +727,21 @@ export function temperaturePage() {
         },
 
         /**
-         * Pinta la gráfica, o no pinta nada si no hay datos (un lienzo con ejes vacíos parece un
-         * fallo, no un estado vacío legítimo). Una serie por pareja (sitio, unidad), nunca dos sitios
-         * ni dos escalas en la misma línea (ver JSDoc del módulo).
+         * Paints the chart, or paints nothing if there is no data (a canvas with empty axes looks
+         * like a bug, not a legitimate empty state). One series per (site, unit) pair, never two
+         * sites and never two scales on the same line (see the module JSDoc).
          *
-         * El eje X es de categoría, no lineal sobre epoch: no hay adaptador de fechas de Chart.js
-         * instalado, así que las etiquetas se formatean aquí con `formatChartDate`, en el idioma
-         * activo, y se comparten por posición entre todas las series.
+         * The X axis is the shared linear one over the instant (`timeAxis.js`), never a category
+         * one: a fever curve is read by the rhythm of the readings, and evenly spaced columns made
+         * five readings of one bad night and two of the following week look like the same cadence.
          *
          * @param {list<{id: string, occurredAt: string, content: object}>} temperatureEvents
          */
         renderChart(temperatureEvents) {
-            /** Se guardan para poder repintar al conmutar el tema (ver `init()` y `chartTheme.js`). */
+            /** They are stored so the chart can be repainted on theme switch (see `init()` and `chartTheme.js`). */
             this.chartEvents = temperatureEvents;
 
-            /** Colores del tema activo, leídos ahora y no al cargar el módulo (`chartTheme.js`). */
+            /** Colours of the active theme, read now and not when the module loaded (`chartTheme.js`). */
             const colors = chartColors();
 
             const seriesByKey = groupTemperatureBySiteAndUnit(temperatureEvents);
@@ -731,16 +753,16 @@ export function temperaturePage() {
                 this.chart = null;
             }
 
-            const timestamps = [...new Set(keys.flatMap((key) => seriesByKey[key].map((point) => point.x)))]
-                .sort((a, b) => a - b);
+            const timeFormat = chartTimeFormat();
+            const instants = keys.flatMap((key) => seriesByKey[key].map((point) => point.x));
 
-            if (timestamps.length === 0) {
+            if (instants.length === 0) {
                 this.paintLegend([]);
             } else {
                 /**
-                 * Descriptores de serie: son a la vez lo que consume Chart.js y lo que rotula la
-                 * leyenda en HTML (ver `chartLegend.js`), así que ninguna de las dos puede quedarse
-                 * con un color o una forma distintos de los de la otra.
+                 * Series descriptors: they are at once what Chart.js consumes and what labels the
+                 * legend in HTML (see `chartLegend.js`), so neither of the two can end up with a
+                 * colour or a shape different from the other's.
                  */
                 const series = keys.map((key, index) => ({
                     label: labels[index],
@@ -748,55 +770,45 @@ export function temperaturePage() {
                     ...CHART_SERIES_SHAPES[index % CHART_SERIES_SHAPES.length],
                 }));
 
-                const datasets = series.map((entry, index) => {
-                    const byTimestamp = new Map(seriesByKey[keys[index]].map((point) => [point.x, point.y]));
-
-                    return {
-                        label: entry.label,
-                        data: timestamps.map((timestamp) => byTimestamp.get(timestamp) ?? null),
-                        borderColor: entry.color,
-                        backgroundColor: entry.color,
-                        pointBackgroundColor: entry.color,
-                        pointBorderColor: colors.surface,
-                        pointBorderWidth: 2,
-                        pointRadius: 4,
-                        pointHoverRadius: 6,
-                        borderWidth: 2,
-                        /** Segunda codificación, además del color (Do's #3): trazo y forma del punto. */
-                        borderDash: [...entry.borderDash],
-                        pointStyle: entry.pointStyle,
-                        tension: 0.3,
-                        spanGaps: true,
-                    };
-                });
+                const datasets = series.map((entry, index) => ({
+                    label: entry.label,
+                    /**
+                     * Each series carries its own points: with a linear axis there is nothing to
+                     * line up by position, so the padding `null`s that only existed because another
+                     * site had no reading at that instant are gone.
+                     */
+                    data: splitOnGaps(seriesByKey[keys[index]], MAX_TEMPERATURE_GAP_MS),
+                    borderColor: entry.color,
+                    backgroundColor: entry.color,
+                    pointBackgroundColor: entry.color,
+                    pointBorderColor: colors.surface,
+                    pointBorderWidth: 2,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    borderWidth: 2,
+                    /** Second encoding, besides the colour (Do's #3): dash and point shape. */
+                    borderDash: [...entry.borderDash],
+                    pointStyle: entry.pointStyle,
+                    tension: 0.3,
+                    /** `spanGaps` false (out of the box): the breaks `splitOnGaps` opened are breaks. */
+                }));
 
                 this.paintLegend(series);
 
                 /**
-                 * Unidades presentes, sin repetir: el rótulo del eje las nombra a todas, porque con
-                 * dos escalas a la vez escribir solo una diría que la gráfica entera está en ella.
+                 * Units present, without repeating: the axis label names them all, because with two
+                 * scales at once writing only one would say the whole chart is in it.
                  */
                 const unitLabels = [...new Set(keys.map((key) => unitLabel(this.catalog, splitSeriesKey(key)[1])))];
 
                 this.chart = new Chart(this.$refs.chart, {
                     type: 'line',
-                    data: { labels: timestamps.map((timestamp) => formatChartDate(timestamp)), datasets },
+                    data: { datasets },
                     options: {
                         maintainAspectRatio: false,
                         color: colors.tick,
                         scales: {
-                            x: {
-                                type: 'category',
-                                /**
-                                 * La rejilla puede ser tenue, pero la LÍNEA DE EJE no: es la
-                                 * referencia contra la que se lee una temperatura, y en el tono de
-                                 * la rejilla era casi invisible (Don'ts #10). Va en el mismo tono de
-                                 * los rótulos.
-                                 */
-                                grid: { color: colors.grid },
-                                border: { color: colors.tick },
-                                ticks: { color: colors.tick, font: { family: CHART_FONTS.mono, size: 12 } },
-                            },
+                            x: timeAxisScale({ colors, format: timeFormat, bounds: timeAxisBounds(instants) }),
                             y: {
                                 grid: { color: colors.grid },
                                 border: { color: colors.tick },
@@ -806,22 +818,28 @@ export function temperaturePage() {
                                     text: joinList(unitLabels),
                                     color: colors.tick,
                                     /**
-                                     * Peso 400: de IBM Plex Mono solo se empaqueta ese, y pedir 600
-                                     * obligaría al navegador a sintetizar una falsa negrita sobre la
-                                     * unidad.
+                                     * Weight 400: only that one of IBM Plex Mono is bundled, and
+                                     * asking for 600 would force the browser to synthesize a fake
+                                     * bold over the unit.
                                      */
                                     font: { family: CHART_FONTS.mono, size: 13, weight: 400 },
                                 },
                             },
                         },
                         plugins: {
-                            /** La leyenda vive fuera del lienzo, en HTML (ver `chartLegend.js`). */
+                            /** The legend lives outside the canvas, in HTML (see `chartLegend.js`). */
                             legend: { display: false },
                             /**
-                             * El par fondo/tinta sale del tema: el tooltip es el único componente
-                             * que se invierte respecto de la interfaz (§ Charts — Dark).
+                             * The background/ink pair comes from the theme: the tooltip is the only
+                             * component that inverts against the interface (§ Charts — Dark).
                              */
                             tooltip: {
+                                /**
+                                 * With a linear axis the title has to be stated: the free one of the
+                                 * category axis is gone, and without this the heading would be the
+                                 * raw epoch number.
+                                 */
+                                callbacks: { title: timeAxisTooltipTitle(timeFormat) },
                                 backgroundColor: colors.tooltipSurface,
                                 titleColor: colors.tooltipInk,
                                 bodyColor: colors.tooltipInk,
@@ -839,9 +857,9 @@ export function temperaturePage() {
         },
 
         /**
-         * Pinta la leyenda en HTML, fuera del lienzo (ver el JSDoc de `chartLegend.js` para el
-         * porqué). Con la lista vacía deja el nodo vacío: una leyenda huérfana describiría líneas
-         * que no están.
+         * Paints the legend in HTML, outside the canvas (see the JSDoc of `chartLegend.js` for the
+         * why). With an empty list it leaves the node empty: an orphan legend would describe lines
+         * that are not there.
          *
          * @param {list<{label: string, color: string, borderDash: list<number>, pointStyle: string}>} series
          */

@@ -1,36 +1,36 @@
 /**
- * Componente Alpine de la pantalla de glucemia (ADR 0002, ADR 0004, ADR 0005, ADR 0006, ADR 0008).
+ * Alpine component of the glucose screen (ADR 0002, ADR 0004, ADR 0005, ADR 0006, ADR 0008).
  *
- * El contrato del DOM lo fija `resources/views/phr/pages/glucose.blade.php`: nada de `wire:model`
- * (ADR 0002), los campos se leen por `x-ref` y el sobre cifrado sube como argumento de
- * `storeEvent`, nunca como propiedad de Livewire.
+ * The DOM contract is fixed by `resources/views/phr/pages/glucose.blade.php`: no `wire:model`
+ * (ADR 0002), the fields are read through `x-ref` and the encrypted envelope goes up as an
+ * argument of `storeEvent`, never as a Livewire property.
  *
- * **El servidor no puede filtrar por tipo** (ADR 0006, ver JSDoc de `Glucose::fetchEvents()`):
- * `fetchEvents` trae todos los eventos del usuario y aquí se descifra cada uno y se descarta el
- * que no sea `type === 'glucose'`. Un sobre que no abre no tumba la pantalla: se cuenta y se avisa,
- * porque un fallo de descifrado silencioso es justo lo que el ADR 0004 prohíbe.
+ * **The server cannot filter by type** (ADR 0006, see the JSDoc of `Glucose::fetchEvents()`):
+ * `fetchEvents` brings every event of the user and here each one is decrypted and whatever is not
+ * `type === 'glucose'` is discarded. An envelope that does not open does not take the screen down:
+ * it is counted and reported, because a silent decryption failure is exactly what ADR 0004 forbids.
  *
- * **El método de medición no se mezcla en silencio** (ADR 0008): la gráfica traza una serie por
- * método y el pie de la gráfica dice siempre cuáles incluye.
+ * **The measurement method is never mixed in silence** (ADR 0008): the chart draws one series per
+ * method and the chart caption always says which ones it includes.
  *
- * **No se convierte entre mg/dL y mmol/L.** La unidad es una preferencia de presentación (ADR
- * 0006, "La unidad de medida es una preferencia del usuario"), no un requisito del evento: cada
- * registro lleva la suya. Convertir para mezclarlas en una sola serie exigiría fijar precisión y
- * redondeo (ADR 0007, "hay que fijar precisión y redondeo en lugar de dejarlo al azar"), que esta
- * versión no aborda; los eventos en otra unidad se dejan fuera de la gráfica y se cuentan en el pie.
+ * **Nothing is converted between mg/dL and mmol/L.** The unit is a display preference (ADR 0006,
+ * "the unit of measure is a user preference"), not a requirement of the event: each record carries
+ * its own. Converting to mix them into a single series would require fixing precision and rounding
+ * (ADR 0007, "precision and rounding have to be fixed instead of left to chance"), which this
+ * version does not tackle; events in another unit are left out of the chart and counted in the caption.
  *
- * **Los cuatro campos comunes a todo evento** (origen manual/aparato, aparato, quién registra, nota
- * libre; ADR 0006) no se construyen aquí: viven en `eventCommonFields.js`, en una función pura
- * (`buildCommonEventFields`) reutilizable por cualquier pantalla de evento (tensión, comidas,
- * insulina), y `buildGlucoseContent` los recibe ya construidos para desplegarlos en el nivel
- * superior del contenido, junto a `v`, `type` y `tz`, nunca dentro de `data`.
+ * **The four fields common to every event** (manual/device origin, device, who records, free note;
+ * ADR 0006) are not built here: they live in `eventCommonFields.js`, in a pure function
+ * (`buildCommonEventFields`) reusable by any event screen (blood pressure, meals, insulin), and
+ * `buildGlucoseContent` receives them already built to spread them at the top level of the content,
+ * next to `v`, `type` and `tz`, never inside `data`.
  *
- * **La fecha del evento no se convierte aquí.** `datetimeLocalToCanonical` vive en
- * `datetimeLocal.js` porque lo que devuelve entra como dato asociado del AEAD (ADR 0004): si cada
- * pantalla llevara su copia y una se desviara, sus sobres dejarían de abrirse.
+ * **The event date is not converted here.** `datetimeLocalToCanonical` lives in `datetimeLocal.js`
+ * because what it returns enters as AEAD associated data (ADR 0004): if each screen carried its
+ * own copy and one drifted, its envelopes would stop opening.
  *
- * Las funciones exportadas antes de `glucosePage()` son la lógica pura del componente, para poder
- * probarlas sin montar Alpine ni Chart.js (`tests/js/glucosePage.test.mjs`).
+ * The functions exported before `glucosePage()` are the pure logic of the component, so they can
+ * be tested without mounting Alpine or Chart.js (`tests/js/glucosePage.test.mjs`).
  */
 
 import Chart from 'chart.js/auto';
@@ -39,28 +39,31 @@ import { isUnlocked, ownerId } from '../auth/keyring.js';
 import { SESSION_READY_EVENT } from '../auth/sessionBootstrap.js';
 import { settings } from '../auth/settings.js';
 import { EnvelopeError } from '../crypto/envelope.js';
-import { formatChartDate, formatDateTime, joinList, t } from '../i18n/index.js';
+import { formatDateTime, joinList, t } from '../i18n/index.js';
 import { legendElementFor, legendItems, renderLegend } from './chartLegend.js';
 import { chartColors, observeThemeChange } from './chartTheme.js';
+import { eventWallClockMs } from './dailyBands.js';
 import { dateRangeControl } from './dateRange.js';
 import { datetimeLocalToCanonical } from './datetimeLocal.js';
 import { buildCommonEventFields } from './eventCommonFields.js';
 import { openEvent, sealEvent } from './eventEnvelope.js';
+import { MAX_READING_GAP_MS } from './glucoseContext.js';
 import { parseNumericValue } from './numericValue.js';
 import { savedNotice } from './savedNotice.js';
+import { chartTimeFormat, splitOnGaps, timeAxisBounds, timeAxisScale, timeAxisTooltipTitle } from './timeAxis.js';
 
-/** Unidad por defecto cuando no hay preferencia guardada en los ajustes del usuario (ADR 0006). */
+/** Default unit when there is no preference saved in the user settings (ADR 0006). */
 const DEFAULT_UNIT = 'mg/dL';
 
 /**
- * Resuelve el código LOINC de (método, unidad) contra la tabla del catálogo del servidor (ADR
- * 0005, ADR 0008). Nunca inventa uno: si la combinación no está, falla de forma visible.
+ * Resolves the LOINC code of (method, unit) against the table of the server catalog (ADR 0005,
+ * ADR 0008). It never invents one: if the combination is missing, it fails visibly.
  *
  * @param {list<{method: string, unit: string, code: string}>} loincTable
  * @param {string} method
  * @param {string} unit
  * @returns {string}
- * @throws {Error} Si no existe código para esa combinación.
+ * @throws {Error} If there is no code for that combination.
  */
 export function resolveLoincCode(loincTable, method, unit) {
     const entry = loincTable.find((row) => row.method === method && row.unit === unit);
@@ -73,28 +76,28 @@ export function resolveLoincCode(loincTable, method, unit) {
 }
 
 /**
- * Construye el contenido en claro de un evento de glucemia, con la forma del ADR 0006 más el
- * método del ADR 0008. El valor viaja como cadena, nunca como número (ADR 0004: decimales como
- * cadena).
+ * Builds the content in the clear of a glucose event, with the shape of ADR 0006 plus the method
+ * of ADR 0008. The value travels as a string, never as a number (ADR 0004: decimals as a
+ * string).
  *
- * `common` son los cuatro campos que comparte cualquier tipo de evento (origen, aparato, quién
- * registra, nota: ver `eventCommonFields.js`) y van en el nivel superior del contenido, no dentro de
- * `data`. `mealContext` es propio de la glucemia y es opcional: si no se indica (cadena vacía o
- * ausente), no entra en `data` en absoluto, en vez de guardarse como cadena vacía (ADR 0006, «un
- * desplegable que ya viene con "en ayunas" escrito convierte el descuido en un dato falso»).
+ * `common` are the four fields any event type shares (origin, device, who records, note: see
+ * `eventCommonFields.js`) and they go at the top level of the content, not inside `data`.
+ * `mealContext` belongs to glucose and is optional: if it is not given (empty string or absent),
+ * it does not enter `data` at all, instead of being stored as an empty string (ADR 0006, "a
+ * dropdown that already comes with 'fasting' written turns an oversight into a false datum").
  *
  * @param {object} params
- * @param {string} params.value Tal cual lo escribió la persona, ya como cadena.
- * @param {string} params.unit Código UCUM.
- * @param {string} params.method Token de `GlucoseMeasurementMethod`.
- * @param {string} [params.mealContext] Token de `MealContext`, o vacío/ausente para «sin especificar».
- * @param {string} params.tz Desfase `±HH:MM` del momento del registro.
+ * @param {string} params.value Exactly as the person typed it, already as a string.
+ * @param {string} params.unit UCUM code.
+ * @param {string} params.method `GlucoseMeasurementMethod` token.
+ * @param {string} [params.mealContext] `MealContext` token, or empty/absent for "unspecified".
+ * @param {string} params.tz `±HH:MM` offset of the moment of recording.
  * @param {list<{method: string, unit: string, code: string}>} params.loincTable
  * @param {{origin: string, recordedBy: string, device?: string, note?: string}} params.common
- *        Ya construido por `buildCommonEventFields`.
+ *        Already built by `buildCommonEventFields`.
  * @returns {{v: 1, type: 'glucose', tz: string, origin: string, recordedBy: string, device?: string,
  *           note?: string, data: {value: string, unit: string, loinc: string, method: string, mealContext?: string}}}
- * @throws {Error} Si falta el valor o no hay código LOINC para (método, unidad).
+ * @throws {Error} If the value is missing or there is no LOINC code for (method, unit).
  */
 export function buildGlucoseContent({ value, unit, method, mealContext, tz, loincTable, common }) {
     if (typeof value !== 'string' || value.trim() === '') {
@@ -119,12 +122,12 @@ export function buildGlucoseContent({ value, unit, method, mealContext, tz, loin
 }
 
 /**
- * Resuelve la etiqueta del contexto de comida de un evento ya descifrado, tolerando que el campo no
- * exista (ADR 0006: el contexto es opcional y se omite del contenido cuando no se indicó).
+ * Resolves the meal context label of an already decrypted event, tolerating that the field does
+ * not exist (ADR 0006: the context is optional and left out of the content when not given).
  *
  * @param {{mealContexts: list<{token: string, label: string}>}} catalog
  * @param {{mealContext?: string}} data
- * @returns {string|null} `null` cuando el evento no trae contexto.
+ * @returns {string|null} `null` when the event brings no context.
  */
 export function mealContextLabel(catalog, data) {
     if (typeof data.mealContext !== 'string' || data.mealContext === '') {
@@ -135,10 +138,10 @@ export function mealContextLabel(catalog, data) {
 }
 
 /**
- * Descarta los eventos descifrados que no son de tipo `glucose`. El servidor no puede hacer este
- * filtro porque el tipo va cifrado dentro del sobre (ADR 0006): es responsabilidad del cliente.
+ * Discards the decrypted events that are not of type `glucose`. The server cannot do this filter
+ * because the type travels encrypted inside the envelope (ADR 0006): it is the client's job.
  *
- * @param {list<{id: string, occurredAt: string, content: object}>} events Ya descifrados.
+ * @param {list<{id: string, occurredAt: string, content: object}>} events Already decrypted.
  * @returns {list<{id: string, occurredAt: string, content: object}>}
  */
 export function filterGlucoseEvents(events) {
@@ -146,13 +149,17 @@ export function filterGlucoseEvents(events) {
 }
 
 /**
- * Agrupa eventos de glucemia por método de medición para la gráfica (ADR 0008: "las estadísticas
- * no mezclan métodos en silencio"), y deja fuera los que no están en la unidad de presentación
- * (no se convierte entre mg/dL y mmol/L, ver JSDoc del módulo).
+ * Groups glucose events by measurement method for the chart (ADR 0008: "statistics do not mix
+ * methods in silence"), and leaves out the ones that are not in the display unit (nothing is
+ * converted between mg/dL and mmol/L, see the module JSDoc).
  *
- * @param {list<{id: string, occurredAt: string, content: object}>} glucoseEvents Ya filtrados por
- *        `filterGlucoseEvents`.
- * @param {string} presentationUnit Unidad que se está mostrando (código UCUM).
+ * The `x` of each point is the wall clock time of whoever measured ({@see eventWallClockMs}), not
+ * the absolute instant: a reading taken before dinner at 21:00 stays at 21:00 when the chart is
+ * opened from another time zone, which is the same rule the home dashboard follows.
+ *
+ * @param {list<{id: string, occurredAt: string, content: object}>} glucoseEvents Already filtered
+ *        by `filterGlucoseEvents`.
+ * @param {string} presentationUnit Unit being displayed (UCUM code).
  * @returns {{seriesByMethod: Record<string, list<{x: number, y: number}>>, excludedByUnit: number}}
  */
 export function groupGlucoseByMethod(glucoseEvents, presentationUnit) {
@@ -169,11 +176,18 @@ export function groupGlucoseByMethod(glucoseEvents, presentationUnit) {
             continue;
         }
 
+        const at = eventWallClockMs(event.occurredAt, event.content.tz);
+
+        /** An unreadable instant has no place on a time axis: it would land on 1970 or on `NaN`. */
+        if (at === null) {
+            continue;
+        }
+
         if (seriesByMethod[data.method] === undefined) {
             seriesByMethod[data.method] = [];
         }
 
-        seriesByMethod[data.method].push({ x: Date.parse(event.occurredAt), y: Number(data.value) });
+        seriesByMethod[data.method].push({ x: at, y: Number(data.value) });
     }
 
     for (const points of Object.values(seriesByMethod)) {
@@ -184,18 +198,18 @@ export function groupGlucoseByMethod(glucoseEvents, presentationUnit) {
 }
 
 /**
- * Texto del pie de la gráfica: qué métodos incluye (ADR 0008) y qué se ha quedado fuera por estar
- * en otra unidad (no se convierte, ver JSDoc del módulo).
+ * Text of the chart caption: which methods it includes (ADR 0008) and what was left out for being
+ * in another unit (nothing is converted, see the module JSDoc).
  *
- * Sin ningún registro de glucemia —el caso de cualquier usuario nuevo— dice lo mismo que la lista
- * («Todavía no hay registros de glucemia.») en vez de «No hay datos que mostrar en esta unidad»,
- * que insinúa que hay registros guardados en otra unidad cuando no hay ninguno.
+ * With no glucose record at all —the case of any new user— it says the same as the list ("No
+ * glucose records yet.") instead of "No data to show in this unit", which suggests there are
+ * records stored in another unit when there are none.
  *
  * @param {object} params
- * @param {list<string>} params.methodLabels Etiquetas de los métodos que sí entran en la gráfica.
- * @param {string} params.presentationUnit Unidad que se está mostrando (código UCUM).
- * @param {number} params.excludedByUnit Registros dejados fuera por estar en otra unidad.
- * @param {boolean} params.hasEvents Si hay algún registro de glucemia, en cualquier unidad.
+ * @param {list<string>} params.methodLabels Labels of the methods that do enter the chart.
+ * @param {string} params.presentationUnit Unit being displayed (UCUM code).
+ * @param {number} params.excludedByUnit Records left out for being in another unit.
+ * @param {boolean} params.hasEvents Whether there is any glucose record, in any unit.
  * @returns {string}
  */
 export function chartCaptionText({ methodLabels, presentationUnit, excludedByUnit, hasEvents }) {
@@ -214,7 +228,7 @@ export function chartCaptionText({ methodLabels, presentationUnit, excludedByUni
     return `${methodsText}${excludedText}`;
 }
 
-/** @returns {string} Ahora mismo, en la forma que espera un `<input type="datetime-local" step="1">`. */
+/** @returns {string} Right now, in the shape an `<input type="datetime-local" step="1">` expects. */
 function nowAsDatetimeLocalValue() {
     return toDatetimeLocalValue(new Date());
 }
@@ -231,10 +245,10 @@ function toDatetimeLocalValue(date) {
 }
 
 /**
- * Segunda codificación de cada serie, además del color: patrón de trazo y forma del punto. Quien
- * no distingue los colores —daltonismo, pantalla en blanco y negro, impresión— sigue pudiendo
- * decir qué línea es qué método por la forma (Do's #3). Los colores salen de `chartColors()`, que
- * los lee del tema en cada dibujado (ver `chartTheme.js`).
+ * Second encoding of each series, besides the colour: dash pattern and point shape. Whoever does
+ * not tell colours apart —colour blindness, black and white screen, printing— can still say which
+ * line is which method by the shape (Do's #3). The colours come from `chartColors()`, which reads
+ * them from the theme on every draw (see `chartTheme.js`).
  */
 const CHART_SERIES_SHAPES = Object.freeze([
     Object.freeze({ borderDash: [], pointStyle: 'circle' }),
@@ -243,8 +257,8 @@ const CHART_SERIES_SHAPES = Object.freeze([
 ]);
 
 /**
- * Familias de DESIGN.md § Typography. Mismo motivo que `CHART_COLORS`: en `<canvas>` la fuente se
- * declara por nombre, no por variable CSS.
+ * Families of DESIGN.md § Typography. Same reason as `CHART_COLORS`: in a `<canvas>` the font is
+ * declared by name, not by CSS variable.
  */
 const CHART_FONTS = Object.freeze({
     body: "'Open Sans', ui-sans-serif, system-ui, sans-serif",
@@ -252,20 +266,19 @@ const CHART_FONTS = Object.freeze({
 });
 
 /**
- * Familia y tamaño por defecto de todo el lienzo, en el único sitio donde Chart.js los admite:
- * `Chart.defaults.font`. No existe una clave `font` en la raíz de `options` —Chart.js resuelve la
- * tipografía de cada elemento contra estos valores por defecto—, así que ponerla allí sería
- * configuración muerta que aparenta cubrir lo que no cubre: cualquier elemento que se añadiera
- * después (un subtítulo, etiquetas de dato) heredaría la fuente de fábrica de la librería en vez
- * de la de DESIGN.md.
+ * Default family and size of the whole canvas, in the only place Chart.js accepts them:
+ * `Chart.defaults.font`. There is no `font` key at the root of `options` —Chart.js resolves the
+ * typography of each element against these defaults—, so putting it there would be dead
+ * configuration pretending to cover what it does not: any element added later (a subtitle, data
+ * labels) would inherit the library factory font instead of the DESIGN.md one.
  */
 Chart.defaults.font.family = CHART_FONTS.body;
 Chart.defaults.font.size = 13;
 
 /**
- * Trazados de Heroicons v2 (outline, 24×24), la misma familia que usa el panel. El de la lista es
- * el matraz de `Glucose::$navigationIcon`, para que el icono guía de cada registro sea el mismo
- * que el de la sección.
+ * Heroicons v2 paths (outline, 24×24), the same family the panel uses. The one in the list is the
+ * flask of `Glucose::$navigationIcon`, so the guide icon of each record is the same as the one of
+ * the section.
  */
 const ICON_PATHS = Object.freeze({
     warning: 'M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 '
@@ -279,9 +292,9 @@ const ICON_PATHS = Object.freeze({
 });
 
 /**
- * Icono decorativo de 20px (DESIGN.md § Lists: «20px icon»). Va con `aria-hidden`: nunca lleva
- * información que no esté también en el texto (Do's #3, el color y el icono acompañan, no
- * sustituyen).
+ * Decorative 20px icon (DESIGN.md § Lists: "20px icon"). It goes with `aria-hidden`: it never
+ * carries information that is not also in the text (Do's #3, the colour and the icon accompany, they
+ * do not replace).
  *
  * @param {'warning'|'info'|'beaker'} name
  * @param {string} className
@@ -308,8 +321,8 @@ function createIcon(name, className) {
 }
 
 /**
- * Aviso en bloque con icono, del tipo que DESIGN.md § Chips (Status Chip) fija para los estados:
- * color + icono + texto, nunca color a secas (Do's #3).
+ * Block notice with an icon, of the kind DESIGN.md § Chips (Status Chip) fixes for states: colour
+ * + icon + text, never colour alone (Do's #3).
  *
  * @param {object} params
  * @param {'error'|'info'} params.tone
@@ -320,11 +333,11 @@ function createCallout({ tone, message }) {
     const callout = document.createElement('div');
 
     /**
-     * Los dos tonos salen de los tokens de aviso (`error-*` / `info-*`, ver `theme.css`), que ya
-     * llevan dentro el par de § Chips corregido a AA —la tinta de error es #B91C1C y no el
-     * #DC2626, que sobre #FEF2F2 da 4.41:1— y su equivalente de § Dark Mode. El error lleva además
-     * la elevación Large, que DESIGN.md reserva a «modals, critical alerts»: un registro clínico
-     * que no se puede mostrar lo es. El info va en Body Large porque es una instrucción accionable.
+     * The two tones come from the notice tokens (`error-*` / `info-*`, see `theme.css`), which
+     * already carry inside the § Chips pair corrected to AA —the error ink is #B91C1C and not
+     * #DC2626, which over #FEF2F2 gives 4.41:1— and its § Dark Mode equivalent. The error also
+     * carries the Large elevation, which DESIGN.md reserves for "modals, critical alerts": a
+     * clinical record that cannot be shown is one. The info goes in Body Large because it is an actionable instruction.
      */
     callout.className = tone === 'error'
         ? 'flex items-start gap-3 rounded-control border border-error-outline bg-error-surface p-pad-md '
@@ -346,11 +359,11 @@ function createCallout({ tone, message }) {
 }
 
 /**
- * Chip de estado (DESIGN.md § Chips · Status Chip, variante info): 12px bold en mayúsculas, 4px de
- * radio, 4px/12px de relleno.
+ * Status chip (DESIGN.md § Chips · Status Chip, info variant): 12px bold in uppercase, 4px radius,
+ * 4px/12px padding.
  *
- * El tamaño va en `text-status-chip` y no en `text-caption`: los dos son 12px, pero el segundo es
- * el papel de las marcas de tiempo y arrastra su tracking de 0.01em, que aquí no pinta nada.
+ * The size goes in `text-status-chip` and not in `text-caption`: both are 12px, but the second is
+ * the role of timestamps and drags its 0.01em tracking, which serves nothing here.
  *
  * @param {string} label
  * @returns {HTMLSpanElement}
@@ -365,9 +378,9 @@ function createStatusChip(label) {
 }
 
 /**
- * Chip de filtro (DESIGN.md § Chips · Filter Chip): píldora #F0F7FF con borde #CBD5E1 y texto
- * #475569 de 13px semibold, 6px/14px de relleno. Se usa para el contexto de comida, que no es un
- * estado clínico sino una circunstancia de la medida.
+ * Filter chip (DESIGN.md § Chips · Filter Chip): #F0F7FF pill with a #CBD5E1 border and #475569
+ * 13px semibold text, 6px/14px padding. It is used for the meal context, which is not a clinical
+ * state but a circumstance of the measurement.
  *
  * @param {string} label
  * @returns {HTMLSpanElement}
@@ -398,15 +411,15 @@ function describeError(failure) {
 }
 
 /**
- * Tamaño de página del historial. Es el mismo valor que el `$limit` por defecto de
- * `HealthEventPage::fetchEvents()`: los argumentos son posicionales, así que pasar el rango obliga
- * a pasar también el cursor y el límite, y aquí se repite el valor de siempre para no cambiar de
- * paso la cantidad de eventos que baja cada carga.
+ * History page size. It is the same value as the default `$limit` of
+ * `HealthEventPage::fetchEvents()`: the arguments are positional, so passing the range forces
+ * passing the cursor and the limit too, and the usual value is repeated here so as not to change
+ * in passing how many events come down on each load.
  */
 const HISTORY_FETCH_LIMIT = 100;
 
 /**
- * Factoría del componente Alpine. Se registra como `phrGlucosePage`.
+ * Alpine component factory. Registered as `phrGlucosePage`.
  *
  * @returns {object}
  */
@@ -419,19 +432,19 @@ export function glucosePage() {
         catalog: null,
         loading: false,
 
-        /** Sobres descifrados que fallaron al abrir en la última carga (no tumban la pantalla). */
+        /** Decrypted envelopes that failed to open on the last load (they do not take the screen down). */
         failedToOpenCount: 0,
 
-        /** Eventos de glucemia en otra unidad que la gráfica dejó fuera en la última carga. */
+        /** Glucose events in another unit the chart left out on the last load. */
         excludedByUnitCount: 0,
 
-        /** Instancia de Chart.js viva, para poder destruirla antes de repintar. */
+        /** Live Chart.js instance, so it can be destroyed before repainting. */
         chart: null,
 
         /**
-         * Últimos eventos que se pintaron. No es caché de datos: es lo que permite rehacer la
-         * gráfica cuando cambia el tema sin volver a pedir ni a descifrar nada (ver `chartTheme.js`;
-         * Chart.js congela los colores al construir el lienzo).
+         * Last events that were painted. It is not a data cache: it is what lets the chart be
+         * rebuilt when the theme changes without asking for or decrypting anything again (see
+         * `chartTheme.js`; Chart.js freezes the colours when the canvas is built).
          */
         chartEvents: [],
 
@@ -439,10 +452,10 @@ export function glucosePage() {
             this.catalog = JSON.parse(document.querySelector('[data-phr-glucose-catalog]').textContent);
 
             /**
-             * DESIGN.md § Charts — Dark: «a chart must also re-read them and redraw when the `.dark`
+             * DESIGN.md § Charts — Dark: "a chart must also re-read them and redraw when the `.dark`
              * class on `<html>` changes; otherwise the whole panel switches theme except the
-             * charts». Solo se repinta si ya hay gráfica: con la sesión bloqueada no hay nada que
-             * dibujar y `renderChart` pediría refs que no tocan.
+             * charts". It only repaints if there already is a chart: with the session locked there
+             * is nothing to draw and `renderChart` would ask for refs that are not there.
              */
             observeThemeChange(() => {
                 if (this.chart !== null) {
@@ -451,12 +464,12 @@ export function glucosePage() {
             });
 
             /**
-             * Las opciones de `unit`, `method` y `mealContext` las renderiza el servidor en Blade
-             * (ADR 0002, ADR 0005): no se rellenan aquí. Ver el comentario al inicio de
+             * The options of `unit`, `method` and `mealContext` are rendered by the server in Blade
+             * (ADR 0002, ADR 0005): they are not filled in here. See the comment at the start of
              * `glucose.blade.php`.
              *
-             * La unidad preseleccionada sí es cosa del cliente: es preferencia de presentación
-             * (ADR 0006) que vive en los ajustes cifrados, así que el servidor no puede leerla.
+             * The preselected unit is the client's business: it is a display preference (ADR 0006)
+             * that lives in the encrypted settings, so the server cannot read it.
              */
             this.$refs.unit.value = settings()?.glucoseUnit ?? DEFAULT_UNIT;
 
@@ -473,12 +486,12 @@ export function glucosePage() {
         },
 
         /**
-         * Guarda el registro.
+         * Saves the record.
          *
-         * `loading` cubre TODA la operación, no solo la descarga del historial: entre el clic y el
-         * repintado hay derivación de clave, sellado AEAD e ida y vuelta a Livewire, y sin señal
-         * alguna la persona vuelve a pulsar el botón. La plantilla lo usa para deshabilitarlo,
-         * marcar `aria-busy` y cambiar el texto (Do's #3), igual que las pantallas de acceso.
+         * `loading` covers the WHOLE operation, not just the history download: between the click and
+         * the repaint there is key derivation, AEAD sealing and a round trip to Livewire, and with
+         * no signal at all the person presses the button again. The template uses it to disable it,
+         * set `aria-busy` and change the text (Do's #3), like the sign-in screens.
          */
         async submit() {
             this.error = '';
@@ -498,8 +511,8 @@ export function glucosePage() {
                     throw new Error(t('glucose.missingValue'));
                 }
 
-                // Valida el formato numérico y normaliza la coma a punto (ver JSDoc de
-                // `numericValue.js`). El resultado sigue siendo cadena: no se convierte a número
+                // Validates the numeric format and normalizes the comma to a dot (see the JSDoc of
+                // `numericValue.js`). The result is still a string: it is not converted to a number
                 // (ADR 0004).
                 const value = parseNumericValue(rawValue, t('field.value'));
 
@@ -511,9 +524,9 @@ export function glucosePage() {
 
                 const { occurredAt, tz } = datetimeLocalToCanonical(localDatetime);
 
-                // `origin` no se pregunta: la inserción aquí siempre es manual (la persona lee el
-                // valor en su glucómetro o sensor y lo teclea), así que `buildCommonEventFields`
-                // lo fija a `manual` por defecto (ver JSDoc de `eventCommonFields.js`).
+                // `origin` is not asked for: the insertion here is always manual (the person reads
+                // the value on their meter or sensor and types it in), so `buildCommonEventFields`
+                // fixes it to `manual` by default (see the JSDoc of `eventCommonFields.js`).
                 const common = buildCommonEventFields({
                     device: this.$refs.device.value,
                     recordedBy: this.$refs.recordedBy.value,
@@ -537,15 +550,15 @@ export function glucosePage() {
                 this.$refs.value.value = '';
 
                 /**
-                 * La fecha vuelve a «ahora»: si se quedara con la del registro recién guardado, el
-                 * siguiente valor se apuntaría en silencio a un instante pasado, y una glucemia con
-                 * hora equivocada es un dato clínico falso que ya no se puede distinguir del bueno.
+                 * The date goes back to "now": if it kept the one of the record just saved, the
+                 * next value would be silently written to a past instant, and a glucose reading
+                 * with the wrong time is a false clinical datum that can no longer be told from a good one.
                  */
                 this.$refs.occurredAt.value = nowAsDatetimeLocalValue();
 
                 await this.loadHistory();
 
-                /** Al final de todo: el aviso confirma la operación entera, no solo el POST. */
+                /** At the very end: the notice confirms the whole operation, not just the POST. */
                 this.confirmSaved();
             } catch (failure) {
                 this.error = describeError(failure);
@@ -554,7 +567,7 @@ export function glucosePage() {
             }
         },
 
-        /** Descarga, descifra, filtra y pinta el historial (lista y gráfica). */
+        /** Downloads, decrypts, filters and paints the history (list and chart). */
         async loadHistory() {
             this.loading = true;
 
@@ -568,10 +581,10 @@ export function glucosePage() {
                 }
 
                 /**
-                 * El rango sí lo aplica el servidor: `occurred_at` es columna en claro (ADR 0006) y
-                 * acotarla ahorra descargar y descifrar meses de eventos de otros tipos que este
-                 * módulo tiraría igualmente. El tipo se sigue descartando aquí, que es lo que el
-                 * servidor no puede hacer.
+                 * The range is applied by the server: `occurred_at` is a column in the clear (ADR
+                 * 0006) and narrowing it saves downloading and decrypting months of events of other
+                 * types this module would throw away anyway. The type is still discarded here,
+                 * which is what the server cannot do.
                  */
                 const range = this.historyRange();
                 const rawEvents = await this.$wire.fetchEvents(null, HISTORY_FETCH_LIMIT, range.from, range.to);
@@ -589,7 +602,7 @@ export function glucosePage() {
 
                         opened.push({ id: rawEvent.id, occurredAt: rawEvent.occurredAt, content });
                     } catch {
-                        /** Un sobre que no abre no tumba la pantalla (ADR 0004): se cuenta y se avisa. */
+                        /** An envelope that does not open does not take the screen down (ADR 0004): it is counted and reported. */
                         failedToOpen += 1;
                     }
                 }
@@ -608,12 +621,12 @@ export function glucosePage() {
         },
 
         /**
-         * Sin clave no se puede descifrar nada: se dice, no se pinta una lista vacía.
+         * With no key nothing can be decrypted: it is said, no empty list is painted.
          *
-         * Perder la clave en mitad de la sesión es normal (ADR 0003), así que la gráfica también se
-         * destruye: dejar en pantalla las líneas de la carga anterior mostraría valores descifrados
-         * de una sesión que ya no está desbloqueada, y el pie seguiría diciendo qué métodos
-         * «incluye» una gráfica que ya no se puede refrescar.
+         * Losing the key mid-session is normal (ADR 0003), so the chart is destroyed too: leaving
+         * the lines of the previous load on screen would show decrypted values of a session that is
+         * no longer unlocked, and the caption would keep saying which methods a chart that can no
+         * longer be refreshed "includes".
          */
         renderLocked() {
             this.$refs.list.replaceChildren(createCallout({ tone: 'info', message: t('common.locked.history') }));
@@ -646,13 +659,13 @@ export function glucosePage() {
 
             if (glucoseEvents.length === 0) {
                 const empty = document.createElement('p');
-                /** #475569, el texto secundario de DESIGN.md; nunca un gris apagado (Don'ts #10). */
+                /** #475569, the secondary text of DESIGN.md; never a dull grey (Don'ts #10). */
                 empty.className = 'text-body text-ink-secondary';
                 empty.textContent = t('glucose.empty');
                 fragment.appendChild(empty);
             } else {
                 const list = document.createElement('ul');
-                /** El borde va en cada item (DESIGN.md § Lists), no en un divisor del contenedor. */
+                /** The border goes on each item (DESIGN.md § Lists), not on a container divider. */
                 list.className = 'flex flex-col';
 
                 for (const event of glucoseEvents) {
@@ -666,19 +679,19 @@ export function glucosePage() {
         },
 
         /**
-         * Item de historial con la forma de DESIGN.md § Lists: borde inferior #E2E8F0, 14px/16px de
-         * relleno, 48px de alto mínimo (objetivo táctil, Do's #2), icono guía de 20px en #0077B6 y
-         * texto secundario #475569 de 13px.
+         * History item with the shape of DESIGN.md § Lists: #E2E8F0 bottom border, 14px/16px
+         * padding, 48px minimum height (touch target, Do's #2), 20px guide icon in #0077B6 and
+         * #475569 13px secondary text.
          *
-         * El valor, la unidad y el código LOINC van en IBM Plex Mono (`font-mono`) porque son
-         * valor médico y código: Do's #7 lo exige para que no se lean mal. El método y el contexto
-         * dejan de ser texto concatenado y pasan a ser chips.
+         * The value, the unit and the LOINC code go in IBM Plex Mono (`font-mono`) because they are
+         * a medical value and a code: Do's #7 demands it so they are not misread. The method and the
+         * context stop being concatenated text and become chips.
          *
-         * El `<li>` NO lleva `hover:` ni `active:`: DESIGN.md § Lists reserva esos dos estados a un
-         * elemento de lista pulsable, y este no es enlace ni botón —no tiene destino, ni manejador,
-         * ni foco—. Prometer una interacción que no ocurre es peor que no prometerla; el día que el
-         * item lleve a un detalle, volverán junto con el `<a>`, su objetivo táctil (Do's #2) y su
-         * indicador de foco (Do's #9).
+         * The `<li>` does NOT carry `hover:` or `active:`: DESIGN.md § Lists reserves those two
+         * states for a pressable list element, and this is neither link nor button —it has no
+         * destination, no handler and no focus—. Promising an interaction that does not happen is
+         * worse than not promising it; the day the item leads to a detail, they will come back
+         * along with the `<a>`, its touch target (Do's #2) and its focus indicator (Do's #9).
          *
          * @param {{id: string, occurredAt: string, content: object}} event
          * @returns {HTMLLIElement}
@@ -694,16 +707,16 @@ export function glucosePage() {
             const body = document.createElement('div');
             body.className = 'flex flex-1 flex-col gap-2';
 
-            /** Primera línea: la medida. Va en monoespaciada y en el texto principal #0F172A. */
+            /** First line: the measurement. It goes in monospace and in the main text #0F172A. */
             const measurement = document.createElement('p');
             measurement.className = 'font-mono text-body text-ink';
 
             /**
-             * Sin `font-semibold`: de IBM Plex Mono solo se empaqueta el peso 400 (§ Typography ·
-             * Code la define «regular»), así que pedir 600 haría que el navegador sintetizara una
-             * falsa negrita, engordando y deformando justo los glifos numéricos que Do's #7 quiere
-             * inconfundibles. El valor destaca por ser lo primero de la línea y llevar la tinta
-             * principal, frente al gris secundario de la unidad.
+             * No `font-semibold`: only weight 400 of IBM Plex Mono is bundled (§ Typography · Code
+             * defines it as "regular"), so asking for 600 would make the browser synthesize a fake
+             * bold, fattening and deforming exactly the numeric glyphs Do's #7 wants unmistakable.
+             * The value stands out by being first on the line and carrying the main ink, against the
+             * secondary grey of the unit.
              */
             const value = document.createElement('span');
             value.textContent = data.value;
@@ -723,7 +736,7 @@ export function glucosePage() {
             chips.className = 'flex flex-wrap items-center gap-2';
             chips.appendChild(createStatusChip(methodLabel));
 
-            /** Sin contexto de comida (ADR 0006, opcional): no se muestra chip en su lugar. */
+            /** With no meal context (ADR 0006, optional): no chip is shown in its place. */
             if (contextLabel !== null) {
                 chips.appendChild(createFilterChip(contextLabel));
             }
@@ -731,9 +744,9 @@ export function glucosePage() {
             body.appendChild(chips);
 
             /**
-             * Texto secundario: marca de tiempo y código LOINC, ambos numéricos → monoespaciada, y
-             * en el tamaño Code de § Typography (14px), que es el papel que DESIGN.md define para
-             * «medical codes, IDs, data fields».
+             * Secondary text: timestamp and LOINC code, both numeric → monospace, and in the Code
+             * size of § Typography (14px), which is the role DESIGN.md defines for "medical codes,
+             * IDs, data fields".
              */
             const meta = document.createElement('p');
             meta.className = 'font-mono text-code text-ink-secondary';
@@ -746,25 +759,25 @@ export function glucosePage() {
         },
 
         /**
-         * Pinta la gráfica, o no pinta nada si no hay datos que mostrar (un lienzo con ejes vacíos
-         * parece un fallo, no un estado vacío legítimo).
+         * Paints the chart, or paints nothing if there is no data to show (a canvas with empty axes
+         * looks like a bug, not a legitimate empty state).
          *
-         * El eje X es de categoría, no lineal sobre epoch: no hay adaptador de fechas de Chart.js
-         * instalado, así que las etiquetas se formatean aquí mismo con `formatChartDate`, en el
-         * idioma activo, y se comparten entre todos los métodos por posición, para que un mismo
-         * instante quede en la misma columna aunque solo un método tenga dato ahí.
+         * The X axis is the shared linear one over the instant (`timeAxis.js`), never a category
+         * one: glucose is the most irregularly measured quantity of them all, and with equal
+         * columns a reading at 00:00, one at 12:00 and one at 12:30 came out at even thirds, which
+         * erased the twelve hours of the first gap and the half hour of the second.
          *
          * @param {list<{id: string, occurredAt: string, content: object}>} glucoseEvents
          */
         renderChart(glucoseEvents) {
             /**
-             * Se guardan para poder repintar cuando cambia el tema (ver `init()`): Chart.js congela
-             * los colores al construir el lienzo, así que la única forma de conmutar es rehacer la
-             * gráfica con los mismos datos.
+             * They are stored so the chart can be repainted when the theme changes (see `init()`):
+             * Chart.js freezes the colours when the canvas is built, so the only way to switch is
+             * rebuilding the chart with the same data.
              */
             this.chartEvents = glucoseEvents;
 
-            /** Colores del tema activo, leídos ahora y no al cargar el módulo (`chartTheme.js`). */
+            /** Colours of the active theme, read now and not when the module loaded (`chartTheme.js`). */
             const colors = chartColors();
 
             const presentationUnit = this.$refs.unit.value;
@@ -779,18 +792,16 @@ export function glucosePage() {
                 this.chart = null;
             }
 
-            const timestamps = [...new Set(methods.flatMap((method) => seriesByMethod[method].map((point) => point.x)))]
-                .sort((a, b) => a - b);
+            const timeFormat = chartTimeFormat();
+            const instants = methods.flatMap((method) => seriesByMethod[method].map((point) => point.x));
 
-            if (timestamps.length === 0) {
+            if (instants.length === 0) {
                 this.paintLegend([]);
             } else {
-                const labels = timestamps.map((timestamp) => formatChartDate(timestamp));
-
                 /**
-                 * Descriptores de serie, uno por método. Son a la vez lo que consume Chart.js y lo
-                 * que pinta la leyenda en HTML (ver `chartLegend.js`): una sola fuente, para que la
-                 * leyenda no pueda quedarse con un color o una forma distintos de los de la línea.
+                 * Series descriptors, one per method. They are at once what Chart.js consumes and
+                 * what paints the legend in HTML (see `chartLegend.js`): one single source, so the
+                 * legend cannot end up with a colour or a shape different from the line's.
                  */
                 const series = methods.map((method, index) => ({
                     label: this.catalog.methods.find((row) => row.token === method)?.label ?? method,
@@ -798,64 +809,53 @@ export function glucosePage() {
                     ...CHART_SERIES_SHAPES[index % CHART_SERIES_SHAPES.length],
                 }));
 
-                const datasets = series.map((entry, index) => {
-                    const byTimestamp = new Map(seriesByMethod[methods[index]].map((point) => [point.x, point.y]));
-
-                    return {
-                        label: entry.label,
-                        data: timestamps.map((timestamp) => byTimestamp.get(timestamp) ?? null),
-                        borderColor: entry.color,
-                        backgroundColor: entry.color,
-                        pointBackgroundColor: entry.color,
-                        pointBorderColor: colors.surface,
-                        pointBorderWidth: 2,
-                        pointRadius: 4,
-                        pointHoverRadius: 6,
-                        borderWidth: 2,
-                        /** Segunda codificación, además del color (Do's #3): trazo y forma del punto. */
-                        borderDash: [...entry.borderDash],
-                        pointStyle: entry.pointStyle,
-                        tension: 0.3,
-                        spanGaps: true,
-                    };
-                });
+                const datasets = series.map((entry, index) => ({
+                    label: entry.label,
+                    /**
+                     * Each method carries its own points: with a linear axis there is nothing to
+                     * line up by position, so the padding `null`s that only existed because another
+                     * method had no reading at that instant are gone. The threshold that does break
+                     * the line is the clinical one, shared with the dashboard curve.
+                     */
+                    data: splitOnGaps(seriesByMethod[methods[index]], MAX_READING_GAP_MS),
+                    borderColor: entry.color,
+                    backgroundColor: entry.color,
+                    pointBackgroundColor: entry.color,
+                    pointBorderColor: colors.surface,
+                    pointBorderWidth: 2,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    borderWidth: 2,
+                    /** Second encoding, besides the colour (Do's #3): dash and point shape. */
+                    borderDash: [...entry.borderDash],
+                    pointStyle: entry.pointStyle,
+                    tension: 0.3,
+                    /** `spanGaps` false (out of the box): the breaks `splitOnGaps` opened are breaks. */
+                }));
 
                 this.paintLegend(series);
 
                 this.chart = new Chart(this.$refs.chart, {
                     type: 'line',
-                    data: { labels, datasets },
+                    data: { datasets },
                     options: {
                         maintainAspectRatio: false,
                         color: colors.tick,
                         scales: {
-                            x: {
-                                type: 'category',
-                                /**
-                                 * La rejilla puede ser tenue (`--chart-grid`, decorativa: 1.23:1 en
-                                 * claro y 1.39:1 en oscuro), pero la LÍNEA DE EJE no: es la
-                                 * referencia contra la que se lee un valor de glucemia, y a esa
-                                 * ratio era casi invisible (Don'ts #10). Va en el mismo tono de los
-                                 * rótulos (`--chart-tick`: 7.58:1 en claro, 8.35:1 en oscuro).
-                                 */
-                                grid: { color: colors.grid },
-                                border: { color: colors.tick },
-                                /** Las etiquetas del eje son fechas y horas: valores, no prosa. */
-                                ticks: { color: colors.tick, font: { family: CHART_FONTS.mono, size: 12 } },
-                            },
+                            x: timeAxisScale({ colors, format: timeFormat, bounds: timeAxisBounds(instants) }),
                             y: {
                                 grid: { color: colors.grid },
                                 border: { color: colors.tick },
-                                /** Do's #7: los valores de medida, en IBM Plex Mono. */
+                                /** Do's #7: measurement values, in IBM Plex Mono. */
                                 ticks: { color: colors.tick, font: { family: CHART_FONTS.mono, size: 12 } },
                                 title: {
                                     display: true,
                                     text: presentationUnit,
                                     color: colors.tick,
                                     /**
-                                     * Peso 400: de IBM Plex Mono solo se empaqueta ese (§ Typography
-                                     * · Code es «regular»), y pedir 600 obligaría al navegador a
-                                     * sintetizar una falsa negrita sobre el código de la unidad.
+                                     * Weight 400: only that one of IBM Plex Mono is bundled
+                                     * (§ Typography · Code says "regular"), and asking for 600
+                                     * would force the browser to synthesize a fake bold over the unit code.
                                      */
                                     font: { family: CHART_FONTS.mono, size: 13, weight: 400 },
                                 },
@@ -863,20 +863,26 @@ export function glucosePage() {
                         },
                         plugins: {
                             /**
-                             * La leyenda vive fuera del lienzo, en HTML (ver `chartLegend.js`).
-                             * `display: false` en vez de `legend: false`: con `false` Chart.js
-                             * descarta el plugin entero y `chart.legend` deja de existir; así el
-                             * plugin sigue en pie, su `fit()` devuelve alto 0 y no roba nada de los
-                             * 320px del contenedor, que es justo lo que desbordaba.
+                             * The legend lives outside the canvas, in HTML (see `chartLegend.js`).
+                             * `display: false` instead of `legend: false`: with `false` Chart.js
+                             * drops the whole plugin and `chart.legend` stops existing; this way the
+                             * plugin stays up, its `fit()` returns height 0 and steals nothing from
+                             * the 320px of the container, which is exactly what was overflowing.
                              */
                             legend: { display: false },
                             /**
-                             * DESIGN.md § Tooltips: 8px de radio, 13px, 8/14px de relleno. El par
-                             * fondo/tinta sale del tema, porque el tooltip es el único componente
-                             * que se invierte respecto de la interfaz: en claro #0F172A sobre
-                             * #FFFFFF y en oscuro #E8EEF7 sobre #0B1220 (§ Charts — Dark).
+                             * DESIGN.md § Tooltips: 8px radius, 13px, 8/14px padding. The
+                             * background/ink pair comes from the theme, because the tooltip is the
+                             * only component that inverts against the interface: in light #0F172A
+                             * over #FFFFFF and in dark #E8EEF7 over #0B1220 (§ Charts — Dark).
                              */
                             tooltip: {
+                                /**
+                                 * With a linear axis the title has to be stated: the free one of the
+                                 * category axis is gone, and without this the heading would be the
+                                 * raw epoch number.
+                                 */
+                                callbacks: { title: timeAxisTooltipTitle(timeFormat) },
                                 backgroundColor: colors.tooltipSurface,
                                 titleColor: colors.tooltipInk,
                                 bodyColor: colors.tooltipInk,
@@ -894,9 +900,9 @@ export function glucosePage() {
         },
 
         /**
-         * Pinta la leyenda en HTML, fuera del lienzo (ver el JSDoc de `chartLegend.js` para el
-         * porqué). Con la lista vacía deja el nodo vacío, que es lo que corresponde cuando no hay
-         * gráfica: una leyenda huérfana describiría líneas que no están.
+         * Paints the legend in HTML, outside the canvas (see the JSDoc of `chartLegend.js` for the
+         * why). With an empty list it leaves the node empty, which is what fits when there is no
+         * chart: an orphan legend would describe lines that are not there.
          *
          * @param {list<{label: string, color: string, borderDash: list<number>, pointStyle: string}>} series
          */
@@ -908,14 +914,14 @@ export function glucosePage() {
         },
 
         /**
-         * Pie de la gráfica: qué métodos incluye (ADR 0008) y cuántos registros quedaron fuera por
-         * estar en otra unidad (no se convierte, ver JSDoc del módulo).
+         * Chart caption: which methods it includes (ADR 0008) and how many records were left out for
+         * being in another unit (nothing is converted, see the module JSDoc).
          *
-         * El `<p>` lo pinta Blade, no este método: es el `aria-describedby` del `<canvas>` —la
-         * única forma de que la tendencia llegue a quien no ve la gráfica— y necesita un `id`
-         * estable. Además tiene que vivir FUERA del contenedor de altura fija: Chart.js exige que
-         * el padre del lienzo sea suyo en exclusiva, y un hermano dentro habría desbordado por
-         * debajo y podía disparar el bucle de redimensionado del lienzo.
+         * The `<p>` is painted by Blade, not by this method: it is the `aria-describedby` of the
+         * `<canvas>` —the only way the trend reaches whoever does not see the chart— and it needs a
+         * stable `id`. It also has to live OUTSIDE the fixed-height container: Chart.js demands that
+         * the parent of the canvas be exclusively its own, and a sibling inside would have
+         * overflowed below and could trigger the canvas resize loop.
          *
          * @param {list<string>} methods
          * @param {string} presentationUnit

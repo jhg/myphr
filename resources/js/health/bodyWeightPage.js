@@ -1,55 +1,55 @@
 /**
- * Componente Alpine de la pantalla de peso y estatura (ADR 0002, ADR 0004, ADR 0005, ADR 0006,
+ * Alpine component of the weight and height screen (ADR 0002, ADR 0004, ADR 0005, ADR 0006,
  * ADR 0008).
  *
- * El contrato del DOM lo fija `resources/views/phr/pages/body-weight.blade.php`: nada de
- * `wire:model` (ADR 0002), los campos se leen por `x-ref` y el sobre cifrado sube como argumento de
- * `storeEvent`, nunca como propiedad de Livewire.
+ * The DOM contract is fixed by `resources/views/phr/pages/body-weight.blade.php`: no `wire:model`
+ * (ADR 0002), the fields are read through `x-ref` and the encrypted envelope goes up as an
+ * argument of `storeEvent`, never as a Livewire property.
  *
- * **El nombre del componente sigue siendo `phrBodyWeightPage`** aunque la pantalla registre ya dos
- * magnitudes: ese nombre vive en `resources/js/app.js`, y renombrarlo es una tarea aparte (ver el
- * PHPDoc de `App\Filament\Pages\BodyWeight`). El cambio de nombre de ahora es solo de etiqueta
- * visible.
+ * **The component name is still `phrBodyWeightPage`** even though the screen now records two
+ * quantities: that name lives in `resources/js/app.js`, and renaming it is a separate task (see
+ * the PHPDoc of `App\Filament\Pages\BodyWeight`). The current rename is only of the visible
+ * label.
  *
- * **Ningún método de medición** (ADR 0008): una báscula no ofrece variantes que cambien el valor de
- * forma conocida, al revés que el brazo y la postura de la tensión o el sitio de medida de la
- * temperatura, así que aquí no se pregunta método y los códigos LOINC son constantes (ver
- * `App\Catalog\BodyWeightLoincCode` y `App\Catalog\BodyHeightLoincCode`). Llegan ya resueltos en
- * `catalog.loinc` y `catalog.heightLoinc`.
+ * **No measurement method** (ADR 0008): a scale offers no variants that change the value in a
+ * known way, unlike the arm and the posture of blood pressure or the measurement site of
+ * temperature, so no method is asked for here and the LOINC codes are constant (see
+ * `App\Catalog\BodyWeightLoincCode` and `App\Catalog\BodyHeightLoincCode`). They arrive already
+ * resolved in `catalog.loinc` and `catalog.heightLoinc`.
  *
- * **La estatura es opcional en cada registro y se arrastra.** Quien se pesa cada semana la escribe
- * una vez y la deja en blanco después, así que un registro sin estatura no es un registro
- * incompleto: el IMC se calcula con la última estatura conocida que no sea posterior a esa pesada
- * (ver `bodyMassIndex.js`). Sin ninguna estatura registrada no hay IMC y no se enseña nada en su
- * lugar.
+ * **Height is optional in each record and it carries over.** Whoever weighs themselves every week
+ * writes it once and leaves it blank afterwards, so a record with no height is not an incomplete
+ * record: BMI is computed with the last known height that is not later than that weighing (see
+ * `bodyMassIndex.js`). With no height recorded at all there is no BMI and nothing is shown in its
+ * place.
  *
- * **No se convierte entre kilogramos y libras.** Cada registro conserva la unidad con la que se
- * anotó (ADR 0006) y la gráfica traza **una serie por unidad** en vez de mezclarlas. Es la misma
- * decisión que en glucemia, pero resuelta al revés que allí: la glucemia deja fuera de la gráfica lo
- * que no está en la unidad de presentación porque entre mg/dL y mmol/L no hay una equivalencia
- * exacta y sí una preferencia guardada en los ajustes; el peso no tiene esa preferencia, así que
- * esconder registros exigiría inventarse cuál es la unidad «buena». Dos series dicen la verdad
- * entera y no ocultan nada.
+ * **Nothing is converted between kilograms and pounds.** Each record keeps the unit it was written
+ * in (ADR 0006) and the chart draws **one series per unit** instead of mixing them. It is the same
+ * decision as in glucose, but resolved the other way round: glucose leaves out of the chart what
+ * is not in the display unit because between mg/dL and mmol/L there is no exact equivalence and
+ * there is a preference saved in the settings; weight has no such preference, so hiding records
+ * would require inventing which unit is the "good" one. Two series tell the whole truth and hide
+ * nothing.
  *
- * **El servidor no puede filtrar por tipo** (ADR 0006): `fetchEvents` trae todos los eventos del
- * usuario y aquí se descifra cada uno y se descarta el que no sea `type === 'bodyWeight'`. Un sobre
- * que no abre no tumba la pantalla: se cuenta y se avisa (ADR 0004).
+ * **The server cannot filter by type** (ADR 0006): `fetchEvents` brings every event of the user
+ * and here each one is decrypted and whatever is not `type === 'bodyWeight'` is discarded. An
+ * envelope that does not open does not take the screen down: it is counted and reported (ADR 0004).
  *
- * **Los cuatro campos comunes a todo evento** (origen, aparato, quién registra, nota; ADR 0006) no
- * se construyen aquí: viven en `eventCommonFields.js` y `buildBodyWeightContent` los recibe ya
- * construidos, para desplegarlos en el nivel superior del contenido, nunca dentro de `data`.
+ * **The four fields common to every event** (origin, device, who records, note; ADR 0006) are not
+ * built here: they live in `eventCommonFields.js` and `buildBodyWeightContent` receives them
+ * already built, to spread them at the top level of the content, never inside `data`.
  *
- * **El origen no se pregunta en el formulario.** `origin` distingue cómo entró el dato —tecleado
- * frente a importado de un aparato—, y aquí la inserción es siempre manual: se lee el número en la
- * báscula y se teclea. `submit()` lo fija a `'manual'` sin leer ningún campo del DOM; el aparato
- * (`device`) sí es útil (con qué se pesó) y conserva su campo.
+ * **The origin is not asked for in the form.** `origin` tells apart how the datum entered —typed
+ * versus imported from a device—, and here the insertion is always manual: the number is read on
+ * the scale and typed in. `submit()` fixes it to `'manual'` without reading any DOM field; the
+ * device (`device`) is useful (what it was weighed with) and keeps its field.
  *
- * **La fecha del evento no se convierte aquí.** `datetimeLocalToCanonical` vive en
- * `datetimeLocal.js` porque lo que devuelve entra como dato asociado del AEAD (ADR 0004): si cada
- * pantalla llevara su copia y una se desviara, sus sobres dejarían de abrirse.
+ * **The event date is not converted here.** `datetimeLocalToCanonical` lives in `datetimeLocal.js`
+ * because what it returns enters as AEAD associated data (ADR 0004): if each screen carried its
+ * own copy and one drifted, its envelopes would stop opening.
  *
- * Las funciones exportadas antes de `bodyWeightPage()` son la lógica pura del componente, para poder
- * probarlas sin montar Alpine ni Chart.js (`tests/js/bodyWeightPage.test.mjs`).
+ * The functions exported before `bodyWeightPage()` are the pure logic of the component, so they
+ * can be tested without mounting Alpine or Chart.js (`tests/js/bodyWeightPage.test.mjs`).
  */
 
 import Chart from 'chart.js/auto';
@@ -57,22 +57,24 @@ import Chart from 'chart.js/auto';
 import { isUnlocked, ownerId } from '../auth/keyring.js';
 import { SESSION_READY_EVENT } from '../auth/sessionBootstrap.js';
 import { EnvelopeError } from '../crypto/envelope.js';
-import { formatChartDate, formatDateTime, formatNumber, joinList, t } from '../i18n/index.js';
+import { formatDateTime, formatNumber, joinList, t } from '../i18n/index.js';
 import { bodyMassIndex, heightKnownAt } from './bodyMassIndex.js';
 import { legendElementFor, legendItems, renderLegend } from './chartLegend.js';
 import { chartColors, observeThemeChange } from './chartTheme.js';
+import { eventWallClockMs } from './dailyBands.js';
 import { dateRangeControl } from './dateRange.js';
 import { datetimeLocalToCanonical } from './datetimeLocal.js';
 import { buildCommonEventFields } from './eventCommonFields.js';
 import { openEvent, sealEvent } from './eventEnvelope.js';
 import { parseNumericValue } from './numericValue.js';
 import { savedNotice } from './savedNotice.js';
+import { chartTimeFormat, splitOnGaps, timeAxisBounds, timeAxisScale, timeAxisTooltipTitle } from './timeAxis.js';
 import { unitLabel } from './unitLabel.js';
 
 /**
- * Lo mismo que `unitLabel` (ver `unitLabel.js`), pero para las unidades de estatura, que son otra
- * lista del catálogo: la pulgada se guarda como `[in_i]` (UCUM distingue la internacional de la US
- * survey) y se enseña como `in`. Se queda aquí porque solo la usa esta pantalla.
+ * The same as `unitLabel` (see `unitLabel.js`), but for the height units, which are another list
+ * of the catalog: the inch is stored as `[in_i]` (UCUM tells the international one from the US
+ * survey one) and shown as `in`. It stays here because only this screen uses it.
  *
  * @param {{heightUnits: list<{code: string, label: string}>}} catalog
  * @param {string} code
@@ -83,30 +85,30 @@ export function heightUnitLabel(catalog, code) {
 }
 
 /**
- * Construye el contenido en claro de un evento de peso, con la forma del ADR 0006. Los valores
- * viajan como cadena, nunca como número (ADR 0004: decimales como cadena).
+ * Builds the content in the clear of a weight event, with the shape of ADR 0006. The values travel
+ * as strings, never as numbers (ADR 0004: decimals as a string).
  *
- * `common` son los cuatro campos que comparte cualquier tipo de evento (ver `eventCommonFields.js`) y
- * van en el nivel superior del contenido, no dentro de `data`.
+ * `common` are the four fields any event type shares (see `eventCommonFields.js`) and they go at
+ * the top level of the content, not inside `data`.
  *
- * **La estatura es opcional y, cuando falta, la clave `height` no se escribe.** Ni `null`, ni cadena
- * vacía, ni la estatura del registro anterior copiada: un sobre solo afirma lo que se midió ese día.
- * Copiarla convertiría en medición cada pesada, y entonces la fecha de la estatura —lo único que
- * permite seguir a quien crece— dejaría de significar nada.
+ * **Height is optional and, when it is missing, the `height` key is not written.** No `null`, no
+ * empty string, and no height copied from the previous record: an envelope only asserts what was
+ * measured that day. Copying it would turn every weighing into a measurement, and then the date of
+ * the height —the only thing that lets a growing person be followed— would stop meaning anything.
  *
  * @param {object} params
- * @param {string} params.value Peso, tal cual lo escribió la persona, ya como cadena.
- * @param {string} params.unit Código UCUM del peso.
- * @param {string} [params.height] Estatura; cadena vacía o ausente cuando no se rellena.
- * @param {string} [params.heightUnit] Código UCUM de la estatura; solo importa si hay estatura.
- * @param {string} params.tz Desfase `±HH:MM` del momento del registro.
+ * @param {string} params.value Weight, exactly as the person typed it, already as a string.
+ * @param {string} params.unit UCUM code of the weight.
+ * @param {string} [params.height] Height; empty string or absent when it is not filled in.
+ * @param {string} [params.heightUnit] UCUM code of the height; it only matters if there is a height.
+ * @param {string} params.tz `±HH:MM` offset of the moment of recording.
  * @param {{loinc: string, heightLoinc: string}} params.catalog
  * @param {{origin: string, recordedBy: string, device?: string, note?: string}} params.common
- *        Ya construido por `buildCommonEventFields`.
+ *        Already built by `buildCommonEventFields`.
  * @returns {{v: 1, type: 'bodyWeight', tz: string, origin: string, recordedBy: string,
  *           device?: string, note?: string, data: {value: string, unit: string, loinc: string,
  *           height?: {value: string, unit: string, loinc: string}}}}
- * @throws {Error} Si falta el peso, su unidad, o la unidad de una estatura que sí se escribió.
+ * @throws {Error} If the weight, its unit, or the unit of a height that was written is missing.
  */
 export function buildBodyWeightContent({ value, unit, height, heightUnit, tz, catalog, common }) {
     if (typeof value !== 'string' || value.trim() === '') {
@@ -145,10 +147,10 @@ export function buildBodyWeightContent({ value, unit, height, heightUnit, tz, ca
 }
 
 /**
- * Descarta los eventos descifrados que no son de tipo `bodyWeight`. El servidor no puede hacer este
- * filtro porque el tipo va cifrado dentro del sobre (ADR 0006): es responsabilidad del cliente.
+ * Discards the decrypted events that are not of type `bodyWeight`. The server cannot do this
+ * filter because the type travels encrypted inside the envelope (ADR 0006): it is the client's job.
  *
- * @param {list<{id: string, occurredAt: string, content: object}>} events Ya descifrados.
+ * @param {list<{id: string, occurredAt: string, content: object}>} events Already decrypted.
  * @returns {list<{id: string, occurredAt: string, content: object}>}
  */
 export function filterBodyWeightEvents(events) {
@@ -156,12 +158,28 @@ export function filterBodyWeightEvents(events) {
 }
 
 /**
- * Agrupa las pesadas por unidad para la gráfica: una serie por unidad, nunca una sola serie con
- * kilogramos y libras mezclados (ver JSDoc del módulo). Cada serie sale ordenada por fecha.
+ * Gap from which the weight line breaks.
  *
- * @param {list<{id: string, occurredAt: string, content: object}>} weightEvents Ya filtrados por
- *        `filterBodyWeightEvents`.
- * @returns {Record<string, list<{x: number, y: number}>>} Indexado por código UCUM.
+ * Weighing is the most sporadic record of them all —three days in a row and then nothing for two
+ * months is the normal pattern—, so the threshold is generous: joining two weighings a fortnight
+ * apart is a legitimate trend, and the proportional axis already shows how far apart they are.
+ * Beyond a month the segment stops being a trend and becomes an invented one, drawn over a stretch
+ * where nobody knows what the weight did.
+ */
+export const MAX_WEIGHT_GAP_MS = 31 * 86_400_000;
+
+/**
+ * Groups the weighings by unit for the chart: one series per unit, never a single series with
+ * kilograms and pounds mixed (see the module JSDoc). Each series comes out sorted by date.
+ *
+ * The `x` of each point is the wall clock time of whoever weighed themselves ({@see eventWallClockMs}),
+ * not the absolute instant: a weighing recorded at 08:00 in Madrid stays at 08:00 when the chart is
+ * opened from another time zone. It is the same rule the home dashboard follows, and the labels are
+ * formatted in UTC for that very reason (`timeAxis.js`).
+ *
+ * @param {list<{id: string, occurredAt: string, content: object}>} weightEvents Already filtered
+ *        by `filterBodyWeightEvents`.
+ * @returns {Record<string, list<{x: number, y: number}>>} Indexed by UCUM code.
  */
 export function groupBodyWeightByUnit(weightEvents) {
     /** @type {Record<string, list<{x: number, y: number}>>} */
@@ -169,12 +187,18 @@ export function groupBodyWeightByUnit(weightEvents) {
 
     for (const event of weightEvents) {
         const { data } = event.content;
+        const at = eventWallClockMs(event.occurredAt, event.content.tz);
+
+        /** An unreadable instant has no place on a time axis: it would land on 1970 or on `NaN`. */
+        if (at === null) {
+            continue;
+        }
 
         if (seriesByUnit[data.unit] === undefined) {
             seriesByUnit[data.unit] = [];
         }
 
-        seriesByUnit[data.unit].push({ x: Date.parse(event.occurredAt), y: Number(data.value) });
+        seriesByUnit[data.unit].push({ x: at, y: Number(data.value) });
     }
 
     for (const points of Object.values(seriesByUnit)) {
@@ -185,10 +209,10 @@ export function groupBodyWeightByUnit(weightEvents) {
 }
 
 /**
- * Texto del pie de la gráfica: qué unidades incluye, porque son series distintas y no comparables
- * entre sí.
+ * Text of the chart caption: which units it includes, because they are different series and not
+ * comparable with each other.
  *
- * @param {list<string>} unitLabels Etiquetas de las unidades con datos en la gráfica.
+ * @param {list<string>} unitLabels Labels of the units with data in the chart.
  * @returns {string}
  */
 export function chartCaptionText(unitLabels) {
@@ -197,7 +221,7 @@ export function chartCaptionText(unitLabels) {
         : t('bodyWeight.caption.empty');
 }
 
-/** @returns {string} Ahora mismo, en la forma que espera un `<input type="datetime-local" step="1">`. */
+/** @returns {string} Right now, in the shape an `<input type="datetime-local" step="1">` expects. */
 function nowAsDatetimeLocalValue() {
     return toDatetimeLocalValue(new Date());
 }
@@ -214,10 +238,10 @@ function toDatetimeLocalValue(date) {
 }
 
 /**
- * Segunda codificación de cada serie, además del color (Do's #3): patrón de trazo y forma del punto.
- * Quien no distingue los colores —daltonismo, pantalla en blanco y negro, impresión— sigue pudiendo
- * decir qué línea es qué unidad. Los colores salen de `chartColors()`, que los lee del tema en cada
- * dibujado (ver `chartTheme.js`).
+ * Second encoding of each series, besides the colour (Do's #3): dash pattern and point shape.
+ * Whoever does not tell colours apart —colour blindness, black and white screen, printing— can
+ * still say which line is which unit. The colours come from `chartColors()`, which reads them from
+ * the theme on every draw (see `chartTheme.js`).
  */
 const CHART_SERIES_SHAPES = Object.freeze([
     Object.freeze({ borderDash: [], pointStyle: 'circle' }),
@@ -225,24 +249,24 @@ const CHART_SERIES_SHAPES = Object.freeze([
     Object.freeze({ borderDash: [2, 3], pointStyle: 'rect' }),
 ]);
 
-/** Familias de DESIGN.md § Typography, declaradas por nombre porque `<canvas>` no lee variables CSS. */
+/** Families of DESIGN.md § Typography, declared by name because a `<canvas>` reads no CSS variables. */
 const CHART_FONTS = Object.freeze({
     body: "'Open Sans', ui-sans-serif, system-ui, sans-serif",
     mono: "'IBM Plex Mono', ui-monospace, monospace",
 });
 
 /**
- * Familia y tamaño por defecto de todo el lienzo, en el único sitio donde Chart.js los admite:
- * `Chart.defaults.font`. Chart.js resuelve la tipografía de cada elemento contra estos valores, así
- * que una clave `font` en la raíz de `options` sería configuración muerta.
+ * Default family and size of the whole canvas, in the only place Chart.js accepts them:
+ * `Chart.defaults.font`. Chart.js resolves the typography of each element against these values, so
+ * a `font` key at the root of `options` would be dead configuration.
  */
 Chart.defaults.font.family = CHART_FONTS.body;
 Chart.defaults.font.size = 13;
 
 /**
- * Trazados de Heroicons v2 (outline, 24×24), la misma familia que usa el panel. El del historial es
- * la balanza de `BodyWeight::$navigationIcon`, para que el icono guía de cada registro sea el mismo
- * que el de la sección.
+ * Heroicons v2 paths (outline, 24×24), the same family the panel uses. The one in the history is
+ * the scale of `BodyWeight::$navigationIcon`, so the guide icon of each record is the same as the
+ * one of the section.
  */
 const ICON_PATHS = Object.freeze({
     warning: 'M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 '
@@ -258,8 +282,8 @@ const ICON_PATHS = Object.freeze({
 });
 
 /**
- * Icono decorativo de 20px (DESIGN.md § Lists: «20px icon»). Va con `aria-hidden`: nunca lleva
- * información que no esté también en el texto (Do's #3).
+ * Decorative 20px icon (DESIGN.md § Lists: "20px icon"). It goes with `aria-hidden`: it never
+ * carries information that is not also in the text (Do's #3).
  *
  * @param {'warning'|'info'|'scale'} name
  * @param {string} className
@@ -286,9 +310,9 @@ function createIcon(name, className) {
 }
 
 /**
- * Aviso en bloque con icono (DESIGN.md § Chips · Status Chip): color + icono + texto, nunca color a
- * secas (Do's #3). Mismos tokens de aviso (`error-*` / `info-*`) que el resto de pantallas de
- * eventos, que conmutan solos con el tema.
+ * Block notice with an icon (DESIGN.md § Chips · Status Chip): colour + icon + text, never colour
+ * alone (Do's #3). Same notice tokens (`error-*` / `info-*`) as the other event screens, which
+ * switch on their own with the theme.
  *
  * @param {object} params
  * @param {'error'|'info'} params.tone
@@ -334,14 +358,14 @@ function describeError(failure) {
 }
 
 /**
- * Tamaño de página del historial. Es el mismo valor que el `$limit` por defecto de
- * `HealthEventPage::fetchEvents()`: los argumentos son posicionales, así que pasar el rango obliga a
- * pasar también el cursor y el límite, y aquí se repite el valor de siempre.
+ * History page size. It is the same value as the default `$limit` of
+ * `HealthEventPage::fetchEvents()`: the arguments are positional, so passing the range forces
+ * passing the cursor and the limit too, and the usual value is repeated here.
  */
 const HISTORY_FETCH_LIMIT = 100;
 
 /**
- * Factoría del componente Alpine. Se registra como `phrBodyWeightPage`.
+ * Alpine component factory. Registered as `phrBodyWeightPage`.
  *
  * @returns {object}
  */
@@ -354,15 +378,15 @@ export function bodyWeightPage() {
         catalog: null,
         loading: false,
 
-        /** Sobres descifrados que fallaron al abrir en la última carga (no tumban la pantalla). */
+        /** Decrypted envelopes that failed to open on the last load (they do not take the screen down). */
         failedToOpenCount: 0,
 
-        /** Instancia de Chart.js viva, para poder destruirla antes de repintar. */
+        /** Live Chart.js instance, so it can be destroyed before repainting. */
         chart: null,
 
         /**
-         * Últimos eventos que se pintaron. No es caché de datos: es lo que permite rehacer la
-         * gráfica cuando cambia el tema sin volver a pedir ni a descifrar nada (`chartTheme.js`).
+         * Last events that were painted. It is not a data cache: it is what lets the chart be
+         * rebuilt when the theme changes without asking for or decrypting anything again (`chartTheme.js`).
          */
         chartEvents: [],
 
@@ -370,8 +394,8 @@ export function bodyWeightPage() {
             this.catalog = JSON.parse(document.querySelector('[data-phr-body-weight-catalog]').textContent);
 
             /**
-             * DESIGN.md § Charts — Dark: la gráfica tiene que releer los colores y repintarse cuando
-             * `<html>` entra o sale del modo oscuro, o el panel entero conmuta menos las gráficas.
+             * DESIGN.md § Charts — Dark: the chart has to re-read the colours and repaint when
+             * `<html>` enters or leaves dark mode, or the whole panel switches except the charts.
              */
             observeThemeChange(() => {
                 if (this.chart !== null) {
@@ -380,8 +404,8 @@ export function bodyWeightPage() {
             });
 
             /**
-             * Las opciones de `unit` las renderiza el servidor en Blade (ADR 0002, ADR 0005): no se
-             * rellenan aquí. Ver el comentario al inicio de `body-weight.blade.php`.
+             * The options of `unit` are rendered by the server in Blade (ADR 0002, ADR 0005): they
+             * are not filled in here. See the comment at the start of `body-weight.blade.php`.
              */
             this.$refs.occurredAt.value = nowAsDatetimeLocalValue();
 
@@ -396,12 +420,12 @@ export function bodyWeightPage() {
         },
 
         /**
-         * Guarda el registro.
+         * Saves the record.
          *
-         * `loading` cubre TODA la operación, no solo la descarga del historial: entre el clic y el
-         * repintado hay derivación de clave, sellado AEAD e ida y vuelta a Livewire, y sin señal
-         * alguna la persona vuelve a pulsar el botón, que en una pantalla de registro clínico
-         * significa una pesada duplicada en el historial.
+         * `loading` covers the WHOLE operation, not just the history download: between the click and
+         * the repaint there is key derivation, AEAD sealing and a round trip to Livewire, and with
+         * no signal at all the person presses the button again, which on a clinical recording screen
+         * means a duplicated weighing in the history.
          */
         async submit() {
             this.error = '';
@@ -415,15 +439,15 @@ export function bodyWeightPage() {
                     throw new Error(t('common.noSession'));
                 }
 
-                // Valida el formato numérico y normaliza la coma a punto (ver JSDoc de
-                // `numericValue.js`); la cadena vacía pasa intacta y la detecta como "falta el dato"
-                // `buildBodyWeightContent`. El resultado sigue siendo cadena: no se convierte a
-                // número (ADR 0004).
+                // Validates the numeric format and normalizes the comma to a dot (see the JSDoc of
+                // `numericValue.js`); the empty string passes untouched and is detected as "missing
+                // datum" by `buildBodyWeightContent`. The result is still a string: it is not
+                // converted to a number (ADR 0004).
                 const value = parseNumericValue(this.$refs.value.value.trim(), t('field.weight'));
 
                 /**
-                 * La estatura pasa por la misma validación, y su cadena vacía pasa intacta: dejarla
-                 * en blanco es el caso normal, no un error (ver el JSDoc del módulo).
+                 * The height goes through the same validation, and its empty string passes
+                 * untouched: leaving it blank is the normal case, not an error (see the module JSDoc).
                  */
                 const height = parseNumericValue(this.$refs.height.value.trim(), t('field.height'));
 
@@ -436,7 +460,7 @@ export function bodyWeightPage() {
                 const { occurredAt, tz } = datetimeLocalToCanonical(localDatetime);
 
                 const common = buildCommonEventFields({
-                    /** Siempre manual: ver el JSDoc del módulo, "El origen no se pregunta...". */
+                    /** Always manual: see the module JSDoc, "The origin is not asked for...". */
                     origin: 'manual',
                     device: this.$refs.device.value,
                     recordedBy: this.$refs.recordedBy.value,
@@ -460,22 +484,22 @@ export function bodyWeightPage() {
                 this.$refs.value.value = '';
 
                 /**
-                 * La estatura también se vacía. No se deja puesta «por comodidad»: el siguiente
-                 * registro la guardaría como si se hubiera vuelto a medir, y una estatura repetida
-                 * sin haberla medido es un dato inventado con fecha de hoy.
+                 * The height is emptied too. It is not left in place "for convenience": the next
+                 * record would store it as if it had been measured again, and a height repeated
+                 * without measuring is an invented datum with today's date.
                  */
                 this.$refs.height.value = '';
 
                 /**
-                 * La fecha vuelve a «ahora»: si se quedara con la del registro recién guardado, la
-                 * siguiente pesada se apuntaría en silencio a un instante pasado, y un peso con hora
-                 * equivocada ya no se distingue del bueno.
+                 * The date goes back to "now": if it kept the one of the record just saved, the
+                 * next weighing would be silently written to a past instant, and a weight with the
+                 * wrong time can no longer be told from a good one.
                  */
                 this.$refs.occurredAt.value = nowAsDatetimeLocalValue();
 
                 await this.loadHistory();
 
-                /** Al final de todo: el aviso confirma la operación entera, no solo el POST. */
+                /** At the very end: the notice confirms the whole operation, not just the POST. */
                 this.confirmSaved();
             } catch (failure) {
                 this.error = describeError(failure);
@@ -484,7 +508,7 @@ export function bodyWeightPage() {
             }
         },
 
-        /** Descarga, descifra, filtra y pinta el historial (lista y gráfica). */
+        /** Downloads, decrypts, filters and paints the history (list and chart). */
         async loadHistory() {
             this.loading = true;
 
@@ -498,10 +522,10 @@ export function bodyWeightPage() {
                 }
 
                 /**
-                 * El rango sí lo aplica el servidor: `occurred_at` es columna en claro (ADR 0006) y
-                 * acotarla ahorra descargar y descifrar meses de eventos de otros tipos que este
-                 * módulo tiraría igualmente. El tipo se sigue descartando aquí, que es lo que el
-                 * servidor no puede hacer.
+                 * The range is applied by the server: `occurred_at` is a column in the clear (ADR
+                 * 0006) and narrowing it saves downloading and decrypting months of events of other
+                 * types this module would throw away anyway. The type is still discarded here,
+                 * which is what the server cannot do.
                  */
                 const range = this.historyRange();
                 const rawEvents = await this.$wire.fetchEvents(null, HISTORY_FETCH_LIMIT, range.from, range.to);
@@ -519,7 +543,7 @@ export function bodyWeightPage() {
 
                         opened.push({ id: rawEvent.id, occurredAt: rawEvent.occurredAt, content });
                     } catch {
-                        /** Un sobre que no abre no tumba la pantalla (ADR 0004): se cuenta y se avisa. */
+                        /** An envelope that does not open does not take the screen down (ADR 0004): it is counted and reported. */
                         failedToOpen += 1;
                     }
                 }
@@ -538,11 +562,11 @@ export function bodyWeightPage() {
         },
 
         /**
-         * Sin clave no se puede descifrar nada: se dice, no se pinta una lista vacía.
+         * With no key nothing can be decrypted: it is said, no empty list is painted.
          *
-         * Perder la clave en mitad de la sesión es normal (ADR 0003), así que la gráfica también se
-         * destruye: dejar las líneas de la carga anterior mostraría valores descifrados de una sesión
-         * que ya no está desbloqueada.
+         * Losing the key mid-session is normal (ADR 0003), so the chart is destroyed too: leaving
+         * the lines of the previous load would show decrypted values of a session that is no longer
+         * unlocked.
          */
         renderLocked() {
             this.$refs.list.replaceChildren(createCallout({ tone: 'info', message: t('common.locked.history') }));
@@ -583,9 +607,9 @@ export function bodyWeightPage() {
 
                 for (const event of weightEvents) {
                     /**
-                     * La estatura que aplica a esta pesada: la del propio registro si la trae y,
-                     * si no, la última conocida que no sea posterior (`bodyMassIndex.js`). Se
-                     * resuelve aquí y no dentro del `<li>` porque hace falta la lista entera.
+                     * The height that applies to this weighing: the one of the record itself if
+                     * it brings one and, if not, the last known one that is not later
+                     * (`bodyMassIndex.js`). Resolved here and not inside the `<li>`: the whole list is needed.
                      */
                     const ownHeight = event.content?.data?.height ?? null;
                     const height = ownHeight ?? heightKnownAt(weightEvents, event.occurredAt);
@@ -600,18 +624,18 @@ export function bodyWeightPage() {
         },
 
         /**
-         * Item de historial con la forma de DESIGN.md § Lists, la misma que las demás pantallas. El
-         * valor va en IBM Plex Mono (Do's #7).
+         * History item with the shape of DESIGN.md § Lists, the same as the other screens. The
+         * value goes in IBM Plex Mono (Do's #7).
          *
-         * El `<li>` NO lleva `hover:` ni `active:`: DESIGN.md § Lists reserva esos dos estados a un
-         * elemento de lista pulsable, y este no es enlace ni botón. Prometer una interacción que no
-         * ocurre es peor que no prometerla.
+         * The `<li>` does NOT carry `hover:` or `active:`: DESIGN.md § Lists reserves those two
+         * states for a pressable list element, and this is neither link nor button. Promising an
+         * interaction that does not happen is worse than not promising it.
          *
          * @param {{id: string, occurredAt: string, content: object}} event
          * @param {object} applicableHeight
          * @param {{value: string, unit: string, occurredAt?: string}|null} applicableHeight.height
-         *        Estatura con la que se calcula el IMC de esta fila, ya resuelta por `renderList`.
-         * @param {boolean} applicableHeight.isOwnHeight Si esa estatura se midió en este registro.
+         *        Height the BMI of this row is computed with, already resolved by `renderList`.
+         * @param {boolean} applicableHeight.isOwnHeight Whether that height was measured in this record.
          * @returns {HTMLLIElement}
          */
         renderListItem(event, { height, isOwnHeight }) {
@@ -629,10 +653,10 @@ export function bodyWeightPage() {
             measurement.className = 'font-mono text-body text-ink';
 
             /**
-             * Sin `font-semibold`: de IBM Plex Mono solo se empaqueta el peso 400 (§ Typography ·
-             * Code la define «regular»), así que pedir 600 haría que el navegador sintetizara una
-             * falsa negrita, engordando justo los glifos numéricos que Do's #7 quiere
-             * inconfundibles.
+             * No `font-semibold`: only weight 400 of IBM Plex Mono is bundled (§ Typography · Code
+             * defines it as "regular"), so asking for 600 would make the browser synthesize a fake
+             * bold, fattening exactly the numeric glyphs Do's #7 wants
+             * unmistakable.
              */
             const value = document.createElement('span');
             value.textContent = data.value;
@@ -644,9 +668,9 @@ export function bodyWeightPage() {
             measurement.appendChild(unit);
 
             /**
-             * La estatura, solo cuando se midió en este registro. La arrastrada NO se repite aquí:
-             * escribirla en una fila donde no se midió haría creer que ese día se tomó la talla.
-             * Dónde sale sí se dice, pero junto al IMC, que es lo que la usa.
+             * The height, only when it was measured in this record. The carried-over one is NOT
+             * repeated here: writing it on a row where it was not measured would make people
+             * believe the height was taken that day. Where it comes from is said, next to the BMI, which is what uses it.
              */
             if (isOwnHeight && height !== null) {
                 const heightLine = document.createElement('span');
@@ -661,13 +685,13 @@ export function bodyWeightPage() {
             body.appendChild(measurement);
 
             /**
-             * IMC, como cifra y nada más: sin categoría («sobrepeso»...) ni color de juicio. El
-             * porqué, largo, está en el JSDoc de `bodyMassIndex.js`; el resumen es que en niños se
-             * lee por percentiles de edad y sexo, que esta aplicación no tiene, y que un umbral
-             * pintado de rojo se lee como un diagnóstico que aquí nadie ha hecho.
+             * BMI, as a figure and nothing else: no category ("overweight"...) and no judgement
+             * colour. The why, which is long, is in the JSDoc of `bodyMassIndex.js`; the summary is
+             * that in children it is read by percentiles of age and sex, which this application does
+             * not have, and that a threshold painted red reads as a diagnosis nobody made here.
              *
-             * Sin estatura no se pinta nada. No hay «IMC —» ni «sin calcular»: un hueco callado dice
-             * menos que una línea que insinúa que falta algo obligatorio, y la estatura no lo es.
+             * With no height nothing is painted. There is no "BMI —" and no "not computed": a
+             * silent gap says less than a line suggesting something mandatory is missing, and height is not.
              */
             const bmi = bodyMassIndex({ weight: { value: data.value, unit: data.unit }, height });
 
@@ -684,9 +708,9 @@ export function bodyWeightPage() {
             }
 
             /**
-             * Texto secundario: marca de tiempo y código LOINC, ambos numéricos → monoespaciada, y
-             * en el tamaño Code de § Typography (14px), que es el papel que DESIGN.md define para
-             * «medical codes, IDs, data fields».
+             * Secondary text: timestamp and LOINC code, both numeric → monospace, and in the Code
+             * size of § Typography (14px), which is the role DESIGN.md defines for "medical codes,
+             * IDs, data fields".
              */
             const meta = document.createElement('p');
             meta.className = 'font-mono text-code text-ink-secondary';
@@ -699,21 +723,23 @@ export function bodyWeightPage() {
         },
 
         /**
-         * Pinta la gráfica, o no pinta nada si no hay datos (un lienzo con ejes vacíos parece un
-         * fallo, no un estado vacío legítimo). Una serie por unidad, nunca kilogramos y libras en la
-         * misma línea (ver JSDoc del módulo).
+         * Paints the chart, or paints nothing if there is no data (a canvas with empty axes looks
+         * like a bug, not a legitimate empty state). One series per unit, never kilograms and pounds
+         * on the same line (see the module JSDoc).
          *
-         * El eje X es de categoría, no lineal sobre epoch: no hay adaptador de fechas de Chart.js
-         * instalado, así que las etiquetas se formatean aquí con `formatChartDate`, en el idioma
-         * activo, y se comparten por posición entre todas las series.
+         * The X axis is the shared linear one over the instant (`timeAxis.js`), never a category
+         * one: on this screen more than on any other, distance is the datum. Three weighings in one
+         * week and then nothing for two months used to be drawn as four evenly spaced points, and
+         * the slope between the last two —which is the only thing anybody reads in a weight chart—
+         * was a made-up one.
          *
          * @param {list<{id: string, occurredAt: string, content: object}>} weightEvents
          */
         renderChart(weightEvents) {
-            /** Se guardan para poder repintar al conmutar el tema (ver `init()` y `chartTheme.js`). */
+            /** They are stored so the chart can be repainted on theme switch (see `init()` and `chartTheme.js`). */
             this.chartEvents = weightEvents;
 
-            /** Colores del tema activo, leídos ahora y no al cargar el módulo (`chartTheme.js`). */
+            /** Colours of the active theme, read now and not when the module loaded (`chartTheme.js`). */
             const colors = chartColors();
 
             const seriesByUnit = groupBodyWeightByUnit(weightEvents);
@@ -725,16 +751,16 @@ export function bodyWeightPage() {
                 this.chart = null;
             }
 
-            const timestamps = [...new Set(units.flatMap((code) => seriesByUnit[code].map((point) => point.x)))]
-                .sort((a, b) => a - b);
+            const timeFormat = chartTimeFormat();
+            const instants = units.flatMap((code) => seriesByUnit[code].map((point) => point.x));
 
-            if (timestamps.length === 0) {
+            if (instants.length === 0) {
                 this.paintLegend([]);
             } else {
                 /**
-                 * Descriptores de serie: son a la vez lo que consume Chart.js y lo que rotula la
-                 * leyenda en HTML (ver `chartLegend.js`), así que ninguna de las dos puede quedarse
-                 * con un color o una forma distintos de los de la otra.
+                 * Series descriptors: they are at once what Chart.js consumes and what labels the
+                 * legend in HTML (see `chartLegend.js`), so neither of the two can end up with a
+                 * colour or a shape different from the other's.
                  */
                 const series = units.map((code, index) => ({
                     label: labels[index],
@@ -742,49 +768,38 @@ export function bodyWeightPage() {
                     ...CHART_SERIES_SHAPES[index % CHART_SERIES_SHAPES.length],
                 }));
 
-                const datasets = series.map((entry, index) => {
-                    const byTimestamp = new Map(seriesByUnit[units[index]].map((point) => [point.x, point.y]));
-
-                    return {
-                        label: entry.label,
-                        data: timestamps.map((timestamp) => byTimestamp.get(timestamp) ?? null),
-                        borderColor: entry.color,
-                        backgroundColor: entry.color,
-                        pointBackgroundColor: entry.color,
-                        pointBorderColor: colors.surface,
-                        pointBorderWidth: 2,
-                        pointRadius: 4,
-                        pointHoverRadius: 6,
-                        borderWidth: 2,
-                        /** Segunda codificación, además del color (Do's #3): trazo y forma del punto. */
-                        borderDash: [...entry.borderDash],
-                        pointStyle: entry.pointStyle,
-                        tension: 0.3,
-                        spanGaps: true,
-                    };
-                });
+                const datasets = series.map((entry, index) => ({
+                    /**
+                     * Each series carries its own points: with a linear axis there is nothing to
+                     * line up by position, so the padding `null`s that only existed because the
+                     * other unit had no weighing at that instant are gone.
+                     */
+                    data: splitOnGaps(seriesByUnit[units[index]], MAX_WEIGHT_GAP_MS),
+                    borderColor: entry.color,
+                    backgroundColor: entry.color,
+                    pointBackgroundColor: entry.color,
+                    pointBorderColor: colors.surface,
+                    pointBorderWidth: 2,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    borderWidth: 2,
+                    /** Second encoding, besides the colour (Do's #3): dash and point shape. */
+                    borderDash: [...entry.borderDash],
+                    pointStyle: entry.pointStyle,
+                    tension: 0.3,
+                    /** `spanGaps` false (out of the box): the breaks `splitOnGaps` opened are breaks. */
+                }));
 
                 this.paintLegend(series);
 
                 this.chart = new Chart(this.$refs.chart, {
                     type: 'line',
-                    data: { labels: timestamps.map((timestamp) => formatChartDate(timestamp)), datasets },
+                    data: { datasets },
                     options: {
                         maintainAspectRatio: false,
                         color: colors.tick,
                         scales: {
-                            x: {
-                                type: 'category',
-                                /**
-                                 * La rejilla puede ser tenue, pero la LÍNEA DE EJE no: es la
-                                 * referencia contra la que se lee un peso, y en el tono de la
-                                 * rejilla era casi invisible (Don'ts #10). Va en el mismo tono de
-                                 * los rótulos.
-                                 */
-                                grid: { color: colors.grid },
-                                border: { color: colors.tick },
-                                ticks: { color: colors.tick, font: { family: CHART_FONTS.mono, size: 12 } },
-                            },
+                            x: timeAxisScale({ colors, format: timeFormat, bounds: timeAxisBounds(instants) }),
                             y: {
                                 grid: { color: colors.grid },
                                 border: { color: colors.tick },
@@ -792,29 +807,35 @@ export function bodyWeightPage() {
                                 title: {
                                     display: true,
                                     /**
-                                     * Con las dos unidades a la vez el rótulo las nombra a las dos:
-                                     * escribir solo una diría que toda la gráfica está en ella, que
-                                     * es justo lo que no ocurre.
+                                     * With both units at once the label names both: writing only
+                                     * one would say the whole chart is in it, which is exactly what
+                                     * does not happen.
                                      */
                                     text: joinList(labels),
                                     color: colors.tick,
                                     /**
-                                     * Peso 400: de IBM Plex Mono solo se empaqueta ese, y pedir 600
-                                     * obligaría al navegador a sintetizar una falsa negrita sobre la
-                                     * unidad.
+                                     * Weight 400: only that one of IBM Plex Mono is bundled, and
+                                     * asking for 600 would force the browser to synthesize a fake
+                                     * bold over the unit.
                                      */
                                     font: { family: CHART_FONTS.mono, size: 13, weight: 400 },
                                 },
                             },
                         },
                         plugins: {
-                            /** La leyenda vive fuera del lienzo, en HTML (ver `chartLegend.js`). */
+                            /** The legend lives outside the canvas, in HTML (see `chartLegend.js`). */
                             legend: { display: false },
                             /**
-                             * El par fondo/tinta sale del tema: el tooltip es el único componente
-                             * que se invierte respecto de la interfaz (§ Charts — Dark).
+                             * The background/ink pair comes from the theme: the tooltip is the only
+                             * component that inverts against the interface (§ Charts — Dark).
                              */
                             tooltip: {
+                                /**
+                                 * With a linear axis the title has to be stated: the free one of the
+                                 * category axis is gone, and without this the heading would be the
+                                 * raw epoch number.
+                                 */
+                                callbacks: { title: timeAxisTooltipTitle(timeFormat) },
                                 backgroundColor: colors.tooltipSurface,
                                 titleColor: colors.tooltipInk,
                                 bodyColor: colors.tooltipInk,
@@ -832,9 +853,9 @@ export function bodyWeightPage() {
         },
 
         /**
-         * Pinta la leyenda en HTML, fuera del lienzo (ver el JSDoc de `chartLegend.js` para el
-         * porqué). Con la lista vacía deja el nodo vacío: una leyenda huérfana describiría líneas
-         * que no están.
+         * Paints the legend in HTML, outside the canvas (see the JSDoc of `chartLegend.js` for the
+         * why). With an empty list it leaves the node empty: an orphan legend would describe lines
+         * that are not there.
          *
          * @param {list<{label: string, color: string, borderDash: list<number>, pointStyle: string}>} series
          */

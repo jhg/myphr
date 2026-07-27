@@ -1,12 +1,12 @@
 /**
- * Comprobaciones de la lógica pura de `health/insulinPage.js` (ADR 0004, ADR 0006).
+ * Checks of the pure logic of `health/insulinPage.js` (ADR 0004, ADR 0006).
  *
- * No se monta Alpine ni Chart.js: `insulinPage()` solo orquesta DOM y librerías externas, y esa
- * orquestación no se prueba aquí. Lo que se prueba es la lógica que no depende de ninguna de las
- * dos, exportada aparte para poder llamarla directamente (mismo enfoque que
+ * Neither Alpine nor Chart.js is mounted: `insulinPage()` only orchestrates DOM and external
+ * libraries, and that orchestration is not tested here. What is tested is the logic that depends
+ * on neither of the two, exported apart so it can be called directly (the same approach as
  * `tests/js/glucosePage.test.mjs`).
  *
- * Corredor incorporado de Node, como el resto de `tests/js` (ver `crypto.test.mjs`).
+ * Node's built-in runner, like the rest of `tests/js` (see `crypto.test.mjs`).
  *
  *     npm test
  */
@@ -25,29 +25,30 @@ import {
     productLabel,
     summarizeDailyDoses,
 } from '../../resources/js/health/insulinPage.js';
+import { MAX_CHART_DAYS } from '../../resources/js/health/dailyBands.js';
 import { datetimeLocalToCanonical, formatTzOffset } from '../../resources/js/health/datetimeLocal.js';
 import { setLocale } from '../../resources/js/i18n/index.js';
 
 /**
- * Estos tests afirman el texto **en castellano**, así que fijan el idioma en vez de darlo por
- * supuesto: el idioma por defecto del cliente es el inglés (igual que `config/app.php`), y en Node
- * no hay `<html lang>` del que deducirlo. Sin esta línea, las afirmaciones de texto de abajo
- * estarían comprobando el catálogo de respaldo sin decirlo.
+ * These tests assert the text **in Spanish**, so they set the language instead of assuming it: the
+ * client default language is English (as in `config/app.php`), and in Node there is no
+ * `<html lang>` to work it out from. Without this line, the text assertions below would be
+ * checking the fallback catalog without saying so.
  */
 setLocale('es');
 
 /**
- * Campos comunes de prueba, con la forma que devuelve `buildCommonEventFields` cuando no se le pasa
- * `origin`: siempre `manual`, porque el formulario de insulina no pregunta el origen del dato
- * (corrección de alcance del 2026-07-25).
+ * Test common fields, with the shape `buildCommonEventFields` returns when no `origin` is passed:
+ * always `manual`, because the insulin form does not ask for the origin of the datum (scope
+ * correction of 2026-07-25).
  */
 const COMMON_FIELDS = Object.freeze({ origin: 'manual', recordedBy: 'self' });
 
-test('INSULIN_UNIT es el código UCUM de la unidad internacional, [iU]', () => {
+test('INSULIN_UNIT is the UCUM code of the international unit, [iU]', () => {
     assert.equal(INSULIN_UNIT, '[iU]');
 });
 
-test('buildInsulinContent: forma exacta del ADR 0006, sin código LOINC', () => {
+test('buildInsulinContent: exact ADR 0006 shape, with no LOINC code', () => {
     const content = buildInsulinContent({
         dose: '6',
         insulinType: 'rapid',
@@ -75,7 +76,7 @@ test('buildInsulinContent: forma exacta del ADR 0006, sin código LOINC', () => 
     assert.equal('loinc' in content.data, false, 'la insulina no lleva código LOINC (ADR 0006)');
 });
 
-test('buildInsulinContent: la dosis decimal viaja como cadena, nunca como número (ADR 0004)', () => {
+test('buildInsulinContent: the decimal dose travels as a string, never as a number (ADR 0004)', () => {
     const content = buildInsulinContent({
         dose: '0.5',
         insulinType: 'rapid',
@@ -87,7 +88,7 @@ test('buildInsulinContent: la dosis decimal viaja como cadena, nunca como númer
     assert.equal(typeof content.data.dose, 'string');
 });
 
-test('buildInsulinContent: producto y zona ausentes cuando llegan vacíos o no se indican', () => {
+test('buildInsulinContent: product and site absent when they arrive empty or are not given', () => {
     const withEmptyStrings = buildInsulinContent({
         dose: '6',
         insulinType: 'long',
@@ -111,7 +112,7 @@ test('buildInsulinContent: producto y zona ausentes cuando llegan vacíos o no s
     assert.equal('site' in withoutFields.data, false);
 });
 
-test('buildInsulinContent: producto con espacios de sobra se recorta', () => {
+test('buildInsulinContent: a product with extra spaces is trimmed', () => {
     const content = buildInsulinContent({
         dose: '6',
         insulinType: 'mixed',
@@ -123,7 +124,7 @@ test('buildInsulinContent: producto con espacios de sobra se recorta', () => {
     assert.equal(content.data.product, 'Humalog Mix 25');
 });
 
-test('buildInsulinContent: los campos comunes van en el nivel superior, nunca dentro de data', () => {
+test('buildInsulinContent: the common fields go at the top level, never inside data', () => {
     const content = buildInsulinContent({
         dose: '6',
         insulinType: 'rapid',
@@ -142,7 +143,7 @@ test('buildInsulinContent: los campos comunes van en el nivel superior, nunca de
     assert.equal('note' in content.data, false);
 });
 
-test('buildInsulinContent: sin dosis, lanza en vez de guardar algo a medias', () => {
+test('buildInsulinContent: with no dose, it throws instead of storing something half done', () => {
     assert.throws(() => buildInsulinContent({
         dose: '   ',
         insulinType: 'rapid',
@@ -151,7 +152,7 @@ test('buildInsulinContent: sin dosis, lanza en vez de guardar algo a medias', ()
     }));
 });
 
-test('buildInsulinContent: sin tipo de insulina, lanza en vez de adivinar uno', () => {
+test('buildInsulinContent: with no insulin type, it throws instead of guessing one', () => {
     assert.throws(() => buildInsulinContent({
         dose: '6',
         insulinType: '',
@@ -166,7 +167,7 @@ test('buildInsulinContent: sin tipo de insulina, lanza en vez de adivinar uno', 
     }));
 });
 
-test('injectionSiteLabel: tolera un evento sin site y no inventa nada', () => {
+test('injectionSiteLabel: tolerates an event with no site and invents nothing', () => {
     const catalog = { injectionSites: [{ token: 'abdomen', label: 'Abdomen' }] };
 
     assert.equal(injectionSiteLabel(catalog, {}), null);
@@ -175,13 +176,13 @@ test('injectionSiteLabel: tolera un evento sin site y no inventa nada', () => {
     assert.equal(injectionSiteLabel(catalog, { site: 'unknown' }), 'unknown');
 });
 
-test('productLabel: tolera un evento sin product y no inventa nada', () => {
+test('productLabel: tolerates an event with no product and invents nothing', () => {
     assert.equal(productLabel({}), null);
     assert.equal(productLabel({ product: '' }), null);
     assert.equal(productLabel({ product: 'Lantus' }), 'Lantus');
 });
 
-test('filterInsulinEvents: descarta eventos de otro tipo', () => {
+test('filterInsulinEvents: discards events of another type', () => {
     const events = [
         { id: '1', occurredAt: '2026-07-25T08:00:00.000000Z', content: { type: 'insulin' } },
         { id: '2', occurredAt: '2026-07-25T08:05:00.000000Z', content: { type: 'glucose' } },
@@ -193,7 +194,7 @@ test('filterInsulinEvents: descarta eventos de otro tipo', () => {
     assert.equal(result[0].id, '1');
 });
 
-test('groupInsulinByDay: suma la dosis por día y tipo, y tolera decimales', () => {
+test('groupInsulinByDay: adds up the dose per day and type, and tolerates decimals', () => {
     const events = [
         {
             id: '1',
@@ -224,27 +225,102 @@ test('groupInsulinByDay: suma la dosis por día y tipo, y tolera decimales', () 
     assert.deepEqual(totalsByType.long, [10, 0]);
 });
 
-test('groupInsulinByDay: sin eventos, no hay días ni series', () => {
+test('groupInsulinByDay: the axis covers the whole stretch, so a break in the therapy is seen', () => {
+    /** Injections on the 1st, the 2nd and the 20th: eighteen days of nothing in between. */
+    const events = ['2026-03-01', '2026-03-02', '2026-03-20'].map((day, index) => ({
+        id: String(index),
+        occurredAt: `${day}T08:00:00.000000Z`,
+        content: { data: { insulinType: 'rapid', dose: '6' }, tz: '+00:00' },
+    }));
+
+    const { days, totalsByType, omittedDays } = groupInsulinByDay(events);
+
+    /** Twenty days on the axis, not three bars stuck together. */
+    assert.equal(days.length, 20);
+    assert.equal(days[0], '2026-03-01');
+    assert.equal(days[19], '2026-03-20');
+    assert.equal(omittedDays, 0);
+
+    /** The days with no injection are a gap, never a zero: a zero would say the dose was nil. */
+    assert.deepEqual(totalsByType.rapid.slice(0, 3), [6, 6, null]);
+    assert.equal(totalsByType.rapid[19], 6);
+    assert.equal(totalsByType.rapid.filter((dose) => dose === null).length, 17);
+});
+
+test('groupInsulinByDay: inside a day with records, a type not injected is a zero and not a gap', () => {
+    const events = [
+        {
+            id: '1',
+            occurredAt: '2026-03-01T08:00:00.000000Z',
+            content: { data: { insulinType: 'rapid', dose: '6' }, tz: '+00:00' },
+        },
+        {
+            id: '2',
+            occurredAt: '2026-03-02T08:00:00.000000Z',
+            content: { data: { insulinType: 'long', dose: '10' }, tz: '+00:00' },
+        },
+    ];
+
+    const { totalsByType } = groupInsulinByDay(events);
+
+    assert.deepEqual(totalsByType.rapid, [6, 0]);
+    assert.deepEqual(totalsByType.long, [0, 10]);
+});
+
+test('groupInsulinByDay: a very long stretch is clipped and says how much it left out', () => {
+    const events = [
+        {
+            id: '1',
+            occurredAt: '2024-01-01T08:00:00.000000Z',
+            content: { data: { insulinType: 'rapid', dose: '6' }, tz: '+00:00' },
+        },
+        {
+            id: '2',
+            occurredAt: '2026-01-01T08:00:00.000000Z',
+            content: { data: { insulinType: 'rapid', dose: '6' }, tz: '+00:00' },
+        },
+    ];
+
+    const { days, omittedDays } = groupInsulinByDay(events);
+
+    assert.equal(days.length, MAX_CHART_DAYS);
+    /** The most recent ones are kept: the stretch being looked at is the one at the end. */
+    assert.equal(days[days.length - 1], '2026-01-01');
+    assert.ok(omittedDays > 0);
+});
+
+test('groupInsulinByDay: the day is the one of the zone it was recorded in, not the browser one', () => {
+    const events = [{
+        id: '1',
+        /** 23:30 in Madrid on the 4th, which is 21:30 UTC: it belongs to the 4th, not the 5th. */
+        occurredAt: '2026-03-04T21:30:00.000000Z',
+        content: { data: { insulinType: 'rapid', dose: '6' }, tz: '+02:00' },
+    }];
+
+    assert.deepEqual(groupInsulinByDay(events).days, ['2026-03-04']);
+});
+
+test('groupInsulinByDay: with no events, there are no days and no series', () => {
     const { days, totalsByType } = groupInsulinByDay([]);
 
     assert.deepEqual(days, []);
     assert.deepEqual(totalsByType, {});
 });
 
-test('formatTzOffset: signo y relleno a dos dígitos', () => {
+test('formatTzOffset: sign and padding to two digits', () => {
     assert.equal(formatTzOffset(120), '+02:00');
     assert.equal(formatTzOffset(-300), '-05:00');
     assert.equal(formatTzOffset(0), '+00:00');
 });
 
-test('datetimeLocalToCanonical: convierte con un desfase explícito, sin depender de la zona horaria local', () => {
+test('datetimeLocalToCanonical: converts with an explicit offset, without depending on the local time zone', () => {
     const { occurredAt, tz } = datetimeLocalToCanonical('2026-07-25T09:30:00', { timezoneOffsetMinutes: -120 });
 
     assert.equal(occurredAt, '2026-07-25T07:30:00.000000Z');
     assert.equal(tz, '+02:00');
 });
 
-test('la dosis pasa por la validacion numerica: coma normalizada a punto y limite de decimales', () => {
+test('the dose goes through the numeric validation: comma normalized to a dot and decimal limit', () => {
     const content = buildInsulinContent({
         dose: parseNumericValue('7,85', 'La dosis'),
         insulinType: 'rapid',
@@ -259,13 +335,13 @@ test('la dosis pasa por la validacion numerica: coma normalizada a punto y limit
     assert.throws(() => parseNumericValue('-1', 'La dosis'), /negativ/);
 });
 
-test('summarizeDailyDoses: sin días, explica qué aparecerá aquí en vez de dejar el pie en blanco', () => {
+test('summarizeDailyDoses: with no days, it explains what will appear here instead of leaving the caption blank', () => {
     const caption = summarizeDailyDoses([], {}, (type) => type);
 
     assert.match(caption, /Aquí aparecerá la dosis total de cada día/);
 });
 
-test('summarizeDailyDoses: dice en texto los tipos y su dosis acumulada (DESIGN.md Do\'s #3)', () => {
+test('summarizeDailyDoses: it states in text the types and their accumulated dose (DESIGN.md Do\'s #3)', () => {
     const caption = summarizeDailyDoses(
         ['2026-07-25', '2026-07-26'],
         { rapid: [6.5, 7], long: [10, 0] },
@@ -278,14 +354,14 @@ test('summarizeDailyDoses: dice en texto los tipos y su dosis acumulada (DESIGN.
 });
 
 /**
- * Contrato de DOM entre `insulin.blade.php` e `insulinPage.js`.
+ * DOM contract between `insulin.blade.php` and `insulinPage.js`.
  *
- * Un `this.$refs.loQueSea` que la plantilla no declara es `undefined` y revienta al pulsar, sin
- * ningún aviso previo; un `x-ref` declarado y que nadie lee es peso muerto que aparenta un contrato
- * que no existe. Ninguno de los dos lo detecta el navegador, así que lo detecta este test: los dos
- * conjuntos tienen que coincidir exactamente.
+ * A `this.$refs.whatever` the template does not declare is `undefined` and blows up on press, with
+ * no warning beforehand; an `x-ref` declared and read by nobody is dead weight pretending a
+ * contract that does not exist. The browser catches neither, so this test does: both sets have to
+ * match exactly.
  */
-test('contrato de DOM: los x-ref de la plantilla y los $refs del módulo coinciden exactamente', () => {
+test('DOM contract: the x-ref of the template and the $refs of the module match exactly', () => {
     const template = readFileSync(new URL('../../resources/views/phr/pages/insulin.blade.php', import.meta.url), 'utf8');
     const module = readFileSync(new URL('../../resources/js/health/insulinPage.js', import.meta.url), 'utf8');
 
@@ -306,14 +382,34 @@ test('contrato de DOM: los x-ref de la plantilla y los $refs del módulo coincid
 });
 
 /**
- * Contrato con el servidor, la mitad que se puede comprobar sin PHP: qué métodos llama el módulo.
- * Que existan de verdad en `App\Filament\Pages\Insulin` lo comprueba
- * `tests/Feature/InsulinPageTest.php`, que es quien puede mirar la clase por reflexión.
+ * Contract with the server, the half that can be checked without PHP: which methods the module
+ * calls. That they really exist in `App\Filament\Pages\Insulin` is checked by
+ * `tests/Feature/InsulinPageTest.php`, which can look at the class by reflection.
  */
-test('contrato con el servidor: el módulo solo llama a storeEvent y fetchEvents', () => {
+test('contract with the server: the module only calls storeEvent and fetchEvents', () => {
     const module = readFileSync(new URL('../../resources/js/health/insulinPage.js', import.meta.url), 'utf8');
 
     const called = [...new Set([...module.matchAll(/\$wire\.([a-zA-Z]+)/g)].map((match) => match[1]))].sort();
 
     assert.deepEqual(called, ['fetchEvents', 'storeEvent']);
+});
+
+test('summarizeDailyDoses: it counts the days WITH records, not the days on the axis', () => {
+    /** Twenty days of axis, three with an injection: saying "20 days with records" would be false. */
+    const days = Array.from({ length: 20 }, (unused, index) => `2026-03-${String(index + 1).padStart(2, '0')}`);
+    const doses = days.map((unused, index) => ([0, 1, 19].includes(index) ? 6 : null));
+
+    const caption = summarizeDailyDoses(days, { rapid: doses }, (type) => type);
+
+    assert.match(caption, /3 días con registro/);
+    /** The gaps do not add to the total either: they are not zeros. */
+    assert.match(caption, /rapid: 18 \[iU\]/);
+});
+
+test('summarizeDailyDoses: a silent clip would read as "there was nothing before", so it is stated', () => {
+    const withoutClip = summarizeDailyDoses(['2026-03-01'], { rapid: [6] }, (type) => type);
+    const withClip = summarizeDailyDoses(['2026-03-01'], { rapid: [6] }, (type) => type, 12);
+
+    assert.notEqual(withClip, withoutClip);
+    assert.match(withClip, /12/);
 });

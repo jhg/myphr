@@ -1,12 +1,12 @@
 /**
- * Comprobaciones de la lógica pura de `health/bloodPressurePage.js` (ADR 0004, ADR 0006, ADR 0008).
+ * Checks of the pure logic of `health/bloodPressurePage.js` (ADR 0004, ADR 0006, ADR 0008).
  *
- * No se monta Alpine ni Chart.js: `bloodPressurePage()` solo orquesta DOM y librerías externas, y
- * esa orquestación no se prueba aquí. Lo que se prueba es la lógica que no depende de ninguna de
- * las dos, exportada aparte para poder llamarla directamente. Mismo enfoque que
+ * Neither Alpine nor Chart.js is mounted: `bloodPressurePage()` only orchestrates DOM and external
+ * libraries, and that orchestration is not tested here. What is tested is the logic that depends
+ * on neither of the two, exported apart so it can be called directly. Same approach as
  * `tests/js/glucosePage.test.mjs`.
  *
- * Corredor incorporado de Node, como el resto de `tests/js` (ver `crypto.test.mjs`).
+ * Node's built-in runner, like the rest of `tests/js` (see `crypto.test.mjs`).
  *
  *     npm test
  */
@@ -26,10 +26,10 @@ import {
 import { datetimeLocalToCanonical, formatTzOffset } from '../../resources/js/health/datetimeLocal.js';
 import { parseNumericValue } from '../../resources/js/health/numericValue.js';
 
-/** Campos comunes de prueba, con la forma que devuelve `buildCommonEventFields` (ADR 0006). */
+/** Test common fields, with the shape `buildCommonEventFields` returns (ADR 0006). */
 const COMMON_FIELDS = Object.freeze({ origin: 'manual', recordedBy: 'self' });
 
-/** Catálogo de prueba, con la forma que devuelve `BloodPressure::catalog()` (ADR 0005, ADR 0008). */
+/** Test catalog, with the shape `BloodPressure::catalog()` returns (ADR 0005, ADR 0008). */
 const CATALOG = Object.freeze({
     arms: [
         { token: 'left', label: 'Izquierdo' },
@@ -44,7 +44,7 @@ const CATALOG = Object.freeze({
     loinc: { systolic: '8480-6', diastolic: '8462-4', pulse: '8867-4' },
 });
 
-test('buildBloodPressureContent: forma exacta del ADR 0006, con pulso', () => {
+test('buildBloodPressureContent: exact ADR 0006 shape, with a pulse', () => {
     const content = buildBloodPressureContent({
         systolic: '120',
         diastolic: '80',
@@ -75,7 +75,7 @@ test('buildBloodPressureContent: forma exacta del ADR 0006, con pulso', () => {
     });
 });
 
-test('buildBloodPressureContent: los tres valores viajan como cadena, nunca como número (ADR 0004)', () => {
+test('buildBloodPressureContent: the three values travel as strings, never as numbers (ADR 0004)', () => {
     const content = buildBloodPressureContent({
         systolic: '135',
         diastolic: '85',
@@ -92,7 +92,7 @@ test('buildBloodPressureContent: los tres valores viajan como cadena, nunca como
     assert.equal(typeof content.data.pulse, 'string');
 });
 
-test('buildBloodPressureContent: los tres valores que llegan al payload son siempre cadena con punto, tras pasar por parseNumericValue (criterio numérico del cliente)', () => {
+test('buildBloodPressureContent: the three values reaching the payload are always strings with a dot, after going through parseNumericValue (client numeric criterion)', () => {
     const content = buildBloodPressureContent({
         systolic: parseNumericValue('13,5', 'La sistólica'),
         diastolic: parseNumericValue('8,5', 'La diastólica'),
@@ -109,7 +109,7 @@ test('buildBloodPressureContent: los tres valores que llegan al payload son siem
     assert.equal(content.data.pulse, '6.8');
 });
 
-test('buildBloodPressureContent: pulso ausente, no entra pulse, pulseUnit ni loinc.pulse', () => {
+test('buildBloodPressureContent: with an absent pulse, neither pulse, pulseUnit nor loinc.pulse go in', () => {
     const withoutPulseField = buildBloodPressureContent({
         systolic: '120',
         diastolic: '80',
@@ -140,7 +140,7 @@ test('buildBloodPressureContent: pulso ausente, no entra pulse, pulseUnit ni loi
     assert.equal('pulseUnit' in withEmptyPulse.data, false);
 });
 
-test('buildBloodPressureContent: los campos comunes van en el nivel superior, nunca dentro de data', () => {
+test('buildBloodPressureContent: the common fields go at the top level, never inside data', () => {
     const content = buildBloodPressureContent({
         systolic: '120',
         diastolic: '80',
@@ -162,7 +162,7 @@ test('buildBloodPressureContent: los campos comunes van en el nivel superior, nu
     assert.equal('note' in content.data, false);
 });
 
-test('buildBloodPressureContent: sin sistólica, diastólica, brazo o postura, lanza en vez de guardar algo a medias', () => {
+test('buildBloodPressureContent: with no systolic, diastolic, arm or posture, it throws instead of storing something half done', () => {
     const base = { tz: '+02:00', catalog: CATALOG, common: COMMON_FIELDS };
 
     assert.throws(() => buildBloodPressureContent({ ...base, systolic: '', diastolic: '80', arm: 'left', posture: 'sitting' }));
@@ -171,7 +171,7 @@ test('buildBloodPressureContent: sin sistólica, diastólica, brazo o postura, l
     assert.throws(() => buildBloodPressureContent({ ...base, systolic: '120', diastolic: '80', arm: 'left', posture: '' }));
 });
 
-test('buildBloodPressureContent: los tres códigos LOINC son los del catálogo, no inventados', () => {
+test('buildBloodPressureContent: the three LOINC codes are the ones of the catalog, not invented', () => {
     const content = buildBloodPressureContent({
         systolic: '120',
         diastolic: '80',
@@ -188,17 +188,17 @@ test('buildBloodPressureContent: los tres códigos LOINC son los del catálogo, 
     assert.equal(content.data.loinc.pulse, '8867-4');
 });
 
-test('methodKey: junta brazo y postura en una sola clave estable', () => {
+test('methodKey: joins arm and posture into a single stable key', () => {
     assert.equal(methodKey('left', 'sitting'), 'left_sitting');
     assert.equal(methodKey('right', 'standing'), 'right_standing');
 });
 
-test('methodLabel: resuelve la etiqueta del catálogo para brazo y postura', () => {
+test('methodLabel: resolves the catalog label for arm and posture', () => {
     assert.equal(methodLabel(CATALOG, 'left', 'sitting'), 'Izquierdo, Sentado');
     assert.equal(methodLabel(CATALOG, 'right', 'standing'), 'Derecho, De pie');
 });
 
-test('filterBloodPressureEvents: descarta los eventos que no son de tipo bloodPressure', () => {
+test('filterBloodPressureEvents: discards the events that are not of type bloodPressure', () => {
     const events = [
         { id: '1', occurredAt: 'a', content: { type: 'bloodPressure', data: {} } },
         { id: '2', occurredAt: 'b', content: { type: 'glucose', data: {} } },
@@ -211,7 +211,7 @@ test('filterBloodPressureEvents: descarta los eventos que no son de tipo bloodPr
     assert.deepEqual(filtered.map((event) => event.id), ['1', '4']);
 });
 
-test('groupBloodPressureByMethod: separa sistólica y diastólica por método (brazo + postura), ordenadas', () => {
+test('groupBloodPressureByMethod: separates systolic and diastolic by method (arm + posture), sorted', () => {
     const events = [
         bloodPressureEvent({ occurredAt: '2026-07-25T09:00:00.000000Z', systolic: '122', diastolic: '80', arm: 'left', posture: 'sitting' }),
         bloodPressureEvent({ occurredAt: '2026-07-25T08:00:00.000000Z', systolic: '118', diastolic: '78', arm: 'left', posture: 'sitting' }),
@@ -234,7 +234,7 @@ test('groupBloodPressureByMethod: separa sistólica y diastólica por método (b
     assert.equal(seriesByMethod.right_standing.systolic[0].y, 140);
 });
 
-test('groupBloodPressureByMethod: no mezcla brazos ni posturas distintas en una misma serie (ADR 0008)', () => {
+test('groupBloodPressureByMethod: it does not mix different arms or postures into one series (ADR 0008)', () => {
     const events = [
         bloodPressureEvent({ occurredAt: '2026-07-25T09:00:00.000000Z', systolic: '120', diastolic: '80', arm: 'left', posture: 'sitting' }),
         bloodPressureEvent({ occurredAt: '2026-07-25T09:05:00.000000Z', systolic: '135', diastolic: '88', arm: 'left', posture: 'standing' }),
@@ -249,7 +249,7 @@ test('groupBloodPressureByMethod: no mezcla brazos ni posturas distintas en una 
     assert.equal(seriesByMethod.right_sitting.systolic.length, 1);
 });
 
-test('groupPulseByMethod: agrupa el pulso por método y cuenta los registros sin pulso', () => {
+test('groupPulseByMethod: groups the pulse by method and counts the records with no pulse', () => {
     const events = [
         bloodPressureEvent({ occurredAt: '2026-07-25T09:00:00.000000Z', systolic: '120', diastolic: '80', arm: 'left', posture: 'sitting', pulse: '70' }),
         bloodPressureEvent({ occurredAt: '2026-07-25T08:00:00.000000Z', systolic: '118', diastolic: '78', arm: 'left', posture: 'sitting', pulse: '65' }),
@@ -265,7 +265,7 @@ test('groupPulseByMethod: agrupa el pulso por método y cuenta los registros sin
     assert.equal(seriesByMethod.left_sitting[1].y, 70);
 });
 
-test('groupPulseByMethod: tolera un evento sin pulso y no lo cuenta como cero', () => {
+test('groupPulseByMethod: tolerates an event with no pulse and does not count it as a zero', () => {
     const events = [
         bloodPressureEvent({ occurredAt: '2026-07-25T09:00:00.000000Z', systolic: '120', diastolic: '80', arm: 'left', posture: 'sitting' }),
     ];
@@ -276,13 +276,13 @@ test('groupPulseByMethod: tolera un evento sin pulso y no lo cuenta como cero', 
     assert.equal(missingPulseCount, 1);
 });
 
-test('formatTzOffset: signo positivo cuando la hora local va por delante de UTC', () => {
+test('formatTzOffset: positive sign when local time is ahead of UTC', () => {
     assert.equal(formatTzOffset(120), '+02:00');
     assert.equal(formatTzOffset(-300), '-05:00');
     assert.equal(formatTzOffset(0), '+00:00');
 });
 
-test('datetimeLocalToCanonical: instante correcto con un desfase positivo (Madrid, +02:00)', () => {
+test('datetimeLocalToCanonical: correct instant with a positive offset (Madrid, +02:00)', () => {
     const { occurredAt, tz } = datetimeLocalToCanonical('2026-07-25T14:30:00', {
         timezoneOffsetMinutes: -120,
     });
@@ -291,7 +291,7 @@ test('datetimeLocalToCanonical: instante correcto con un desfase positivo (Madri
     assert.equal(tz, '+02:00');
 });
 
-test('datetimeLocalToCanonical: acepta datetime-local sin segundos', () => {
+test('datetimeLocalToCanonical: accepts a datetime-local with no seconds', () => {
     const { occurredAt } = datetimeLocalToCanonical('2026-07-25T11:08', { timezoneOffsetMinutes: 0 });
 
     assert.equal(occurredAt, '2026-07-25T11:08:00.000000Z');
@@ -325,31 +325,31 @@ function bloodPressureEvent({ occurredAt, systolic, diastolic, arm, posture, pul
 }
 
 /*
- * Contrato de la clave de método (ADR 0008). `methodKey` y `splitMethodKey` tienen que ser inversas
- * exactas: la gráfica y los pies agrupan por esa clave y luego la deshacen para rotular. Si el
- * corte se hiciera por todos los separadores y no por el primero, un token compuesto daría tres
- * trozos y la etiqueta saldría mal, en silencio.
+ * Contract of the method key (ADR 0008). `methodKey` and `splitMethodKey` have to be exact
+ * inverses: the chart and the captions group by that key and then undo it to label. If the split
+ * were done on every separator and not on the first one, a composite token would give three pieces
+ * and the label would come out wrong, in silence.
  */
-test('splitMethodKey deshace methodKey', () => {
+test('splitMethodKey undoes methodKey', () => {
     assert.deepEqual(splitMethodKey(methodKey('left', 'sitting')), ['left', 'sitting']);
     assert.deepEqual(splitMethodKey(methodKey('right', 'standing')), ['right', 'standing']);
 });
 
-test('splitMethodKey corta por el primer separador, no por todos', () => {
+test('splitMethodKey splits on the first separator, not on every one', () => {
     assert.deepEqual(splitMethodKey(methodKey('left', 'semi_recumbent')), ['left', 'semi_recumbent']);
     assert.equal(methodLabel(CATALOG, ...splitMethodKey(methodKey('left', 'sitting'))), 'Izquierdo, Sentado');
 });
 
-test('splitMethodKey tolera una clave sin separador en vez de reventar', () => {
+test('splitMethodKey tolerates a key with no separator instead of blowing up', () => {
     assert.deepEqual(splitMethodKey('left'), ['left', '']);
 });
 
 /*
- * Un sobre de otra pantalla no puede colarse en el historial de tensión ni en las gráficas: el
- * servidor no puede filtrar por tipo porque va cifrado (ADR 0006), así que el filtro del cliente es
- * lo único que hay.
+ * An envelope of another screen cannot slip into the blood pressure history or into the charts:
+ * the server cannot filter by type because it travels encrypted (ADR 0006), so the client filter
+ * is all there is.
  */
-test('filterBloodPressureEvents deja fuera un evento sin contenido descifrado', () => {
+test('filterBloodPressureEvents leaves out an event with no decrypted content', () => {
     const filtered = filterBloodPressureEvents([
         { id: '1', occurredAt: '2026-07-25T10:00:00.000000Z', content: null },
         { id: '2', occurredAt: '2026-07-25T11:00:00.000000Z', content: { type: 'bloodPressure', data: {} } },
@@ -360,19 +360,19 @@ test('filterBloodPressureEvents deja fuera un evento sin contenido descifrado', 
 });
 
 /*
- * Estado sin datos: ninguna de las dos agrupaciones puede inventar una serie ni un cero. Un cero en
- * una gráfica de tensión se lee como una medida real.
+ * State with no data: neither grouping can invent a series or a zero. A zero in a blood pressure
+ * chart reads as a real measurement.
  */
-test('sin eventos, ninguna agrupación produce series ni ceros', () => {
+test('with no events, no grouping produces series or zeros', () => {
     assert.deepEqual(groupBloodPressureByMethod([]), {});
     assert.deepEqual(groupPulseByMethod([]), { seriesByMethod: {}, missingPulseCount: 0 });
 });
 
 /*
- * El pulso es opcional (ADR 0006). Si no se teclea, no puede aparecer como cadena vacía ni como
- * cero en el contenido cifrado: ausencia tiene que significar ausencia.
+ * The pulse is optional (ADR 0006). If it is not typed, it cannot appear as an empty string or as
+ * a zero in the encrypted content: absence has to mean absence.
  */
-test('buildBloodPressureContent omite pulso, pulseUnit y loinc.pulse cuando no se indica el pulso', () => {
+test('buildBloodPressureContent leaves out pulse, pulseUnit and loinc.pulse when no pulse is given', () => {
     const content = buildBloodPressureContent({
         systolic: '118',
         diastolic: '76',
@@ -387,4 +387,64 @@ test('buildBloodPressureContent omite pulso, pulseUnit y loinc.pulse cuando no s
     assert.equal('pulse' in content.data, false);
     assert.equal('pulseUnit' in content.data, false);
     assert.equal('pulse' in content.data.loinc, false);
+});
+
+test('groupBloodPressureByMethod: the axis instant keeps the burst apart from the loose reading', () => {
+    /**
+     * Three readings of one same morning and one from a month before. Evenly spaced, the burst
+     * —which is what makes those three one single measurement— looked like four loose readings.
+     */
+    const events = [
+        '2026-02-25T08:00:00.000000Z',
+        '2026-03-25T08:00:00.000000Z',
+        '2026-03-25T08:02:00.000000Z',
+        '2026-03-25T08:04:00.000000Z',
+    ].map((occurredAt) => bloodPressureEvent({
+        occurredAt,
+        systolic: '128',
+        diastolic: '82',
+        arm: 'left',
+        posture: 'sitting',
+    }));
+
+    const { systolic } = groupBloodPressureByMethod(events).left_sitting;
+    const gaps = systolic.slice(1).map((point, index) => point.x - systolic[index].x);
+
+    assert.equal(gaps[0], 28 * 86_400_000);
+    assert.deepEqual(gaps.slice(1), [120_000, 120_000]);
+});
+
+test('groupBloodPressureByMethod: the instant is the wall clock of the event, not the browser one', () => {
+    const event = bloodPressureEvent({
+        /** 08:00 in Madrid, which is 06:00 UTC: on the axis it has to sit at 08:00. */
+        occurredAt: '2026-03-25T06:00:00.000000Z',
+        systolic: '128',
+        diastolic: '82',
+        arm: 'left',
+        posture: 'sitting',
+    });
+
+    event.content.tz = '+02:00';
+
+    const { systolic } = groupBloodPressureByMethod([event]).left_sitting;
+
+    assert.equal(new Date(systolic[0].x).getUTCHours(), 8);
+});
+
+test('groupPulseByMethod: the pulse travels on the same instant as the pressure it came with', () => {
+    const event = bloodPressureEvent({
+        occurredAt: '2026-03-25T06:00:00.000000Z',
+        systolic: '128',
+        diastolic: '82',
+        arm: 'left',
+        posture: 'sitting',
+        pulse: '70',
+    });
+
+    event.content.tz = '+02:00';
+
+    const { systolic } = groupBloodPressureByMethod([event]).left_sitting;
+    const { seriesByMethod } = groupPulseByMethod([event]);
+
+    assert.equal(seriesByMethod.left_sitting[0].x, systolic[0].x);
 });
