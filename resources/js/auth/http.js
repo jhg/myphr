@@ -53,7 +53,7 @@ export function updateCsrfToken(token) {
  *
  * @param {string} method
  * @param {string} url
- * @param {object} body
+ * @param {object|undefined} body Cuerpo JSON, o `undefined` para no mandar ninguno (`GET`).
  * @param {Record<string, string>} headers Cabeceras adicionales (`If-Match`, por ejemplo).
  * @returns {Promise<any>} Cuerpo decodificado de una respuesta 2xx.
  * @throws {AuthRequestError} Cualquier respuesta no 2xx, cualquier cuerpo que no sea JSON y
@@ -62,19 +62,28 @@ export function updateCsrfToken(token) {
 async function sendJson(method, url, body, headers) {
     let response;
 
+    /**
+     * `fetch` lanza un `TypeError` si a un `GET` se le adjunta cuerpo, así que el cuerpo se omite
+     * cuando no hay ninguno en vez de mandar el `"undefined"` que produciría `JSON.stringify`.
+     */
+    const request = {
+        method,
+        credentials: 'same-origin',
+        headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRF-TOKEN': csrfToken(),
+            ...headers,
+        },
+    };
+
+    if (body !== undefined) {
+        request.body = JSON.stringify(body);
+    }
+
     try {
-        response = await fetch(url, {
-            method,
-            credentials: 'same-origin',
-            headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-                'X-Requested-With': 'XMLHttpRequest',
-                'X-CSRF-TOKEN': csrfToken(),
-                ...headers,
-            },
-            body: JSON.stringify(body),
-        });
+        response = await fetch(url, request);
     } catch {
         throw new AuthRequestError('The request could not be sent.');
     }
@@ -122,4 +131,30 @@ export function postJson(url, body = {}, headers = {}) {
  */
 export function putJson(url, body = {}, headers = {}) {
     return sendJson('PUT', url, body, headers);
+}
+
+/**
+ * GET que espera JSON, con el mismo CSRF y las mismas credenciales que el resto.
+ *
+ * Lo usa el listado de recortes compartidos (ADR 0011). Va por aquí y no por un `fetch` suelto para
+ * que la sesión y el token sigan viviendo en un único sitio: un segundo cliente HTTP sería un
+ * segundo sitio donde olvidarlos.
+ *
+ * @param {string} url
+ * @param {Record<string, string>} [headers]
+ * @returns {Promise<any>}
+ */
+export function getJson(url, headers = {}) {
+    return sendJson('GET', url, undefined, headers);
+}
+
+/**
+ * DELETE que espera JSON. Lo usa la revocación de un recorte compartido (ADR 0011).
+ *
+ * @param {string} url
+ * @param {Record<string, string>} [headers]
+ * @returns {Promise<any>}
+ */
+export function deleteJson(url, headers = {}) {
+    return sendJson('DELETE', url, undefined, headers);
 }

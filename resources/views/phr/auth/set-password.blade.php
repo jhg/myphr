@@ -69,7 +69,19 @@
                     {{-- Campo obligatorio (Do's #5): asterisco visible en #DC2626. --}}
                     <span class="text-destructive-text" aria-hidden="true">*</span>
                 </label>
-                <input id="phr-login" type="email" autocomplete="username" autocapitalize="none"
+                {{--
+                    `autofocus` en el correo porque es el primer campo del formulario y el primero
+                    que se rellena: sin él hace falta un clic antes de escribir, y en móvil ese clic
+                    es lo que retrasa la aparición del teclado. En la contraseña sería un error:
+                    dejaría el correo en blanco por detrás del cursor.
+
+                    Es HTML puro y lo aplica el navegador al parsear el documento, antes de que
+                    Alpine hidrate, así que no interfiere con el componente. A esta pantalla se
+                    llega siempre con una carga completa del documento —es un controlador invocable
+                    plano y el token viaja en el fragmento de la URL, sin `wire:navigate` de por
+                    medio—, que es el único caso que `autofocus` cubre.
+                --}}
+                <input id="phr-login" type="email" autofocus autocomplete="username" autocapitalize="none"
                        spellcheck="false" required class="{{ $inputClass }}" x-ref="login" />
             </div>
 

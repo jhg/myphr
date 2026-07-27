@@ -2,7 +2,17 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\Sharing\ShareChallengeController;
+use App\Http\Controllers\Sharing\ShareOpenController;
+use App\Http\Controllers\Sharing\ShareReaderPageController;
+use App\Http\Middleware\NoStore;
+use App\Http\Middleware\WithoutLivewireAssets;
+use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
+use Illuminate\Cookie\Middleware\EncryptCookies;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
+use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Route;
+use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 /**
  * La raíz del sitio manda al panel, que es toda la aplicación.
@@ -17,3 +27,59 @@ use Illuminate\Support\Facades\Route;
  * sesión vive en un solo sitio.
  */
 Route::redirect('/', '/phr')->name('home');
+
+/**
+ * Lectura de un recorte compartido con un profesional (ADR 0011).
+ *
+ * Las tres rutas viven aquí y no bajo `phr` porque el prefijo del panel es el de Filament
+ * (`PhrPanelProvider::path('phr')`) y todo lo que se monta ahí pasa por `routes()`, que Filament
+ * envuelve con el grupo `web` y por tanto con sesión y CSRF, incluidas sus rutas sin autenticar.
+ * Esta pila es la contraria: sin cookie de sesión, sin CSRF y sin nada que identifique a quien lee.
+ *
+ * El prefijo es `/s`, corto porque acaba en un QR —cada carácter son módulos de más en el código— y
+ * mudo porque la URL se enseña en una consulta y se guarda en el historial de un dispositivo ajeno:
+ * `/compartir-historial-medico/…` diría de qué va antes de que nadie la abra. El dominio ya delata
+ * bastante por Certificate Transparency.
+ *
+ * Se retiran cinco middlewares del grupo `web`, uno a uno y de forma explícita:
+ *
+ * * `StartSession`, `EncryptCookies` y `AddQueuedCookiesToResponse`, para que la respuesta no lleve
+ *   ninguna cookie. Una cookie de sesión aquí sería un identificador estable de un profesional en su
+ *   consulta, correlacionable entre los recortes de dos pacientes distintos.
+ * * `PreventRequestForgery`, porque no hay sesión que falsificar y exigir un token obligaría a
+ *   pintarlo en la página, que es tanto como no exigirlo.
+ * * `ShareErrorsFromSession`, que sin sesión revienta.
+ *
+ * `WithoutLivewireAssets` apaga la inyección automática del runtime de Livewire, que se cuela en
+ * cualquier respuesta HTML de 200 sin que la plantilla lo pida: el porqué está en el propio
+ * middleware.
+ *
+ * `NoStore` sí se aplica: ya pone `Cache-Control: no-store`, `Pragma: no-cache` y
+ * `Referrer-Policy: no-referrer`, esta última especialmente pertinente aquí, porque la URL lleva `S`
+ * en el fragmento y el resto de la URL no debe viajar como `Referer` a ningún recurso externo.
+ *
+ * Los limitadores por IP son hermanos de los de `OpaqueServiceProvider` y se declaran en
+ * `AppServiceProvider`. No sustituyen al contador de intentos, que vive en columna: son dos frenos
+ * distintos, uno contra el ruido y otro contra la fuerza bruta sobre el PIN.
+ */
+Route::prefix('s')
+    ->name('share.')
+    ->middleware([NoStore::class, WithoutLivewireAssets::class])
+    ->withoutMiddleware([
+        EncryptCookies::class,
+        AddQueuedCookiesToResponse::class,
+        StartSession::class,
+        ShareErrorsFromSession::class,
+        PreventRequestForgery::class,
+    ])
+    ->group(function (): void {
+        Route::get('{link}', ShareReaderPageController::class)->name('reader');
+
+        Route::post('{link}/challenge', ShareChallengeController::class)
+            ->middleware('throttle:share-challenge')
+            ->name('challenge');
+
+        Route::post('{link}/open', ShareOpenController::class)
+            ->middleware('throttle:share-open')
+            ->name('open');
+    });

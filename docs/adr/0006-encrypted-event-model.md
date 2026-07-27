@@ -2,7 +2,7 @@
 
 * **Status**: Accepted
 * **Date**: 2026-07-25
-* **Updated**: 2026-07-25
+* **Updated**: 2026-07-27
 * **Decider**: Development Team
 
 ## Context
@@ -95,6 +95,11 @@ sangre y las tiras de orina dan una presencia, no un número. Cada una tiene su 
 intercambiables. El método de medición como parte del dato, y sus consecuencias para las estadísticas, se
 deciden en el ADR 0008 (`docs/adr/0008-measurement-method.md`), porque afectan a toda magnitud y no solo a
 la glucemia.
+
+Sacar un recorte de estos eventos hacia un profesional sin cuenta lo decide el ADR 0011
+(`docs/adr/0011-shared-clipping-for-professionals.md`), que hereda la regla de aquí: ninguna columna en
+claro describe lo que contiene el recorte, ni sus tipos ni su rango. Su tabla es además la única del
+proyecto sin `deleted_at`, porque revocar tiene que borrar de verdad.
 
 El servidor valida el formato del sobre, la codificación y el tamaño, que con el relleno a tamaños fijos
 solo puede ser uno de los valores permitidos más la cabecera del sobre. Nunca el contenido.

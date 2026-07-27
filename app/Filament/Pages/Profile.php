@@ -26,10 +26,18 @@ use Illuminate\Contracts\Support\Htmlable;
  * pinta antes de que exista ninguna clave (ADR 0007, con el mismo razonamiento que el ADR 0009 hace
  * para el correo y el nombre). No dice nada sobre la salud de nadie.
  *
- * Hereda de {@see PhrPage} y no de `Filament\Pages\Page` por las seis propiedades `#[Url]` que
- * `InteractsWithActions` publica en la barra de direcciones.
+ * **Por qué hereda de {@see HealthEventPage}** y no directamente de {@see PhrPage}: el bloque de
+ * últimas medidas (peso, estatura e índice de masa corporal) se calcula descifrando en el navegador,
+ * y para eso el cliente necesita `fetchEvents`, el mismo método, la misma autorización y el mismo
+ * criterio de fecha canónica que las pantallas de historial. Una segunda vía de lectura sería un
+ * segundo sitio donde equivocarse. Es el mismo razonamiento —y el mismo precedente— de
+ * {@see Sharing}; `storeEvent` viene de propina y no añade superficie, porque cualquier pantalla de
+ * eventos del panel ya lo expone para el mismo usuario. `HealthEventPage` hereda a su vez de
+ * `PhrPage`, así que siguen cerradas las seis propiedades `#[Url]` de `InteractsWithActions`.
+ *
+ * El servidor sigue sin ver nada: entrega ciphertext y no sabe cuánto pesa ni cuánto mide nadie.
  */
-final class Profile extends PhrPage
+final class Profile extends HealthEventPage
 {
     protected static string|BackedEnum|null $navigationIcon = Heroicon::UserCircle;
 

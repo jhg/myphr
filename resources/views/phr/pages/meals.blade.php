@@ -226,7 +226,29 @@
                     </button>
                 </div>
 
-                <div wire:ignore x-ref="foods" wire:key="meals-foods-region" class="rounded-card border border-border bg-surface px-4"></div>
+                {{--
+                    El cursor arranca en el nombre del primer alimento, que es el dato principal de
+                    una comida y el primero que hay que teclear: el tipo de comida y la fecha ya
+                    llegan resueltos (desplegable con la primera opción puesta y hora actual). Sin
+                    esto hace falta un clic antes de escribir, y en móvil ese clic retrasa la
+                    aparición del teclado.
+
+                    No se hace con el atributo `autofocus`, a diferencia de las demás pantallas, por
+                    dos motivos: ese campo no lo escribe el servidor —vive dentro del `<template>`
+                    de arriba y lo clona Alpine—, y un `autofocus` en la plantilla se copiaría a
+                    cada fila añadida con «Añadir alimento», robando el foco cada vez. Además, al
+                    panel se entra casi siempre navegando con `wire:navigate`, que sustituye el
+                    cuerpo del documento sin volver a parsearlo y deja `autofocus` sin efecto de
+                    todos modos; `x-init` sí se vuelve a ejecutar, porque Livewire reinicializa
+                    Alpine sobre el HTML nuevo.
+
+                    `$nextTick` porque la primera fila la añade `init()` del componente: al correr
+                    este `x-init` la fila ya existe, pero el aplazamiento lo garantiza sin depender
+                    del orden en que Alpine recorre el árbol. `?.` para que, si algún día el
+                    formulario arrancara sin filas, esto no reviente la inicialización entera.
+                --}}
+                <div wire:ignore x-ref="foods" wire:key="meals-foods-region" class="rounded-card border border-border bg-surface px-4"
+                     x-init="$nextTick(() => $el.querySelector('[data-food-name]')?.focus())"></div>
             </div>
 
             {{--
@@ -315,15 +337,38 @@
                     Livewire. `loading` deshabilita el botón, marca `aria-busy` y cambia el texto,
                     para que la espera se vea (Do's #3) y no se guarde la misma comida dos veces.
                 --}}
-                <button
-                    type="submit"
-                    class="inline-flex min-h-11 items-center justify-center rounded-control bg-accent px-6 py-2.5 text-button text-accent-ink hover:bg-accent-hover focus-visible:shadow-focus-blue focus-visible:outline-none active:bg-accent-active disabled:cursor-not-allowed disabled:bg-surface-disabled disabled:text-ink-disabled disabled:hover:bg-surface-disabled"
-                    x-bind:disabled="loading"
-                    x-bind:aria-busy="loading ? 'true' : 'false'"
-                >
-                    <span x-show="! loading">{{ __('Save') }}</span>
-                    <span x-show="loading" x-cloak>{{ __('Saving…') }}</span>
-                </button>
+                <div class="flex flex-wrap items-center gap-4">
+                    <button
+                        type="submit"
+                        class="inline-flex min-h-11 items-center justify-center rounded-control bg-accent px-6 py-2.5 text-button text-accent-ink hover:bg-accent-hover focus-visible:shadow-focus-blue focus-visible:outline-none active:bg-accent-active disabled:cursor-not-allowed disabled:bg-surface-disabled disabled:text-ink-disabled disabled:hover:bg-surface-disabled"
+                        x-bind:disabled="loading"
+                        x-bind:aria-busy="loading ? 'true' : 'false'"
+                    >
+                        <span x-show="! loading">{{ __('Save') }}</span>
+                        <span x-show="loading" x-cloak>{{ __('Saving…') }}</span>
+                    </button>
+
+                    {{--
+                        Confirmación de guardado, al lado del botón y no al pie de la página: es ahí
+                        donde está mirando quien acaba de pulsar. Se va sola a los pocos segundos
+                        (ver `savedNotice.js`), porque confirma ESTA operación y no un estado.
+
+                        Nunca repite el valor guardado: no hace falta para confirmar y son datos
+                        clínicos, igual que en `profile.blade.php`.
+
+                        `role="status"` (que ya implica `aria-live="polite"`) y no `alert`: es una
+                        buena noticia, no interrumpe lo que se esté leyendo. El aviso de error de
+                        más abajo sí lleva `alert`, que es lo que corresponde a un fallo.
+                    --}}
+                    <p
+                        x-show="saved"
+                        x-cloak
+                        role="status"
+                        class="text-body-sm font-semibold text-ink"
+                    >
+                        {{ __('Record saved.') }}
+                    </p>
+                </div>
             </div>
         </form>
 
@@ -357,6 +402,14 @@
         <h2 class="font-display text-subhead text-ink">
             {{ __('History') }}
         </h2>
+
+        {{--
+            Rango de fechas del historial. Va FUERA del `@island`: el island lo vacía el servidor en
+            cada petición de Livewire (ver el comentario de la región descifrada), y el control es
+            marcado que el servidor sí renderiza y tiene que sobrevivir a la recarga que él mismo
+            dispara.
+        --}}
+        @include('phr.partials.date-range', ['idPrefix' => 'meals'])
 
         @island(name: 'meals-list')
             <div wire:ignore x-ref="list" wire:key="meals-list-region" class="mt-4"></div>

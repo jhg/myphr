@@ -18,15 +18,14 @@ import { test } from 'node:test';
 
 import {
     buildInsulinContent,
-    datetimeLocalToCanonical,
     filterInsulinEvents,
-    formatTzOffset,
     groupInsulinByDay,
     injectionSiteLabel,
     INSULIN_UNIT,
     productLabel,
     summarizeDailyDoses,
 } from '../../resources/js/health/insulinPage.js';
+import { datetimeLocalToCanonical, formatTzOffset } from '../../resources/js/health/datetimeLocal.js';
 import { setLocale } from '../../resources/js/i18n/index.js';
 
 /**

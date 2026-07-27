@@ -12,8 +12,6 @@ use App\Provisioning\RegistrationLinks;
 use App\Security\Opaque\Base64Url;
 use App\Security\Opaque\CredentialIdentifier;
 use App\Security\Opaque\OpaqueProfile;
-use App\Security\Opaque\Oprf;
-use App\Security\Opaque\RegistrationRecord;
 use App\Support\AuditEvent;
 use Filament\Http\Middleware\Authenticate;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -31,42 +29,11 @@ uses(RefreshDatabase::class);
  * Los flujos se recorren de extremo a extremo contra el servidor real, con un cliente OPAQUE de
  * pruebas ({@see OpaqueTestClient}): nada de fixtures grabados ni de respuestas simuladas.
  */
-const TEST_SERVER_IDENTITY = 'myemr.test/opaque-v1';
-
 const TEST_PASSWORD = 'CorrectHorseBatteryStaple';
 
 beforeEach(function (): void {
     config(['opaque' => opaqueEndpointConfig()]);
 });
-
-/**
- * Configuración OPAQUE equivalente a la que produce `opaque:setup`, con material fijo para que un
- * fallo sea reproducible.
- *
- * @return array<string, mixed>
- */
-function opaqueEndpointConfig(): array
-{
-    [$privateKey] = Oprf::deriveDiffieHellmanKeyPair(str_repeat("\x11", OpaqueProfile::NSEED));
-    [, $fakeClientPublicKey] = Oprf::deriveDiffieHellmanKeyPair(str_repeat("\x22", OpaqueProfile::NSEED));
-
-    $fakeRecord = new RegistrationRecord(
-        $fakeClientPublicKey,
-        str_repeat("\x33", OpaqueProfile::NH),
-        str_repeat("\x00", OpaqueProfile::ENVELOPE_BYTES),
-    );
-
-    return [
-        'profile' => OpaqueProfile::NAME,
-        'oprf_seed' => Base64Url::encode(str_repeat("\x44", OpaqueProfile::OPRF_SEED_BYTES)),
-        'server_private_key' => Base64Url::encode($privateKey),
-        'server_public_key' => null,
-        'fake_registration_record' => $fakeRecord->toBase64Url(),
-        'server_identity' => TEST_SERVER_IDENTITY,
-        'enumeration_key' => Base64Url::encode(str_repeat("\x55", 32)),
-        'context' => '',
-    ];
-}
 
 /**
  * Sobre cifrado del ADR 0004 con un tamaño válido. El servidor no lo abre nunca, así que su

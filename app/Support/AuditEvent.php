@@ -48,4 +48,23 @@ enum AuditEvent: string
 
     /** Cambió el sobre de ajustes, el idioma, o ambos. Cuál de los dos no se anota. */
     case SettingsUpdated = 'settings-updated';
+
+    /**
+     * Se compartió un recorte con un profesional (ADR 0011).
+     *
+     * Anota únicamente que hubo una compartición y cuándo, que es lo que el servidor ya ve por el
+     * mero hecho de almacenar la fila. Nunca el rango, ni los tipos, ni el número de eventos: van
+     * cifrados dentro del descriptor, y repetirlos aquí devolvería al servidor justo el metadato que
+     * el ADR 0006 quitó del esquema.
+     */
+    case ShareCreated = 'share-created';
+
+    /**
+     * Se revocó un recorte compartido (ADR 0011). Revocar es borrado físico, así que sin esta
+     * entrada no quedaría constancia de que ese recorte llegó a existir.
+     *
+     * No hay caso equivalente para las **descargas**: un rastro de accesos diría cuántas veces y
+     * cuándo se consultó cada envío, que es exactamente lo que el ADR 0006 descarta.
+     */
+    case ShareRevoked = 'share-revoked';
 }

@@ -11,8 +11,13 @@
  * fecha canónica del ADR 0004, la misma que trae `openEvent` (`resources/js/health/eventEnvelope.js`).
  *
  * **El método de medición no se mezcla en silencio** (ADR 0008): toda función de resumen agrupa
- * por `data.method` antes de calcular nada, y devuelve las claves que agrupó para que la vista
- * pueda decir siempre qué métodos incluye un número.
+ * antes de calcular nada por el campo que dice cómo se midió —`data.method` en glucemia y tensión,
+ * `data.site` en temperatura, `data.insulinType` en insulina— y devuelve las claves que agrupó para
+ * que la vista pueda decir siempre qué incluye un número.
+ *
+ * **Ya no se resumen ventanas fijas.** Estas funciones reciben los eventos del periodo que la
+ * persona ha elegido, acotado por el servidor con `[from, to)` (`occurred_at` es columna en claro,
+ * ADR 0006); aquí no se vuelve a recortar por fecha.
  *
  * **No se convierte entre unidades.** La glucemia se resume para una única unidad de
  * presentación, y los eventos en otra unidad se cuentan aparte en vez de mezclarse (ADR 0007:
@@ -29,10 +34,15 @@
  * número es bueno o malo), es solo la precisión de la presentación.
  */
 
-/** Duración de las dos ventanas del panel, en días. */
-export const WINDOW_DAYS = Object.freeze({ week: 7, month: 30 });
-
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
+/**
+ * Duración en días de los atajos de periodo relativos, comunes al panel de inicio y a las pantallas
+ * de historial (`health/dateRange.js`, que los importa de aquí y no los copia).
+ *
+ * `day` es el periodo por defecto del panel de inicio: son las últimas 24 horas, no «el día de hoy»
+ * desde medianoche, porque el resto de atajos también cuentan hacia atrás desde ahora y mezclar los
+ * dos criterios haría que «último día» y «última semana» no midieran lo mismo.
+ */
+export const WINDOW_DAYS = Object.freeze({ day: 1, week: 7, month: 30 });
 
 /** Decimales fijos para media y mediana (ver JSDoc del módulo). */
 const STAT_DECIMALS = 2;
@@ -60,10 +70,15 @@ function round(value, decimals) {
  * que no trae `data.value` sino `data.result`, y un valor mal formado que no debe tumbar el
  * resumen (robustez pedida explícitamente).
  *
+ * Se exporta porque la regla que aplica —el valor clínico viaja como cadena, con el punto como
+ * separador decimal (ADR 0004)— es la misma para quien calcula estadísticas y para quien construye
+ * las series de una gráfica (`health/dailyBands.js`). Duplicarla allí sería duplicar el criterio de
+ * qué se descarta, que es justo lo que no puede divergir entre la tarjeta y la gráfica de al lado.
+ *
  * @param {unknown} raw
  * @returns {number|null}
  */
-function toFiniteNumber(raw) {
+export function toFiniteNumber(raw) {
     if (typeof raw !== 'string' || raw.trim() === '') {
         return null;
     }
@@ -82,63 +97,6 @@ function toEpochMs(occurredAt) {
 }
 
 /**
- * ¿Cae `occurredAt` en la ventana de `windowDays` días terminada en `referenceInstant`?
- *
- * **Límites inclusivos en ambos extremos**: `[referenceInstant - windowDays días,
- * referenceInstant]`. Se fija así, y no con un límite abierto, para que el resumen no cambie
- * según la hora del día en que se abre el panel: con el límite inferior inclusivo, un evento
- * registrado hace exactamente `windowDays` días completos sigue contando igual a las 00:00 que a
- * las 23:59. Nada posterior al instante de referencia entra, aunque exista en la lista (evita que
- * un reloj de dispositivo adelantado cuente eventos "futuros").
- *
- * @param {string} occurredAt
- * @param {number} referenceEpochMs
- * @param {number} windowDays
- * @returns {boolean}
- */
-export function isWithinWindow(occurredAt, referenceEpochMs, windowDays) {
-    const epochMs = toEpochMs(occurredAt);
-
-    if (Number.isNaN(epochMs)) {
-        return false;
-    }
-
-    const lowerBoundMs = referenceEpochMs - (windowDays * MS_PER_DAY);
-
-    return epochMs >= lowerBoundMs && epochMs <= referenceEpochMs;
-}
-
-/**
- * Filtra `events` a los que caen en una ventana de `windowDays` días terminada en
- * `referenceInstant`. Ver `isWithinWindow` para el criterio exacto de los límites.
- *
- * @param {list<{occurredAt: string}>} events
- * @param {Date|string|number} referenceInstant Instante de referencia ("ahora" del panel).
- * @param {number} windowDays
- * @returns {list<object>}
- */
-export function filterByWindow(events, referenceInstant, windowDays) {
-    const referenceEpochMs = new Date(referenceInstant).getTime();
-
-    return events.filter((event) => isWithinWindow(event.occurredAt, referenceEpochMs, windowDays));
-}
-
-/**
- * Las dos ventanas que resume el panel: última semana y último mes, ambas terminadas en
- * `referenceInstant` con los límites inclusivos de `isWithinWindow`.
- *
- * @param {list<{occurredAt: string}>} events
- * @param {Date|string|number} referenceInstant
- * @returns {{week: list<object>, month: list<object>}}
- */
-export function windowEvents(events, referenceInstant) {
-    return {
-        week: filterByWindow(events, referenceInstant, WINDOW_DAYS.week),
-        month: filterByWindow(events, referenceInstant, WINDOW_DAYS.month),
-    };
-}
-
-/**
  * Media y mediana de una lista de números, con la precisión fija del módulo.
  *
  * La mediana de un número par de muestras es el promedio de las dos centrales (con la lista ya
@@ -148,41 +106,92 @@ export function windowEvents(events, referenceInstant) {
  * @returns {{mean: number, median: number}}
  */
 function meanAndMedian(numbers) {
-    const sorted = [...numbers].sort((a, b) => a - b);
-    const sum = sorted.reduce((total, value) => total + value, 0);
-    const mean = sum / sorted.length;
+    const sum = numbers.reduce((total, value) => total + value, 0);
 
+    return { mean: round(sum / numbers.length, STAT_DECIMALS), median: medianOf(numbers) };
+}
+
+/**
+ * Mediana de una lista de números, con la misma precisión fija que el resto del módulo.
+ *
+ * Vive aquí y no en quien la necesita para que la mediana de una tarjeta de estadísticas y la de la
+ * gráfica de al lado sean **el mismo número**: dos implementaciones con redondeos distintos darían
+ * dos cifras para el mismo dato en la misma pantalla, y no hay forma de que quien lo lea sepa cuál
+ * creer.
+ *
+ * @param {list<number>} numbers No vacía.
+ * @returns {number}
+ */
+export function medianOf(numbers) {
+    const sorted = [...numbers].sort((a, b) => a - b);
     const middle = Math.floor(sorted.length / 2);
     const median = sorted.length % 2 === 1
         ? sorted[middle]
         : (sorted[middle - 1] + sorted[middle]) / 2;
 
-    return { mean: round(mean, STAT_DECIMALS), median: round(median, STAT_DECIMALS) };
+    return round(median, STAT_DECIMALS);
 }
 
 /**
- * Resumen de glucemia de un periodo, agrupado por método de medición (ADR 0008) dentro de una
- * única unidad de presentación (ADR 0007: no se convierte entre unidades).
+ * Unidad con la que se resume un tipo de evento cuando la persona no la ha elegido en ninguna
+ * parte: la del registro **más reciente** con valor numérico.
  *
- * Se descartan, sin tumbar el resumen: los eventos que no son de tipo `glucose`; los resultados
- * cualitativos (tira de orina, ADR 0008: "no entran en estadísticas de rango ni tienen
- * promedio"), que no traen `data.value` numérico; y cualquier valor no numérico. Todos suman al
- * mismo contador `discarded`, porque de cara al resumen son el mismo caso: no hay número que
- * calcular.
+ * La glucemia no pasa por aquí porque su unidad de presentación es un ajuste explícito del perfil
+ * (ADR 0007). El peso, la temperatura y la insulina no tienen ese ajuste, y aun así no se pueden
+ * promediar kilos con libras ni grados Celsius con Fahrenheit. Se toma la del último registro y no
+ * la más frecuente porque es la que la persona está usando ahora: si acaba de cambiar de báscula,
+ * el resumen habla de la báscula nueva y las lecturas en la unidad vieja se cuentan aparte
+ * (`excludedByUnit`) en vez de desaparecer.
  *
- * Los eventos en otra unidad que `unit` se cuentan aparte en `excludedByUnit` y no entran en
- * ningún grupo, para que la vista pueda decirlo (ADR 0007).
+ * @param {list<{type: string, occurredAt: string, data: object}>} events
+ * @param {string} type
+ * @param {string} [valueKey] Campo numérico del sobre (`value`, `dose`, ...).
+ * @returns {string|null} `null` si no hay ningún registro utilizable de ese tipo.
+ */
+export function dominantUnit(events, type, valueKey = 'value') {
+    let latest = null;
+
+    for (const event of events) {
+        if (event.type !== type || toFiniteNumber(event.data?.[valueKey]) === null) {
+            continue;
+        }
+
+        if (typeof event.data.unit !== 'string' || event.data.unit === '') {
+            continue;
+        }
+
+        if (latest === null || toEpochMs(event.occurredAt) > toEpochMs(latest.occurredAt)) {
+            latest = event;
+        }
+    }
+
+    return latest === null ? null : latest.data.unit;
+}
+
+/**
+ * Resumen de un tipo de evento de **una sola magnitud numérica** (glucemia, peso, temperatura,
+ * dosis de insulina) en un periodo, agrupado por el campo que distingue cómo se midió.
  *
- * @param {list<{type: string, occurredAt: string, data: object}>} events Eventos de un periodo
- *        (semana o mes), ya filtrados por ventana con `filterByWindow`/`windowEvents`.
+ * Es el mismo cálculo para los cuatro, así que vive una sola vez: lo que cambia entre ellos es el
+ * nombre del campo con el valor (`value`, `dose`) y el del campo que agrupa (`method`, `site`,
+ * `insulinType`, o ninguno en el peso, que se mide de una única forma). Un tipo sin campo de
+ * agrupación cae entero en el grupo `''`, y quien pinte decide no escribir ninguna cabecera.
+ *
+ * Las dos exclusiones son las mismas que ya documentaba la glucemia y por los mismos motivos: lo
+ * que no trae número (`discarded`, incluidos los resultados cualitativos del ADR 0008) y lo que
+ * está en otra unidad (`excludedByUnit`, ADR 0007: no se convierte).
+ *
+ * @param {list<{type: string, occurredAt: string, data: object}>} events Eventos del periodo, ya
+ *        acotados por fecha (hoy lo hace el servidor con `[from, to)`, no el cliente).
  * @param {object} params
- * @param {string} params.unit Unidad de presentación (código UCUM, p. ej. `"mg/dL"`).
- * @param {{low: string|number, high: string|number}} [params.targetRange] Rango objetivo
- *        configurado por el usuario (ADR 0007). **Si no se pasa, ningún grupo lleva
- *        `inRangePercent`**: ni `null` ni `0`, la clave simplemente no está, porque la aplicación
- *        no trae rangos por defecto ni disfraza su ausencia de dato.
+ * @param {string} params.type Token del tipo de evento (`glucose`, `bodyWeight`, ...).
+ * @param {string} [params.valueKey] Campo numérico del sobre. Por defecto `value`.
+ * @param {string} [params.groupBy] Campo de agrupación. Sin él, un único grupo `''`.
+ * @param {string} params.unit Unidad con la que se resume; el resto se cuenta en `excludedByUnit`.
+ * @param {{low: string|number, high: string|number}} [params.targetRange] Ver
+ *        {@see summarizeGlucosePeriod}: **sin rango no hay clave `inRangePercent`**.
  * @returns {{
- *   byMethod: Record<string, {
+ *   byGroup: Record<string, {
  *     count: number, mean: number, median: number, min: number, max: number,
  *     last: {value: number, occurredAt: string}, inRangePercent?: number
  *   }>,
@@ -190,18 +199,18 @@ function meanAndMedian(numbers) {
  *   discarded: number,
  * }}
  */
-export function summarizeGlucosePeriod(events, { unit, targetRange } = {}) {
+export function summarizeMeasurementPeriod(events, { type, valueKey = 'value', groupBy, unit, targetRange } = {}) {
     /** @type {Record<string, list<{value: number, occurredAt: string}>>} */
-    const readingsByMethod = {};
+    const readingsByGroup = {};
     let excludedByUnit = 0;
     let discarded = 0;
 
     for (const event of events) {
-        if (event.type !== 'glucose') {
+        if (event.type !== type) {
             continue;
         }
 
-        const value = toFiniteNumber(event.data?.value);
+        const value = toFiniteNumber(event.data?.[valueKey]);
 
         if (value === null) {
             discarded += 1;
@@ -215,9 +224,9 @@ export function summarizeGlucosePeriod(events, { unit, targetRange } = {}) {
             continue;
         }
 
-        const method = event.data.method;
+        const group = groupBy === undefined ? '' : (event.data[groupBy] ?? '');
 
-        (readingsByMethod[method] ??= []).push({ value, occurredAt: event.occurredAt });
+        (readingsByGroup[group] ??= []).push({ value, occurredAt: event.occurredAt });
     }
 
     const hasTargetRange = targetRange !== undefined && targetRange !== null;
@@ -225,9 +234,9 @@ export function summarizeGlucosePeriod(events, { unit, targetRange } = {}) {
     const high = hasTargetRange ? Number(targetRange.high) : null;
 
     /** @type {Record<string, object>} */
-    const byMethod = {};
+    const byGroup = {};
 
-    for (const [method, readings] of Object.entries(readingsByMethod)) {
+    for (const [group, readings] of Object.entries(readingsByGroup)) {
         const values = readings.map((reading) => reading.value);
         const { mean, median } = meanAndMedian(values);
         const last = readings.reduce((latest, reading) => (
@@ -248,30 +257,56 @@ export function summarizeGlucosePeriod(events, { unit, targetRange } = {}) {
             summary.inRangePercent = round((inRangeCount / values.length) * 100, PERCENT_DECIMALS);
         }
 
-        byMethod[method] = summary;
+        byGroup[group] = summary;
     }
 
-    return { byMethod, excludedByUnit, discarded };
+    return { byGroup, excludedByUnit, discarded };
 }
 
 /**
- * `summarizeGlucosePeriod` aplicado a las dos ventanas del panel a la vez.
+ * Resumen de glucemia de un periodo, agrupado por método de medición (ADR 0008) dentro de una
+ * única unidad de presentación (ADR 0007: no se convierte entre unidades).
  *
- * @param {list<{type: string, occurredAt: string, data: object}>} events Todos los eventos ya
- *        descifrados, sin filtrar por ventana todavía (el filtro lo hace esta función).
- * @param {Date|string|number} referenceInstant
- * @param {object} params Ver `summarizeGlucosePeriod`.
- * @param {string} params.unit
- * @param {{low: string|number, high: string|number}} [params.targetRange]
- * @returns {{week: object, month: object}}
+ * Se descartan, sin tumbar el resumen: los eventos que no son de tipo `glucose`; los resultados
+ * cualitativos (tira de orina, ADR 0008: "no entran en estadísticas de rango ni tienen
+ * promedio"), que no traen `data.value` numérico; y cualquier valor no numérico. Todos suman al
+ * mismo contador `discarded`, porque de cara al resumen son el mismo caso: no hay número que
+ * calcular.
+ *
+ * Los eventos en otra unidad que `unit` se cuentan aparte en `excludedByUnit` y no entran en
+ * ningún grupo, para que la vista pueda decirlo (ADR 0007).
+ *
+ * @param {list<{type: string, occurredAt: string, data: object}>} events Eventos de un periodo
+ *        del periodo elegido, ya acotados por fecha por el servidor (`[from, to)`).
+ * @param {object} params
+ * @param {string} params.unit Unidad de presentación (código UCUM, p. ej. `"mg/dL"`).
+ * @param {{low: string|number, high: string|number}} [params.targetRange] Rango objetivo
+ *        configurado por el usuario (ADR 0007). **Si no se pasa, ningún grupo lleva
+ *        `inRangePercent`**: ni `null` ni `0`, la clave simplemente no está, porque la aplicación
+ *        no trae rangos por defecto ni disfraza su ausencia de dato.
+ * @returns {{
+ *   byMethod: Record<string, {
+ *     count: number, mean: number, median: number, min: number, max: number,
+ *     last: {value: number, occurredAt: string}, inRangePercent?: number
+ *   }>,
+ *   excludedByUnit: number,
+ *   discarded: number,
+ * }}
  */
-export function summarizeGlucose(events, referenceInstant, params) {
-    const { week, month } = windowEvents(events, referenceInstant);
+export function summarizeGlucosePeriod(events, { unit, targetRange } = {}) {
+    /**
+     * El cálculo es el genérico; lo único propio de la glucemia es cómo se llaman sus campos y que
+     * la clave del resultado se siga llamando `byMethod`, que es lo que el ADR 0008 nombra y lo que
+     * lee la vista.
+     */
+    const { byGroup, excludedByUnit, discarded } = summarizeMeasurementPeriod(events, {
+        type: 'glucose',
+        groupBy: 'method',
+        unit,
+        targetRange,
+    });
 
-    return {
-        week: summarizeGlucosePeriod(week, params),
-        month: summarizeGlucosePeriod(month, params),
-    };
+    return { byMethod: byGroup, excludedByUnit, discarded };
 }
 
 /**
@@ -299,7 +334,7 @@ function magnitudeSummary(readings) {
  * calcular con datos parciales, y cuenta como descartado sin tumbar el resumen.
  *
  * @param {list<{type: string, occurredAt: string, data: object}>} events Eventos de un periodo,
- *        ya filtrados por ventana.
+ *        ya acotados por fecha por el servidor (`[from, to)`).
  * @returns {{
  *   byMethod: Record<string, {
  *     systolic: {mean: number, median: number, min: number, max: number, last: number},
@@ -354,20 +389,4 @@ export function summarizeBloodPressurePeriod(events) {
     }
 
     return { byMethod, discarded };
-}
-
-/**
- * `summarizeBloodPressurePeriod` aplicado a las dos ventanas del panel a la vez.
- *
- * @param {list<{type: string, occurredAt: string, data: object}>} events
- * @param {Date|string|number} referenceInstant
- * @returns {{week: object, month: object}}
- */
-export function summarizeBloodPressure(events, referenceInstant) {
-    const { week, month } = windowEvents(events, referenceInstant);
-
-    return {
-        week: summarizeBloodPressurePeriod(week),
-        month: summarizeBloodPressurePeriod(month),
-    };
 }

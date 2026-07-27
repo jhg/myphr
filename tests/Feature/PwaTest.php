@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
@@ -87,6 +88,20 @@ it('mantiene el service worker sin caché y sin interceptar respuestas', functio
         ->and($worker)->not->toContain('caches.open')
         ->and($worker)->not->toContain('cache.put')
         ->and($worker)->not->toContain('cache.add');
+});
+
+/**
+ * El botón de instalar tiene que llegar al HTML del panel. Quién lo ve lo decide el cliente —hay
+ * tres situaciones y solo el navegador las conoce—, pero si el render hook desaparece no lo ve
+ * nadie y ningún otro test lo notaría: el panel seguiría funcionando entero.
+ */
+it('emite el botón de instalar en el panel', function (): void {
+    $user = User::factory()->registered()->create();
+
+    $html = $this->actingAs($user)->get('/phr')->assertOk()->getContent();
+
+    expect($html)->toContain('x-data="phrInstallButton"')
+        ->and($html)->toContain(__('Install app'));
 });
 
 it('enlaza el manifiesto y el icono de iOS en las páginas del panel', function (): void {

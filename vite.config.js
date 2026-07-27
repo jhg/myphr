@@ -6,7 +6,16 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineConfig({
     plugins: [
         laravel({
-            input: ['resources/css/app.css', 'resources/js/app.js', 'resources/css/filament/phr/theme.css'],
+            input: [
+                'resources/css/app.css',
+                'resources/js/app.js',
+                'resources/css/filament/phr/theme.css',
+                // Entrada propia de la página del lector (ADR 0011). Va aparte del panel a
+                // propósito: esa página se abre sin sesión y en un dispositivo ajeno, así que no
+                // debe cargar el llavero, el bloqueo por inactividad ni los componentes del panel.
+                'resources/css/reader.css',
+                'resources/js/reader.js',
+            ],
             refresh: true,
             // Fuentes autoalojadas. Vite las descarga en el build y las sirve desde
             // public/build, así que en tiempo de ejecución no hay peticiones a terceros.

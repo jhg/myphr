@@ -7,9 +7,6 @@ use App\Models\User;
 use App\Models\UserMasterKeyEnvelope;
 use App\Security\Opaque\Base64Url;
 use App\Security\Opaque\HkdfSha512;
-use App\Security\Opaque\OpaqueProfile;
-use App\Security\Opaque\Oprf;
-use App\Security\Opaque\RegistrationRecord;
 use App\Support\Terminal;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
@@ -20,7 +17,6 @@ use Tests\Support\OpaqueTestClient;
 
 uses(RefreshDatabase::class);
 
-const PC_IDENTITY = 'myemr.test/opaque-v1';
 const PC_OLD_PASSWORD = 'CorrectHorseBatteryStaple';
 const PC_NEW_PASSWORD = 'TrueRhinoCandleWindow';
 const PC_EMAIL = 'Alicia@Example.COM';
@@ -28,23 +24,7 @@ const PC_EMAIL = 'Alicia@Example.COM';
 beforeEach(function (): void {
     app()->instance(Terminal::class, new FakeTerminal);
 
-    [$privateKey] = Oprf::deriveDiffieHellmanKeyPair(str_repeat("\x11", OpaqueProfile::NSEED));
-    [, $fakePk] = Oprf::deriveDiffieHellmanKeyPair(str_repeat("\x22", OpaqueProfile::NSEED));
-
-    config(['opaque' => [
-        'profile' => OpaqueProfile::NAME,
-        'oprf_seed' => Base64Url::encode(str_repeat("\x44", OpaqueProfile::OPRF_SEED_BYTES)),
-        'server_private_key' => Base64Url::encode($privateKey),
-        'server_public_key' => null,
-        'fake_registration_record' => (new RegistrationRecord(
-            $fakePk,
-            str_repeat("\x33", OpaqueProfile::NH),
-            str_repeat("\x00", OpaqueProfile::ENVELOPE_BYTES),
-        ))->toBase64Url(),
-        'server_identity' => PC_IDENTITY,
-        'enumeration_key' => Base64Url::encode(str_repeat("\x55", 32)),
-        'context' => '',
-    ]]);
+    config(['opaque' => opaqueEndpointConfig()]);
 });
 
 /** `deriveKey()` de `resources/js/crypto/kdf.js`. */
@@ -123,7 +103,7 @@ function pcRegister(): string
         PC_OLD_PASSWORD,
         $started['blind'],
         $start->json('registrationResponse'),
-        PC_IDENTITY,
+        TEST_SERVER_IDENTITY,
     );
 
     $user = User::query()->sole();
@@ -167,7 +147,7 @@ function pcLogin(string $password): TestResponse
             $password,
             $started,
             $start->json('loginResponse'),
-            PC_IDENTITY,
+            TEST_SERVER_IDENTITY,
         );
     } catch (RuntimeException) {
         /** El cliente real traduce esto a «contraseña incorrecta» y no llega a llamar a `finish`. */
@@ -215,7 +195,7 @@ function pcPrepareChangePassword(string $oldPassword, string $newPassword): arra
             $oldPassword,
             $started,
             $reauthStart->json('loginResponse'),
-            PC_IDENTITY,
+            TEST_SERVER_IDENTITY,
         );
     } catch (RuntimeException) {
         /** El navegador ni siquiera llega a llamar a `finish`: la contraseña actual no cuadra. */
@@ -265,7 +245,7 @@ function pcPrepareChangePassword(string $oldPassword, string $newPassword): arra
         $newPassword,
         $registrationStarted['blind'],
         $registrationStart->json('registrationResponse'),
-        PC_IDENTITY,
+        TEST_SERVER_IDENTITY,
     );
 
     /** Pasos 16 a 18: la MISMA clave maestra, reenvuelta bajo la KEK nueva y verificada en local. */
@@ -362,7 +342,7 @@ it('cambia la contraseña y deja el historial legible con la nueva', function ()
         PC_NEW_PASSWORD,
         $startedAgain,
         $startAgain->json('loginResponse'),
-        PC_IDENTITY,
+        TEST_SERVER_IDENTITY,
     );
 
     $session = test()->postJson(route('filament.phr.auth.opaque.login.finish'), [
@@ -461,7 +441,7 @@ it('no acepta un ticket de otra sesion ni un handshake de login normal', functio
         PC_OLD_PASSWORD,
         $started,
         $loginStart->json('loginResponse'),
-        PC_IDENTITY,
+        TEST_SERVER_IDENTITY,
     );
 
     test()->postJson(route('filament.phr.auth.password.reauth.finish'), [
@@ -496,7 +476,7 @@ it('rechaza un sobre mal formado sin tocar nada', function (): void {
         PC_OLD_PASSWORD,
         $started,
         $reauthStart->json('loginResponse'),
-        PC_IDENTITY,
+        TEST_SERVER_IDENTITY,
     );
 
     $reauthFinish = test()->postJson(route('filament.phr.auth.password.reauth.finish'), [
@@ -514,7 +494,7 @@ it('rechaza un sobre mal formado sin tocar nada', function (): void {
         PC_NEW_PASSWORD,
         $registrationStarted['blind'],
         $registrationStart->json('registrationResponse'),
-        PC_IDENTITY,
+        TEST_SERVER_IDENTITY,
     );
 
     test()->postJson(route('filament.phr.auth.password.change'), [
@@ -607,7 +587,7 @@ it('si el navegador se cierra justo al recibir la confirmacion, todo sigue funci
         PC_NEW_PASSWORD,
         $startedAgain,
         $startAgain->json('loginResponse'),
-        PC_IDENTITY,
+        TEST_SERVER_IDENTITY,
     );
 
     $session = test()->postJson(route('filament.phr.auth.opaque.login.finish'), [

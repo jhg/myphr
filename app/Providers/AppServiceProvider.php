@@ -6,6 +6,9 @@ use App\Console\Commands\ProhibitedMakeFilamentUserCommand;
 use App\Livewire\Hooks\EncryptedPayloadGuardHook;
 use App\Support\SystemTerminal;
 use App\Support\Terminal;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Livewire\Livewire;
 
@@ -26,6 +29,48 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->prohibitFilamentUserCommand();
+        $this->registerShareRateLimiters();
+    }
+
+    /**
+     * Limitadores por IP de las dos rutas de lectura de un recorte (ADR 0011), hermanos de los de
+     * {@see OpaqueServiceProvider}.
+     *
+     * **No** sustituyen al contador de intentos del PIN, que vive en columna de base de datos. Son
+     * dos frenos distintos y no intercambiables: este vive en caché y un `cache:clear` operativo lo
+     * reiniciaría, así que confiarle la fuerza bruta sobre un PIN de seis dígitos sería devolver el
+     * ataque completo con un comando de mantenimiento rutinario. Lo que sí hace es acotar el ruido y
+     * el rastreo de identificadores desde una misma IP.
+     *
+     * La IP entra **hasheada** en la clave, y no en claro como en OPAQUE. En esta ruta la IP de
+     * quien descarga revela el centro sanitario y de ahí el diagnóstico, y el ADR decide de forma
+     * explícita que ninguna capa que operemos la registre; guardarla legible en el almacén de caché,
+     * aunque sea un minuto, sería registrarla.
+     *
+     * `challenge` es más generoso que `open` porque no consume intentos y devuelve algo público por
+     * construcción: la sal. `open` es el que hay que apretar.
+     */
+    private function registerShareRateLimiters(): void
+    {
+        RateLimiter::for('share-challenge', static function (Request $request): array {
+            return [
+                Limit::perMinute(30)->by('share-challenge:ip:'.self::hashedIp($request)),
+            ];
+        });
+
+        RateLimiter::for('share-open', static function (Request $request): array {
+            $link = hash('sha256', (string) $request->route('link'));
+
+            return [
+                Limit::perMinute(15)->by('share-open:ip:'.self::hashedIp($request)),
+                Limit::perMinute(10)->by('share-open:link:'.$link),
+            ];
+        });
+    }
+
+    private static function hashedIp(Request $request): string
+    {
+        return hash('sha256', $request->ip() ?? 'unknown');
     }
 
     /**

@@ -15,3 +15,13 @@ Artisan::command('inspire', function () {
  * purga, cada intento de login sin autenticar hace crecer la tabla sin límite.
  */
 Schedule::command('opaque:prune-handshakes')->everyTenMinutes();
+
+/**
+ * ADR 0011: purga de recortes compartidos caducados.
+ *
+ * Cada hora y no cada diez minutos porque, al contrario que los handshakes, aquí no hay ninguna
+ * urgencia: la caducidad ya se aplica en la consulta que sirve el blob, así que una fila caducada no
+ * puede leerla nadie aunque siga en la tabla. Esto solo libera disco, y el TTL más corto de la lista
+ * cerrada es de una hora, así que ese es el ritmo natural.
+ */
+Schedule::command('shares:prune')->hourly();

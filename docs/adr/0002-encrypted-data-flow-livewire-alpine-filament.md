@@ -111,3 +111,8 @@ el titular no puede compartir un registro con un profesional, y compartir es la 
 si un usuario pierde la contraseña, sus datos son irrecuperables mientras no exista un mecanismo de
 escrow.
 Ambas condicionan el esquema de claves y conviene cerrarlas antes de escribir los primeros componentes.
+
+La primera ya tiene diseño: el ADR 0011 (`docs/adr/0011-shared-clipping-for-professionals.md`) comparte un
+recorte cifrado con su propia clave, sin tocar la derivación por usuario. Su paquete usa el prefijo `s1.`,
+que los dos guardarraíles de aquí abortarían, así que sube por un endpoint HTTP propio fuera de Livewire,
+la vía que este ADR reserva para los blobs grandes.

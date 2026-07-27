@@ -15,12 +15,11 @@ import { test } from 'node:test';
 
 import {
     buildMealContent,
-    datetimeLocalToCanonical,
     describeMealEvent,
     filterMealEvents,
-    formatTzOffset,
     normalizeFoods,
 } from '../../resources/js/health/mealsPage.js';
+import { datetimeLocalToCanonical, formatTzOffset } from '../../resources/js/health/datetimeLocal.js';
 import { setLocale } from '../../resources/js/i18n/index.js';
 
 /**

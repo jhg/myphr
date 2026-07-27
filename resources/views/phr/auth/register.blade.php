@@ -59,7 +59,19 @@
                     {{-- Campo obligatorio (Do's #5): asterisco visible en #DC2626. --}}
                     <span class="text-destructive-text" aria-hidden="true">*</span>
                 </label>
-                <input id="phr-name" type="text" autocomplete="name" required class="{{ $inputClass }}"
+                {{--
+                    `autofocus` en el nombre completo porque es el primer campo del formulario y el
+                    primero que se rellena: sin él hay que hacer clic antes de poder escribir, un
+                    clic por uso que en móvil además retrasa la aparición del teclado. No va en la
+                    contraseña ni en su repetición: dejarían campos anteriores en blanco por detrás
+                    del cursor.
+
+                    Es HTML puro y el navegador lo aplica al parsear el documento, así que no
+                    interfiere con el componente Alpine que envuelve el formulario. A esta pantalla
+                    se llega siempre con una carga completa del documento (es un controlador plano,
+                    sin `wire:navigate`), que es el único caso que `autofocus` cubre.
+                --}}
+                <input id="phr-name" type="text" autofocus autocomplete="name" required class="{{ $inputClass }}"
                        x-ref="name" />
             </div>
 

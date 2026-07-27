@@ -13,11 +13,16 @@ use Illuminate\Contracts\Support\Htmlable;
  * Panel de inicio (Spec 0001 §9, «Propiedades en URL»; ADR 0002, ADR 0006, ADR 0007, ADR 0008).
  *
  * Sustituye a `Filament\Pages\Dashboard`: sus widgets resuelven en servidor, y el servidor no
- * puede leer datos cifrados (ADR 0002). Esta página muestra, en su lugar, un resumen de glucemia y
- * tensión de la última semana y del último mes, calculado en el navegador
- * (`resources/js/health/dashboardPage.js`) a partir de `fetchEvents()`, heredado de
- * {@see HealthEventPage} igual que hace {@see Glucose}. El servidor no ve nunca el contenido de un
- * evento; solo entrega el ciphertext, como en cualquier otra pantalla de eventos clínicos.
+ * puede leer datos cifrados (ADR 0002). Esta página muestra, en su lugar, la línea temporal, las
+ * gráficas y las estadísticas **del periodo y de los tipos de evento que elige la persona**,
+ * calculado todo en el navegador (`resources/js/health/dashboardPage.js`) a partir de
+ * `fetchEvents()`, heredado de {@see HealthEventPage} igual que hace {@see Glucose}. El servidor no
+ * ve nunca el contenido de un evento; solo entrega el ciphertext, como en cualquier otra pantalla
+ * de eventos clínicos.
+ *
+ * El periodo sí lo aplica el servidor, porque `occurred_at` es columna en claro (ADR 0006) y
+ * `fetchEvents()` acepta el rango; el filtro por tipo no puede aplicarlo —el tipo va dentro del
+ * sobre cifrado—, así que lo hace el cliente sobre lo que ya tiene descifrado, sin peticiones extra.
  *
  * Hereda de `HealthEventPage` (y no de `Filament\Pages\Dashboard`) para reutilizar `fetchEvents` y
  * heredar, a través de {@see PhrPage}, el mismo cierre de las seis propiedades `#[Url]` de
@@ -29,9 +34,12 @@ use Illuminate\Contracts\Support\Htmlable;
  * ruta del panel siga siendo `/phr` y no cambie el registro en
  * `App\Providers\Filament\PhrPanelProvider::pages()`.
  *
- * De ahí también la duplicación literal de las seis propiedades `#[Url]` sin el atributo: es
- * deliberada y el test de arquitectura la cubre (`tests/Feature/PanelUrlPropertiesTest.php`); si
- * alguien borra una, el test falla.
+ * Las seis propiedades de `InteractsWithActions` **no se redeclaran aquí**: la redeclaración sin
+ * `#[Url]` de {@see PhrPage} ya es la que ve la reflexión de Livewire, porque una propiedad heredada
+ * conserva la declaración —y los atributos— de la clase que la declaró por última vez, y esa es
+ * `PhrPage`. Copiarlas otra vez no añadía ninguna garantía; lo que la da es
+ * `tests/Feature/PanelUrlPropertiesTest.php`, que recorre todas las páginas del panel y falla si
+ * alguna vuelve a exponer una con el atributo.
  */
 final class Dashboard extends HealthEventPage
 {
@@ -58,24 +66,6 @@ final class Dashboard extends HealthEventPage
     {
         return __('Home');
     }
-
-    /** @var mixed */
-    public $defaultAction = null;
-
-    /** @var mixed */
-    public $defaultActionArguments = null;
-
-    /** @var mixed */
-    public $defaultActionContext = null;
-
-    /** @var mixed */
-    public $defaultTableAction = null;
-
-    /** @var mixed */
-    public $defaultTableActionRecord = null;
-
-    /** @var mixed */
-    public $defaultTableActionArguments = null;
 
     public static function getRoutePath(Panel $panel): string
     {

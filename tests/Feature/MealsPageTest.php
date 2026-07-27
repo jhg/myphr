@@ -164,15 +164,26 @@ it('las llamadas a storeEvent y fetchEvents pasan los argumentos que la pagina e
     $source = mealsModuleSource();
 
     expect($source)->toContain('$wire.storeEvent(payload, occurredAt)');
-    expect($source)->toContain('$wire.fetchEvents()');
+
+    /**
+     * El historial se pide con el rango de fechas que haya elegido la persona (ver
+     * `resources/js/health/dateRange.js`). Los cuatro argumentos van por posición, así que el
+     * cursor y el límite se pasan explícitamente aunque valgan lo de siempre.
+     */
+    expect($source)->toContain('$wire.fetchEvents(null, HISTORY_FETCH_LIMIT, range.from, range.to)');
 
     $storeEvent = new ReflectionMethod(HealthEventPage::class, 'storeEvent');
     expect($storeEvent->getNumberOfParameters())->toBe(2);
     expect($storeEvent->getParameters()[0]->getName())->toBe('payload');
     expect($storeEvent->getParameters()[1]->getName())->toBe('occurredAt');
 
-    /** `fetchEvents()` se llama sin argumentos: los dos suyos tienen que ser opcionales. */
-    expect((new ReflectionMethod(HealthEventPage::class, 'fetchEvents'))->getNumberOfRequiredParameters())->toBe(0);
+    /**
+     * `fetchEvents` se llama con cuatro argumentos y ninguno es obligatorio: el panel de inicio
+     * sigue llamándolo con dos y las pruebas de la clase base, con ninguno.
+     */
+    $fetchEvents = new ReflectionMethod(HealthEventPage::class, 'fetchEvents');
+    expect($fetchEvents->getNumberOfRequiredParameters())->toBe(0);
+    expect($fetchEvents->getNumberOfParameters())->toBe(4);
 });
 
 /** Los campos que el cliente lee de cada evento devuelto tienen que existir en la respuesta. */

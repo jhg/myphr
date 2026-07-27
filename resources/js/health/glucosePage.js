@@ -25,6 +25,10 @@
  * insulina), y `buildGlucoseContent` los recibe ya construidos para desplegarlos en el nivel
  * superior del contenido, junto a `v`, `type` y `tz`, nunca dentro de `data`.
  *
+ * **La fecha del evento no se convierte aquí.** `datetimeLocalToCanonical` vive en
+ * `datetimeLocal.js` porque lo que devuelve entra como dato asociado del AEAD (ADR 0004): si cada
+ * pantalla llevara su copia y una se desviara, sus sobres dejarían de abrirse.
+ *
  * Las funciones exportadas antes de `glucosePage()` son la lógica pura del componente, para poder
  * probarlas sin montar Alpine ni Chart.js (`tests/js/glucosePage.test.mjs`).
  */
@@ -34,103 +38,19 @@ import Chart from 'chart.js/auto';
 import { isUnlocked, ownerId } from '../auth/keyring.js';
 import { SESSION_READY_EVENT } from '../auth/sessionBootstrap.js';
 import { settings } from '../auth/settings.js';
-import { canonicalDate } from '../crypto/canonicalDate.js';
 import { EnvelopeError } from '../crypto/envelope.js';
 import { formatChartDate, formatDateTime, joinList, t } from '../i18n/index.js';
 import { legendElementFor, legendItems, renderLegend } from './chartLegend.js';
 import { chartColors, observeThemeChange } from './chartTheme.js';
+import { dateRangeControl } from './dateRange.js';
+import { datetimeLocalToCanonical } from './datetimeLocal.js';
 import { buildCommonEventFields } from './eventCommonFields.js';
 import { openEvent, sealEvent } from './eventEnvelope.js';
 import { parseNumericValue } from './numericValue.js';
+import { savedNotice } from './savedNotice.js';
 
 /** Unidad por defecto cuando no hay preferencia guardada en los ajustes del usuario (ADR 0006). */
 const DEFAULT_UNIT = 'mg/dL';
-
-/**
- * Patrón de un `<input type="datetime-local" step="1">`: sin desfase, porque es hora local del
- * dispositivo (`YYYY-MM-DDTHH:MM` o `YYYY-MM-DDTHH:MM:SS`).
- */
-const DATETIME_LOCAL_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/;
-
-/**
- * Descompone el valor de un `datetime-local` en sus campos de calendario, sin interpretarlo
- * todavía en ninguna zona horaria.
- *
- * @param {string} value
- * @returns {{year: number, month: number, day: number, hour: number, minute: number, second: number}}
- * @throws {Error} Si el valor no tiene la forma esperada.
- */
-export function parseDatetimeLocalFields(value) {
-    const match = DATETIME_LOCAL_PATTERN.exec(value);
-
-    if (match === null) {
-        throw new Error(t('common.badDatetime', { value }));
-    }
-
-    const [, year, month, day, hour, minute, second = '00'] = match;
-
-    return {
-        year: Number(year),
-        month: Number(month),
-        day: Number(day),
-        hour: Number(hour),
-        minute: Number(minute),
-        second: Number(second),
-    };
-}
-
-/**
- * Da forma `±HH:MM` a un desfase, con el mismo convenio de signo que el campo `tz` del ADR 0006
- * (positivo cuando la hora local va por delante de UTC).
- *
- * @param {number} offsetMinutes Local menos UTC, en minutos.
- * @returns {string}
- */
-export function formatTzOffset(offsetMinutes) {
-    const sign = offsetMinutes < 0 ? '-' : '+';
-    const absolute = Math.abs(offsetMinutes);
-    const hours = String(Math.floor(absolute / 60)).padStart(2, '0');
-    const minutes = String(absolute % 60).padStart(2, '0');
-
-    return `${sign}${hours}:${minutes}`;
-}
-
-/**
- * Convierte un `datetime-local` (hora local sin desfase) al instante correcto y a su forma
- * canónica (ADR 0004), junto con el desfase para el campo `tz` del ADR 0006.
- *
- * `Date.prototype.getTimezoneOffset()` da el desfase del dispositivo en vigor **para ese
- * calendario concreto**, así que el horario de verano de la fecha registrada se respeta y no el
- * de hoy. `timezoneOffsetMinutes` solo existe para poder probar esta función con un desfase
- * distinto de cero sin depender de la zona horaria de quien ejecuta los tests.
- *
- * @param {string} value Valor crudo del `<input type="datetime-local">`.
- * @param {object} [options]
- * @param {number} [options.timezoneOffsetMinutes] Desfase a usar en vez del de `Date` (minutos,
- *        local menos... no: convenio de `getTimezoneOffset`, UTC menos local).
- * @returns {{occurredAt: string, tz: string}}
- */
-export function datetimeLocalToCanonical(value, { timezoneOffsetMinutes } = {}) {
-    const fields = parseDatetimeLocalFields(value);
-
-    const offsetMinutes = timezoneOffsetMinutes
-        ?? new Date(fields.year, fields.month - 1, fields.day, fields.hour, fields.minute, fields.second)
-            .getTimezoneOffset();
-
-    const utcMilliseconds = Date.UTC(
-        fields.year,
-        fields.month - 1,
-        fields.day,
-        fields.hour,
-        fields.minute,
-        fields.second
-    ) + offsetMinutes * 60_000;
-
-    return {
-        occurredAt: canonicalDate(new Date(utcMilliseconds)),
-        tz: formatTzOffset(-offsetMinutes),
-    };
-}
 
 /**
  * Resuelve el código LOINC de (método, unidad) contra la tabla del catálogo del servidor (ADR
@@ -478,12 +398,23 @@ function describeError(failure) {
 }
 
 /**
+ * Tamaño de página del historial. Es el mismo valor que el `$limit` por defecto de
+ * `HealthEventPage::fetchEvents()`: los argumentos son posicionales, así que pasar el rango obliga
+ * a pasar también el cursor y el límite, y aquí se repite el valor de siempre para no cambiar de
+ * paso la cantidad de eventos que baja cada carga.
+ */
+const HISTORY_FETCH_LIMIT = 100;
+
+/**
  * Factoría del componente Alpine. Se registra como `phrGlucosePage`.
  *
  * @returns {object}
  */
 export function glucosePage() {
     return {
+        ...savedNotice(),
+        ...dateRangeControl(),
+
         error: '',
         catalog: null,
         loading: false,
@@ -551,6 +482,7 @@ export function glucosePage() {
          */
         async submit() {
             this.error = '';
+            this.clearSaved();
             this.loading = true;
 
             try {
@@ -612,6 +544,9 @@ export function glucosePage() {
                 this.$refs.occurredAt.value = nowAsDatetimeLocalValue();
 
                 await this.loadHistory();
+
+                /** Al final de todo: el aviso confirma la operación entera, no solo el POST. */
+                this.confirmSaved();
             } catch (failure) {
                 this.error = describeError(failure);
             } finally {
@@ -632,7 +567,14 @@ export function glucosePage() {
                     return;
                 }
 
-                const rawEvents = await this.$wire.fetchEvents();
+                /**
+                 * El rango sí lo aplica el servidor: `occurred_at` es columna en claro (ADR 0006) y
+                 * acotarla ahorra descargar y descifrar meses de eventos de otros tipos que este
+                 * módulo tiraría igualmente. El tipo se sigue descartando aquí, que es lo que el
+                 * servidor no puede hacer.
+                 */
+                const range = this.historyRange();
+                const rawEvents = await this.$wire.fetchEvents(null, HISTORY_FETCH_LIMIT, range.from, range.to);
 
                 let failedToOpen = 0;
                 const opened = [];

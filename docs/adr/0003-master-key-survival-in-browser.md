@@ -129,7 +129,9 @@ argumentos.
 Describimos el sistema con precisión: es zero-knowledge frente al almacenamiento, es decir base de datos,
 copias de seguridad, personal con acceso a SQL y proveedor de hosting, y no lo es frente a la entrega,
 porque quien controla el servidor que sirve el JavaScript puede servir una versión que capture la clave.
-La formulación "el servidor nunca ve nada" es falsa y no debe usarse ante auditoría.
+La formulación "el servidor nunca ve nada" es falsa y no debe usarse ante auditoría. La compartición con
+profesionales del ADR 0011 (`docs/adr/0011-shared-clipping-for-professionals.md`) agrava esa mitad: su
+página se abre en dispositivos ajenos y con material de clave en la propia URL.
 
 Tres decisiones quedan pendientes y no se toman aquí. El desbloqueo con gesto biométrico mediante la
 extensión PRF de WebAuthn resolvería la pestaña nueva sin persistir material de clave, pero su soporte

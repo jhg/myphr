@@ -3,11 +3,13 @@
 declare(strict_types=1);
 
 use App\Filament\Pages\BloodPressure;
+use App\Filament\Pages\BodyWeight;
 use App\Filament\Pages\Dashboard;
 use App\Filament\Pages\Glucose;
 use App\Filament\Pages\Insulin;
 use App\Filament\Pages\Meals;
 use App\Filament\Pages\Profile;
+use App\Filament\Pages\Temperature;
 use App\Http\Controllers\Settings\UpdateSettingsController;
 use App\Http\Middleware\SetLocale;
 use App\Models\User;
@@ -245,6 +247,8 @@ it('traduce el título y la etiqueta de navegación de todas las páginas del pa
         BloodPressure::class,
         Insulin::class,
         Meals::class,
+        BodyWeight::class,
+        Temperature::class,
         Profile::class,
     ];
 

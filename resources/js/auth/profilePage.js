@@ -6,7 +6,15 @@
  * hay ninguna llamada a Livewire: los ajustes suben ya cifrados a `PUT /phr/settings` y el cambio de
  * contraseña habla directamente con las rutas de `/phr/auth/password/*`.
  *
- * Dos operaciones, dos botones y dos peticiones, deliberadamente separadas:
+ * Además hay un bloque de **solo lectura** con las últimas medidas corporales (peso, estatura e
+ * índice de masa corporal). No es un ajuste y por eso no tiene campos ni botón: esas medidas se
+ * registran en la pantalla de peso y estatura, con su fecha, y ahí es donde se corrigen. Se calculan
+ * aquí, en el navegador, descifrando los eventos que baja `$wire.fetchEvents` —la única llamada a
+ * Livewire de este módulo—, porque el servidor no puede leerlas (ADR 0002, ADR 0004). El IMC se
+ * enseña como cifra desnuda, sin categorías ni colores: el porqué clínico está en el JSDoc de
+ * `health/bodyMassIndex.js`.
+ *
+ * Dos operaciones de escritura, dos botones y dos peticiones, deliberadamente separadas:
  *
  * * **Ajustes.** Idioma, unidad preferida y rango objetivo se guardan juntos, en una sola petición,
  *   porque el sobre cifrado es un documento único que se reemplaza entero (el servidor no puede
@@ -23,8 +31,10 @@
  * montar Alpine (`tests/js/profilePage.test.mjs`).
  */
 
+import { bodyMassIndex, heightKnownAt, measurementUnitLabel } from '../health/bodyMassIndex.js';
+import { openEvent } from '../health/eventEnvelope.js';
 import { parseNumericValue } from '../health/numericValue.js';
-import { t } from '../i18n/index.js';
+import { formatDateTime, formatNumber, t } from '../i18n/index.js';
 import { isUnlocked, ownerId } from './keyring.js';
 import { AuthRequestError } from './http.js';
 import { KEY_STRETCHING_SECONDS, progressMixin } from './progress.js';
@@ -129,6 +139,61 @@ export function buildSettingsPatch({ glucoseUnit, lowRaw, highRaw, rangeUnit }) 
 }
 
 /**
+ * Tamaño de página al leer eventos para el bloque de últimas medidas. Es el techo duro de
+ * `HealthEventPage::MAX_FETCH_LIMIT`: aquí se busca hacia atrás en el tiempo hasta encontrar la
+ * última pesada y la última estatura, y cuantas menos idas y vueltas, mejor.
+ */
+const MEASUREMENTS_PAGE_SIZE = 500;
+
+/**
+ * Cuántas páginas se recorren como mucho.
+ *
+ * Sin tope, una cuenta con años de comidas y glucemias y sin ninguna estatura recorrería el
+ * historial entero descifrando sobre a sobre solo para acabar diciendo «todavía no». Con el tope, el
+ * peor caso son 2500 eventos y el bloque dice lo mismo. Que una estatura de hace muchísimo no
+ * aparezca es un mal menor frente a bloquear la pestaña: se registra de nuevo y vuelve a salir.
+ */
+const MEASUREMENTS_MAX_PAGES = 5;
+
+/**
+ * Resume las últimas medidas corporales a partir de los eventos de peso ya descifrados.
+ *
+ * El peso más reciente y la estatura más reciente pueden venir de registros distintos, y es lo
+ * normal: la estatura es opcional en cada registro (ver `health/bodyWeightPage.js`). El IMC se
+ * calcula con esa pareja, que es la mejor información disponible hoy.
+ *
+ * **Sin ninguna estatura no hay IMC**: devuelve `null`, y la pantalla no enseña cifra. Nunca un
+ * cero ni una estatura media inventada.
+ *
+ * @param {list<{occurredAt: string, content: object}>} weightEvents Eventos `bodyWeight` descifrados.
+ * @returns {{weight: {value: string, unit: string, occurredAt: string}|null,
+ *           height: {value: string, unit: string, occurredAt: string}|null,
+ *           bmi: number|null}}
+ */
+export function summarizeBodyMeasurements(weightEvents) {
+    let weight = null;
+    let weightTime = -Infinity;
+
+    for (const event of weightEvents) {
+        const time = Date.parse(event.occurredAt);
+
+        if (Number.isNaN(time) || time < weightTime) {
+            continue;
+        }
+
+        const { data } = event.content;
+
+        weight = { value: data.value, unit: data.unit, occurredAt: event.occurredAt };
+        weightTime = time;
+    }
+
+    /** Sin cota superior (`null`): el perfil enseña la estatura más reciente de todas. */
+    const height = heightKnownAt(weightEvents, null);
+
+    return { weight, height, bmi: bodyMassIndex({ weight, height }) };
+}
+
+/**
  * Traduce un fallo al mensaje que ve la persona. Nunca detalle técnico.
  *
  * @param {unknown} failure
@@ -184,11 +249,25 @@ export function profilePage() {
         /** Idioma con el que se pintó la página, para saber si hay que recargar tras guardar. */
         initialLocale: '',
 
+        /**
+         * Bloque de últimas medidas, ya como texto: la plantilla solo hace `x-text`. Arrancan con el
+         * aviso de sesión bloqueada y no en blanco, porque hasta que no hay clave no se puede
+         * descifrar nada y un hueco vacío se leería como «no tienes registros».
+         */
+        lastWeightText: t('common.locked.summary'),
+        lastWeightDate: '',
+        lastHeightText: t('common.locked.summary'),
+        lastHeightDate: '',
+        bodyMassIndexText: t('common.locked.summary'),
+        bodyMassIndexDate: '',
+        measurementsError: '',
+
         init() {
             this.initialLocale = this.$refs.locale.value;
 
             if (isUnlocked()) {
                 this.fillFromSettings();
+                void this.loadBodyMeasurements();
 
                 return;
             }
@@ -196,9 +275,13 @@ export function profilePage() {
             /**
              * Los ajustes viven descifrados en memoria y llegan al terminar el arranque de sesión
              * (§6.2). Hasta entonces los campos se quedan como los pintó el servidor, que para la
-             * unidad y el rango es «vacío», nunca un valor inventado.
+             * unidad y el rango es «vacío», nunca un valor inventado. Las últimas medidas dependen
+             * de la misma clave, así que esperan al mismo momento.
              */
-            document.addEventListener(SESSION_READY_EVENT, () => this.fillFromSettings(), { once: true });
+            document.addEventListener(SESSION_READY_EVENT, () => {
+                this.fillFromSettings();
+                void this.loadBodyMeasurements();
+            }, { once: true });
         },
 
         /**
@@ -215,6 +298,116 @@ export function profilePage() {
             this.$refs.rangeLow.value = range === null ? '' : String(range.low);
             this.$refs.rangeHigh.value = range === null ? '' : String(range.high);
             this.$refs.rangeUnit.value = range?.unit ?? this.$refs.glucoseUnit.value;
+        },
+
+        /**
+         * Lee, descifra y resume las últimas medidas corporales.
+         *
+         * El servidor no puede filtrar por tipo (ADR 0006: el tipo va dentro del sobre), así que se
+         * piden páginas de eventos hacia atrás en el tiempo y se descarta aquí todo lo que no sea
+         * `bodyWeight`. Se para en cuanto se tienen las dos cosas —último peso y última estatura—,
+         * que en una cuenta que registra la estatura de vez en cuando es casi siempre la primera
+         * página.
+         *
+         * Un sobre que no abre no tumba nada: se salta. Es lo mismo que hacen las pantallas de
+         * historial (ADR 0004), y aquí importa menos todavía, porque el bloque solo enseña la última
+         * medida y no un recuento.
+         */
+        async loadBodyMeasurements() {
+            this.measurementsError = '';
+
+            try {
+                const userId = ownerId();
+
+                if (!isUnlocked() || userId === null) {
+                    this.showBodyMeasurements(null);
+
+                    return;
+                }
+
+                const weightEvents = [];
+                let cursor = null;
+
+                for (let page = 0; page < MEASUREMENTS_MAX_PAGES; page += 1) {
+                    /** Mismo orden posicional que `HealthEventPage::fetchEvents(?string, int, ?string, ?string)`. */
+                    const rawEvents = await this.$wire.fetchEvents(cursor, MEASUREMENTS_PAGE_SIZE);
+
+                    for (const rawEvent of rawEvents) {
+                        try {
+                            const content = openEvent({
+                                userId,
+                                occurredAt: rawEvent.occurredAt,
+                                envelope: rawEvent.payload,
+                            });
+
+                            if (content?.type === 'bodyWeight') {
+                                weightEvents.push({ occurredAt: rawEvent.occurredAt, content });
+                            }
+                        } catch {
+                            /** Un sobre ilegible se salta, no rompe la pantalla (ADR 0004). */
+                        }
+                    }
+
+                    /** Menos filas que el tamaño de página significa que no hay más historial. */
+                    if (rawEvents.length < MEASUREMENTS_PAGE_SIZE) {
+                        break;
+                    }
+
+                    const summarySoFar = summarizeBodyMeasurements(weightEvents);
+
+                    if (summarySoFar.weight !== null && summarySoFar.height !== null) {
+                        break;
+                    }
+
+                    cursor = rawEvents[rawEvents.length - 1].occurredAt;
+                }
+
+                this.showBodyMeasurements(summarizeBodyMeasurements(weightEvents));
+            } catch (failure) {
+                this.showBodyMeasurements(null);
+                this.measurementsError = describe(failure, t('profile.error.measurementsGeneric'));
+            }
+        },
+
+        /**
+         * Vuelca el resumen en los textos del bloque.
+         *
+         * `null` significa «no se pudo calcular» (sesión bloqueada o error) y se dice con la frase de
+         * sesión bloqueada, no con un hueco. Lo que sí falta de verdad —no hay ningún peso, no hay
+         * ninguna estatura— se dice con «todavía no hay registro», que es distinto y verdadero.
+         *
+         * @param {{weight: object|null, height: object|null, bmi: number|null}|null} summary
+         */
+        showBodyMeasurements(summary) {
+            if (summary === null) {
+                this.lastWeightText = t('common.locked.summary');
+                this.lastHeightText = t('common.locked.summary');
+                this.bodyMassIndexText = t('common.locked.summary');
+                this.lastWeightDate = '';
+                this.lastHeightDate = '';
+                this.bodyMassIndexDate = '';
+
+                return;
+            }
+
+            const { weight, height, bmi } = summary;
+
+            this.lastWeightText = weight === null
+                ? t('profile.body.none')
+                : `${weight.value} ${measurementUnitLabel(weight.unit)}`;
+            this.lastWeightDate = weight === null ? '' : formatDateTime(weight.occurredAt);
+
+            this.lastHeightText = height === null
+                ? t('profile.body.none')
+                : `${height.value} ${measurementUnitLabel(height.unit)}`;
+            this.lastHeightDate = height === null ? '' : formatDateTime(height.occurredAt);
+
+            /**
+             * Sin estatura no hay IMC, y se dice por qué en vez de dejar el hueco: la persona puede
+             * hacer algo al respecto (registrar una estatura), así que merece saberlo.
+             */
+            this.bodyMassIndexText = bmi === null ? t('profile.body.noBmi') : formatNumber(bmi);
+            this.bodyMassIndexDate = bmi === null ? '' : t('profile.body.fromRecords');
         },
 
         /** Guarda las tres secciones de ajustes en una única petición. */

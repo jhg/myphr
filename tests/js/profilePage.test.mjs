@@ -13,7 +13,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { buildSettingsPatch, parseGlucoseTargetRange } from '../../resources/js/auth/profilePage.js';
+import {
+    buildSettingsPatch,
+    parseGlucoseTargetRange,
+    summarizeBodyMeasurements,
+} from '../../resources/js/auth/profilePage.js';
 import { setLocale } from '../../resources/js/i18n/index.js';
 
 /**
@@ -115,4 +119,77 @@ test('buildSettingsPatch: rechaza una unidad preferida que no es UCUM', () => {
         () => buildSettingsPatch({ glucoseUnit: 'mgdl', lowRaw: '', highRaw: '', rangeUnit: 'mg/dL' }),
         /unidad válida/i,
     );
+});
+
+/*
+|--------------------------------------------------------------------------
+| Bloque de solo lectura: últimas medidas corporales
+|--------------------------------------------------------------------------
+|
+| El perfil no registra nada: enseña el último peso, la última estatura y el IMC, calculados aquí a
+| partir de los sobres descifrados. Lo que se prueba es que el último peso y la última estatura
+| pueden venir de registros distintos —la estatura es opcional en cada uno— y que sin ninguna
+| estatura no aparece ningún IMC.
+|
+*/
+
+/**
+ * @param {string} occurredAt
+ * @param {string} value
+ * @param {{value: string, unit: string}|null} [height]
+ * @returns {{occurredAt: string, content: object}}
+ */
+function weightEvent(occurredAt, value, height = null) {
+    const data = { value, unit: 'kg', loinc: '3141-9' };
+
+    if (height !== null) {
+        data.height = { ...height, loinc: '8302-2' };
+    }
+
+    return { occurredAt, content: { v: 1, type: 'bodyWeight', data } };
+}
+
+test('summarizeBodyMeasurements: el último peso y la última estatura pueden ser de registros distintos', () => {
+    const summary = summarizeBodyMeasurements([
+        weightEvent('2026-01-10T08:00:00.000000Z', '68', { value: '175', unit: 'cm' }),
+        weightEvent('2026-05-10T08:00:00.000000Z', '70'),
+        weightEvent('2026-03-10T08:00:00.000000Z', '69'),
+    ]);
+
+    assert.equal(summary.weight.value, '70');
+    assert.equal(summary.weight.occurredAt, '2026-05-10T08:00:00.000000Z');
+    assert.equal(summary.height.value, '175');
+    assert.equal(summary.height.occurredAt, '2026-01-10T08:00:00.000000Z');
+    assert.equal(summary.bmi, 22.9);
+});
+
+test('summarizeBodyMeasurements: sin ninguna estatura registrada no hay IMC', () => {
+    const summary = summarizeBodyMeasurements([weightEvent('2026-05-10T08:00:00.000000Z', '70')]);
+
+    assert.equal(summary.weight.value, '70');
+    assert.equal(summary.height, null);
+    /** Ni cero ni cifra inventada: la pantalla no enseña IMC. */
+    assert.equal(summary.bmi, null);
+});
+
+test('summarizeBodyMeasurements: sin ningún registro no inventa nada', () => {
+    assert.deepEqual(summarizeBodyMeasurements([]), { weight: null, height: null, bmi: null });
+});
+
+test('summarizeBodyMeasurements: el IMC sale con libras y pulgadas igual que con kilos y centímetros', () => {
+    const imperial = summarizeBodyMeasurements([{
+        occurredAt: '2026-05-10T08:00:00.000000Z',
+        content: {
+            v: 1,
+            type: 'bodyWeight',
+            data: {
+                value: '154.32',
+                unit: '[lb_av]',
+                loinc: '3141-9',
+                height: { value: '68.9', unit: '[in_i]', loinc: '8302-2' },
+            },
+        },
+    }]);
+
+    assert.equal(imperial.bmi, 22.9);
 });

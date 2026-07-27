@@ -136,6 +136,11 @@ estricto que el de login porque cada intento cuesta un handshake completo, y lo 
 El registro de actividad anota el alta de usuarios y el uso del enlace, sin contenido, como fija el
 ADR 0006.
 
+El bloqueo a los quince minutos tiene un efecto incómodo en la compartición con profesionales
+(`docs/adr/0011-shared-clipping-for-professionals.md`): destruye la pantalla que muestra el enlace, el QR y
+el PIN mientras la persona espera en la sala. No cambiamos el plazo por eso, se resuelve avisando de que
+hay que anotar el PIN en el momento y recomendando generar el recorte antes de entrar en consulta.
+
 El login normalizado queda fijo una vez la cuenta está registrada: el identificador de credencial se
 derivó de él, cambiarlo dejaría el envelope irrecuperable y reintroduciría el oráculo de enumeración que
 describe `docs/OPAQUE.md`. Ni consumir un enlace ni completar el registro público verifican el correo: el

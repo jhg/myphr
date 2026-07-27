@@ -71,9 +71,24 @@
                 {{-- Campo obligatorio (Do's #5): asterisco visible en #DC2626. --}}
                 <span class="text-destructive-text" aria-hidden="true">*</span>
             </label>
+            {{--
+                `autofocus` aquí y en ningún otro campo de esta pantalla: el correo es el primer
+                dato que se teclea al entrar, así que sin él hace falta un clic previo antes de
+                escribir, y en móvil ese clic es la diferencia entre que se abra el teclado solo o
+                no. En la contraseña sería un error: dejaría el correo en blanco por detrás del
+                cursor y obligaría a volver hacia atrás.
+
+                Es HTML puro, no interfiere con `wire:ignore` ni con Alpine: el navegador lo aplica
+                al parsear el documento, antes de que Livewire o Alpine hidraten nada, y ninguno de
+                los dos lo vuelve a mirar. No lleva el `x-init="$el.focus()"` de las pantallas de
+                salud porque a esta se llega siempre con una carga completa del documento (los
+                enlaces de alta y de vuelta son anclas normales, sin `wire:navigate`), que es
+                justo el caso que `autofocus` cubre.
+            --}}
             <input
                 id="phr-login"
                 type="email"
+                autofocus
                 autocomplete="username"
                 autocapitalize="none"
                 spellcheck="false"

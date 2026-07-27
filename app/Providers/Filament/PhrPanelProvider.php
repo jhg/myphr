@@ -19,6 +19,10 @@ use App\Http\Controllers\Auth\Opaque\SessionSecretController;
 use App\Http\Controllers\Auth\RegisterPageController;
 use App\Http\Controllers\Auth\SetPasswordPageController;
 use App\Http\Controllers\Settings\UpdateSettingsController;
+use App\Http\Controllers\Sharing\IssueShareLinkController;
+use App\Http\Controllers\Sharing\ListSharesController;
+use App\Http\Controllers\Sharing\RevokeShareController;
+use App\Http\Controllers\Sharing\StoreShareController;
 use App\Http\Middleware\EnforceIdleTimeout;
 use App\Http\Middleware\NoStore;
 use App\Http\Middleware\SetLocale;
@@ -104,6 +108,8 @@ class PhrPanelProvider extends PanelProvider
                 url('/phr/auth/*'),
                 url('/phr/logout'),
                 url('/phr/settings'),
+                url('/phr/shares'),
+                url('/phr/shares/*'),
             ])
             /**
              * Buscador global desactivado (Spec 0001 §10).
@@ -118,6 +124,23 @@ class PhrPanelProvider extends PanelProvider
              * admite `Htmlable` y así la vista se resuelve al pintar, no al construir el panel.
              */
             ->brandLogo(fn (): View => view('phr.partials.brand'))
+            /**
+             * Icono de la pestaña del navegador.
+             *
+             * Se reutiliza a propósito el mismo PNG que ya declara el manifiesto del PWA
+             * (`public/manifest.webmanifest`) en lugar de generar un juego aparte: con dos juegos,
+             * el día que cambie la marca se actualiza uno y se olvida el otro, y la pestaña acaba
+             * mostrando un icono distinto al de la aplicación instalada. El 192 es el más pequeño
+             * de los dos del manifiesto y sobra para los 16/32 px de una pestaña.
+             *
+             * Ruta absoluta y **sin dominio**, como el resto de las etiquetas de `pwa-head`: el
+             * proyecto garantiza que cambiar de dominio no rompe nada (ADR 0003), y Filament imprime
+             * esta cadena tal cual en el `href` del `<link rel="icon">`.
+             *
+             * Con esto no hace falta `public/favicon.ico`: el navegador solo cae en esa ruta por
+             * convención cuando la página no declara ningún icono.
+             */
+            ->favicon('/icons/icon-192.png')
             ->renderHook(
                 PanelsRenderHook::HEAD_END,
                 fn (): View => view('phr.partials.crypto-head'),
@@ -130,6 +153,21 @@ class PhrPanelProvider extends PanelProvider
             ->renderHook(
                 PanelsRenderHook::HEAD_END,
                 fn (): View => view('phr.partials.pwa-head'),
+            )
+            /**
+             * Botón de «instalar aplicación», en la barra superior y a la izquierda del menú de
+             * usuario.
+             *
+             * Va como render hook con plantilla propia, y no como entrada de `->userMenuItems()`,
+             * porque la decisión de mostrarlo no es del servidor: en Chromium depende de que llegue
+             * `beforeinstallprompt` después de pintar, en iOS ese evento no existe y el botón solo
+             * puede explicar el gesto manual de «Compartir», y si la aplicación ya está instalada no
+             * debe salir nada. Un item de menú construido en PHP se pintaría siempre, también en los
+             * navegadores donde pulsarlo no puede hacer nada.
+             */
+            ->renderHook(
+                PanelsRenderHook::USER_MENU_BEFORE,
+                fn (): View => view('phr.partials.install-button'),
             )
             /**
              * Idioma de la petición, en el `<body>` y no solo en el `<html>`, porque la navegación
@@ -478,5 +516,28 @@ class PhrPanelProvider extends PanelProvider
         Route::middleware(NoStore::class)
             ->put('settings', UpdateSettingsController::class)
             ->name('settings.update');
+
+        /**
+         * Compartición de recortes (ADR 0011), lado de quien es dueño de los datos.
+         *
+         * Van en `authenticatedRoutes()`, con sesión, CSRF y caducidad por inactividad: crear,
+         * listar y revocar son operaciones de la persona propietaria. La otra mitad del flujo —la
+         * página del profesional, `challenge` y `open`— vive en `routes/web.php` con la pila
+         * contraria, sin sesión y sin CSRF, porque quien la usa no tiene cuenta.
+         *
+         * El paquete sube por aquí, un endpoint HTTP propio, y **no** por Livewire: lleva prefijo
+         * `s1.` y los dos guardarraíles del ADR 0002 abortan cualquier cadena larga que no empiece
+         * por `v1.`. No se tocan; se usa la vía que el propio ADR 0002 reserva para los blobs
+         * grandes.
+         */
+        Route::middleware(NoStore::class)
+            ->prefix('shares')
+            ->name('shares.')
+            ->group(function (): void {
+                Route::get('/', ListSharesController::class)->name('index');
+                Route::post('/', StoreShareController::class)->name('store');
+                Route::post('{share}/links', IssueShareLinkController::class)->name('links.store');
+                Route::delete('{share}', RevokeShareController::class)->name('destroy');
+            });
     }
 }

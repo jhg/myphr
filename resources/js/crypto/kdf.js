@@ -38,6 +38,12 @@ export const KDF_LABELS = Object.freeze({
     SETTINGS: 'myphr/settings/v1',
     /** Clave del sobre -> subclave de ese sobre concreto, con su sal (ADR 0004). */
     ENVELOPE: 'myphr/envelope/v1',
+    /** Dato asociado del paquete de compartición (ADR 0011). No deriva clave: etiqueta el contexto. */
+    SHARE: 'myphr/share/v1',
+    /** PIN estirado + clave de envío -> clave que envuelve `CK` en un enlace (ADR 0011). */
+    SHARE_LINK: 'myphr/share-link/v1',
+    /** PIN estirado -> tag que el servidor compara para dejar pasar (ADR 0011). */
+    SHARE_PIN_TAG: 'myphr/share-pin-tag/v1',
 });
 
 const TEXT_ENCODER = new TextEncoder();

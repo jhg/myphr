@@ -72,3 +72,39 @@ export function eventContext(userId, occurredAt) {
 
     return `${userId.toLowerCase()}/event/${canonicalDate(occurredAt)}`;
 }
+
+/**
+ * Dato asociado y contexto de derivación del **descriptor** de un recorte compartido (ADR 0011).
+ *
+ * El ADR lo fija así y sin más: «un sobre normal del ADR 0004 bajo la clave maestra, con dato
+ * asociado `user_id` más el `id` del share». Lo que ata ese sobre a su fila es justo ese par, y
+ * nada más: ni el rango, ni los tipos, ni el número de eventos pueden entrar aquí, porque el dato
+ * asociado viaja en claro y son exactamente los metadatos que el descriptor existe para esconder
+ * (leer `["glucose","insulin"]` es saber que esa persona es diabética sin descifrar un byte).
+ *
+ * Vive en este fichero por el mismo motivo que sus dos hermanos: es una cadena que no se puede
+ * cambiar sin invalidar el tag de todo lo ya cifrado, y no hay forma de re-cifrar desde el
+ * servidor. Las dos mitades van en minúsculas porque son UUID y su forma canónica lo es (ADR 0004);
+ * el `id` del recorte lo genera el cliente con `crypto.randomUUID()`, que ya emite minúsculas, pero
+ * el que vuelve del servidor en el listado podría no hacerlo y produciría otro contexto.
+ *
+ * Ojo con no confundirlo con el dato asociado del **paquete** (`sharePackageContext`, en
+ * `crypto/shareEnvelope.js`), que deliberadamente **no** lleva `user_id`: aquel lo construye el
+ * profesional que lee, y darle un identificador estable del paciente lo haría correlacionable entre
+ * dos envíos. Este de aquí no sale nunca del navegador de la persona propietaria.
+ *
+ * @param {string} userId UUID del usuario, tal cual lo devuelve el servidor.
+ * @param {string} shareId UUIDv4 del recorte (columna `shares.id`).
+ * @returns {string}
+ */
+export function shareDescriptorContext(userId, shareId) {
+    if (typeof userId !== 'string' || userId === '') {
+        throw new TypeError('userId must be a non-empty string.');
+    }
+
+    if (typeof shareId !== 'string' || shareId === '') {
+        throw new TypeError('shareId must be a non-empty string.');
+    }
+
+    return `${userId.toLowerCase()}/share/${shareId.toLowerCase()}`;
+}

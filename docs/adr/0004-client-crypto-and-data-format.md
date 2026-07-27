@@ -2,6 +2,7 @@
 
 * **Status**: Accepted
 * **Date**: 2026-07-25
+* **Updated**: 2026-07-27
 * **Decider**: Development Team
 
 ## Context
@@ -55,6 +56,12 @@ Estas reglas del dato en reposo valen para cualquier funcionalidad que cifre, no
 contenido: si un tipo de registro ocupa 120 bytes y otro 2.000, el servidor los clasifica sin descifrar
 nada y cifrar el tipo se queda en decoración. Rellenar cuesta unos bytes hoy; hacerlo después exigiría
 re-cifrar el histórico.
+
+Los tres tamaños valen para un registro suelto y no para un paquete grande. La compartición de un recorte
+con un profesional (ADR 0011, `docs/adr/0011-shared-clipping-for-professionals.md`) es la excepción y va
+con su propio formato: prefijo de transporte `s1.` en lugar de `v1.`, escalera propia de 64 KiB a 4 MiB,
+compresión antes de rellenar, validador propio en servidor y dato asociado sin `user_id`, porque ahí lo
+construye el lector. La escalera de aquí no se amplía: dejaría de acotar los eventos.
 
 **Versión dentro de cada sobre**, que no se quita nunca. Añadir un campo opcional no la sube; cambiar el
 significado de uno existente, sí. La migración es perezosa y en cliente al reescribir el registro: no
@@ -151,3 +158,12 @@ heap de JavaScript.
 La primera aplicación de estas reglas es el registro de eventos de seguimiento, en el ADR 0006
 (`docs/adr/0006-encrypted-event-model.md`), que fija además qué identifica a un evento dentro de su tabla
 y cómo queda el reparto entre columnas en claro y contenido cifrado.
+
+## Decision History
+
+### 2026-07-27 — El relleno a tres tamaños fijos deja de ser universal
+Previamente decidido: los tamaños 256, 1024 y 4096 bytes se aplicaban a cualquier funcionalidad que
+cifrase, sin excepciones.
+Cambió porque: un paquete de compartición no cabe ahí ni de lejos, y ampliar la escalera común habría
+dejado de acotar los eventos sueltos. El ADR 0011 define un formato hermano con su propia escalera, su
+propio prefijo y su propio validador; el resto de reglas del dato en reposo le siguen aplicando igual.

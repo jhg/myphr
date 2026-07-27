@@ -104,10 +104,15 @@ it('cada $wire.<metodo> del módulo existe como método público de la página',
 });
 
 /**
- * El otro extremo del mismo contrato: el número y el orden de los argumentos. `fetchEvents(?string
- * $before, int $limit)` acepta dos, opcionales, y el módulo pagina pasándolos en ese orden.
+ * El otro extremo del mismo contrato: el número y el orden de los argumentos. El panel pagina
+ * pasando los cuatro por posición —cursor, límite y las dos puntas del periodo elegido—, así que el
+ * orden de la firma es parte del contrato y no un detalle interno.
+ *
+ * El panel dejó de resumir dos ventanas fijas: ahora acota por rango en el servidor, que sí puede
+ * filtrar por `occurred_at` (ADR 0006). Es la diferencia entre descifrar 24 horas de sobres y
+ * descifrar un mes en cada visita a la pantalla de entrada.
  */
-it('fetchEvents acepta el cursor y el límite en el orden en que los pasa el módulo', function (): void {
+it('fetchEvents acepta el cursor, el límite y el rango en el orden en que los pasa el módulo', function (): void {
     $signature = new ReflectionMethod(Dashboard::class, 'fetchEvents');
 
     $parameters = array_map(
@@ -115,8 +120,29 @@ it('fetchEvents acepta el cursor y el límite en el orden en que los pasa el mó
         $signature->getParameters(),
     );
 
-    expect($parameters)->toBe(['before', 'limit']);
+    expect(array_slice($parameters, 0, 4))->toBe(['before', 'limit', 'from', 'to']);
     expect($signature->getNumberOfRequiredParameters())->toBe(0);
+});
+
+/**
+ * El panel tiene que pasar el rango de verdad, no solo poder hacerlo: si volviera a llamar con dos
+ * argumentos, bajaría y descifraría todo el historial en cada visita sin que ningún test lo notara.
+ */
+it('el módulo pasa el rango elegido a fetchEvents, no solo el cursor y el límite', function (): void {
+    $module = (string) file_get_contents(base_path(DASHBOARD_MODULE));
+
+    expect($module)->toMatch('/\$wire\.fetchEvents\([^)]*range\.from[^)]*range\.to[^)]*\)/');
+});
+
+/**
+ * El periodo por defecto de esta pantalla es el último día, y es una decisión de producto, no un
+ * detalle: es lo que hace que la pantalla de entrada abra rápido. El historial, en cambio, sigue
+ * arrancando sin acotar.
+ */
+it('el panel arranca con el periodo del último día', function (): void {
+    $module = (string) file_get_contents(base_path(DASHBOARD_MODULE));
+
+    expect($module)->toContain("dateRangeControl({ preset: 'day' })");
 });
 
 /**
@@ -184,6 +210,11 @@ it('cada región que escribe Alpine va dentro de un island, con wire:ignore y wi
 
     preg_match_all("/@island\(name: '[\w-]+'\)(.*?)@endisland/s", $view, $islands, PREG_SET_ORDER);
 
+    /**
+     * Avisos de carga, línea temporal y estadísticas: las tres regiones que escribe Alpine. Las
+     * tarjetas por tipo ya no son regiones de la plantilla, porque cuáles existen depende del filtro
+     * de tipos del cliente.
+     */
     expect($islands)->toHaveCount(3);
 
     foreach ($islands as [, $body]) {
@@ -234,4 +265,59 @@ it('los avisos del módulo usan los tokens de aviso y no las rampas de acento', 
     expect($module)->toContain('bg-info-surface');
     expect($module)->not->toContain('bg-danger-50');
     expect($module)->not->toContain('bg-primary-50');
+});
+
+/**
+ * ─── Región de gráficas ───────────────────────────────────────────────────────────────────────
+ *
+ * Los lienzos **no** pueden vivir dentro de un `@island`: tras cualquier petición de Livewire el
+ * servidor lo reemite y se lleva por delante lo que Alpine dibujó, que es el fallo que ya costó caro
+ * en las pantallas de glucemia, tensión e insulina. Lo que protege la región es `wire:ignore` con
+ * `wire:key` estable (ADR 0002).
+ */
+it('los lienzos de las gráficas viven fuera de los islands, con wire:ignore y wire:key', function (): void {
+    $view = (string) file_get_contents(base_path(DASHBOARD_VIEW));
+
+    $outsideIslands = (string) preg_replace("/@island\(name: '[\w-]+'\).*?@endisland/s", '', $view);
+
+    expect($outsideIslands)->toContain('wire:key="dashboard-charts-region"');
+    expect($outsideIslands)->toContain('<canvas');
+
+    $insideIslands = (string) preg_replace('/^.*?(?=@island)/s', '', $view);
+
+    preg_match_all("/@island\(name: '[\w-]+'\)(.*?)@endisland/s", $insideIslands, $islands, PREG_SET_ORDER);
+
+    foreach ($islands as [, $body]) {
+        expect($body)->not->toContain('<canvas');
+    }
+});
+
+/**
+ * El módulo busca sus lienzos por `id` y no por `x-ref`, precisamente porque están fuera de los
+ * islands. Los dos extremos de ese contrato tienen que coincidir: un `id` que la plantilla no emite
+ * deja la gráfica sin dibujar y sin ningún error.
+ */
+it('cada tipo con gráfica trae en la plantilla los cuatro identificadores que busca el módulo', function (): void {
+    $view = (string) file_get_contents(base_path(DASHBOARD_VIEW));
+
+    /** Las comidas no están: no tienen magnitud que promediar, así que no tienen gráfica. */
+    foreach (['glucose', 'bloodPressure', 'insulin', 'bodyWeight', 'temperature'] as $type) {
+        foreach (['', '-canvas', '-caption', '-legend'] as $suffix) {
+            expect($view)->toContain('id="dashboard-chart-{{ $token }}'.$suffix.'"');
+        }
+
+        expect($view)->toContain("'{$type}' => __(");
+    }
+});
+
+/**
+ * El lienzo es un objeto gráfico sin texto: sin nombre accesible y sin un pie que diga en texto qué
+ * series incluye, la tendencia solo llegaría por el color de las líneas (DESIGN.md Do's #3).
+ */
+it('cada lienzo lleva nombre accesible y apunta a su pie y a su leyenda', function (): void {
+    $view = (string) file_get_contents(base_path(DASHBOARD_VIEW));
+
+    expect($view)->toContain('role="img"');
+    expect($view)->toContain('aria-label="{{ __(\'Daily median and daily range for :type\'');
+    expect($view)->toContain('aria-describedby="dashboard-chart-{{ $token }}-caption dashboard-chart-{{ $token }}-legend"');
 });

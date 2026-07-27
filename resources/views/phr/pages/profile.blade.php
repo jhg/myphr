@@ -227,6 +227,73 @@
         </div>
     </form>
 
+    {{-- ────────────────────  Últimas medidas (solo lectura)  ──────────────────── --}}
+    {{--
+        Solo lectura, y no por falta de tiempo: estas tres cifras no son ajustes. Se registran en la
+        pantalla de peso y estatura, con su fecha, y ahí es donde se corrigen. Un campo editable aquí
+        crearía un segundo sitio donde guardar la misma medida y dos verdades para el mismo día.
+
+        Todo se calcula en el navegador a partir de los sobres descifrados (ADR 0002, ADR 0004): el
+        servidor entrega ciphertext y no sabe cuánto pesa ni cuánto mide nadie.
+
+        La región va con `wire:ignore` y `wire:key` estable (ADR 0002): la rellena Alpine y el morph
+        de Livewire —que ahora sí ocurre en esta pantalla, porque el bloque llama a `fetchEvents`— la
+        borraría en la primera petición. Sin `@island`, por el mismo motivo que la gráfica de la
+        pantalla de peso: el servidor emitiría el island vacío y los nodos desaparecerían.
+    --}}
+    <section class="rounded-card border border-border bg-surface p-card shadow-sm">
+        <h2 class="font-display text-subhead text-ink">
+            {{ __('Latest body measurements') }}
+        </h2>
+
+        <p class="mt-2 text-body-sm text-ink-secondary">
+            {{ __('Read-only. These figures come from your own weight and height records and are worked out in this browser: the server cannot read them. To change them, add a new record on the weight and height screen.') }}
+        </p>
+
+        <div wire:ignore wire:key="profile-body-measurements-region" class="mt-4">
+            <dl class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div class="rounded-control border border-border bg-background p-pad-md">
+                    <dt class="text-body-sm font-semibold text-ink">{{ __('Last weight') }}</dt>
+                    {{-- Valores de medida en IBM Plex Mono (DESIGN.md § Do's #7). --}}
+                    <dd x-text="lastWeightText" class="mt-1 font-mono text-body text-ink"></dd>
+                    <dd x-text="lastWeightDate" class="mt-1 font-mono text-code text-ink-secondary"></dd>
+                </div>
+
+                <div class="rounded-control border border-border bg-background p-pad-md">
+                    <dt class="text-body-sm font-semibold text-ink">{{ __('Last height') }}</dt>
+                    <dd x-text="lastHeightText" class="mt-1 font-mono text-body text-ink"></dd>
+                    <dd x-text="lastHeightDate" class="mt-1 font-mono text-code text-ink-secondary"></dd>
+                </div>
+
+                <div class="rounded-control border border-border bg-background p-pad-md">
+                    <dt class="text-body-sm font-semibold text-ink">{{ __('Body mass index') }}</dt>
+                    {{--
+                        Cifra desnuda: ni categoría, ni umbral, ni color. El porqué está en el JSDoc
+                        de `resources/js/health/bodyMassIndex.js` y en el párrafo de abajo.
+                    --}}
+                    <dd x-text="bodyMassIndexText" class="mt-1 font-mono text-body text-ink"></dd>
+                    <dd x-text="bodyMassIndexDate" class="mt-1 font-mono text-code text-ink-secondary"></dd>
+                </div>
+            </dl>
+
+            <p class="mt-4 text-helper text-ink-secondary">
+                {{ __('The body mass index is your weight divided by the square of your height. It is a ratio between two numbers, not a diagnosis, and it is shown as a plain figure: in children and teenagers it is read against percentiles for age and sex, which this application does not have. Talk it over with your doctor.') }}
+            </p>
+
+            <div
+                x-show="measurementsError"
+                x-cloak
+                role="alert"
+                class="mt-4 flex items-start gap-2 rounded-control border border-error-outline bg-error-surface px-3.5 py-2.5"
+            >
+                <svg class="mt-px size-5 shrink-0 text-error-ink" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003ZM12 8.25a.75.75 0 0 1 .75.75v3.75a.75.75 0 0 1-1.5 0V9a.75.75 0 0 1 .75-.75Zm0 8.25a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z" clip-rule="evenodd" />
+                </svg>
+                <p x-text="measurementsError" class="text-helper text-error-ink"></p>
+            </div>
+        </div>
+    </section>
+
     {{-- ────────────────────  Cambio de contraseña  ──────────────────── --}}
     <section class="rounded-card border border-border bg-surface p-card shadow-sm">
         <h2 class="font-display text-subhead text-ink">

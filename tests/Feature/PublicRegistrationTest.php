@@ -4,10 +4,6 @@ declare(strict_types=1);
 
 use App\Models\OpaqueRegistration;
 use App\Models\User;
-use App\Security\Opaque\Base64Url;
-use App\Security\Opaque\OpaqueProfile;
-use App\Security\Opaque\Oprf;
-use App\Security\Opaque\RegistrationRecord;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
 use Tests\Support\OpaqueTestClient;
@@ -17,28 +13,10 @@ uses(RefreshDatabase::class);
 /**
  * `POST /phr/auth/opaque/registration/public/start` — alta pública, sin invitación.
  */
-const PUBREG_IDENTITY = 'myemr.test/opaque-v1';
-
 const PUBREG_PASSWORD = 'CorrectHorseBatteryStaple';
 
 beforeEach(function (): void {
-    [$privateKey] = Oprf::deriveDiffieHellmanKeyPair(str_repeat("\x11", OpaqueProfile::NSEED));
-    [, $fakePk] = Oprf::deriveDiffieHellmanKeyPair(str_repeat("\x22", OpaqueProfile::NSEED));
-
-    config(['opaque' => [
-        'profile' => OpaqueProfile::NAME,
-        'oprf_seed' => Base64Url::encode(str_repeat("\x44", OpaqueProfile::OPRF_SEED_BYTES)),
-        'server_private_key' => Base64Url::encode($privateKey),
-        'server_public_key' => null,
-        'fake_registration_record' => (new RegistrationRecord(
-            $fakePk,
-            str_repeat("\x33", OpaqueProfile::NH),
-            str_repeat("\x00", OpaqueProfile::ENVELOPE_BYTES),
-        ))->toBase64Url(),
-        'server_identity' => PUBREG_IDENTITY,
-        'enumeration_key' => Base64Url::encode(str_repeat("\x55", 32)),
-        'context' => '',
-    ]]);
+    config(['opaque' => opaqueEndpointConfig()]);
 });
 
 /**
@@ -64,7 +42,7 @@ function pubregRegister(string $login, string $name = 'Alicia'): array
         PUBREG_PASSWORD,
         $started['blind'],
         $start->json('registrationResponse'),
-        PUBREG_IDENTITY,
+        TEST_SERVER_IDENTITY,
     );
 
     $finish = test()->postJson(route('filament.phr.auth.opaque.registration.finish'), [
@@ -91,7 +69,7 @@ function pubregLogin(string $login): TestResponse
         PUBREG_PASSWORD,
         $started,
         $start->json('loginResponse'),
-        PUBREG_IDENTITY,
+        TEST_SERVER_IDENTITY,
     );
 
     return test()->postJson(route('filament.phr.auth.opaque.login.finish'), [

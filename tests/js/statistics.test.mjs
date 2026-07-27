@@ -11,16 +11,17 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
-    filterByWindow,
-    isWithinWindow,
+    dominantUnit,
     summarizeBloodPressurePeriod,
     summarizeGlucosePeriod,
-    windowEvents,
-    WINDOW_DAYS,
+    summarizeMeasurementPeriod,
 } from '../../resources/js/health/statistics.js';
 
-const REFERENCE = '2026-07-25T12:00:00.000000Z';
-const REFERENCE_MS = Date.parse(REFERENCE);
+/**
+ * Estas funciones ya no acotan por ventana: el periodo lo aplica el servidor al pedir los eventos
+ * (`[from, to)` de `HealthEventPage::fetchEvents()`), así que aquí llegan los del periodo ya
+ * elegido. Lo que se prueba es el cálculo, no el recorte.
+ */
 
 /**
  * @param {object} params
@@ -51,42 +52,6 @@ function bpEvent({ occurredAt, systolic, diastolic, pulse, method = 'left_sittin
         data: { systolic, diastolic, pulse, method },
     };
 }
-
-// --- Ventanas de tiempo -----------------------------------------------------------------------
-
-test('isWithinWindow: límites inclusivos por ambos extremos', () => {
-    const weekMs = WINDOW_DAYS.week * 24 * 60 * 60 * 1000;
-
-    // Exactamente en el instante de referencia: dentro.
-    assert.equal(isWithinWindow(REFERENCE, REFERENCE_MS, WINDOW_DAYS.week), true);
-
-    // Exactamente 7 días antes: dentro (límite inferior inclusivo).
-    const lowerBoundIso = new Date(REFERENCE_MS - weekMs).toISOString();
-    assert.equal(isWithinWindow(lowerBoundIso, REFERENCE_MS, WINDOW_DAYS.week), true);
-
-    // Un milisegundo antes del límite inferior: fuera.
-    const justBeforeIso = new Date(REFERENCE_MS - weekMs - 1).toISOString();
-    assert.equal(isWithinWindow(justBeforeIso, REFERENCE_MS, WINDOW_DAYS.week), false);
-
-    // Un milisegundo después del instante de referencia: fuera (no cuenta el "futuro").
-    const justAfterIso = new Date(REFERENCE_MS + 1).toISOString();
-    assert.equal(isWithinWindow(justAfterIso, REFERENCE_MS, WINDOW_DAYS.week), false);
-});
-
-test('filterByWindow / windowEvents: separa semana y mes con los mismos límites', () => {
-    const events = [
-        { occurredAt: '2026-07-25T11:00:00.000000Z' }, // hoy: en semana y mes
-        { occurredAt: '2026-07-20T12:00:00.000000Z' }, // hace 5 días: en semana y mes
-        { occurredAt: '2026-07-10T12:00:00.000000Z' }, // hace 15 días: solo en mes
-        { occurredAt: '2026-05-01T12:00:00.000000Z' }, // hace más de un mes: en ninguna
-    ];
-
-    const { week, month } = windowEvents(events, REFERENCE);
-
-    assert.equal(week.length, 2);
-    assert.equal(month.length, 3);
-    assert.deepEqual(filterByWindow(events, REFERENCE, WINDOW_DAYS.week), week);
-});
 
 // --- Glucemia ----------------------------------------------------------------------------------
 
@@ -266,4 +231,121 @@ test('summarizeBloodPressurePeriod: separa por método (brazo y postura, ADR 000
     assert.deepEqual(Object.keys(byMethod).sort(), ['left_sitting', 'right_standing']);
     assert.equal(byMethod.left_sitting.count, 1);
     assert.equal(byMethod.right_standing.count, 1);
+});
+
+// --- Magnitudes simples: peso, temperatura e insulina --------------------------------------------
+
+/**
+ * @param {string} type
+ * @param {object} data
+ * @param {string} occurredAt
+ * @returns {object}
+ */
+function measurementEvent(type, occurredAt, data) {
+    return { v: 1, type, tz: '+00:00', occurredAt, data };
+}
+
+test('summarizeMeasurementPeriod: sin campo de agrupación, todo cae en un único grupo sin nombre', () => {
+    const events = [
+        measurementEvent('bodyWeight', 't1', { value: '72.4', unit: 'kg' }),
+        measurementEvent('bodyWeight', 't2', { value: '71.6', unit: 'kg' }),
+    ];
+
+    const { byGroup } = summarizeMeasurementPeriod(events, { type: 'bodyWeight', unit: 'kg' });
+
+    assert.deepEqual(Object.keys(byGroup), ['']);
+    assert.equal(byGroup[''].count, 2);
+    assert.equal(byGroup[''].mean, 72);
+    assert.equal(byGroup[''].min, 71.6);
+    assert.equal(byGroup[''].max, 72.4);
+});
+
+/** El sitio de medición cambia lo que significa el número: una axilar y una rectal no se promedian. */
+test('summarizeMeasurementPeriod: la temperatura se separa por sitio de medición', () => {
+    const events = [
+        measurementEvent('temperature', '2026-07-25T08:00:00.000000Z', { value: '36.5', unit: 'Cel', site: 'axillary' }),
+        measurementEvent('temperature', '2026-07-25T09:00:00.000000Z', { value: '37.1', unit: 'Cel', site: 'oral' }),
+        measurementEvent('temperature', '2026-07-25T10:00:00.000000Z', { value: '36.9', unit: 'Cel', site: 'axillary' }),
+    ];
+
+    const { byGroup } = summarizeMeasurementPeriod(events, { type: 'temperature', groupBy: 'site', unit: 'Cel' });
+
+    assert.deepEqual(Object.keys(byGroup).sort(), ['axillary', 'oral']);
+    assert.equal(byGroup.axillary.count, 2);
+    assert.equal(byGroup.axillary.last.value, 36.9);
+    assert.equal(byGroup.oral.count, 1);
+});
+
+test('summarizeMeasurementPeriod: la insulina resume la dosis, agrupada por tipo de insulina', () => {
+    const events = [
+        measurementEvent('insulin', 't1', { dose: '6', unit: '[iU]', insulinType: 'rapid' }),
+        measurementEvent('insulin', 't2', { dose: '8', unit: '[iU]', insulinType: 'rapid' }),
+        measurementEvent('insulin', 't3', { dose: '20', unit: '[iU]', insulinType: 'long' }),
+    ];
+
+    const { byGroup } = summarizeMeasurementPeriod(events, {
+        type: 'insulin',
+        valueKey: 'dose',
+        groupBy: 'insulinType',
+        unit: '[iU]',
+    });
+
+    assert.equal(byGroup.rapid.mean, 7);
+    assert.equal(byGroup.long.count, 1);
+});
+
+/** ADR 0007: kilos y libras no se promedian juntos, igual que mg/dL y mmol/L. */
+test('summarizeMeasurementPeriod: lo que está en otra unidad se cuenta aparte, no se mezcla', () => {
+    const events = [
+        measurementEvent('bodyWeight', 't1', { value: '72', unit: 'kg' }),
+        measurementEvent('bodyWeight', 't2', { value: '160', unit: '[lb_av]' }),
+    ];
+
+    const { byGroup, excludedByUnit } = summarizeMeasurementPeriod(events, { type: 'bodyWeight', unit: 'kg' });
+
+    assert.equal(excludedByUnit, 1);
+    assert.equal(byGroup[''].count, 1);
+});
+
+test('summarizeMeasurementPeriod: un valor no numérico se descarta y se cuenta', () => {
+    const events = [
+        measurementEvent('bodyWeight', 't1', { value: '72', unit: 'kg' }),
+        measurementEvent('bodyWeight', 't2', { value: 'no-es-un-número', unit: 'kg' }),
+    ];
+
+    const { byGroup, discarded } = summarizeMeasurementPeriod(events, { type: 'bodyWeight', unit: 'kg' });
+
+    assert.equal(discarded, 1);
+    assert.equal(byGroup[''].count, 1);
+});
+
+// --- dominantUnit ---------------------------------------------------------------------------------
+
+/**
+ * Peso, temperatura e insulina no tienen unidad de presentación configurable (la glucemia sí,
+ * ADR 0007), así que se resume con la del registro más reciente: quien acaba de cambiar de báscula ve
+ * el resumen en la unidad que está usando ahora, no en la que usaba hace meses.
+ */
+test('dominantUnit: la unidad es la del registro más reciente con valor numérico', () => {
+    const events = [
+        measurementEvent('bodyWeight', '2026-07-01T08:00:00.000000Z', { value: '160', unit: '[lb_av]' }),
+        measurementEvent('bodyWeight', '2026-07-20T08:00:00.000000Z', { value: '72', unit: 'kg' }),
+    ];
+
+    assert.equal(dominantUnit(events, 'bodyWeight'), 'kg');
+});
+
+test('dominantUnit: sin ningún registro utilizable no inventa unidad', () => {
+    assert.equal(dominantUnit([], 'bodyWeight'), null);
+    assert.equal(
+        dominantUnit([measurementEvent('bodyWeight', 't1', { value: '', unit: 'kg' })], 'bodyWeight'),
+        null,
+    );
+});
+
+test('dominantUnit: mira el campo de valor que se le diga (la insulina guarda la dosis)', () => {
+    const events = [measurementEvent('insulin', 't1', { dose: '6', unit: '[iU]', insulinType: 'rapid' })];
+
+    assert.equal(dominantUnit(events, 'insulin', 'dose'), '[iU]');
+    assert.equal(dominantUnit(events, 'insulin'), null);
 });

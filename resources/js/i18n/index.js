@@ -136,21 +136,49 @@ function interpolate(template, params) {
     ));
 }
 
-/** @type {Map<string, Intl.PluralRules>} */
-const pluralRulesCache = new Map();
+/**
+ * Fabrica un formateador de `Intl` memoizado **por etiqueta BCP 47**, no por módulo.
+ *
+ * Construir un `Intl.NumberFormat` o un `Intl.DateTimeFormat` es la parte cara (carga las tablas
+ * del idioma); formatear con uno ya construido es barato. Por eso se guarda uno por idioma.
+ *
+ * **La clave tiene que ser el idioma activo en cada llamada, nunca el del primer uso.** El idioma
+ * cambia en caliente: `syncLocale()` de `app.js` lo relee del `<html lang>` en cada navegación de
+ * Livewire, así que un formateador capturado al cargar el módulo seguiría escribiendo `7,8` después
+ * de cambiar a inglés. De ahí que `intlLocale()` se consulte dentro del formateador devuelto.
+ *
+ * Existe para que los seis formateadores de abajo no repitan cada uno su propio `Map`, su
+ * comprobación y su `new`: seis copias del mismo patrón son seis sitios donde volver a olvidarse de
+ * releer el idioma.
+ *
+ * @template {new (locale: string, options?: object) => {format?: Function, select?: Function}} T
+ * @param {T} Formatter Constructor de `Intl` (`NumberFormat`, `DateTimeFormat`, `PluralRules`).
+ * @param {object} [options] Opciones fijas del formateador.
+ * @returns {() => InstanceType<T>} Devuelve el formateador del idioma activo.
+ */
+function memoizedFormatter(Formatter, options = undefined) {
+    /** @type {Map<string, InstanceType<T>>} */
+    const cache = new Map();
+
+    return () => {
+        const tag = intlLocale();
+
+        if (!cache.has(tag)) {
+            cache.set(tag, new Formatter(tag, options));
+        }
+
+        return cache.get(tag);
+    };
+}
+
+const pluralRules = memoizedFormatter(Intl.PluralRules);
 
 /**
  * @param {number} count
  * @returns {string} Categoría de plural (`one`, `other`, ...) del idioma activo.
  */
 function pluralCategory(count) {
-    const tag = intlLocale();
-
-    if (!pluralRulesCache.has(tag)) {
-        pluralRulesCache.set(tag, new Intl.PluralRules(tag));
-    }
-
-    return pluralRulesCache.get(tag).select(count);
+    return pluralRules().select(count);
 }
 
 /**
@@ -192,8 +220,7 @@ export function joinList(items) {
     return items.join(t('common.listSeparator'));
 }
 
-/** @type {Map<string, Intl.NumberFormat>} */
-const numberFormatCache = new Map();
+const numberFormat = memoizedFormatter(Intl.NumberFormat, { maximumFractionDigits: 2 });
 
 /**
  * Número con la separación decimal y de millares del idioma activo. En castellano `7,8`; en inglés
@@ -203,13 +230,7 @@ const numberFormatCache = new Map();
  * @returns {string}
  */
 export function formatNumber(value) {
-    const tag = intlLocale();
-
-    if (!numberFormatCache.has(tag)) {
-        numberFormatCache.set(tag, new Intl.NumberFormat(tag, { maximumFractionDigits: 2 }));
-    }
-
-    return numberFormatCache.get(tag).format(value);
+    return numberFormat().format(value);
 }
 
 /**
@@ -222,8 +243,40 @@ export function formatDateTime(value) {
     return new Date(value).toLocaleString(intlLocale());
 }
 
-/** @type {Map<string, Intl.DateTimeFormat>} */
-const chartDayFormatCache = new Map();
+const dayHeadingFormat = memoizedFormatter(Intl.DateTimeFormat, {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+});
+
+/**
+ * Fecha larga con día de la semana, para el encabezado de un día de la línea temporal del panel.
+ *
+ * Lleva el día de la semana porque el encabezado agrupa lo ocurrido en una jornada y «martes» sitúa
+ * mucho más rápido que «28/07». No lleva año: la línea temporal solo cubre el último mes, y repetir
+ * el año en cada encabezado es ruido.
+ *
+ * @param {Date|string|number} value
+ * @returns {string}
+ */
+export function formatDayHeading(value) {
+    return dayHeadingFormat().format(new Date(value));
+}
+
+const timeOfDayFormat = memoizedFormatter(Intl.DateTimeFormat, { hour: '2-digit', minute: '2-digit' });
+
+/**
+ * Solo la hora y el minuto, para cada entrada de la línea temporal: el día ya lo dice el encabezado
+ * del grupo, así que repetir la fecha en cada línea sería ruido.
+ *
+ * @param {Date|string|number} value
+ * @returns {string}
+ */
+export function formatTimeOfDay(value) {
+    return timeOfDayFormat().format(new Date(value));
+}
+
+const chartDayFormat = memoizedFormatter(Intl.DateTimeFormat, { dateStyle: 'short' });
 
 /**
  * Solo la fecha, sin hora, para el eje de la gráfica de insulina, que agrupa por día.
@@ -232,17 +285,10 @@ const chartDayFormatCache = new Map();
  * @returns {string}
  */
 export function formatChartDay(value) {
-    const tag = intlLocale();
-
-    if (!chartDayFormatCache.has(tag)) {
-        chartDayFormatCache.set(tag, new Intl.DateTimeFormat(tag, { dateStyle: 'short' }));
-    }
-
-    return chartDayFormatCache.get(tag).format(new Date(value));
+    return chartDayFormat().format(new Date(value));
 }
 
-/** @type {Map<string, Intl.DateTimeFormat>} */
-const chartDateFormatCache = new Map();
+const chartDateFormat = memoizedFormatter(Intl.DateTimeFormat, { dateStyle: 'short', timeStyle: 'short' });
 
 /**
  * Fecha y hora abreviadas para el eje de categorías de las gráficas (no hay adaptador de fechas de
@@ -252,11 +298,5 @@ const chartDateFormatCache = new Map();
  * @returns {string}
  */
 export function formatChartDate(value) {
-    const tag = intlLocale();
-
-    if (!chartDateFormatCache.has(tag)) {
-        chartDateFormatCache.set(tag, new Intl.DateTimeFormat(tag, { dateStyle: 'short', timeStyle: 'short' }));
-    }
-
-    return chartDateFormatCache.get(tag).format(new Date(value));
+    return chartDateFormat().format(new Date(value));
 }

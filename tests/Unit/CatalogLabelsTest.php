@@ -14,6 +14,7 @@ use App\Catalog\InsulinType;
 use App\Catalog\MealContext;
 use App\Catalog\MealType;
 use App\Catalog\RecordedBy;
+use App\Catalog\TemperatureMeasurementSite;
 use App\Support\SupportedLocale;
 
 /**
@@ -37,6 +38,7 @@ function catalogLabelSources(): array
         [MealContext::class, 'label'],
         [MealType::class, 'label'],
         [RecordedBy::class, 'label'],
+        [TemperatureMeasurementSite::class, 'label'],
         [GlucoseLoincCode::class, 'patientLabel'],
     ];
 }

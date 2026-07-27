@@ -27,10 +27,14 @@ import { setPasswordForm } from './auth/setPasswordPage.js';
 import { bootstrapSession } from './auth/sessionBootstrap.js';
 import { installLivewirePayloadGuard } from './guards/livewirePayloadGuard.js';
 import { bloodPressurePage } from './health/bloodPressurePage.js';
+import { bodyWeightPage } from './health/bodyWeightPage.js';
 import { dashboardPage } from './health/dashboardPage.js';
 import { glucosePage } from './health/glucosePage.js';
 import { insulinPage } from './health/insulinPage.js';
 import { mealsPage } from './health/mealsPage.js';
+import { sharePage } from './health/sharePage.js';
+import { temperaturePage } from './health/temperaturePage.js';
+import { captureInstallPrompt, installButton } from './pwa/installPrompt.js';
 
 /**
  * Idioma de las cadenas que construye el cliente.
@@ -76,9 +80,24 @@ const COMPONENTS = Object.freeze({
     phrBloodPressurePage: bloodPressurePage,
     phrMealsPage: mealsPage,
     phrInsulinPage: insulinPage,
+    phrBodyWeightPage: bodyWeightPage,
+    phrTemperaturePage: temperaturePage,
     phrDashboardPage: dashboardPage,
     phrProfilePage: profilePage,
+    phrSharePage: sharePage,
+    phrInstallButton: installButton,
 });
+
+/**
+ * Oyente de `beforeinstallprompt`, enganchado al evaluar el módulo y no al montar el botón.
+ *
+ * El navegador dispara ese evento cuando le parece, sin repetirlo, y a menudo antes de que Alpine
+ * haya montado nada: quien llegue tarde se queda sin el único objeto capaz de abrir el diálogo de
+ * instalación. Por eso vive en el scope del módulo, que además sobrevive a la navegación SPA
+ * mientras el componente se reconstruye en cada pantalla. El porqué de las dos ramas —Chromium con
+ * evento, iOS sin él— está en `pwa/installPrompt.js`.
+ */
+captureInstallPrompt(window);
 
 /** @param {{data: (name: string, factory: Function) => void}} alpine */
 function register(alpine) {

@@ -88,6 +88,19 @@
                     pedir 600 haría que el navegador sintetizara una falsa negrita y deformara justo
                     los dígitos de la dosis.
                 --}}
+                {{--
+                    El cursor arranca en la dosis: es el dato que se viene a registrar, y unidad,
+                    tipo de insulina y fecha ya llegan con un valor puesto. Sin esto hace falta un
+                    clic antes de escribir, y en móvil ese clic retrasa la aparición del teclado.
+
+                    Dos atributos porque son dos situaciones distintas: `autofocus` lo aplica el
+                    navegador al parsear el documento y solo cubre la carga inicial; al panel se
+                    entra casi siempre navegando con `wire:navigate`, que sustituye el cuerpo del
+                    documento sin volver a parsearlo y deja `autofocus` sin efecto. `x-init` cubre
+                    ese caso, porque Livewire vuelve a inicializar Alpine sobre el HTML nuevo. Un
+                    morph de Livewire no reinicializa un elemento que ya existe, así que guardar un
+                    registro no vuelve a robar el foco. Mismo patrón que en `glucose.blade.php`.
+                --}}
                 <input
                     id="insulin-dose"
                     x-ref="dose"
@@ -95,6 +108,9 @@
                     min="0"
                     step="any"
                     inputmode="decimal"
+                    {{-- El foco se declara tras el bloque numérico, que los tests leen junto. --}}
+                    autofocus
+                    x-init="$el.focus()"
                     aria-required="true"
                     placeholder="{{ __('E.g. 6 or 0.5') }}"
                     class="block min-h-11 w-full rounded-control border-[1.5px] border-border-strong bg-surface px-3.5 py-2.5 font-mono text-body-lg text-ink placeholder:text-ink-muted focus:border-accent focus:shadow-focus-blue focus:outline-none"
@@ -298,15 +314,38 @@
                     para que la espera se vea (Do's #3) y no se pulse dos veces: aquí pulsar dos
                     veces guarda dos dosis.
                 --}}
-                <button
-                    type="submit"
-                    class="inline-flex min-h-11 items-center justify-center rounded-control bg-accent px-6 py-2.5 text-button text-accent-ink hover:bg-accent-hover focus-visible:shadow-focus-blue focus-visible:outline-none active:bg-accent-active disabled:cursor-not-allowed disabled:bg-surface-disabled disabled:text-ink-disabled disabled:hover:bg-surface-disabled"
-                    x-bind:disabled="loading"
-                    x-bind:aria-busy="loading ? 'true' : 'false'"
-                >
-                    <span x-show="! loading">{{ __('Save') }}</span>
-                    <span x-show="loading" x-cloak>{{ __('Saving…') }}</span>
-                </button>
+                <div class="flex flex-wrap items-center gap-4">
+                    <button
+                        type="submit"
+                        class="inline-flex min-h-11 items-center justify-center rounded-control bg-accent px-6 py-2.5 text-button text-accent-ink hover:bg-accent-hover focus-visible:shadow-focus-blue focus-visible:outline-none active:bg-accent-active disabled:cursor-not-allowed disabled:bg-surface-disabled disabled:text-ink-disabled disabled:hover:bg-surface-disabled"
+                        x-bind:disabled="loading"
+                        x-bind:aria-busy="loading ? 'true' : 'false'"
+                    >
+                        <span x-show="! loading">{{ __('Save') }}</span>
+                        <span x-show="loading" x-cloak>{{ __('Saving…') }}</span>
+                    </button>
+
+                    {{--
+                        Confirmación de guardado, al lado del botón y no al pie de la página: es ahí
+                        donde está mirando quien acaba de pulsar. Se va sola a los pocos segundos
+                        (ver `savedNotice.js`), porque confirma ESTA operación y no un estado.
+
+                        Nunca repite el valor guardado: no hace falta para confirmar y son datos
+                        clínicos, igual que en `profile.blade.php`.
+
+                        `role="status"` (que ya implica `aria-live="polite"`) y no `alert`: es una
+                        buena noticia, no interrumpe lo que se esté leyendo. El aviso de error de
+                        más abajo sí lleva `alert`, que es lo que corresponde a un fallo.
+                    --}}
+                    <p
+                        x-show="saved"
+                        x-cloak
+                        role="status"
+                        class="text-body-sm font-semibold text-ink"
+                    >
+                        {{ __('Record saved.') }}
+                    </p>
+                </div>
             </div>
         </form>
 
@@ -344,6 +383,14 @@
         <h2 class="font-display text-subhead text-ink">
             {{ __('History') }}
         </h2>
+
+        {{--
+            Rango de fechas del historial. Va FUERA del `@island`: el island lo vacía el servidor en
+            cada petición de Livewire (ver el comentario de la región descifrada), y el control es
+            marcado que el servidor sí renderiza y tiene que sobrevivir a la recarga que él mismo
+            dispara.
+        --}}
+        @include('phr.partials.date-range', ['idPrefix' => 'insulin'])
 
         @island(name: 'insulin-list')
             <div wire:ignore x-ref="list" wire:key="insulin-list-region" class="mt-4"></div>

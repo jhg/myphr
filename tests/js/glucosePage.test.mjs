@@ -16,13 +16,12 @@ import { test } from 'node:test';
 import {
     buildGlucoseContent,
     chartCaptionText,
-    datetimeLocalToCanonical,
     filterGlucoseEvents,
-    formatTzOffset,
     groupGlucoseByMethod,
     mealContextLabel,
     resolveLoincCode,
 } from '../../resources/js/health/glucosePage.js';
+import { datetimeLocalToCanonical, formatTzOffset } from '../../resources/js/health/datetimeLocal.js';
 import { parseNumericValue } from '../../resources/js/health/numericValue.js';
 import { setLocale } from '../../resources/js/i18n/index.js';
 

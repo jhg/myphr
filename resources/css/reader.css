@@ -1,0 +1,207 @@
+@import 'tailwindcss';
+
+@source '../views/share/**/*.blade.php';
+@source '../js/reader/**/*.js';
+
+/*
+ * Hoja de la página del lector (ADR 0011): la que abre el profesional, fuera del panel.
+ *
+ * ── Por qué no reutiliza el tema del panel ────────────────────────────────────────────────
+ *
+ * `resources/css/filament/phr/theme.css` empieza importando el tema entero de Filament, que es el
+ * CSS de un panel administrativo completo: barra lateral, tablas, modales, notificaciones, y el
+ * bloque `:root.dark` que conmuta con la CLASE `.dark` que pone el conmutador del panel. Esta página
+ * no tiene panel, no tiene conmutador y se abre en un dispositivo ajeno, donde cada kilobyte que no
+ * se sirve es código que no corre. Así que declara aquí, y solo aquí, los tokens que usa.
+ *
+ * Los VALORES no son nuevos: salen de DESIGN.md, exactamente igual que los del panel, y esta hoja
+ * no inventa ni un color ni un tamaño. Lo que cambia es el juego: solo los papeles que la pantalla
+ * pinta. Si algún día hiciera falta un token más, se copia de DESIGN.md — nunca se elige a ojo.
+ *
+ * ── El tema oscuro va por `prefers-color-scheme`, no por clase ────────────────────────────
+ *
+ * En el panel el tema lo elige la persona y se guarda en su cuenta. Aquí no hay cuenta y no puede
+ * haber preferencia guardada: guardar una sería escribir en el dispositivo del profesional, que es
+ * justo lo que esta ruta evita (ni cookie de sesión, ni preferencia, ni nada). Así que manda el
+ * sistema operativo, que es lo único que se puede leer sin dejar rastro.
+ *
+ * Y no es una traducción libre: cada valor del bloque oscuro es el que DESIGN.md § Dark Mode asigna
+ * a ese mismo papel, con las mismas ratios de contraste verificadas allí.
+ */
+@theme static {
+    /* ── Tipografía · DESIGN.md § Typography ─────────────────────────────────────────── */
+
+    /* Las tres familias las publica el ayudante de fuentes de laravel-vite-plugin, autoalojadas. */
+    --font-sans: var(--font-open-sans, 'Open Sans'), ui-sans-serif, system-ui, sans-serif;
+    --font-display: var(--font-figtree, 'Figtree'), ui-sans-serif, system-ui, sans-serif;
+    --font-mono: var(--font-ibm-plex-mono, 'IBM Plex Mono'), ui-monospace, monospace;
+
+    --text-headline: 1.625rem; /* 26px · título de la página y del informe */
+    --text-headline--line-height: 1.3;
+    --text-headline--letter-spacing: 0.01em;
+    --text-headline--font-weight: 700;
+
+    --text-subhead: 1.25rem; /* 20px · títulos de tarjeta */
+    --text-subhead--line-height: 1.4;
+    --text-subhead--font-weight: 600;
+
+    --text-body-lg: 1.125rem; /* 18px · instrucciones y avisos */
+    --text-body-lg--line-height: 1.6;
+    --text-body-lg--font-weight: 400;
+
+    --text-body: 1rem; /* 16px · texto de lectura y campos */
+    --text-body--line-height: 1.6;
+    --text-body--font-weight: 400;
+
+    --text-body-sm: 0.875rem; /* 14px · celdas de tabla e información secundaria */
+    --text-body-sm--line-height: 1.55;
+    --text-body-sm--font-weight: 400;
+
+    --text-caption: 0.75rem; /* 12px · marcas de tiempo y códigos */
+    --text-caption--line-height: 1.5;
+    --text-caption--letter-spacing: 0.01em;
+    --text-caption--font-weight: 500;
+
+    --text-overline: 0.6875rem; /* 11px · cabeceras de columna */
+    --text-overline--line-height: 1.4;
+    --text-overline--letter-spacing: 0.08em;
+    --text-overline--font-weight: 700;
+
+    --text-helper: 0.8125rem; /* 13px · § Inputs · Helper Text */
+    --text-helper--line-height: 1.5;
+    --text-helper--font-weight: 400;
+
+    --text-button: 0.9375rem; /* 15px · § Buttons (tamaño medio) */
+    --text-button--line-height: 1.5;
+    --text-button--font-weight: 600;
+
+    /* ── Papeles de color · DESIGN.md § Colors ───────────────────────────────────────── */
+
+    --color-background: #fafcff;
+    --color-surface: #ffffff;
+    --color-surface-hover: #f0f7ff;
+    --color-border: #e2e8f0;
+    --color-border-strong: #cbd5e1;
+    --color-ink: #0f172a;
+    --color-ink-secondary: #475569;
+    --color-ink-muted: #94a3b8;
+    --color-accent: #0077b6;
+    --color-accent-hover: #006399;
+    --color-accent-ink: #ffffff;
+    --color-progress-track: #90e0ef;
+
+    /* § Chips · Status Chip: el rojo de TEXTO es un peldaño más oscuro que el de relleno. */
+    --color-error-surface: #fef2f2;
+    --color-error-outline: #fecaca;
+    --color-error-ink: #b91c1c;
+
+    --color-warning-surface: #fffbeb;
+    --color-warning-outline: #fde68a;
+    --color-warning-ink: #b45309;
+
+    /* ── Radios, espaciado y elevación · DESIGN.md § Border Radius / Spacing / Elevation ── */
+
+    --radius-control: 0.5rem; /* 8px · botones e inputs */
+    --radius-card: 0.5rem; /* 8px · tarjetas y paneles */
+
+    --spacing-card: 1.5rem; /* 24px · relleno de tarjeta */
+    --spacing-pad-md: 1rem; /* 16px */
+
+    /* Subtle · § Elevation: «cards, form containers». */
+    --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px 0 rgb(0 0 0 / 0.04);
+
+    /* § Elevation · Blue Focus y Error Halo: dos anillos, 0…2px del fondo y 2…6px del color. */
+    --shadow-focus-blue: 0 0 0 2px var(--focus-ring-inset), 0 0 0 6px var(--focus-ring-accent);
+    --shadow-error-halo: 0 0 0 2px var(--focus-ring-inset), 0 0 0 6px var(--error-ring-accent);
+}
+
+:root {
+    --focus-ring-inset: #fafcff;
+    --focus-ring-accent: #0077b6;
+    --error-ring-accent: #dc2626;
+
+    color-scheme: light dark;
+}
+
+/*
+ * Tema oscuro · DESIGN.md § Dark Mode. Cada valor es el que allí se asigna a ese papel; el anillo
+ * interior del foco pasa a ser el fondo de página oscuro, o el halo se vería blanco.
+ */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --color-background: #0b1220;
+        --color-surface: #152238;
+        --color-surface-hover: #1a2a42;
+        --color-border: #2a3a55;
+        --color-border-strong: #7189ac;
+        --color-ink: #e8eef7;
+        --color-ink-secondary: #aebdd1;
+        --color-ink-muted: #94a6be;
+        --color-accent: #48cae4;
+        --color-accent-hover: #7fdbee;
+        --color-accent-ink: #0b1220;
+        --color-progress-track: #2a3a55;
+
+        --color-error-surface: #2c1013;
+        --color-error-outline: #6b2226;
+        --color-error-ink: #fca5a5;
+
+        --color-warning-surface: #2a1f05;
+        --color-warning-outline: #5a4408;
+        --color-warning-ink: #fcd34d;
+
+        --focus-ring-inset: #0b1220;
+        --focus-ring-accent: #48cae4;
+        --error-ring-accent: #f87171;
+    }
+}
+
+body {
+    background-color: var(--color-background);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+}
+
+/*
+ * ── Impresión ─────────────────────────────────────────────────────────────────────────────
+ *
+ * Lo que de verdad acaba dentro de una historia clínica es texto en papel (ADR 0011), así que la
+ * hoja impresa no es un extra: es la mitad del caso de uso. Tres reglas y ninguna floritura.
+ *
+ *  1. **Sobre blanco y en negro**, pase lo que pase con el tema del sistema. Un informe impreso en
+ *     tema oscuro gasta un cartucho y se lee peor; y las tintas oscuras sobre papel blanco pierden
+ *     el contraste que DESIGN.md verificó sobre superficie oscura.
+ *  2. **Fuera lo que no se puede pulsar en papel**: el formulario del PIN, los botones y el selector
+ *     de idioma. Se marcan con `data-phr-reader-screen-only`.
+ *  3. **La cabecera de la tabla se repite en cada página** (`thead` con `display: table-header-group`)
+ *     y ninguna fila se parte por la mitad. Una fila cortada entre dos hojas es un valor que se lee
+ *     en una página y una unidad que se lee en la otra.
+ */
+@media print {
+    :root {
+        --color-background: #ffffff;
+        --color-surface: #ffffff;
+        --color-border: #cbd5e1;
+        --color-ink: #000000;
+        --color-ink-secondary: #334155;
+        --color-error-ink: #7f1d1d;
+    }
+
+    [data-phr-reader-screen-only] {
+        display: none !important;
+    }
+
+    thead {
+        display: table-header-group;
+    }
+
+    tr,
+    section {
+        break-inside: avoid;
+    }
+
+    /* La sombra no imprime nada útil: en papel solo ensucia el borde. */
+    * {
+        box-shadow: none !important;
+    }
+}

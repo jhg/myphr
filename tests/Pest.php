@@ -1,6 +1,10 @@
 <?php
 
 use App\Crypto\EnvelopeValidator;
+use App\Security\Opaque\Base64Url;
+use App\Security\Opaque\OpaqueProfile;
+use App\Security\Opaque\Oprf;
+use App\Security\Opaque\RegistrationRecord;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -71,4 +75,49 @@ function envelopeCipherText(int $paddedSize = 256): string
 function canonicalOccurredAtNow(): string
 {
     return now()->utc()->format('Y-m-d\TH:i:s.u\Z');
+}
+
+/**
+ * Identidad del servidor OPAQUE en los tests.
+ *
+ * Es un identificador de despliegue fijo, deliberadamente NO derivado del dominio: si cambiase con
+ * `app.url`, las cuentas dejarían de poder entrar al mover el sitio de dominio (lo comprueban
+ * `OpaqueServerIdentityIsDomainIndependentTest` y `DomainChangeDoesNotBreakAccountTest`). Vive aquí
+ * porque el cliente de pruebas la necesita en `finishLogin`/`finishRegistration` de media docena de
+ * ficheros: si cada uno declarase la suya, un cambio en una sola convertiría el resto en tests que
+ * pasan por casualidad.
+ */
+const TEST_SERVER_IDENTITY = 'myemr.test/opaque-v1';
+
+/**
+ * Configuración OPAQUE equivalente a la que produce `opaque:setup`, con material fijo para que un
+ * fallo sea reproducible.
+ *
+ * Vive aquí, y no en cada fichero de test, porque la necesitan todos los flujos de autenticación
+ * (alta, login, cambio de contraseña, cambio de dominio) y declarar la misma función en dos
+ * ficheros de `Feature` rompe la suite entera con «cannot redeclare function».
+ *
+ * @return array<string, mixed>
+ */
+function opaqueEndpointConfig(): array
+{
+    [$privateKey] = Oprf::deriveDiffieHellmanKeyPair(str_repeat("\x11", OpaqueProfile::NSEED));
+    [, $fakeClientPublicKey] = Oprf::deriveDiffieHellmanKeyPair(str_repeat("\x22", OpaqueProfile::NSEED));
+
+    $fakeRecord = new RegistrationRecord(
+        $fakeClientPublicKey,
+        str_repeat("\x33", OpaqueProfile::NH),
+        str_repeat("\x00", OpaqueProfile::ENVELOPE_BYTES),
+    );
+
+    return [
+        'profile' => OpaqueProfile::NAME,
+        'oprf_seed' => Base64Url::encode(str_repeat("\x44", OpaqueProfile::OPRF_SEED_BYTES)),
+        'server_private_key' => Base64Url::encode($privateKey),
+        'server_public_key' => null,
+        'fake_registration_record' => $fakeRecord->toBase64Url(),
+        'server_identity' => TEST_SERVER_IDENTITY,
+        'enumeration_key' => Base64Url::encode(str_repeat("\x55", 32)),
+        'context' => '',
+    ];
 }

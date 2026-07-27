@@ -16,15 +16,14 @@ import { test } from 'node:test';
 
 import {
     buildBloodPressureContent,
-    datetimeLocalToCanonical,
     filterBloodPressureEvents,
-    formatTzOffset,
     groupBloodPressureByMethod,
     groupPulseByMethod,
     methodKey,
     methodLabel,
     splitMethodKey,
 } from '../../resources/js/health/bloodPressurePage.js';
+import { datetimeLocalToCanonical, formatTzOffset } from '../../resources/js/health/datetimeLocal.js';
 import { parseNumericValue } from '../../resources/js/health/numericValue.js';
 
 /** Campos comunes de prueba, con la forma que devuelve `buildCommonEventFields` (ADR 0006). */

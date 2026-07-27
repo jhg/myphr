@@ -9,8 +9,6 @@ use App\Models\UserRegistrationLink;
 use App\Security\Opaque\Base64Url;
 use App\Security\Opaque\HkdfSha512;
 use App\Security\Opaque\OpaqueProfile;
-use App\Security\Opaque\Oprf;
-use App\Security\Opaque\RegistrationRecord;
 use App\Support\Terminal;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
@@ -33,8 +31,6 @@ uses(RefreshDatabase::class);
  * formato de `resources/js/crypto/envelope.js`; el servidor nunca lo abre, así que su único papel
  * es demostrar que lo que se sube es byte a byte lo que se recupera.
  */
-const E2E_SERVER_IDENTITY = 'myemr.test/opaque-v1';
-
 const E2E_PASSWORD = 'CorrectHorseBatteryStaple';
 
 const E2E_EMAIL = 'Alicia@Example.COM';
@@ -42,23 +38,7 @@ const E2E_EMAIL = 'Alicia@Example.COM';
 beforeEach(function (): void {
     app()->instance(Terminal::class, new FakeTerminal);
 
-    [$privateKey] = Oprf::deriveDiffieHellmanKeyPair(str_repeat("\x11", OpaqueProfile::NSEED));
-    [, $fakeClientPublicKey] = Oprf::deriveDiffieHellmanKeyPair(str_repeat("\x22", OpaqueProfile::NSEED));
-
-    config(['opaque' => [
-        'profile' => OpaqueProfile::NAME,
-        'oprf_seed' => Base64Url::encode(str_repeat("\x44", OpaqueProfile::OPRF_SEED_BYTES)),
-        'server_private_key' => Base64Url::encode($privateKey),
-        'server_public_key' => null,
-        'fake_registration_record' => (new RegistrationRecord(
-            $fakeClientPublicKey,
-            str_repeat("\x33", OpaqueProfile::NH),
-            str_repeat("\x00", OpaqueProfile::ENVELOPE_BYTES),
-        ))->toBase64Url(),
-        'server_identity' => E2E_SERVER_IDENTITY,
-        'enumeration_key' => Base64Url::encode(str_repeat("\x55", 32)),
-        'context' => '',
-    ]]);
+    config(['opaque' => opaqueEndpointConfig()]);
 });
 
 /**
@@ -163,7 +143,7 @@ it('lleva a una cuenta desde el comando que emite el enlace hasta su UMK recuper
         E2E_PASSWORD,
         $started['blind'],
         $start->json('registrationResponse'),
-        E2E_SERVER_IDENTITY,
+        TEST_SERVER_IDENTITY,
     );
 
     expect($finished['serverPublicKey'])->toBe(Base64Url::decode($start->json('serverPublicKey'), 'spk'));
@@ -218,7 +198,7 @@ it('lleva a una cuenta desde el comando que emite el enlace hasta su UMK recuper
         E2E_PASSWORD,
         $startedLogin,
         $loginStart->json('loginResponse'),
-        E2E_SERVER_IDENTITY,
+        TEST_SERVER_IDENTITY,
     );
 
     $session = $this->postJson(route('filament.phr.auth.opaque.login.finish'), [

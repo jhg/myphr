@@ -26,10 +26,13 @@ del usuario y que nunca llega al servidor: ni la contraseña, ni las claves, ni
 los datos en claro. La autenticación usa OPAQUE (RFC 9807), que permite
 autenticar sin enviar la contraseña. Ver [OPAQUE.md](OPAQUE.md).
 
-La compartición con profesionales **no está en la primera versión**. Cuando
-llegue, con quién y qué se comparte serán decisiones criptográficas y no
-permisos en una tabla, porque el servidor no puede conceder acceso a algo que no
-sabe leer. De momento el paciente registra y consulta sus propios datos.
+La compartición con profesionales **no está implementada todavía**, pero ya está
+diseñada en el
+[ADR 0011](adr/0011-shared-clipping-for-professionals.md): un recorte cifrado en
+el navegador, un enlace con la clave en el fragmento y un PIN corto que el
+servidor verifica en línea con contador de intentos. Con quién y qué se comparte
+son decisiones criptográficas y no permisos en una tabla, porque el servidor no
+puede conceder acceso a algo que no sabe leer.
 
 ## Para qué sirve en la práctica
 
