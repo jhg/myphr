@@ -47,7 +47,7 @@ import { derivePinTag, deriveWrapKey, normalizePin, PIN_LENGTH, stretchPinAsync 
 import { decodeShareFragment, openShareWrapper } from '../crypto/shareLink.js';
 import { zeroize } from '../crypto/zeroize.js';
 import { decodeBase64Url, encodeBase64Url } from '../crypto/base64url.js';
-import { setLocale, t } from '../i18n/index.js';
+import { setLocale, textDirection, t } from '../i18n/index.js';
 import { resolveCatalog } from './clinicalReport.js';
 
 /**
@@ -428,6 +428,7 @@ export function startReaderPage(document, window) {
         }
 
         document.documentElement.lang = state.locale.replace('_', '-');
+        document.documentElement.dir = textDirection(state.locale);
         nodes.pin.setAttribute('inputmode', 'numeric');
         nodes.pin.setAttribute('maxlength', String(PIN_LENGTH + 2));
     }
@@ -438,7 +439,8 @@ export function startReaderPage(document, window) {
      * The page arrives in the language of the professional's `Accept-Language`, which is the
      * browser's and not necessarily theirs: in a clinic the machine is usually in whatever language
      * the person who installed it left. The selector changes the language **without reloading and
-     * without asking the server for anything**, because the catalog brings all three inside, and
+     * without asking the server for anything**, because the catalog brings all supported languages
+     * inside, and
      * without writing any preference anywhere: a language cookie would be exactly the cookie this route drops.
      */
     function renderLocaleChoices() {

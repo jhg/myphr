@@ -24,6 +24,7 @@ it('emits in the html the same language it renders with', function (): void {
         ->getContent();
 
     expect($html)->toContain('lang="zh-CN"')
+        ->and($html)->toContain('dir="ltr"')
         ->and($html)->toContain('data-phr-locale="zh_CN"');
 });
 
@@ -33,7 +34,18 @@ it('honours the browser header on the screens without a session', function (): v
         ->getContent();
 
     expect($html)->toContain('lang="zh-CN"')
+        ->and($html)->toContain('dir="ltr"')
         ->and($html)->toContain('data-phr-locale="zh_CN"');
+});
+
+it('emits right-to-left direction for an Arabic account', function (): void {
+    $user = User::factory()->registered()->create(['locale' => 'ar']);
+
+    $html = $this->actingAs($user)->get('/phr')->assertOk()->getContent();
+
+    expect($html)->toContain('lang="ar"')
+        ->and($html)->toContain('dir="rtl"')
+        ->and($html)->toContain('data-phr-locale="ar"');
 });
 
 /**

@@ -129,14 +129,14 @@ a gap where a statistic should be invites filling it with any number at all.
 
 Three obligations come out of the language. Translation keys are written in English, which is the default
 language, so that a missing translation falls back to English and not to Spanish; the catalogs live in
-`lang/es.json` and `lang/zh_CN.json` and a test checks that they have exactly the same set of keys, which is
+one JSON file per non-English locale under `lang/`, and a test checks that they have exactly the same set of keys, which is
 the only way for a gap to fail in continuous integration and not in front of the user. The patient-facing
-labels of the `app/Catalog` enums exist in all three languages, and a language we don't recognize falls back
+labels of the `app/Catalog` enums exist in every supported language, and a language we don't recognize falls back
 to English instead of throwing an exception, because someone with a stale preference is someone who doesn't
 understand the screen, not an error to find out about through a 500. The official term from the terminology
 is never translated, not even into Chinese: ADR 0005 reserves it for `coding.display` and LOINC publishes no
 Chinese translation of those terms, which is precisely why our own label is the only layer we can offer
-complete in all three languages.
+complete across all supported languages.
 
 ## Decision History
 

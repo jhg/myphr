@@ -4,16 +4,15 @@
  * **Why it exists.** The panel screens build much of their text in JavaScript (history, notices,
  * chart captions, progress bar stages), and that text does not go through Laravel `__()`: until
  * now it was frozen in Spanish inside each module. This module is the client equivalent of
- * `lang/`, with **English by default** just like `config/app.php`, plus Spanish and simplified
- * Chinese.
+ * `lang/`, with **English by default** just like `config/app.php`, plus every supported language.
  *
- * **Why the three catalogs are imported statically and not with a dynamic `import()`.** Almost all
+ * **Why the catalogs are imported statically and not with a dynamic `import()`.** Almost all
  * of these strings are error messages coming out of pure and **synchronous** functions
  * (`buildGlucoseContent`, `parseNumericValue`, `chartCaptionText`, ...). With lazy loading, `t()`
  * would have to be async or return the key while the catalog travels, and a clinical validation
  * message showing up in English for the first few milliseconds is exactly the silent failure we do
- * not want. The three catalogs together are a few kilobytes of text, less than one icon, so the
- * saving does not pay for the risk.
+ * not want. The catalogs are small compared with the application bundle, so lazy loading does not
+ * pay for the risk of a synchronous translation function returning a key during a language load.
  *
  * **Where the language comes from.** From `document.documentElement.lang`, which the server
  * already emits out of `app()->getLocale()`. No new endpoint and no new metadata. In Node (the
@@ -29,6 +28,29 @@
 import { EN } from './en.js';
 import { ES } from './es.js';
 import { ZH_CN } from './zh_CN.js';
+import { HI } from './hi.js';
+import { FR } from './fr.js';
+import { AR } from './ar.js';
+import { BN } from './bn.js';
+import { PT } from './pt.js';
+import { RU } from './ru.js';
+import { UR } from './ur.js';
+import { ID } from './id.js';
+import { DE } from './de.js';
+import { JA } from './ja.js';
+import { SW } from './sw.js';
+import { MR } from './mr.js';
+import { TE } from './te.js';
+import { TA } from './ta.js';
+import { TR } from './tr.js';
+import { KO } from './ko.js';
+import { VI } from './vi.js';
+import { JV } from './jv.js';
+import { IT } from './it.js';
+import { HA } from './ha.js';
+import { TH } from './th.js';
+import { FA } from './fa.js';
+import { PL } from './pl.js';
 
 /** Fallback language, the same as `config/app.php` (`APP_LOCALE=en`). */
 export const DEFAULT_LOCALE = 'en';
@@ -37,13 +59,52 @@ export const DEFAULT_LOCALE = 'en';
  * Closed list of catalogs. The names are those of the Laravel and Filament translation folders
  * (`zh_CN`, not `zh-CN` and not `zh`), so ours line up with theirs.
  */
-const CATALOGS = Object.freeze({ en: EN, es: ES, zh_CN: ZH_CN });
+const CATALOGS = Object.freeze({
+    en: EN,
+    es: ES,
+    zh_CN: ZH_CN,
+    hi: HI,
+    fr: FR,
+    ar: AR,
+    bn: BN,
+    pt: PT,
+    ru: RU,
+    ur: UR,
+    id: ID,
+    de: DE,
+    ja: JA,
+    sw: SW,
+    mr: MR,
+    te: TE,
+    ta: TA,
+    tr: TR,
+    ko: KO,
+    vi: VI,
+    jv: JV,
+    it: IT,
+    ha: HA,
+    th: TH,
+    fa: FA,
+    pl: PL,
+});
 
 /** @type {list<string>} */
 export const SUPPORTED_LOCALES = Object.freeze(Object.keys(CATALOGS));
 
 /** BCP 47 tag of each catalog, the one `Intl.*` and `Date.prototype.toLocaleString` understand. */
-const INTL_TAGS = Object.freeze({ en: 'en', es: 'es', zh_CN: 'zh-CN' });
+const INTL_TAGS = Object.freeze({
+    en: 'en', es: 'es', zh_CN: 'zh-CN', hi: 'hi', fr: 'fr', ar: 'ar', bn: 'bn', pt: 'pt', ru: 'ru',
+    ur: 'ur', id: 'id', de: 'de', ja: 'ja', sw: 'sw', mr: 'mr', te: 'te', ta: 'ta', tr: 'tr', ko: 'ko',
+    vi: 'vi', jv: 'jv', it: 'it', ha: 'ha', th: 'th', fa: 'fa', pl: 'pl',
+});
+
+const LOCALE_BY_LANGUAGE = Object.freeze({
+    en: 'en', es: 'es', zh: 'zh_CN', hi: 'hi', fr: 'fr', ar: 'ar', bn: 'bn', pt: 'pt', ru: 'ru',
+    ur: 'ur', id: 'id', de: 'de', ja: 'ja', sw: 'sw', mr: 'mr', te: 'te', ta: 'ta', tr: 'tr',
+    ko: 'ko', vi: 'vi', jv: 'jv', it: 'it', ha: 'ha', th: 'th', fa: 'fa', pl: 'pl',
+});
+
+const RTL_LOCALES = Object.freeze(new Set(['ar', 'ur', 'fa']));
 
 /** @type {string|null} Resolved the first time it is needed, not when the module is evaluated. */
 let activeLocale = null;
@@ -56,28 +117,20 @@ let activeLocale = null;
  * closed on purpose, because the value ends up choosing a catalog.
  *
  * @param {unknown} tag
- * @returns {'en'|'es'|'zh_CN'}
+ * @returns {string}
  */
 export function resolveLocale(tag) {
     if (typeof tag !== 'string' || tag.trim() === '') {
         return DEFAULT_LOCALE;
     }
 
-    const normalized = tag.trim().replace('-', '_').toLowerCase();
+    const normalized = tag.trim().replace(/-/g, '_').toLowerCase();
     const [language] = normalized.split('_');
 
-    if (language === 'zh') {
-        return 'zh_CN';
-    }
-
-    if (language === 'es') {
-        return 'es';
-    }
-
-    return DEFAULT_LOCALE;
+    return LOCALE_BY_LANGUAGE[language] ?? DEFAULT_LOCALE;
 }
 
-/** @returns {'en'|'es'|'zh_CN'} */
+/** @returns {string} */
 function detectLocale() {
     if (typeof document === 'undefined' || document.documentElement === null) {
         return DEFAULT_LOCALE;
@@ -91,7 +144,7 @@ function detectLocale() {
  * does not change without reloading the page (the server fixes it in the `<html lang>`), so
  * re-reading it on every `t()` would be wasted work.
  *
- * @returns {'en'|'es'|'zh_CN'}
+ * @returns {string}
  */
 export function currentLocale() {
     if (activeLocale === null) {
@@ -106,7 +159,7 @@ export function currentLocale() {
  * order) and so do the tests, which thereby declare which language they assert in.
  *
  * @param {string} locale
- * @returns {'en'|'es'|'zh_CN'} The one that ended up active.
+ * @returns {string} The one that ended up active.
  */
 export function setLocale(locale) {
     activeLocale = SUPPORTED_LOCALES.includes(locale) ? locale : resolveLocale(locale);
@@ -117,6 +170,11 @@ export function setLocale(locale) {
 /** @returns {string} BCP 47 tag of the active language, for `Intl` and `toLocaleString`. */
 export function intlLocale() {
     return INTL_TAGS[currentLocale()];
+}
+
+/** @param {string} [locale] @returns {'ltr'|'rtl'} */
+export function textDirection(locale = currentLocale()) {
+    return RTL_LOCALES.has(resolveLocale(locale)) ? 'rtl' : 'ltr';
 }
 
 /**

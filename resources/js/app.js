@@ -18,7 +18,7 @@
 
 import './auth/keyring.js';
 
-import { setLocale } from './i18n/index.js';
+import { setLocale, textDirection } from './i18n/index.js';
 import { armInactivityLock, disarmInactivityLock, interceptLogout } from './auth/lock.js';
 import { loginForm } from './auth/loginPage.js';
 import { profilePage } from './auth/profilePage.js';
@@ -61,6 +61,8 @@ function syncLocale() {
     if (document.documentElement.lang !== tag) {
         document.documentElement.lang = tag;
     }
+
+    document.documentElement.dir = textDirection(active);
 }
 
 syncLocale();

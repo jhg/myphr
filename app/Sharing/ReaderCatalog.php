@@ -33,12 +33,12 @@ use BackedEnum;
  * served for a live link, an expired one and one that never existed. The clinical values stay inside
  * the encrypted package, and this class neither sees them nor can see them.
  *
- * **Why the labels come out in all three languages at once and not only the negotiated one.** The
+ * **Why the labels come out in all supported languages at once and not only the negotiated one.** The
  * page is painted in the professional's `Accept-Language` (never in the patient's language, which is
  * a plaintext column under ADR 0007 and has no reason to leave home), but that header says the
  * browser's language, not the language of whoever uses it: in a practice the laptop is usually in
  * whatever language the person who set it up left it in. Making the language selector work without a
- * reload requires having all three versions already on the page, because a second request to change
+ * reload requires having every version already on the page, because a second request to change
  * language would be one more request tying that reader to that link, and a preference cookie would
  * be exactly the cookie this route shakes off. It is a few kilobytes of text.
  *
@@ -49,7 +49,7 @@ final readonly class ReaderCatalog
 {
     /**
      * How each UCUM code is displayed, since it is exchange notation and not something anyone should
-     * be asked to read (ADR 0005). It is not translated: `mg/dL` is `mg/dL` in all three languages.
+     * be asked to read (ADR 0005). It is not translated: `mg/dL` is `mg/dL` in every language.
      *
      * A code that is not in this table is shown as is on the client, without inventing anything: see
      * `unitLabel()` in `resources/js/reader/clinicalReport.js`.
@@ -106,7 +106,15 @@ final readonly class ReaderCatalog
      */
     private function locales(): array
     {
-        $names = ['en' => 'English', 'es' => 'Español', 'zh_CN' => '简体中文'];
+        $names = [
+            'en' => 'English', 'es' => 'Español', 'zh_CN' => '简体中文', 'hi' => 'हिन्दी',
+            'fr' => 'Français', 'ar' => 'العربية', 'bn' => 'বাংলা', 'pt' => 'Português',
+            'ru' => 'Русский', 'ur' => 'اردو', 'id' => 'Bahasa Indonesia', 'de' => 'Deutsch',
+            'ja' => '日本語', 'sw' => 'Kiswahili', 'mr' => 'मराठी', 'te' => 'తెలుగు',
+            'ta' => 'தமிழ்', 'tr' => 'Türkçe', 'ko' => '한국어', 'vi' => 'Tiếng Việt',
+            'jv' => 'Basa Jawa', 'it' => 'Italiano', 'ha' => 'Hausa', 'th' => 'ไทย',
+            'fa' => 'فارسی', 'pl' => 'Polski',
+        ];
 
         return array_map(
             static fn (string $locale): array => ['code' => $locale, 'label' => $names[$locale] ?? $locale],

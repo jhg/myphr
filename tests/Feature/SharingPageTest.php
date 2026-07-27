@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Sharing\ReaderCatalog;
 use App\Sharing\Shares;
 use App\Sharing\ShareTtl;
+use App\Support\SupportedLocale;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 
@@ -216,7 +217,7 @@ it('has the screen copy translated in both catalogs', function (): void {
      * pieces of copy are the ones read before deciding to share: if they stayed in English on a
      * Spanish account, the people who need them most would not read them.
      */
-    foreach (['es', 'zh_CN'] as $locale) {
+    foreach (array_values(array_diff(SupportedLocale::all(), [SupportedLocale::Fallback])) as $locale) {
         $catalog = json_decode(file_get_contents(base_path("lang/{$locale}.json")), true);
 
         expect($catalog)->toHaveKey('Before you share');

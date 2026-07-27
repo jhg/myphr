@@ -29,8 +29,11 @@ beforeEach(function (): void {
     Route::middleware(['auth', SetLocale::class])->put('/test/locale/settings', UpdateSettingsController::class);
 });
 
-it('carries the three configured languages, with English as the default', function (): void {
-    expect(SupportedLocale::all())->toBe(['en', 'es', 'zh_CN'])
+it('carries all configured languages, with English as the default', function (): void {
+    expect(SupportedLocale::all())->toBe([
+        'en', 'es', 'zh_CN', 'hi', 'fr', 'ar', 'bn', 'pt', 'ru', 'ur', 'id', 'de', 'ja',
+        'sw', 'mr', 'te', 'ta', 'tr', 'ko', 'vi', 'jv', 'it', 'ha', 'th', 'fa', 'pl',
+    ])
         ->and(config('app.locale'))->toBe('en')
         ->and(config('app.fallback_locale'))->toBe('en');
 });
@@ -50,9 +53,32 @@ it('negotiates the language with Accept-Language when there is no user', functio
     'chino simplificado con guion' => ['zh-CN,zh;q=0.9', 'zh_CN'],
     'regional Spanish' => ['es-AR,es;q=0.9,en;q=0.8', 'es'],
     'English' => ['en-GB', 'en'],
-    'idioma no soportado' => ['fr-FR,fr;q=0.9', 'en'],
+    'idioma no soportado' => ['xx-XX,xx;q=0.9', 'en'],
     'sin cabecera' => [null, 'en'],
-    'factor de calidad manda sobre el orden' => ['fr;q=1.0,zh-CN;q=0.8,de;q=0.9', 'zh_CN'],
+    'factor de calidad manda sobre el orden' => ['xx;q=1.0,zh-CN;q=0.8,yy;q=0.9', 'zh_CN'],
+    'Hindi regional' => ['hi-IN,hi;q=0.9', 'hi'],
+    'French regional' => ['fr-FR,fr;q=0.9', 'fr'],
+    'Arabic regional' => ['ar-EG,ar;q=0.9', 'ar'],
+    'Bengali regional' => ['bn-BD,bn;q=0.9', 'bn'],
+    'Portuguese regional' => ['pt-BR,pt;q=0.9', 'pt'],
+    'Russian regional' => ['ru-RU,ru;q=0.9', 'ru'],
+    'Urdu regional' => ['ur-PK,ur;q=0.9', 'ur'],
+    'Indonesian regional' => ['id-ID,id;q=0.9', 'id'],
+    'German regional' => ['de-DE,de;q=0.9', 'de'],
+    'Japanese regional' => ['ja-JP,ja;q=0.9', 'ja'],
+    'Swahili regional' => ['sw-KE,sw;q=0.9', 'sw'],
+    'Marathi regional' => ['mr-IN,mr;q=0.9', 'mr'],
+    'Telugu regional' => ['te-IN,te;q=0.9', 'te'],
+    'Tamil regional' => ['ta-IN,ta;q=0.9', 'ta'],
+    'Turkish regional' => ['tr-TR,tr;q=0.9', 'tr'],
+    'Korean regional' => ['ko-KR,ko;q=0.9', 'ko'],
+    'Vietnamese regional' => ['vi-VN,vi;q=0.9', 'vi'],
+    'Javanese regional' => ['jv-ID,jv;q=0.9', 'jv'],
+    'Italian regional' => ['it-IT,it;q=0.9', 'it'],
+    'Hausa regional' => ['ha-NG,ha;q=0.9', 'ha'],
+    'Thai regional' => ['th-TH,th;q=0.9', 'th'],
+    'Persian regional' => ['fa-IR,fa;q=0.9', 'fa'],
+    'Polish regional' => ['pl-PL,pl;q=0.9', 'pl'],
 ]);
 
 /** The stored choice wins over whatever the browser asks for. */
@@ -167,12 +193,71 @@ it('keeps the same key set across every translation catalog', function (): void 
     }
 });
 
-/** The profile selector offers the three languages, each name written in its own language. */
-it('offers the three languages in the profile, each one in its own language', function (): void {
+it('keeps the same replacement placeholders across every translation catalog', function (): void {
+    $reference = json_decode(
+        (string) file_get_contents(lang_path('es.json')),
+        true,
+        flags: JSON_THROW_ON_ERROR,
+    );
+
+    $placeholdersOf = static function (string $text): array {
+        preg_match_all('/:([A-Za-z_]\w*)/', $text, $matches);
+
+        $placeholders = $matches[1];
+        sort($placeholders);
+
+        return $placeholders;
+    };
+
+    foreach (SupportedLocale::all() as $locale) {
+        if ($locale === SupportedLocale::Fallback) {
+            continue;
+        }
+
+        $entries = json_decode(
+            (string) file_get_contents(lang_path($locale.'.json')),
+            true,
+            flags: JSON_THROW_ON_ERROR,
+        );
+
+        foreach ($reference as $key => $text) {
+            expect($placeholdersOf($entries[$key]))->toBe(
+                $placeholdersOf($text),
+                sprintf('The "%s" entry in "%s" does not preserve its placeholders.', $key, $locale),
+            );
+        }
+    }
+});
+
+/** The profile selector offers every language, each name written in its own language. */
+it('offers every language in the profile, each one in its own language', function (): void {
     expect((new Profile)->locales())->toBe([
         ['code' => 'en', 'label' => 'English'],
         ['code' => 'es', 'label' => 'Español'],
         ['code' => 'zh_CN', 'label' => '简体中文'],
+        ['code' => 'hi', 'label' => 'हिन्दी'],
+        ['code' => 'fr', 'label' => 'Français'],
+        ['code' => 'ar', 'label' => 'العربية'],
+        ['code' => 'bn', 'label' => 'বাংলা'],
+        ['code' => 'pt', 'label' => 'Português'],
+        ['code' => 'ru', 'label' => 'Русский'],
+        ['code' => 'ur', 'label' => 'اردو'],
+        ['code' => 'id', 'label' => 'Bahasa Indonesia'],
+        ['code' => 'de', 'label' => 'Deutsch'],
+        ['code' => 'ja', 'label' => '日本語'],
+        ['code' => 'sw', 'label' => 'Kiswahili'],
+        ['code' => 'mr', 'label' => 'मराठी'],
+        ['code' => 'te', 'label' => 'తెలుగు'],
+        ['code' => 'ta', 'label' => 'தமிழ்'],
+        ['code' => 'tr', 'label' => 'Türkçe'],
+        ['code' => 'ko', 'label' => '한국어'],
+        ['code' => 'vi', 'label' => 'Tiếng Việt'],
+        ['code' => 'jv', 'label' => 'Basa Jawa'],
+        ['code' => 'it', 'label' => 'Italiano'],
+        ['code' => 'ha', 'label' => 'Hausa'],
+        ['code' => 'th', 'label' => 'ไทย'],
+        ['code' => 'fa', 'label' => 'فارسی'],
+        ['code' => 'pl', 'label' => 'Polski'],
     ]);
 });
 
@@ -238,7 +323,7 @@ it('has every key the code uses with __() translated in every catalog', function
 /**
  * Visible literals that do not go through `__()` are invisible to the test above: there is no key to
  * look for. This check comes from the other side —the effective language of the screen— and pins
- * down what is most visible in the panel: the page title and its menu entry, in all three languages.
+ * down what is most visible in the panel: the page title and its menu entry, in every language.
  */
 it('translates the title and the navigation label of every panel page', function (): void {
     $pages = [

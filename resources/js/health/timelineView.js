@@ -186,7 +186,7 @@ export function describeTimelineEvent(event) {
         /**
          * Composite key with the type token. It is only reached for the types in
          * `TIMELINE_SUMMARIES` (the others have already left through `null`), so the list of
-         * `dashboard.timeline.type.*` keys that have to exist in the three catalogs is exactly the
+         * `dashboard.timeline.type.*` keys that have to exist in every catalog is exactly the
          * one of that object.
          */
         typeLabel: typeLabel(event.type),

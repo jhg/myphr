@@ -847,7 +847,7 @@ export function sharePage() {
                     body,
                     /**
                      * The reader vocabulary (catalog tokens, LOINC terms and units) is painted by
-                     * the server in the catalog of this screen, in all three languages, as in the
+                     * the server in the catalog of this screen, in all supported languages, as in the
                      * reader page. Here it is resolved to the language in force in the panel.
                      */
                     resolved: resolveCatalog(this.config.readerCatalog, currentLocale()),

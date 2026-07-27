@@ -48,11 +48,11 @@ We store both, so the patient's view uses their own wording and the one shown at
 one. SNOMED refused to add patient-facing terms to the international edition and recommends that each implementation
 contribute them; New Zealand formalized this as a national refset for patient portals.
 
-Languages in order: English first, Spanish second, and Simplified Chinese for China, all three already underway
+Languages in order: English first, followed by the supported locales listed in `SupportedLocale`, with Simplified Chinese for China
 (ADR 0007 fixes where the language preference lives and why it is in the clear). The official SNOMED term exists in
 English for every concept; its Spanish translation is Latin American Spanish, so for Spain it has to be reviewed, and
 for Chinese there is none in the IPS Terminology. That is another reason for the patient-facing label to be ours: it is
-the only layer we can offer complete in all three languages.
+the only layer we can offer complete across all supported languages.
 
 The codes are LOINC for measurements (weight `29463-7`, systolic `8480-6`, diastolic `8462-4`, heart rate `8867-4`,
 temperature `8310-5`, all validated against the source) and SNOMED CT for symptoms and findings.

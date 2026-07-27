@@ -53,11 +53,11 @@ dataset('catalog cases', function (): Generator {
 });
 
 /**
- * Simplified Chinese is the third language, and the patient label is the only layer we can offer
- * complete in all three: LOINC publishes no official Chinese translation of these terms
+ * Simplified Chinese is one supported language, and the patient label is the only layer we can offer
+ * complete across the supported languages: LOINC publishes no official Chinese translation of these terms
  * (ADR 0005), so the official term stays in English and this layer is ours.
  */
-it('returns a label in all three languages for every catalog case', function (
+it('returns a label in every supported language for every catalog case', function (
     BackedEnum $case,
     string $method,
 ): void {

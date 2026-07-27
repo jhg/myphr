@@ -34,14 +34,17 @@
     instead of after the bundle has downloaded and evaluated. Before this, a slow connection showed
     a card with no title, a field with no label and a button with no text — a page that looks broken
     at the one moment there is nothing to do but read it. It costs no privacy: the whole public
-    catalog already travels inside this page in all three languages.
+    catalog already travels inside this page in all supported languages.
 
     Estilo: MediCare+ (DESIGN.md) con la hoja propia `resources/css/reader.css`, siempre por el
     PAPEL del token (`text-ink`, `bg-surface`, `border-border-strong`, `bg-accent` +
     `text-accent-ink`) y nunca por un tono de la rampa.
 --}}
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', $locale) }}">
+<html
+    lang="{{ str_replace('_', '-', $locale) }}"
+    dir="{{ \App\Support\SupportedLocale::isRtl($locale) ? 'rtl' : 'ltr' }}"
+>
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -79,7 +82,7 @@
     </head>
     <body class="min-h-screen">
         {{--
-            Vocabulario público en claro. Trae los tres idiomas porque el selector de esta página
+            Vocabulario público en claro. Trae todos los idiomas admitidos porque el selector de esta página
             cambia de idioma sin volver a pedir nada: una segunda petición sería una petición más
             que ata a este lector con este enlace.
         --}}

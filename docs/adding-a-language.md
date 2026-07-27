@@ -126,6 +126,11 @@ reader publishes all supported clinical labels in one public catalog so its sele
 language without another request. `ReaderCatalog` already loops over `SupportedLocale::all()`; the
 manual language-name map still needs the new entry.
 
+For right-to-left languages, add the locale to the RTL list in both
+`App\Support\SupportedLocale` and `resources/js/i18n/index.js`. The panel and the shared reader set
+`dir="rtl"` on the document so screen readers, text flow and browser-native controls receive the
+correct direction.
+
 ### 6. Update tests that describe the supported set
 
 Some tests intentionally assert the exact current list or catalog shape. Update their expectations for

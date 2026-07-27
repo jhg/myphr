@@ -8,7 +8,7 @@
  * * a snapshot the server cannot place answers **404**, and Livewire dumps the raw error page into
  *   a modal — a wall of HTML with a stack trace behind it;
  * * an invalidated session or a release-token mismatch answers **419**, and Livewire calls the
- *   browser's native `confirm()` with an English sentence, untranslated in all three locales, whose
+ *   browser's native `confirm()` with an English sentence, untranslated in the supported locales, whose
  *   only two outcomes are "reload right now" or "nothing at all".
  *
  * Both look, to the person reading, like the screen they were on broke. This replaces them with one

@@ -21,7 +21,7 @@ use Illuminate\Http\Request;
 final class SupportedLocale
 {
     /**
-     * The three languages the interface speaks, with the default one first.
+     * The languages the interface speaks, with the default one first.
      *
      * It is a constant and not a `config()` read because the `App\Catalog` enums use it and they are
      * plain code: they have to be able to resolve a label without the container. `config/app.php`
@@ -29,10 +29,16 @@ final class SupportedLocale
      *
      * @var list<string>
      */
-    public const array All = ['en', 'es', 'zh_CN'];
+    public const array All = [
+        'en', 'es', 'zh_CN', 'hi', 'fr', 'ar', 'bn', 'pt', 'ru', 'ur', 'id', 'de', 'ja',
+        'sw', 'mr', 'te', 'ta', 'tr', 'ko', 'vi', 'jv', 'it', 'ha', 'th', 'fa', 'pl',
+    ];
 
     /** Default language when there is no usable signal. It matches `app.fallback_locale`. */
     public const string Fallback = 'en';
+
+    /** @var list<string> */
+    public const array RightToLeft = ['ar', 'ur', 'fa'];
 
     /**
      * @return list<string>
@@ -46,6 +52,12 @@ final class SupportedLocale
     public static function isSupported(?string $locale): bool
     {
         return $locale !== null && in_array($locale, self::all(), true);
+    }
+
+    /** Whether the resolved language is written right to left. */
+    public static function isRtl(?string $locale): bool
+    {
+        return in_array(self::resolve($locale), self::RightToLeft, true);
     }
 
     /**

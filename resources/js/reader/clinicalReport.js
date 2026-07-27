@@ -28,11 +28,11 @@ import { formatDateTime, joinList, t } from '../i18n/index.js';
  * emits.
  *
  * It is resolved once when the language is chosen and not on every row: the catalog brings the
- * three languages inside (so the selector does not have to ask the server for anything) and
+ * supported languages inside (so the selector does not have to ask the server for anything) and
  * looking up by language in every cell would repeat the same work per event.
  *
  * @param {object} catalog Content of `data-phr-reader-catalog`.
- * @param {string} locale Active language (`en`, `es`, `zh_CN`).
+ * @param {string} locale Active language code.
  * @returns {{labels: Record<string, Record<string, string>>, loinc: Record<string, string>,
  *           units: Record<string, string>}}
  */

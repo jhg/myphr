@@ -7,7 +7,7 @@ namespace App\Catalog;
 use App\Filament\Pages\HealthEventPage;
 
 /**
- * A catalog enum with a patient-facing label in the three languages of the application.
+ * A catalog enum with a patient-facing label in every supported language.
  *
  * It exists for one thing only: so {@see HealthEventPage::labelledOptions()} can walk the cases of
  * any of these enums with real types, instead of receiving a loose `array` and trusting that its

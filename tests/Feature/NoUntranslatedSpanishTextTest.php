@@ -14,7 +14,7 @@ declare(strict_types=1);
  *
  * `app/Providers/` is in the sweep because the panel user menu is declared there
  * (`PhrPanelProvider::userMenuItems()`), and `->label('Mi perfil')` slipped through that gap,
- * visible from every screen and in Spanish for all three languages.
+ * visible from every screen and in Spanish for every supported language.
  */
 test('no Spanish text is hardcoded outside __() in app/Filament and app/Providers', function () {
     $spanishCharsPattern = '/[áéíóúñÁÉÍÓÚÑ¿¡]/u';

@@ -6,6 +6,7 @@ use App\Models\Share;
 use App\Models\ShareLink;
 use App\Models\User;
 use App\Security\Opaque\Base64Url;
+use App\Support\SupportedLocale;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 
@@ -115,15 +116,16 @@ it('is painted in the professional language, negotiated by Accept-Language', fun
     'Spanish' => ['es-ES,es;q=0.9', 'es'],
     'chino' => ['zh-CN,zh;q=0.9', 'zh-CN'],
     'English' => ['en-GB,en;q=0.8', 'en'],
-    'idioma no soportado' => ['fr-FR,fr;q=0.9', 'en'],
+    'idioma no soportado' => ['xx-XX,xx;q=0.9', 'en'],
+    'Arabic' => ['ar-EG,ar;q=0.9', 'ar'],
 ]);
 
 /**
- * The catalog carries all three languages inside so the page's language selector can switch without
+ * The catalog carries every language inside so the page's language selector can switch without
  * asking the server for anything: a second request would be one more request tying that reader to
  * that link, and a preference cookie would be exactly the cookie this route shakes off.
  */
-it('publishes the clinical vocabulary in the three languages and the LOINC term untranslated', function (): void {
+it('publishes the clinical vocabulary in every language and the LOINC term untranslated', function (): void {
     $content = $this->get('/s/'.Str::uuid())->getContent();
     $catalog = json_decode(
         html_entity_decode((string) preg_replace(
@@ -134,7 +136,7 @@ it('publishes the clinical vocabulary in the three languages and the LOINC term 
         true,
     );
 
-    expect(array_keys($catalog['labels']))->toBe(['en', 'es', 'zh_CN'])
+    expect(array_keys($catalog['labels']))->toBe(SupportedLocale::all())
         ->and($catalog['labels']['es']['types']['glucose'])->toBe('Glucemia')
         ->and($catalog['labels']['zh_CN']['types']['glucose'])->not->toBe('Glucemia')
         /** The official LOINC term is not translated (ADR 0005): it goes once and in English. */
