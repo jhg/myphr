@@ -128,6 +128,8 @@ profile page is not on that list on purpose: it serves HTML and should be naviga
 ## Documentation
 
 - [OPAQUE.md](OPAQUE.md): password authentication without sending the password.
+- [adding-a-language.md](adding-a-language.md): how to add a complete interface language across the
+  server, browser, clinical catalog and shared-record reader.
 - [adr/](adr/): architecture decisions, with their context and their trade-offs.
 - [specs/](specs/): the implementation detail of each feature, resting on those ADRs. That is where the
   cryptographic contract for tracking event capture lives, and it has to be respected to the letter because
